@@ -1,0 +1,289 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "About twenty test fixtures pass `setting_sources=None` into a field the slice makes non-optional",
+  "location": "src/squadron/review/templates/__init__.py:36",
+  "description": "`ReviewTemplate.setting_sources` is now `list[str]` with a \"Never None\" comment. Only the YAML loader enforces that: `_resolve_setting_sources` runs in `load_template`, and the dataclass (lines 26-27) has no `__post_init__`. Tests still build templates with `setting_sources=None`, for example `tests/review/test_review_client.py:35`, `tests/review/test_templates.py:186`, and `tests/review/test_rules.py:184`.\n\nProduction has no `None` path today, but nothing stops one. `review_client.py:220-224` passes the template value straight through. A `None` there drops the flag, so the CLI loads user settings, which is the outcome this slice exists to prevent. The artifact would show \"cli default\", so the problem is visible but not prevented. `pyproject.toml:94` sets pyright to `include = [\"src\"]`, so none of these fixtures are type-checked. Fix: add a `__post_init__` that rejects `None`, and update the fixtures to pass `[\"project\"]`."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "`pipeline.background_idle_timeout_s` accepts `true`, `0`, and negative values",
+  "location": "src/squadron/config/manager.py:134-137",
+  "description": "The int branch of `get_typed_config` checks `isinstance(value, int)`, which is true for `bool`. The bool branch above it has a \"bool before int\" comment, but the int branch does not exclude bool. A hand-edited `pipeline.background_idle_timeout_s = true` returns `True`, which becomes a one-second idle bound. Zero or negative values also pass, and they make the timer fire at once, so every background agent is stopped immediately. The CLI path cannot produce a bool (`_coerce_value` calls `int()`), but hand-edited TOML can. `tests/config/test_keys.py` (`TestPipelineConfigKeys`) only covers the `\"60\"` coercion. Fix: reject bool explicitly in the int branch, require a positive value, and add tests for `true`, `0`, and `-1`."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "Synchronous config reads run on the event loop inside async functions",
+  "location": "src/squadron/pipeline/actions/dispatch.py:147",
+  "description": "The project rule for async code says any `async def` that calls synchronous code must guarantee under 1 ms worst case, and reviewers must verify this. This slice adds `get_typed_config` calls in `one_shot_dispatch_with_telemetry` (`dispatch.py:147` and `:153`), in `open_pipeline_session` (`sdk_session.py:455-460`), and in `_collect_turns` through `_background_idle_timeout_s` (`sdk_session.py:224` and `:327`). Each call goes through `load_config`, which opens and parses two TOML files synchronously. `user_config_path()` can also run `shutil.copytree` during the one-time config migration. A file read cannot be guaranteed under 1 ms. One one-shot dispatch performs two full config loads on the loop.\n\nFix: read the three values once in a synchronous setup step (for example when the session is built), or move the read to `asyncio.to_thread`. I did not check whether the existing callers, such as `events/dispatcher.py:92` and `tools/cf_tools.py:221`, run in async functions. If they do, this is a pattern the slice follows, not one it introduces."
+ },
+ {
+  "ref": "haiku-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "No load test covers the new background-wait path",
+  "location": "src/squadron/pipeline/sdk_session.py:215-260",
+  "description": "`tests/load/` exists (`test_grep_timeout.py`, `test_worktree_concurrency.py`), and the project rule requires at least one load test for code on network or concurrency paths, asserting on latency, throughput, or resource bounds. `_collect_turns` adds a per-message idle timer, a ledger of concurrent background agents, and a stop fan-out. Every new test runs in-process against `ScriptedClient` with sleeps of 0.05 to 0.15 s, so none of them measures a bound. The slice doc does not mention a load test. Whether this path counts as network or concurrency is a judgment call, and I would treat it as one. Fix: add a load test that drives many background agents through `dispatch()` and asserts both the wall-clock bound and that the idle stop fires within the configured window."
+ },
+ {
+  "ref": "haiku-xhigh/1/4",
+  "severity": "CONCERN",
+  "title": "`sdk_session.py` is 472 lines",
+  "location": "src/squadron/pipeline/sdk_session.py:1",
+  "description": "The project guide asks for source files around 300 lines where practical. The slice split `sdk_turns.py` out \"for size\", but the remaining module still holds the client lifecycle, rotation and seeding, rate-limit retry, the background wait and stop loop, and the pipeline session builder. The wait machinery (`_collect_turns`, `_read_turn_with_retry`, `_read_turn`, `_background_idle_timeout_s`, `_stop_background`) is about 130 lines and is the obvious next extraction. It needs only the client, so it can move to `sdk_turns.py` or a sibling module without a new dependency."
+ },
+ {
+  "ref": "haiku-xhigh/2/0",
+  "severity": "FAIL",
+  "title": "Test helpers annotated `-> object` break strict pyright",
+  "location": "tests/pipeline/conftest.py:208",
+  "description": "`failing_reconnect_patch()` returns `object`, and so do `scripted_session` (conftest.py:196), `typed_config` (conftest.py:218), and the `sdk_*` builders (conftest.py:96-150). Callers then use the results as context managers or read attributes from them: `with failing_reconnect_patch():` at tests/pipeline/actions/test_compact.py:262, tests/pipeline/actions/test_summary.py:1061 and :1086, and tests/pipeline/test_sdk_session.py:829. Also `with failing_reconnect_patch() as fresh_ctor:` and `fresh_ctor.return_value.query` at tests/pipeline/test_executor_each.py:288 and :305. Pyright strict reports the `with` on `object` and the attribute access on `object` as errors. `pyproject.toml` puts `tests` under strict checking, and the project rules make zero pyright errors a merge blocker. The same `object` return type is why the new tests carry many `# type: ignore[attr-defined]` comments. Return the real types (the type `patch()` returns, `SDKExecutionSession`, the SDK message classes) and drop the ignores."
+ },
+ {
+  "ref": "haiku-xhigh/2/1",
+  "severity": "CONCERN",
+  "title": "`set_model` is not gated by the unusable check",
+  "location": "src/squadron/pipeline/sdk_session.py:168",
+  "description": "The comment at sdk_session.py:125-126 says that after a failed reconnect \"every later call then raises\". The check is only in `dispatch`, `compact`, and `seed_context`. `set_model` is not gated. `_reconnect` resets `current_model` to `None` (sdk_session.py:427), so `set_model` always reaches `self.client`, which after a failed connect is the unconnected client built at sdk_session.py:426. `_dispatch_via_session` calls `session.set_model(model_id)` before `dispatch()` (src/squadron/pipeline/actions/dispatch.py:353). So the first call after a failed reconnect hits the dead client, and the error the user sees is whatever that call raises, not the \"SDK session unusable\" reason. The batch test `test_items_after_failed_reconnect_are_flagged_unusable` asserts that reason for item 2 and passes only because `ScriptedClient.set_model` is an `AsyncMock` that never fails (tests/pipeline/conftest.py:176). Gate `set_model` the same way and make the fake fail when disconnected. What the SDK raises for an unconnected `set_model` could not be checked here."
+ },
+ {
+  "ref": "haiku-xhigh/2/2",
+  "severity": "CONCERN",
+  "title": "`background_tasks_stopped` counts attempts, not successful stops",
+  "location": "src/squadron/pipeline/sdk_session.py:344",
+  "description": "`_stop_background` logs and continues when `stop_task` fails (sdk_session.py:336-341). It then sets `self.background_tasks_stopped = len(ids)` (line 344) and logs every description as \"stopped\" (lines 345-349). A failed stop is therefore reported as stopped in the step metadata (dispatch.py:369) and in the WARNING, even though the agent may still be running. The test `test_stop_task_failure_is_logged_and_next_id_still_stopped` (tests/pipeline/test_sdk_session.py, `TestBackgroundIdleTimeout`) checks the ERROR log and the call order, but not the count. Count only successful stops and name only those in the WARNING, or report failures separately."
+ },
+ {
+  "ref": "haiku-xhigh/2/3",
+  "severity": "CONCERN",
+  "title": "Synchronous config reads run on the event loop in async functions",
+  "location": "src/squadron/pipeline/sdk_session.py:323",
+  "description": "`_background_idle_timeout_s` is called from the async `_collect_turns` (sdk_session.py:224) and calls `get_typed_config`, which reads TOML synchronously. The same pattern appears in the async `one_shot_dispatch_with_telemetry` (dispatch.py:142-153) and the async `open_pipeline_session` (sdk_session.py:455-461). `python.md` requires synchronous code in an async function to run in under 1 ms worst case. This can be exceeded: `_config_dir()` (src/squadron/config/manager.py:24-32) can run `shutil.copytree` on first use after a config migration. The steady-state cost is small, but the rule is explicit and these are new call sites. Read the config at a synchronous boundary, or move the read to `asyncio.to_thread`."
+ },
+ {
+  "ref": "haiku-xhigh/2/4",
+  "severity": "CONCERN",
+  "title": "Pipeline settings policy is duplicated, with config keys repeated as literals",
+  "location": "src/squadron/pipeline/actions/dispatch.py:142",
+  "description": "The same policy is computed in two places: `one_shot_dispatch_with_telemetry` (dispatch.py:142-153) and `open_pipeline_session` (sdk_session.py:455-461). Both call `pipeline_setting_sources(include_user=get_typed_config(\"pipeline.user_settings\", ...))` and `get_typed_config(\"pipeline.auto_memory\", ...)`. Each key string appears in both places, and the project rules say lookup values are defined once. Move the policy into one helper, for example in `providers/sdk/settings.py`, that takes the cwd and returns both values, and call it from both paths."
+ },
+ {
+  "ref": "haiku-xhigh/2/5",
+  "severity": "CONCERN",
+  "title": "`sdk_session.py` is 473 lines, and the session class also does turn collection",
+  "location": "src/squadron/pipeline/sdk_session.py:215",
+  "description": "The file is 473 lines against the roughly 300-line guideline. `SDKExecutionSession` now covers lifecycle (connect, reconnect, seeding), turn collection (`_collect_turns`, `_read_turn_with_retry`, `_read_turn`), the idle-timeout stop (`_stop_background`), and settings policy. `DispatchTurns` was already split into `sdk_turns.py`, but that module is documented as having \"no client, no I/O\", so the client-bound loop cannot move there without breaking that contract. A sibling module that takes the client as a parameter would keep the session class to lifecycle."
+ },
+ {
+  "ref": "haiku-xhigh/2/6",
+  "severity": "CONCERN",
+  "title": "No load-tier test for the new wait and idle-timeout path",
+  "location": "src/squadron/pipeline/sdk_session.py:215",
+  "description": "`python.md` requires at least one `tests/load/` test for code on concurrency or network paths, asserting latency, throughput, or resource bounds, and requires CI to gate it. The background-wait loop with per-message `asyncio.timeout`, the idle stop, and the leftover-turn discard fit that description. `tests/load/` contains `test_grep_timeout.py` and `test_worktree_concurrency.py`, and nothing for this slice. Earlier reviews under `project-documents/user/reviews/` waived load tests when the design stated no NFR, and this slice's design states none, so the PM may decide this is a waiver. Either add a load test or record the waiver."
+ },
+ {
+  "ref": "haiku-xhigh/3/0",
+  "severity": "CONCERN",
+  "title": "Stopped-agent count includes agents whose stop call failed",
+  "location": "src/squadron/pipeline/sdk_session.py:344",
+  "description": "`_stop_background` catches a failed `stop_task` per id and continues, but then sets `self.background_tasks_stopped = len(ids)` unconditionally. The count is written into step metadata as `background_tasks_stopped`, and the warning at line 345 lists every id as \"stopped\". If one of two stops fails, the metadata reports 2. The test `test_stop_task_failure_is_logged_and_next_id_still_stopped` in `tests/pipeline/test_sdk_session.py` checks the logged error and the call order, but never asserts the count. Track successes separately and assert the count in that test."
+ },
+ {
+  "ref": "haiku-xhigh/3/1",
+  "severity": "CONCERN",
+  "title": "`set_model` bypasses the unusable-session guard",
+  "location": "src/squadron/pipeline/sdk_session.py:168",
+  "description": "`unusable_reason` is documented at lines 125\u2013126 as \"every later call then raises\". `dispatch`, `compact`, and `seed_context` call `_require_usable()`, but `set_model` does not. After a failed rotation, `_reconnect` resets `current_model` to `None`, so the next session step calls `set_model` on the never-connected client (`dispatch.py:353`) before `dispatch()` raises the \"SDK session unusable\" message. What the SDK raises from an unconnected client is unverified here. The test suite cannot show the difference, because the fresh client's `set_model` is an `AsyncMock` in `tests/pipeline/conftest.py`. Add the guard to `set_model`, and give the fake client a `set_model` that fails when not connected."
+ },
+ {
+  "ref": "haiku-xhigh/3/2",
+  "severity": "CONCERN",
+  "title": "Synchronous config-file reads run on the event loop",
+  "location": "src/squadron/pipeline/sdk_session.py:323",
+  "description": "`_background_idle_timeout_s` is called from the async `_collect_turns` (line 224). `open_pipeline_session` (lines 458\u2013460) and `one_shot_dispatch_with_telemetry` (`dispatch.py:147,153`) are also async and call `get_typed_config`. Each call runs `load_config`, which does two synchronous `open()` and `tomllib` reads (`config/manager.py:82\u2013102`). The project rule requires that synchronous code in async functions be guaranteed under 1 ms, and file reads cannot guarantee that. The same pattern predates this diff (`openai/provider.py:63`, `tools/cf_tools.py:221`), but the new call sites add to it. Read the config once in `open_pipeline_session`, store the value on the session, and reuse it. Use `asyncio.to_thread` for any remaining reads."
+ },
+ {
+  "ref": "haiku-xhigh/3/3",
+  "severity": "CONCERN",
+  "title": "Step-metadata key contract is written twice",
+  "location": "src/squadron/pipeline/actions/dispatch.py:371",
+  "description": "`describe_run_settings` in `core/models.py:125\u2013131` builds `system_prompt_mode`, `setting_sources`, and `auto_memory`. The session path of `DispatchAction` builds the same three keys by hand (`dispatch.py:371\u2013375`). A rename or a change to one copy silently breaks the other. Have the session path call a shared helper that takes the session's values, or move the key construction into one function."
+ },
+ {
+  "ref": "haiku-xhigh/3/4",
+  "severity": "CONCERN",
+  "title": "`sdk_session.py` is 473 lines and holds too many responsibilities",
+  "location": "src/squadron/pipeline/sdk_session.py",
+  "description": "The project guideline is about 300 lines per source file. The class now owns rotation, the turn-read loop, rate-limit retry, the idle timer, background-agent stopping, and the settings builder. The read loop (`_collect_turns`, `_read_turn_with_retry`, `_read_turn`, `_stop_background`, roughly lines 215\u2013349) depends only on the client and the turn ledger. Move it to a module that takes the client as a parameter, next to `sdk_turns.py`."
+ },
+ {
+  "ref": "haiku-xhigh/3/5",
+  "severity": "CONCERN",
+  "title": "Blanket `except Exception` that does not re-raise",
+  "location": "src/squadron/pipeline/sdk_session.py:336",
+  "description": "`_stop_background` catches `Exception` with `# noqa: BLE001`, logs with `logger.exception`, and continues. Project rule (a) requires re-raising after the log, and rule (b) requires a specific exception type. The comment gives a reason, but the rule does not allow a blanket catch in this position. The failure is logged but its outcome is not recorded (see the count finding above). Either record failures and surface them in the dispatch result, or catch the narrowest type the SDK actually raises."
+ },
+ {
+  "ref": "haiku-xhigh/3/6",
+  "severity": "CONCERN",
+  "title": "Zero or negative idle timeout is accepted and stops agents immediately",
+  "location": "src/squadron/config/keys.py:118",
+  "description": "`_coerce_value` (`config/manager.py:75\u201376`) does a bare `int(raw_value)`, and `get_typed_config` checks only the type. `pipeline.background_idle_timeout_s = 0` therefore stores and reads back. `asyncio.timeout(0)` expires at once, so every waiting dispatch stops its background agents immediately. A user who reads 0 as \"disabled\" gets that behavior. Validate at the config boundary: reject values below 1, or define an explicit disable value and document it in the key description."
+ },
+ {
+  "ref": "haiku-xhigh/3/7",
+  "severity": "CONCERN",
+  "title": "No load test for the new concurrency path",
+  "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._collect_turns",
+  "description": "The project's Python rules require at least one `tests/load/` test for code on concurrency or network paths, and assert latency or resource bounds there. This change adds an idle-timer read loop with stop and reconnect behavior, and no `tests/load/` file is in the diff. The slice's task review (`project-documents/user/reviews/932-review.tasks.pipeline-sdk-session-\u2026md`, line 109) judged no load test necessary, but on NFR grounds, which is narrower than the rule. Either add a bounded-latency load test with a scripted client, or record an explicit exception against the rule."
+ },
+ {
+  "ref": "sol/1/0",
+  "severity": "FAIL",
+  "title": "Task completion before the original result drops the continuation",
+  "location": "src/squadron/pipeline/sdk_session.py:252-253",
+  "description": "A task can finish before the original turn\u2019s result while its notification still triggers a subsequent parent continuation. The empty ledger then causes dispatch to return prematurely. Reproduced with the project\u2019s scripted client: start \u2192 notification \u2192 original result returned `\"Waiting\"` without reading the queued `\"Artifact written\"` continuation. Track pending continuations or authoritative session-idle state, and add this ordering as a regression test."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "FAIL",
+  "title": "Background timeout also interrupts active parent continuations",
+  "location": "src/squadron/pipeline/sdk_session.py:223-229",
+  "description": "The timeout remains enabled throughout `_read_turn`, even after a notification clears the last background task and the parent resumes foreground work. A slow parent operation can therefore cause dispatch to return partial text as success while that operation remains unfinished. Reproduced with a notification followed by a delayed continuation: dispatch returned `\"Waiting\\nWorking\"` before its final result and logged a timeout with no agents to stop. Disable the background-only timer once no tracked tasks remain, and test a slow continuation after task completion."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "FAIL",
+  "title": "Completed tasks can still have an unread continuation turn",
+  "location": "src/squadron/pipeline/sdk_session.py:252-253",
+  "description": "An empty task ledger does not prove the dispatch is finished. A task notification can arrive before the human-origin result, while its parent continuation remains pending. This branch returns prematurely; the next dispatch then discards that continuation as leftover text. Reproduced with the existing scripted client: dispatch returned `\"Waiting.\"` without reading the queued final answer. Track pending continuations or authoritative session-idle state, and add this ordering as a regression test."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "FAIL",
+  "title": "Background timeout also interrupts foreground continuation work",
+  "location": "src/squadron/pipeline/sdk_session.py:297-301",
+  "description": "Once a background-wait turn starts, `idle_s` remains applied even after a terminal notification clears the ledger and the parent resumes foreground work. A slow continuation therefore times out and returns partial text as success, contrary to the foreground-no-timer policy. Reproduced with a completed task followed by a delayed parent answer: dispatch returned only `\"Starting final work.\"` with zero tasks stopped. Disable the background timer when foreground work resumes and test this transition."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "FAIL",
+  "title": "Background timeout also interrupts foreground continuation work",
+  "location": "src/squadron/pipeline/sdk_session.py:299-308",
+  "description": "Once `_read_turn` receives an idle timeout, it applies that timeout to every subsequent message wait\u2014even after a task notification clears the ledger and the parent starts its continuation. Reproduced: notification \u2192 parent text \u2192 slow foreground work returns partial text as success, with no tasks stopped. Disable the background timer when foreground work resumes and test this transition."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "FAIL",
+  "title": "Completed tasks can still owe a continuation turn",
+  "location": "src/squadron/pipeline/sdk_session.py:251-252",
+  "description": "An empty active-task ledger does not establish that the response is complete. If a task notification arrives before the dispatch\u2019s own result, this branch returns without consuming the parent\u2019s pending continuation. Reproduced with the scripted client: only \u201cWaiting\u201d was returned; the subsequent \u201cWrote design\u201d turn remained unread. Track pending continuations or authoritative session-idle state, and cover this ordering."
+ },
+ {
+  "ref": "sol/3/2",
+  "severity": "CONCERN",
+  "title": "Model switching bypasses the unusable-session guard",
+  "location": "src/squadron/pipeline/sdk_session.py:418-421",
+  "description": "After reconnect failure, `DispatchAction` calls `session.set_model()` before guarded `dispatch()`. Because `set_model()` lacks `_require_usable()`, the real disconnected client raises \u201cNot connected\u201d instead of preserving the recorded reconnect failure. Reproduced using a real `ClaudeSDKClient` with a failing connect. Guard model switching too; the current mock-based batch test conceals this behavior."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "Test helpers return `object`, forcing pervasive `# type: ignore` in strict-checked tests",
+  "location": "tests/pipeline/conftest.py:86-226",
+  "description": "`scripted_session`, `sdk_text`, `sdk_result`, `typed_config` and the other new helpers are annotated as returning `object`. Every caller then needs `# type: ignore[attr-defined]` (`tests/pipeline/test_sdk_session.py` has dozens). The Python rules require strict pyright on test code and say bugs in tests can mask bugs in code. `scripted_session` should return `SDKExecutionSession`. The message builders should return the SDK message types or `Any`. `typed_config` should return a `Callable`. The `_ledger_after` helper in `test_sdk_session.py` has the same problem. Proper return types would remove most of the ignores."
+ },
+ {
+  "ref": "sonnet/1/1",
+  "severity": "CONCERN",
+  "title": "Timing-based tests rely on wall-clock sleeps",
+  "location": "tests/pipeline/test_sdk_session.py (TestBackgroundIdleTimeout)",
+  "description": "The idle-timeout tests patch the timeout to 0.05s and script a 0.15s sleep. `test_slow_foreground_turn_has_no_timer` sleeps 0.1s. The 3x margin can fail on a loaded CI box. Making the timeout much smaller than the sleep (for example 0.01s against 0.5s), or driving the clock deterministically, would remove the flake risk."
+ },
+ {
+  "ref": "sonnet/1/2",
+  "severity": "CONCERN",
+  "title": "Pyright suppression at the options boundary in `open_pipeline_session`",
+  "location": "src/squadron/pipeline/sdk_session.py (`open_pipeline_session`, `setting_sources=settings[\"setting_sources\"]`)",
+  "description": "`SdkSettings.setting_sources` is typed `list[str]`, while the SDK expects a list of literals. The mismatch is hidden with `# pyright: ignore[reportArgumentType]`. `provider.py` handles the same boundary with `# type: ignore[arg-type]`. Typing `SdkSettings` with the SDK's `SettingSource` literal, or casting once inside `settings.py`, would fix this in one place instead of at every caller."
+ },
+ {
+  "ref": "sonnet/1/3",
+  "severity": "CONCERN",
+  "title": "Config is read from different directories on the one-shot and session paths",
+  "location": "src/squadron/pipeline/actions/dispatch.py (`config_cwd = cwd or \".\"`)",
+  "description": "`one_shot_dispatch_with_telemetry` resolves `pipeline.user_settings` and `pipeline.auto_memory` from the caller's `cwd`. The SDK agent itself is spawned with `cwd=None`, so the CLI runs in the process cwd. `open_pipeline_session` reads the same keys from `Path.cwd()`. If a caller passes a `cwd`, one-shot dispatch can pick up a different project's config than the process the CLI runs in, and than the session path would. Using one rule for both paths (and documenting it) would avoid surprising per-project overrides."
+ },
+ {
+  "ref": "sonnet/1/4",
+  "severity": "CONCERN",
+  "title": "Comment points to a table that is no longer adjacent",
+  "location": "src/squadron/core/models.py:93",
+  "description": "The `SystemPromptMode` docstring says \"the four rows of the table above\". The table is a comment on `AgentConfig.use_default_system_prompt`, about 40 lines earlier and in a different class. The `SystemPromptMode` docstring should name that field instead. Separately, `describe_*` helpers that render SDK-specific settings now sit in `core/models.py`. That is a mild layering smell, and they would sit better next to `providers/sdk/settings.py`."
+ },
+ {
+  "ref": "sonnet/3/0",
+  "severity": "CONCERN",
+  "title": "Idle-timeout config accepts zero, negative and boolean values",
+  "location": "src/squadron/config/manager.py:134-137",
+  "description": "`get_typed_config(..., int)` only checks `isinstance(value, int)`. Because `bool` is a subclass of `int`, a TOML `true` passes for `pipeline.background_idle_timeout_s`. `_coerce_value` also accepts `0` or `-5` without a range check. The value goes straight into `asyncio.timeout(idle_s)` in `src/squadron/pipeline/sdk_session.py#_read_turn`. With `0` or a negative value the first wait after the dispatch's own result times out immediately. `_stop_background` then kills every background agent the moment the dispatch starts waiting. That silently defeats the wait-for-agents behavior this slice adds. The project's \"fail explicitly\" rule suggests rejecting non-positive values at `sq config set` and in the typed read. The bool branch is checked before int, so the guard can be added without disturbing it."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "Pipeline settings policy and its config keys are wired in two places",
+  "location": "src/squadron/pipeline/actions/dispatch.py:140-153",
+  "description": "`one_shot_dispatch_with_telemetry` and `open_pipeline_session` (`src/squadron/pipeline/sdk_session.py:455-461`) each repeat the same sequence. Each reads `pipeline.user_settings`, feeds it to `pipeline_setting_sources`, and reads `pipeline.auto_memory`. The key strings `\"pipeline.user_settings\"` and `\"pipeline.auto_memory\"` are literals at both sites and again in `keys.py`. That conflicts with the project rule \"define once, reference everywhere\". A rename or a new policy input would have to be changed in both places, and the two could drift. The two sites also resolve the config cwd differently: `cwd or \".\"` in one and `Path.cwd()` in the other.\n\nAdd one helper next to `sdk_settings_options` in `providers/sdk/settings.py`, for example `pipeline_settings(cwd)`. It would own the key names and the policy resolution, and both callers would use it."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "Test fakes return `object`, forcing 35 type suppressions in one test file",
+  "location": "tests/pipeline/conftest.py:180-210",
+  "description": "`scripted_session`, `sdk_text`, `sdk_result` and `typed_config` are all annotated `-> object`. As a result, `tests/pipeline/test_sdk_session.py` carries 35 `# type: ignore` or `pyright: ignore` comments (`session.dispatch`, `ledger.active`, and others). The Python rules require strict pyright on tests, because test bugs can mask code bugs. Suppressing at every call site defeats that. Annotate `scripted_session` as `SDKExecutionSession`, `_ledger_after` as `BackgroundLedger`, and the message builders with the SDK message types. Related: `test_failed_reconnect_marks_session_unusable` uses `pytest.raises(Exception, match=\"E2BIG\")`, which is broader than needed. `ProviderError` or `CLIConnectionError` would be tighter."
+ },
+ {
+  "ref": "sonnet-high/2/0",
+  "severity": "CONCERN",
+  "title": "Comment says unreported values render as \"not reported\", but the code renders \"not computed\"",
+  "location": "src/squadron/review/models.py#ReviewResult",
+  "description": "The comment above `system_prompt_mode` and `setting_sources` says a hand-built result with `None` \"renders as 'not reported'\". `_render_optional` in `review/persistence.py:317` returns the shared `_NOT_COMPUTED` sentinel, which is \"not computed\". The new test `test_unreported_values_render_the_shared_sentinel` asserts `- System prompt: not computed`. So the test and the code agree and the comment is wrong. Fix the comment, or define a single name for the sentinel and refer to it."
+ },
+ {
+  "ref": "sonnet-high/2/1",
+  "severity": "CONCERN",
+  "title": "Test helpers return `object`, which forces many `# type: ignore` comments in strict-checked tests",
+  "location": "tests/pipeline/conftest.py#scripted_session",
+  "description": "The Python rules include tests in strict pyright. `scripted_session`, `sdk_text`, `sdk_result`, `sdk_task_*`, `failing_reconnect_patch` and `typed_config` are all annotated as returning `object`. `typed_config` also takes a bare `type`. As a result, `tests/pipeline/test_sdk_session.py` is full of `# type: ignore[attr-defined]` on `session.dispatch(...)`, `session.background_tasks_waited`, `ledger.active` and similar. `_ledger_after` has the same problem. A blanket ignore also hides real attribute typos. `test_failed_reconnect_marks_session_unusable` already needs an `assert isinstance(session, SDKExecutionSession)` to narrow the type.\n\n- Return `SDKExecutionSession` from `scripted_session`.\n- Return `BackgroundLedger` from `_ledger_after`.\n- Return `AssistantMessage`, `ResultMessage` and so on from the message builders.\n- Return `AbstractContextManager[ScriptedClient]` from `failing_reconnect_patch`.\n- Type `typed_config` as `Callable[..., object]`.\n\nThen drop the ignores."
+ },
+ {
+  "ref": "sonnet-high/3/0",
+  "severity": "CONCERN",
+  "title": "`pipeline.background_idle_timeout_s` accepts zero or negative values",
+  "location": "src/squadron/config/keys.py:117-125",
+  "description": "The key is a plain `int` with no range check. `set_config` has no validator hook, and `_coerce_value` only runs `int(raw_value)`. A value of `0` or a negative number reaches `asyncio.timeout(idle_s)` in `SDKExecutionSession._read_turn`. The timer then fires immediately once a background agent is running. `_stop_background` kills every agent and `dispatch` returns partial text. The user gets no sign of a bad setting, only agents killed at once. The project's fail-fast rule says to catch this where the value is set or read. Reject values `<= 0` in `_background_idle_timeout_s` (or add a per-key validator) and raise `ValueError`."
+ },
+ {
+  "ref": "sonnet-high/3/1",
+  "severity": "CONCERN",
+  "title": "`TimeoutError` catch in `_collect_turns` can mistake a foreign timeout for an idle timeout",
+  "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._collect_turns",
+  "description": "`except TimeoutError` wraps all of `_read_turn_with_retry`, not only the `asyncio.timeout(idle_s)` block in `_read_turn`. `_read_turn_with_retry` also covers the retry `asyncio.sleep` and the SDK iteration. If anything inside raises a `TimeoutError` of its own, it is handled as \"background agents idle\". The agents are stopped and the dispatch returns partial text as if it succeeded, with a misleading warning. Narrow the handler. For example, have `_read_turn` convert its own timeout into a dedicated `IdleTimeout` exception and catch that. A bare `TimeoutError` can then still propagate as a real failure."
+ },
+ {
+  "ref": "sonnet-high/3/2",
+  "severity": "CONCERN",
+  "title": "Config reads inside the session and dispatch hot path (dependency inversion)",
+  "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._background_idle_timeout_s",
+  "description": "`SDKExecutionSession._background_idle_timeout_s` and `open_pipeline_session` call `get_typed_config` directly. `one_shot_dispatch_with_telemetry` in `pipeline/actions/dispatch.py` does the same. These are low-level classes and functions that reach into the global config store, so their tests must `patch(f\"{_MOD}.get_typed_config\", ...)`. The review rules treat that kind of monkeypatching as a sign of inverted dependencies. The timeout reads from `base_options.cwd or Path.cwd()` on every dispatch with a waiting agent. Resolve the three pipeline settings once at the composition root (executor or `open_pipeline_session`). Pass them into the session as constructor fields, for example `idle_timeout_s`. Pass `auto_memory` and `user_settings` into `one_shot_dispatch_with_telemetry` the same way. This also lets one place validate the timeout value."
+ },
+ {
+  "ref": "sonnet-high/3/3",
+  "severity": "CONCERN",
+  "title": "`sdk_session.py` has grown large and mixes responsibilities",
+  "location": "src/squadron/pipeline/sdk_session.py",
+  "description": "The diff adds turn collection, rate-limit retry, idle timeout, background-agent stop, an unusable-session state, seeding and settings policy to `SDKExecutionSession`. Moving the pure bookkeeping into `sdk_turns.py` was the right call. The stream-reading loop (`_collect_turns`, `_read_turn_with_retry`, `_read_turn`, `_stop_background`, about 100 lines) still lives in the session class. It is also hard to follow: `_collect_turns` has five exit paths and mutates `turns` flags (`own_result_seen`, `waiting_logged`, `progressed`) from outside. That is Law of Demeter pressure and works against the project's roughly 300-line file guideline. Consider moving the read loop into `DispatchTurns` or a small collaborator that takes the stream as input."
+ }
+]

@@ -1,0 +1,401 @@
+{
+  "case": "a122",
+  "issues": [
+    {
+      "id": "a122-I1",
+      "title": "The one RunObserver shared by all projects prunes its poll, overdue and fault state to the current project's entries, so each project's tick erases the others'.",
+      "members": [
+        "haiku-xhigh/1/0",
+        "haiku-xhigh/2/0",
+        "haiku-xhigh/3/2",
+        "sol/1/0",
+        "sol/2/0",
+        "sol/3/0"
+      ],
+      "grade": "REAL",
+      "confidence": "high",
+      "why": "RunnerTenant builds a single RunObserver and passes it to every ProjectTick, and observe() filters _last_poll, _overdue and _faulted to the ids of the entries it was given, which are only the current project's. With two or more hosted projects every run loses its last-poll time each tick, so it is polled every tick instead of once per run_poll_interval_seconds, and standing faults and overdue markers are dropped. The author removed the pruning in 8736ea5 ('address slice 122 code review findings') with a comment that the observer is shared by every project.",
+      "evidence": [
+        "src/amoeba/runner/tenant.py:74",
+        "src/amoeba/runner/tenant.py:133",
+        "src/amoeba/runner/observe.py:108-111",
+        "src/amoeba/runner/tick.py:114-119"
+      ],
+      "known": null,
+      "fail_justified": true
+    },
+    {
+      "id": "a122-I2",
+      "title": "An unconfirmed launch whose poll failed does not replay the stored fault on ticks between polls, so the run_observation_failed escalation closes and reopens.",
+      "members": [
+        "haiku-xhigh/1/2",
+        "haiku-xhigh/2/2",
+        "haiku-xhigh/3/1",
+        "sol/1/2",
+        "sol/2/1",
+        "sol/3/2"
+      ],
+      "grade": "REAL",
+      "confidence": "medium",
+      "why": "_after_launch_poll stores a PollFailure in _faulted via _fault, but _unconfirmed never reads _faulted. On the next tick, with the poll not due, it calls _still_overdue, which adds a fault only for ids in _overdue (a PollFailure never adds one) and returns LAUNCHING. _close_recovered then closes the run_observation_failed escalation because the kind did not recur, and the next poll reopens it. The comment at observe.py:92-93 and the D8 closure rule say a standing fault must not look recovered, and _confirmed does replay it.",
+      "evidence": [
+        "src/amoeba/runner/observe.py:92-94",
+        "src/amoeba/runner/observe.py:140-145",
+        "src/amoeba/runner/observe.py:186-187",
+        "src/amoeba/runner/observe.py:233-234",
+        "src/amoeba/runner/observe.py:260",
+        "src/amoeba/runner/tick.py:194-200"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I3",
+      "title": "The tenant's broad catch always returns (COMPLETE, True), so a fault that recurs every tick reports work and the host loop never idles.",
+      "members": [
+        "haiku-xhigh/2/1",
+        "haiku-xhigh/3/0",
+        "sol/1/3"
+      ],
+      "grade": "REAL",
+      "confidence": "high",
+      "why": "After logging and escalate(), _tick_project returns TickResult.COMPLETE, True unconditionally, even when escalate wrote nothing (node already blocked, or the project escalation is already open and deduplicated). RunnerTenant.tick returns that True, contradicting its own docstring, and the host skips its idle wait when a tenant reports work, so a persistent fault spins with a traceback per pass. This is the case's known bug B2, fixed later in 43ba517.",
+      "evidence": [
+        "src/amoeba/runner/tenant.py:93-100",
+        "src/amoeba/runner/tenant.py:145-149",
+        "src/amoeba/runner/faults.py:171-191"
+      ],
+      "known": "B2",
+      "fail_justified": true
+    },
+    {
+      "id": "a122-I4",
+      "title": "The budget is checked before journaling, not again immediately before Popen, so a launch can start after the deadline or a stop request.",
+      "members": [
+        "sol/1/1",
+        "sol/2/2",
+        "sol/3/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "_act calls budget.allows_call() and then _launch does journal_issue (one SQLite commit) and launch() with no second check, so the claim is literally true. The window is a single local write, and the budget only bounds when a call may begin. Re-checking after journaling would leave a journaled but never-launched entry, which is worse than finishing the launch; a detached child after a stop is reconciled by recovery. This is hardening with no real effect.",
+      "evidence": [
+        "src/amoeba/runner/tick.py:161-192",
+        "src/amoeba/runner/budget.py:28-51"
+      ],
+      "known": null,
+      "fail_justified": false
+    },
+    {
+      "id": "a122-I5",
+      "title": "The Runner has no load-tier test although the project's Python rules require one for concurrency and environment-layer code.",
+      "members": [
+        "haiku-xhigh/1/1",
+        "haiku-xhigh/2/5",
+        "haiku-xhigh/3/6"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "No file under tests/load/ at head exercises the Runner, and python.md line 57 asks for a load test on such paths. That is a missing test and a rules-compliance point, not a defect in the code itself; the author added tests/load/test_runner_tick_load.py later in 8736ea5. It does not by itself block a merge.",
+      "evidence": [
+        "project-documents/ai-project-guide/project-guides/rules/python.md:57",
+        "src/amoeba/runner/tenant.py:93"
+      ],
+      "known": null,
+      "fail_justified": false
+    },
+    {
+      "id": "a122-I6",
+      "title": "raise_expected_faults keeps only the first fault's payload per (project, kind), so later faults of the same kind lose their details.",
+      "members": [
+        "haiku-xhigh/1/3",
+        "haiku-xhigh/2/3"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "raise_expected_faults calls raise_project_escalation once per fault, and the store (from slice 121, unchanged here) returns an already-open (project, kind) row without changing it, so a second subject's detail is not stored. The slice design says escalations are deduplicated on (project, kind), so this is the intended trade-off. What is lost is detail the operator would see, not a fault that goes unreported. The point about one write transaction per tick is performance with no real effect.",
+      "evidence": [
+        "src/amoeba/runner/faults.py:120-143"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I7",
+      "title": "The tenant re-raises store and upstream-shape errors without logging with logger.exception first.",
+      "members": [
+        "haiku-xhigh/1/4",
+        "haiku-xhigh/3/5"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "tenant.py:142-144 is a bare re-raise with no log. The errors reach the CLI's process-boundary handlers, which print a message, so nothing fails silently. This is compliance with the project's exception-handling rule, not wrong behavior.",
+      "evidence": [
+        "src/amoeba/runner/tenant.py:142-144"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I8",
+      "title": "The per-project broad catch is not at a process boundary as the project's exception rule words it.",
+      "members": [
+        "haiku-xhigh/1/5"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "The except Exception at tenant.py:145 isolates one project, logs with logger.exception and escalates. This per-project isolation is a deliberate design (slice 122 D8, line 436), not a silent swallow. The finding is about how the rule is worded, not about a defect.",
+      "evidence": [
+        "src/amoeba/runner/tenant.py:145-149"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I9",
+      "title": "The journal parameter keys 'pipeline' and 'params' are defined again in launch.py, alongside the existing sq_runs.py constants and the store's literals.",
+      "members": [
+        "haiku-xhigh/1/6"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "launch.py:121-122 adds PARAM_PIPELINE and PARAM_PARAMS, which duplicate the constants already in sq_runs.py (present at base) and the literals in REQUIRED_PARAMETER_KEYS. All of them have the same values today, so behavior is unaffected. This is a DRY point.",
+      "evidence": [
+        "src/amoeba/runner/launch.py:121-122",
+        "src/amoeba/process/observers/sq_runs.py:42-43",
+        "src/amoeba/store/journal_models.py:85-88"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I10",
+      "title": "LaunchTracker.confirm is never called from production code; the observer sets tracked.confirmed directly.",
+      "members": [
+        "haiku-xhigh/1/7",
+        "sonnet-high/1/0"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "git grep finds .confirm( only in tests, and RunObserver._confirm writes tracked.confirmed = True directly. Both paths set the same flag, so behavior is correct. This is a dead-code and encapsulation point.",
+      "evidence": [
+        "src/amoeba/runner/launch.py:257-259",
+        "src/amoeba/runner/observe.py:275-277"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I11",
+      "title": "faults.py's docstring says escalation writes come in a later task, but the module already contains them.",
+      "members": [
+        "haiku-xhigh/1/8",
+        "haiku-xhigh/3/7"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "faults.py:4 says 'Escalation writes join this module in a later task.', but raise_expected_faults and escalate are defined in the same file. Only the docstring is stale.",
+      "evidence": [
+        "src/amoeba/runner/faults.py:3-4",
+        "src/amoeba/runner/faults.py:120",
+        "src/amoeba/runner/faults.py:152"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I12",
+      "title": "The check that a journal entry has a usable run_id is written separately in observe, finish and launch, with slightly different rules.",
+      "members": [
+        "haiku-xhigh/2/4",
+        "sonnet/2/1",
+        "sonnet-high/1/2"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "observe._observe_one rejects a non-string or empty id, finish._run_id rejects only a non-string, and launch._text_parameter rejects both. journal_issue requires run_id and the Runner always writes a minted string, so the differences do not change behavior for entries the Runner creates. This is a DRY point.",
+      "evidence": [
+        "src/amoeba/runner/observe.py:127-129",
+        "src/amoeba/runner/finish.py:141-145",
+        "src/amoeba/runner/launch.py:166-170"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I13",
+      "title": "escalate() reads entry.parameters[PARAM_RUN_ID] unguarded, so an in-flight sq_run entry with no run_id raises KeyError inside the last-resort fault handler.",
+      "members": [
+        "sonnet-high/3/0"
+      ],
+      "grade": "REAL",
+      "confidence": "medium",
+      "why": "_in_flight_run_ids indexes parameters[PARAM_RUN_ID] directly. The codebase at head treats sq_run entries journaled before slice 120, which have no run_id, as a real case (sq_run_id.py routes them to a legacy matcher). For such an entry, observe raises ValueError, the tenant's broad catch calls escalate, and the KeyError escapes the except block. That takes down the whole process instead of isolating one project. The author changed it to .get(PARAM_RUN_ID, entry.id) for legacy entries in 8736ea5. Confidence is medium because it depends on an unresolved pre-120 entry surviving recovery.",
+      "evidence": [
+        "src/amoeba/runner/faults.py:194-199",
+        "src/amoeba/runner/tenant.py:145-148",
+        "src/amoeba/process/observers/sq_run_id.py:14"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I14",
+      "title": "probe_link quotes only stdout on a non-zero cf exit, so a cf error reported on stderr leaves the fault detail with no reason.",
+      "members": [
+        "haiku-xhigh/3/3"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "probes.py:131-133 builds the failure detail from completed.stdout only, even though stderr is captured. The probe still fails and escalates correctly, so detection is unaffected. Only the operator-facing diagnostic text is thinner.",
+      "evidence": [
+        "src/amoeba/runner/probes.py:131-133"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I15",
+      "title": "Any exit 2 from sq run with no run state is classified as a missing shape and stops the whole process.",
+      "members": [
+        "haiku-xhigh/3/4"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "observe.py:243-247 classifies by exit code alone, and tick.py raises UpstreamShapeError, which the tenant re-raises. The slice design (line 267 and success criterion 426) specifies exactly this: exit 2 with no state means a missing shape and exits with UPSTREAM_SHAPE. The message includes the stderr tail. This questions the design choice and is not a deviation from it.",
+      "evidence": [
+        "src/amoeba/runner/observe.py:243-247",
+        "src/amoeba/runner/tick.py:132-140"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I16",
+      "title": "launch() can raise ValueError after the entry is journaled, leaving an untracked entry that is later recorded as vanished rather than as a launch failure.",
+      "members": [
+        "sonnet/1/0"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "launch() validates the journaled parameters after journal_issue. But _launch writes them itself from a typed LaunchRun: str(Path) is never empty, params were already checked by build_argv, and run_id is freshly minted. Only an empty pipeline from a planner could trigger it, and production planners are empty at head. The consequence would be a misleading 'vanished' reason, not a lost entry. This is speculative hardening.",
+      "evidence": [
+        "src/amoeba/runner/tick.py:170-192",
+        "src/amoeba/runner/launch.py:186-208"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I17",
+      "title": "observe.py is 326 lines, over the ~300-line guideline, and mixes the confirmed and unconfirmed state machines.",
+      "members": [
+        "sonnet/1/1",
+        "sonnet/3/0"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "The diffstat shows observe.py at 326 added lines. This is a structure and style point with no behavioral effect.",
+      "evidence": [
+        "src/amoeba/runner/observe.py"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I18",
+      "title": "validate_settings reads fields by string name with getattr and does not check launch_grace_seconds.",
+      "members": [
+        "sonnet/1/2",
+        "sonnet/3/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "factory.py:38-45 iterates string names through getattr, so pyright cannot check a renamed field, and launch_grace_seconds is not bounded. A negative grace would require an operator to pass a bad flag. The getattr loop was replaced with direct attribute pairs in 8736ea5. This is type-safety hardening.",
+      "evidence": [
+        "src/amoeba/runner/factory.py:30-51"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I19",
+      "title": "tenant.py:145 is over 88 characters and would fail ruff E501.",
+      "members": [
+        "sonnet/2/0"
+      ],
+      "grade": "FALSE",
+      "confidence": "high",
+      "why": "The line is 91 characters, but running ruff 0.17.2 with the repo's own pyproject.toml config (line-length 88, select E) on tenant.py at head gives 'All checks passed!', because ruff leaves a trailing noqa pragma out of the line-length count. The claimed lint failure does not happen.",
+      "evidence": [
+        "src/amoeba/runner/tenant.py:145",
+        "pyproject.toml:36-43"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I20",
+      "title": "The single-broad-except test counts a substring in source text, and the tenant and factory tests read private attributes.",
+      "members": [
+        "sonnet/2/2"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "test_the_runner_package_has_exactly_one_broad_except counts 'except Exception' in file text, and the tests read tenant._tracker and tenant._planners with pyright ignores. These are test-quality points with no production effect.",
+      "evidence": [
+        "tests/runner/test_tenant.py:190-196",
+        "tests/runner/test_factory.py:88"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I21",
+      "title": "test_budget_coverage imports the private helper _link from another test module.",
+      "members": [
+        "sonnet/3/2"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "test_budget_coverage.py:18 imports _link from runner.test_probes with a reportPrivateUsage ignore. This only affects how the tests are organized.",
+      "evidence": [
+        "tests/runner/test_budget_coverage.py:18"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I22",
+      "title": "The crash harness uses type-ignores and replaces Store.journal_resolve at runtime.",
+      "members": [
+        "sonnet/3/3"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "crash_entry.py carries several type: ignore comments and assigns Store.journal_resolve inside a throwaway subprocess. It is test-only code and has no production effect.",
+      "evidence": [
+        "tests/runner/crash_entry.py:97-123",
+        "tests/runner/crash_entry.py:161-163"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "a122-I23",
+      "title": "_close_recovered closes an unexpected_fault project escalation on the next complete tick, because that kind never enters TickFaults.",
+      "members": [
+        "sonnet-high/1/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "This is true: escalate writes unexpected_fault directly and never into TickFaults, so the next complete tick closes it. The slice design's closure rule (line 297, criterion 429) closes every open project escalation whose kind did not recur. A recurring exception aborts the tick before close, so the escalation stays open while the fault persists. The behavior matches the spec, and the finding is a design preference.",
+      "evidence": [
+        "src/amoeba/runner/tick.py:194-200",
+        "src/amoeba/runner/faults.py:183-191"
+      ],
+      "known": null,
+      "fail_justified": null
+    }
+  ]
+}

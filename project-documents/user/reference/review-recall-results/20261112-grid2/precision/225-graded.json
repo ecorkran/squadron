@@ -1,0 +1,342 @@
+{
+ "case": "225",
+ "issues": [
+  {
+   "id": "225-I1",
+   "title": "raw_counts counts every tick_trade row in the session windows with no product/instrument filter, so other products' rows show as mismatches",
+   "members": [
+    "haiku-xhigh/1/2",
+    "haiku-xhigh/3/1",
+    "sol/1/1",
+    "sol/3/1",
+    "sonnet/2/0",
+    "sonnet-high/1/0",
+    "sonnet-high/2/1"
+   ],
+   "grade": "REAL",
+   "confidence": "high",
+   "why": "raw_counts filters tick_trade only by ts_event against the session windows, while ledger_totals is filtered by the product's shape. _session_row takes the union of instrument keys from both maps, so any instrument with raw rows but no shape ledger row becomes a Mismatch(ledger 0, raw n) and coverage exits 3. This is the case's known bug, fixed later in 459ac7bd.",
+   "evidence": [
+    "src/manta_trading/data/tick/status_reads.py:154-174",
+    "src/manta_trading/data/tick/status_reads.py:96-106",
+    "src/manta_trading/data/tick/tick_coverage.py:81-90"
+   ],
+   "known": "B1",
+   "fail_justified": null
+  },
+  {
+   "id": "225-I2",
+   "title": "caught_up is evaluated (and can read 'yes') when a tier and start are set but the wanted end is unknown",
+   "members": [
+    "haiku-xhigh/1/1",
+    "haiku-xhigh/2/0",
+    "haiku-xhigh/3/0",
+    "sonnet-high/1/1",
+    "sonnet-high/2/0"
+   ],
+   "grade": "REAL",
+   "confidence": "medium",
+   "why": "_product_status sets wanted=None when _wanted_end returns None (no entry.end and no tick_dataset_edge row), so _scope covers only held sessions, yet line 217 passes wanted=wanted_start is not None, which is True. caught_up then returns all(...) over held sessions only (vacuously True with none), so status prints 'caught up: yes' beside 'edge: never observed', against the slice's 'without a wanted range: n/a'. Latent while ES has tier=None, but reachable once a tier is set on a database with no edge row (for example one rebuilt by ingest alone); the later 8a9c47ec fix kept the same wanted flag.",
+   "evidence": [
+    "src/manta_trading/data/tick/tick_status_build.py:186-193",
+    "src/manta_trading/data/tick/tick_status_build.py:217",
+    "src/manta_trading/data/tick/tick_status.py:152-163",
+    "src/manta_trading/data/tick/universe.py:45-47"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I3",
+   "title": "Coverage reads ledger totals and raw counts in separate autocommit snapshots, so an ingest committing between them gives a false mismatch",
+   "members": [
+    "sol/1/0",
+    "sol/2/0",
+    "sol/3/0"
+   ],
+   "grade": "REAL",
+   "confidence": "medium",
+   "why": "_connect opens the read connection with autocommit=True, and build_coverage runs session_verdicts, ledger_totals and raw_counts as separate statements with no enclosing transaction. Ingest commits a unit's tick_trade rows and ledger rows together, so a commit landing between the ledger_totals and raw_counts statements leaves raw > ledger for that session and coverage exits 3 reporting corruption. The window is real but transient and clears on rerun, so it is worth a REPEATABLE READ fix but does not block merge.",
+   "evidence": [
+    "src/manta_trading/data/tick/store_context.py:157-161",
+    "src/manta_trading/data/tick/tick_coverage.py:107-113",
+    "src/manta_trading/cli/commands/tick_store_cmds.py:156-167"
+   ],
+   "known": null,
+   "fail_justified": false
+  },
+  {
+   "id": "225-I4",
+   "title": "raw_counts' range join against unnested sessions may cost rows x sessions with no ts_event index; the cost is unmeasured",
+   "members": [
+    "haiku-xhigh/1/5",
+    "haiku-xhigh/2/3",
+    "haiku-xhigh/3/3"
+   ],
+   "grade": "UNSURE",
+   "confidence": "medium",
+   "why": "tick_trade is a hypertable on ts_event created with create_default_indexes => FALSE and its key leads with instrument_id, so the outer WHERE bound gives chunk exclusion but the BETWEEN join to unnest has no index and will likely be a nested loop with a join filter evaluated rows x sessions times. Whether that is materially slow on realistic ranges is not settled by the code; the slice design chose this exact join. An EXPLAIN ANALYZE of coverage over a multi-month ES range on production-sized data would settle it.",
+   "evidence": [
+    "src/manta_trading/data/tick/status_reads.py:166-173",
+    "src/manta_trading/market/schema/migrations/tick.py:248-254"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I5",
+   "title": "calendar_sessions misses psycopg_pool PoolTimeout, so a calendar outage escapes as a traceback",
+   "members": [
+    "haiku-xhigh/1/0"
+   ],
+   "grade": "FALSE",
+   "confidence": "high",
+   "why": "psycopg_pool defines PoolTimeout (and PoolClosed) as subclasses of psycopg.OperationalError, so the existing except (psycopg.OperationalError, CalendarNotFoundError) catches it and maps it to TickCalendarError, which exit_code_for maps to exit 4. The claimed traceback cannot happen.",
+   "evidence": [
+    "src/manta_trading/data/tick/tick_status_build.py:70-71",
+    "src/manta_trading/data/base/trading_calendar.py:154,194",
+    "src/manta_trading/cli/commands/tick_exit.py:54-57",
+    "psycopg_pool/errors.py:16 (class PoolTimeout(e.OperationalError))"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I6",
+   "title": "An out-of-calendar-range --start/--end exits 4 (storage), which the read epilog does not describe; unreachable-calendar path untested",
+   "members": [
+    "haiku-xhigh/2/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "calendar_sessions turns OutOfPopulatedRangeError into TickCalendarError, which exit_code_for maps to EXIT_STORAGE, while READ_EPILOG names exit 4 only for an unreachable database. The message is still printed, so the effect is a misclassified exit code for an input/range problem (later changed to exit 1 in 3188a92f); the second bullet's pool-exception doubt is unfounded since PoolTimeout is an OperationalError.",
+   "evidence": [
+    "src/manta_trading/data/tick/tick_status_build.py:72-73",
+    "src/manta_trading/cli/commands/tick_store_cmds.py:37-42",
+    "src/manta_trading/cli/commands/tick_exit.py:54-57"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I7",
+   "title": "age() renders negative ages (clock skew) as '-1d 23h'",
+   "members": [
+    "haiku-xhigh/1/3",
+    "haiku-xhigh/3/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "age() applies floor divmod to int(seconds), so a negative input yields days=-1, hours=23 and prints '-1d 23h'. A negative age needs the status host's clock to lag the pass host's; the effect is a cosmetic line in human output only.",
+   "evidence": [
+    "src/manta_trading/cli/commands/tick_status_render.py:43-50",
+    "src/manta_trading/data/tick/tick_status_build.py:211-213"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I8",
+   "title": "build_coverage itself does not reject end <= start",
+   "members": [
+    "haiku-xhigh/1/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The only caller at head, the CLI, rejects end <= start before calling build_coverage. The unguarded path matters only for a future API caller (slice 230), so this is hardening against input that cannot arrive today.",
+   "evidence": [
+    "src/manta_trading/cli/commands/tick_store_cmds.py:216-222",
+    "src/manta_trading/data/tick/tick_coverage.py:94-115"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I9",
+   "title": "calendar_sessions duplicates product_session_days' calendar open/error-mapping/close",
+   "members": [
+    "haiku-xhigh/2/1",
+    "haiku-xhigh/3/4",
+    "sonnet-high/2/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "calendar_sessions repeats the same TradingCalendar open, the same exception-to-TickCalendarError mapping and close as tick_calendar.product_session_days. True duplication, but both copies behave identically today; a DRY refactor, not a defect.",
+   "evidence": [
+    "src/manta_trading/data/tick/tick_status_build.py:63-75",
+    "src/manta_trading/data/tick/tick_calendar.py:67-81"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I10",
+   "title": "status_reads re-declares the unit/request join instead of using manifest_reads.UNIT_FROM",
+   "members": [
+    "haiku-xhigh/2/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "_UNITS is the same string as manifest_reads.UNIT_FROM, and status_reads adds SQL on tick_request/tick_archive_unit outside the modules manifest_reads' docstring names. Structure and DRY only; no behavior difference.",
+   "evidence": [
+    "src/manta_trading/data/tick/status_reads.py:50-59",
+    "src/manta_trading/data/tick/manifest_reads.py:90"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I11",
+   "title": "Unannotated SQL fragments in status_reads may fail strict pyright's LiteralString check",
+   "members": [
+    "haiku-xhigh/3/6"
+   ],
+   "grade": "FALSE",
+   "confidence": "medium",
+   "why": "The project's type checker is mypy, not pyright (pyproject says so explicitly), and mypy treats LiteralString as str, so these str constants do not produce a merge-blocking error. The fragments are unchanged at the current HEAD, consistent with the check passing.",
+   "evidence": [
+    "pyproject.toml:68-75",
+    "src/manta_trading/data/tick/status_reads.py:50-59"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I12",
+   "title": "Wanted-range/tier path of status (caught_up, holed, tier rendering) has no integration test",
+   "members": [
+    "haiku-xhigh/1/6",
+    "haiku-xhigh/3/5"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "Every integration test uses TICK_UNIVERSE[0], which has tier=None, so _wanted_end, the wanted branch of _scope and caught_up True/False are not exercised end to end. A test gap; the defect it would catch is graded separately.",
+   "evidence": [
+    "test/integration/data/test_tick_status_build.py:87",
+    "src/manta_trading/data/tick/universe.py:46"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I13",
+   "title": "Render branches and age() in tick_status_render have no direct tests",
+   "members": [
+    "sonnet-high/3/0"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "No test imports tick_status_render, and the CLI tests cover only the tier-less, edge-less path. Missing tests for paths that are otherwise correct (apart from the cosmetic negative-age case graded separately).",
+   "evidence": [
+    "src/manta_trading/cli/commands/tick_status_render.py:43-110"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I14",
+   "title": "_session_row rescans all ledger/raw keys per session (quadratic) synchronously",
+   "members": [
+    "sol/1/2",
+    "sol/2/1",
+    "sol/3/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "Each _session_row builds the instrument set by scanning every key of both dicts, so assembly is O(sessions x keys). This is a one-shot CLI with no concurrent tasks on its loop, and the cost is small next to the tick_trade scan for the same range; no real effect.",
+   "evidence": [
+    "src/manta_trading/data/tick/tick_coverage.py:81",
+    "src/manta_trading/data/tick/tick_coverage.py:114"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I15",
+   "title": "Module-level assert guards that _BUCKET_ROWS covers every TickSessionStatus",
+   "members": [
+    "sonnet/1/0",
+    "sonnet/2/1",
+    "sonnet-high/1/3",
+    "sonnet-high/3/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The exhaustiveness check is a bare module-level assert, stripped under -O. The same pattern already exists in tick_exit.py; a missing bucket would only drop a row from human output. Style/hardening.",
+   "evidence": [
+    "src/manta_trading/cli/commands/tick_status_render.py:38-40",
+    "src/manta_trading/cli/commands/tick_exit.py:32-35"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I16",
+   "title": "run_mapped's per-verb storage tuple splits exit-code policy from tick_exit.exit_code_for",
+   "members": [
+    "sonnet/1/1",
+    "sonnet-high/3/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "run_mapped checks the caller's storage tuple before exit_code_for so read verbs map TickDatabaseUnreachable to 4 while writers keep 1. Behavior is correct and tested; this is a design-cohesion point.",
+   "evidence": [
+    "src/manta_trading/cli/commands/tick_store_cmds.py:66-82",
+    "src/manta_trading/cli/commands/tick_store_cmds.py:170-173"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I17",
+   "title": "_product_status and _product_lines are long and mix responsibilities; jsonable lives in the status module",
+   "members": [
+    "sonnet/1/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "Function length and module placement concerns only; no behavior effect.",
+   "evidence": [
+    "src/manta_trading/data/tick/tick_status_build.py:179-227",
+    "src/manta_trading/cli/commands/tick_status_render.py:57-110"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I18",
+   "title": "shape_units is queried twice per product, and spread filtering uses list membership",
+   "members": [
+    "sonnet/2/2",
+    "sonnet-high/1/2",
+    "sonnet-high/3/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "_scope and session_verdicts each call shape_units for the same shape, and contracts are filtered with 'c not in spreads'. Both true; one extra manifest query and a small quadratic over a handful of contracts have no real effect.",
+   "evidence": [
+    "src/manta_trading/data/tick/tick_status_build.py:87",
+    "src/manta_trading/data/tick/tick_status_build.py:155",
+    "src/manta_trading/data/tick/tick_status_build.py:224"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-I19",
+   "title": "_read and the coverage read callback type the connection as Any",
+   "members": [
+    "sonnet-high/3/3"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "_read takes Callable[[Any, str], ...] and the inner read uses conn: Any although manifest_reads defines Conn. Typing looseness only.",
+   "evidence": [
+    "src/manta_trading/cli/commands/tick_store_cmds.py:156-158",
+    "src/manta_trading/cli/commands/tick_store_cmds.py:228"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
+ ]
+}

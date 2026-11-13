@@ -1,0 +1,275 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "FAIL",
+  "title": "The estimate parser reads top-level keys from a payload that nests the summary under `phases`",
+  "location": "scripts/cutover_304_first_purchase.py:152-163",
+  "description": "`fetch_estimate` returns the parsed stdout of `mt data tick pass --estimate-only --json` unchanged. `judge_estimate` then reads `summary[\"wanted_days\"]`, `summary[\"verdict\"]`, and `summary[\"requests\"]` at the top level (`scripts/cutover_304_checks.py:196`). The real payload has none of those keys. `print_pass` calls `pass_to_dict`, which is `PassResult.to_dict()` plus `exit_code` (`src/manta_trading/cli/commands/tick_pass_render.py:146-148`, `:285-287`). That method places each phase's summary under `phases[i].summary` (`src/manta_trading/data/tick/pass_contract.py:119-135`). The purchase summary is at `phases[name == \"purchase\"].summary`, which `scripts/cutover_234_checks.py:145` already reads that way. Here `_check_scope` raises `KeyError: 'wanted_days'`. `main` catches it as \"unexpected payload\" and exits 1 (`cutover_304_first_purchase.py:249-252`). The full run and the new `--estimate` mode both stop there, before any spend, so the PM never gets the ceiling command.\n\nThe tests miss this because the fixtures are flat. `NOTHING` (`test/unit/scripts/test_cutover_304_first_purchase.py:47-56`) and `_summary()` (`test/unit/scripts/test_cutover_304_checks.py:59-80`) are hand-written. `_summary`'s docstring says it mirrors `plan_summary`, which is the inner summary and not what the CLI prints. The CLAUDE.md parser rule requires fixtures in the production format. Only the coverage, accounting, and debug fixtures use the real builders. This path predates the diff, but the diff adds `--estimate` on top of it, and its tests pin the wrong shape. I could not check history without git to see whether the nesting came after 304."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "FAIL",
+  "title": "A real estimate can never reach BUY: its verdict is `estimate_only`, and the judge accepts only `allowed`",
+  "location": "scripts/cutover_304_checks.py:242-245",
+  "description": "`pass --estimate-only` calls `evaluate_spend(..., estimate_only=True)`, which sets `VerdictStatus.ESTIMATE_ONLY` whenever the plan is non-empty (`src/manta_trading/data/tick/spend_guard.py:266-269`; `purchase_plan.py:252-260`; `purchase_phase.py:158-163`). An integration test pins that value: `test/integration/data/test_tick_purchase_phase.py:240` asserts `summary[\"verdict\"] == \"estimate_only\"`. `judge_estimate` returns BUY only when the verdict equals `VERDICT_ALLOWED` (`\"allowed\"`). So on the full path, every non-empty plan is refused: by the ceiling checks, or by this verdict check once they pass. The `--estimate` mode avoids the check only because `check_ceilings=False` returns early (next finding). The `_summary` fixture uses `\"verdict\": \"allowed\"`, which the real estimate never produces, so the tests cannot see this. A fix has to decide BUY from the ceilings and from `reasons`. The archive-space shortfall reaches the estimate only through `reasons` (`purchase_plan.py:304`), and the verdict will never say \"refused\" for it."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "`--estimate` returns BUY for any refusal and prints the ceiling command as the fix",
+  "location": "scripts/cutover_304_checks.py:225-226",
+  "description": "With `check_ceilings=False`, `judge_estimate` returns `Estimate.BUY` before it reads the verdict. So any refusal is reported as a buy. `_estimate_only` then prints `verdict refused: buy` and \"the PM runs: sudo \u2026set-tick-spend-ceilings.sh \u2026\" (`scripts/cutover_304_first_purchase.py:271-275`). One refusal that raising a ceiling cannot fix is the archive-space shortfall, which `plan_summary` appends to `reasons` (`purchase_plan.py:304`; `spend_guard.py:117-124`). The PM would set ceilings, and the real run would then stop on space. `test_estimate_prints_the_command_and_buys_nothing` uses only `reasons: [\"ceiling\"]`, so this path is untested. When the two FAILs are fixed, the `--estimate` branch also has to refuse on non-ceiling reasons."
+ },
+ {
+  "ref": "haiku-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "Over-session names are keyed by product, not family, and a missing key is silently defaulted",
+  "location": "scripts/cutover_304_evidence.py:232-234",
+  "description": "`_family_evidence` collects `over` names into `named[product]` across every coverage read for that product, both ES `ohlcv-1m` and ES `statistics`. `over_failures` then attaches the whole list to each family row for that product. So a bar-family failure can name statistics sessions, and the reverse. Each `volume_verdict_dict` carries a `family` field (`src/manta_trading/data/tick/tick_coverage.py:93`) that could key the list. Separately, `over_sessions` uses `coverage.get(\"volume_checks\") or ()` (`scripts/purchase_accounting.py:112`). That default swallows an absent key, although the module docstring says every key is required and a missing one raises. The failure still fires, because the count comes from `cross_tier`, so the impact is on the names."
+ },
+ {
+  "ref": "haiku-xhigh/1/4",
+  "severity": "CONCERN",
+  "title": "`--slice` accepts any text, and that text becomes part of file paths",
+  "location": "scripts/cutover_304_first_purchase.py:201-204",
+  "description": "The help text and docstring say `--slice <n>`, but `_nonempty` accepts any non-empty string. The value builds the start file, the baseline file, and the log name (`:99-104`, `:237`). A value like `../x` writes outside `NOTES_DIR`. `ref` goes into the log name the same way, though that predates this diff. Validating the slice as digits (`type=int`, or a `^\\d+$` check) would enforce the documented contract."
+ },
+ {
+  "ref": "haiku-xhigh/1/5",
+  "severity": "CONCERN",
+  "title": "The new scripts and the new tests are not covered by the configured type checker",
+  "location": "pyproject.toml:72-75",
+  "description": "`[tool.mypy]` sets `files = [\"src/manta_trading\"]`. So `scripts/purchase_*.py`, `scripts/cutover_304_*.py`, and `test/unit/scripts/test_*.py` are never checked. The python rules require strict pyright over `src` and `tests`, or zero mypy errors on touched files, and this config does not reach these files. The tests also load the scripts as `ModuleType` (`pv`, `fp`, `ev`, `checks`), so every call into the code under test is `Any`. Test helpers use bare `-> dict` and `list` annotations (`test/unit/scripts/test_purchase_verdicts.py:187`, `:200`, `:250`, `:273-274`), which pyright strict reports as `reportMissingTypeArgument`."
+ },
+ {
+  "ref": "haiku-xhigh/2/0",
+  "severity": "FAIL",
+  "title": "Estimate verdict check refuses the verdict every estimate-only run emits, so no purchase can run",
+  "location": "scripts/cutover_304_checks.py:242",
+  "description": "`judge_estimate` buys only when `summary[\"verdict\"] == \"allowed\"` (lines 242-245). The producer never emits that value in estimate-only mode:\n\n- `build_plan` passes `estimate_only` into `evaluate_spend` (`src/manta_trading/data/tick/purchase_plan.py:259`). `spend_guard.py:266-267` then sets `ESTIMATE_ONLY` whenever that flag is true, so the status can never be `ALLOWED` or `REFUSED`.\n- `plan_summary` emits `spend.status.value` as `verdict` (`purchase_plan.py:303`).\n- `test/integration/data/test_tick_purchase_phase.py:240` asserts `verdict == \"estimate_only\"`, and `test_spend_guard.py:127-130` says estimate-only \"never allows\".\n\nThe cutover calls `fetch_estimate()` with `--estimate-only` (`ESTIMATE_ARGS`, `cutover_304_first_purchase.py:80`). `_steps` judges that output at line 290 and again at line 298. For a non-empty plan within the ceilings, `judge_estimate` reaches the verdict check and raises `estimate: verdict estimate_only`. The run exits 1 before `mt-run tick`, so the buy path is unreachable.\n\nThe check predates this diff, but the diff rewires this path, and its tests fake the verdict as `\"allowed\"` or `\"refused\"`. That is why it was not caught.\n\nI verified this by reading the producer and an existing integration test, not by running the CLI. The fix should judge the figures and scope on the estimate-only status, and leave the buy decision to the real pass's own guard. Add a test that uses the real `estimate_only` verdict shape."
+ },
+ {
+  "ref": "haiku-xhigh/2/1",
+  "severity": "CONCERN",
+  "title": "`--estimate` prints \"buy\" and the ceiling command for every non-nothing verdict",
+  "location": "scripts/cutover_304_checks.py:225-226",
+  "description": "With `check_ceilings=False`, `judge_estimate` returns `Estimate.BUY` before it reads the verdict or the reasons. `_estimate_only` (`cutover_304_first_purchase.py:255-276`) then prints `verdict ...: buy` and \"the PM runs: sudo ...\".\n\nThe reasons can include a disk-space refusal (`_space_reason`, `purchase_plan.py:304` and `:312`), not only spend reasons. For a space refusal the printed ceiling command cannot fix anything. The unit test at `test_cutover_304_first_purchase.py:544` uses `verdict: \"refused\"`, which estimate-only output never emits, so it does not exercise this case.\n\nWhen the reasons are not ceiling lines, `--estimate` should print the reasons and omit the command."
+ },
+ {
+  "ref": "haiku-xhigh/2/2",
+  "severity": "CONCERN",
+  "title": "The baseline's shape is validated after the purchase has run",
+  "location": "scripts/cutover_304_first_purchase.py:110-111",
+  "description": "`record_start_and_baselines` returns an existing baseline without checking for the `records` key. `_steps` then installs and buys. Only `collect()` calls `_baseline_records` (`cutover_304_evidence.py:237-241`, used at `:268-270`) and raises \"predates 307\".\n\nFor example, a re-run under `--slice 304` with the old `304-cutover-baseline.json` would spend money under the new 307 wants and only then stop. The check belongs in the reuse branch, before install."
+ },
+ {
+  "ref": "haiku-xhigh/2/3",
+  "severity": "CONCERN",
+  "title": "`--slice` is free text that names the state files",
+  "location": "scripts/cutover_304_first_purchase.py:223-225",
+  "description": "`_nonempty` only strips whitespace, although the help text says \"slice number\". The value becomes part of `{slice}-cutover-start.txt` and `{slice}-cutover-baseline.json`.\n\nA mistyped id finds no state files, so the script records a fresh start instant and a fresh baseline after any purchase already made. That makes the \"before\" figures and the resubmit `since` cutoff wrong with no error. Validate it as an integer or a strict slice-number pattern."
+ },
+ {
+  "ref": "haiku-xhigh/2/4",
+  "severity": "CONCERN",
+  "title": "Exit codes and bucket names are defined twice",
+  "location": "scripts/cutover_304_evidence.py:42",
+  "description": "`cutover_304_evidence.py` declares its own `EXIT_OK, EXIT_PARTIAL = 0, 3` (line 42) and `COMPLETE = \"complete\"` (line 45). `purchase_verdicts.py` imports the canonical `EXIT_OK` and `EXIT_PARTIAL` from `manta_trading.cli.commands.tick_exit` (line 25), and uses `TickSessionStatus.COMPLETE`. The Python rules say to define a value once. Import the canonical values in `cutover_304_evidence.py` too."
+ },
+ {
+  "ref": "haiku-xhigh/2/5",
+  "severity": "CONCERN",
+  "title": "Test fixtures use a verdict vocabulary the producer does not emit",
+  "location": "test/unit/scripts/test_cutover_304_checks.py:80",
+  "description": "The checks fixture is built with `\"verdict\": \"allowed\"` (line 80), and `test_an_unbuyable_estimate_refuses...` uses `\"refused\"` (line 107). The first-purchase fixtures use `\"refused\"` at line 544. The real estimate-only verdict is `\"estimate_only\"`, so these tests cannot catch Finding 1.\n\nTwo other gaps in the same area:\n\n- The `judge()` wrapper's resubmit branch (`cutover_304_first_purchase.py:166-175`, which calls `debug requests` and `resubmit_origins`) has no test.\n- The `resubmit_origins` fixture is hand-written, while the symbols test renders its row through `_cell`. I checked that `_cell` produces aware ISO timestamps and ISO dates, which is what the parser expects. The test does not pin that format."
+ },
+ {
+  "ref": "haiku-xhigh/3/0",
+  "severity": "FAIL",
+  "title": "The full cutover requires verdict \"allowed\", which the planner never emits for an estimate",
+  "location": "scripts/cutover_304_checks.py:242",
+  "description": "`judge_estimate` raises unless `summary[\"verdict\"] == \"allowed\"` (lines 242-245). The cutover's step 3 gets its summary from `pass --estimate-only --json` (`ESTIMATE_ARGS`, first_purchase.py:80). That command never returns \"allowed\" for a non-empty plan:\n\n- `evaluate_spend` sets `VerdictStatus.ESTIMATE_ONLY` whenever `estimate_only` is passed, regardless of breach (src/manta_trading/data/tick/spend_guard.py:266-267).\n- `plan_summary` writes that status as `verdict` (purchase_plan.py:303).\n- The integration test asserts the same thing: test/integration/data/test_tick_purchase_phase.py:240 expects `\"estimate_only\"`.\n\nConsequences:\n\n- For any non-empty plan, the full run installs the release (step 2), then stops at step 3 with \"verdict estimate_only\". It does this even when both ceilings are correct.\n- The new `--estimate` path skips this check (`check_ceilings=False` returns BUY at lines 225-226). It prints \"the PM runs: sudo \u2026\", the PM sets the ceilings as instructed, and the full run still refuses.\n- The unit tests pass only because their fixtures use shapes the CLI does not print: `\"allowed\"` at test/unit/scripts/test_cutover_304_checks.py:80 and test/unit/scripts/test_cutover_304_first_purchase.py:402, and `\"refused\"` at test_cutover_304_first_purchase.py:544 for the `--estimate` test. CLAUDE.md requires parser fixtures to match production output.\n- The 232 slice note (`project-documents/user/slices/232-slice.universe-expansion-gc.md:561`) records `allowed` in estimate-only, so the planner contract changed at some point. I cannot tell from this worktree when.\n\nSuggested fix: decide the spend verdict from the figures and `reasons` instead of requiring `\"allowed\"`. Refusing on non-empty `reasons` would also cover a space shortfall, which the cutover does not check today. Replace the fixtures with real `estimate_only` output and add a test that feeds that output through `judge` and `_steps`."
+ },
+ {
+  "ref": "haiku-xhigh/3/1",
+  "severity": "CONCERN",
+  "title": "An unknown source edge passes the D6 item 3 exit rule silently",
+  "location": "scripts/purchase_verdicts.py:275",
+  "description": "`not_caught_up_report` lists nothing and reports no failure unless `caught_up is False`. `caught_up` is also `None` when the family has no source edge: `scope_caught_up` returns `None` when `source_edge is None` (src/manta_trading/data/tick/tick_status_scope.py:204-208), and the docstring at lines 192-193 says nothing is judged in that case. For a wanted family, an unknown edge therefore passes with only \"caught up None\" in the narration. The test `test_a_family_that_is_caught_up_lists_nothing` (parametrized with `None`) enshrines this. CLAUDE.md says no silent fallbacks, so an unjudgeable wanted family should be a failure."
+ },
+ {
+  "ref": "haiku-xhigh/3/2",
+  "severity": "CONCERN",
+  "title": "Over-session names are attributed to the wrong volume family",
+  "location": "scripts/purchase_accounting.py:119",
+  "description": "`named` is keyed by product only (scripts/cutover_304_evidence.py:216, 232-233), and `over_sessions` takes every `over` verdict regardless of family (purchase_accounting.py:105-116). The statistics coverage document carries volume checks for both volume families (`VOLUME_FAMILIES` in src/manta_trading/data/tick/schema_families.py:53-56, iterated in tick_coverage_statistics.py:61-71). Each verdict has a `family` field (tick_coverage.py:93). So `over_failures` attaches every ES over session to both the ES tick-tier row and the ES bar_1m row. The count is right, but the names can be wrong, and D6 item 4 requires naming. The test fixture for `over_sessions` omits `family`, so this is not exercised. Key the names by (product, family) and filter by family."
+ },
+ {
+  "ref": "haiku-xhigh/3/3",
+  "severity": "CONCERN",
+  "title": "`origins = {}` is untyped",
+  "location": "scripts/cutover_304_first_purchase.py:171",
+  "description": "`origins` is assigned `{}` and later a `dict[RequestKey, datetime]`. Under the project's `typeCheckingMode = \"strict\"`, pyright will likely report a partially-unknown variable type. I could not run pyright to confirm. Annotate it as `dict[RequestKey, datetime]`."
+ },
+ {
+  "ref": "haiku-xhigh/3/4",
+  "severity": "CONCERN",
+  "title": "`EXIT_USAGE` is dead code",
+  "location": "scripts/cutover_304_first_purchase.py:79",
+  "description": "The constant is defined and never used in this file (the grep matched only its definition). The argparse path returns argparse's own exit code. Remove it, or use it deliberately in `main` if it should override argparse's code."
+ },
+ {
+  "ref": "sol/1/0",
+  "severity": "CONCERN",
+  "title": "Tick-tier families bypass the session exit rule",
+  "location": "scripts/cutover_304_evidence.py:72-91",
+  "description": "`coverage_reads()` includes only history wants, excluding both products\u2019 configured `tbbo` tiers. Consequently, `_family_evidence()` never checks or lists their incomplete sessions, even when accounting reports `caught_up=False`. With unchanged health and units carrying failure reasons, the cutover can pass without accounting for these sessions. Include tier ranges and test this case."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "CONCERN",
+  "title": "Over-volume evidence mixes different families",
+  "location": "scripts/purchase_accounting.py:119-127",
+  "description": "Failure counts are per family, but session names are indexed only by product. Statistics coverage includes a `family` on each volume check; `over_sessions()` discards it. An `ohlcv-1m` failure can therefore list `tbbo` discrepancies, and vice versa. Preserve family identity and group names by `(product, family)`."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "FAIL",
+  "title": "Include tick-tier families in completeness evidence",
+  "location": "scripts/cutover_304_evidence.py:75-76",
+  "description": "`coverage_reads()` visits only `entry.history`, omitting both products\u2019 configured `tbbo` tiers. Consequently, `_family_evidence()` never checks or names their incomplete sessions, despite D6 requiring every family. An already-failing health baseline can remain unchanged while these omissions produce no exit-rule failure. Include each configured tier\u2019s range and add a regression test for an unaccounted-for tick-tier session."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "FAIL",
+  "title": "Only exempt provider holes on provider-missing days",
+  "location": "scripts/purchase_verdicts.py:283-286",
+  "description": "Every `provider_hole` session is skipped regardless of its condition. The existing `tick_status.caught_up()` contract exempts holes only when a constituent day is provider-`missing`; D6 requires the same distinction. A hole on an `available` day therefore remains not caught up but disappears from this report without failing.\n\nExecuting the extracted report function with `caught_up=False` and an available-day provider hole returned `SessionReport(lines=[], failures=[])`. Check the qualifying provider condition before exempting the session, and test both qualifying and nonqualifying holes."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "FAIL",
+  "title": "Estimate mode prices the installed release, not the requested release",
+  "location": "scripts/cutover_304_first_purchase.py:261-268",
+  "description": "`fetch_estimate()` invokes `sudo mt-run`, which executes `/opt/manta-trading/.venv/bin/mt`. This path never installs or runs the requested ref. When production still has the previous universe, `--estimate` prices those old wants\u2014potentially reporting nothing to buy and printing no ceiling command. Run the estimate using the requested release\u2019s universe and production configuration, and test with differing installed and requested releases."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "FAIL",
+  "title": "Pre-install baseline omits the new GC bar family",
+  "location": "scripts/cutover_304_first_purchase.py:112-115",
+  "description": "The baseline reads production accounting before `install_release()`. The previous universe has no GC bar want, and `family_wants()` only reports configured families, so this baseline lacks `GC/bar_1m`. After installation and purchase, accounting includes that family; `purchase_accounting.totals_delta()` then raises because its baseline is missing. Reruns retain the same incomplete baseline. Capture totals for every target family before spending, independently of the installed universe."
+ },
+ {
+  "ref": "sol/3/2",
+  "severity": "CONCERN",
+  "title": "Session evidence excludes the tick-tier families",
+  "location": "scripts/cutover_304_evidence.py:72-91",
+  "description": "`coverage_reads()` includes only history wants, so `_family_evidence()` never judges ES or GC `tbbo` sessions. Accounting narrates those families but does not enforce their caught-up state. Consequently, an unchanged unhealthy baseline can pass without naming outstanding tick-tier sessions, contrary to D6\u2019s every-family exit criterion. Include tier coverage over each entry\u2019s tier range."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "Loose typing in new script and test code under the strict-pyright rule",
+  "location": "test/unit/scripts/test_purchase_verdicts.py:94",
+  "description": "`_status(...)` is annotated `-> object` but is passed to `check_dataset_edge`, which takes `subprocess.CompletedProcess[str]`. The same file has bare `-> dict` return annotations on `_request`, `_unit` and `_coverage`, and bare `list` for `exhausted`. In `scripts/cutover_304_first_purchase.py` (`judge`), `origins = {}` has no annotation. The rules include tests in strict pyright and treat zero errors as a merge blocker. I did not run pyright, so these are likely violations, not confirmed ones. Annotate them as `CompletedProcess[str]`, `dict[str, Any]`, `list[ExhaustedRequest]` and `dict[RequestKey, datetime]`."
+ },
+ {
+  "ref": "sonnet/2/0",
+  "severity": "CONCERN",
+  "title": "`--estimate` reports BUY for any non-\"nothing_to_buy\" verdict, including refusals",
+  "location": "scripts/cutover_304_checks.py:225",
+  "description": "When `check_ceilings=False`, `judge_estimate` returns `Estimate.BUY` immediately after the scope check. It returns before the later `summary[\"verdict\"] != VERDICT_ALLOWED` branch, so that branch never runs in this mode. A verdict of `refused` for a reason other than the ceilings (for example, a provider or planner refusal) is therefore reported as BUY. `_estimate_only` then prints `verdict refused: Estimate.BUY` and the PM's ceiling command. The test `test_estimate_prints_the_command_and_buys_nothing` only exercises a `refused` verdict whose reason is \"ceiling\", so it hides this. Skipping only the ceiling comparisons would be correct, but the verdict check should still run, or `--estimate` should print the verdict reasons."
+ },
+ {
+  "ref": "sonnet/2/1",
+  "severity": "CONCERN",
+  "title": "Naive and aware datetimes can be compared in resubmit matching",
+  "location": "scripts/cutover_304_checks.py:158",
+  "description": "`resubmit_origins` parses `requested_at` with `datetime.fromisoformat`. `judge()` in `cutover_304_first_purchase.py` parses `start`, which is tz-aware. If the `debug requests` JSON renders `requested_at` without an offset, `made < since` in `_check_resubmit` raises a raw `TypeError`. It would not raise a `CutoverError`, and the operator would see an unexplained crash. The tests only use `+00:00` values, so nothing covers the naive case. `_edge_of` already rejects naive instants explicitly, and this path should do the same, or a test should pin the real CLI's format."
+ },
+ {
+  "ref": "sonnet/3/0",
+  "severity": "CONCERN",
+  "title": "Source files exceed the ~300-line guideline",
+  "location": "scripts/cutover_304_checks.py",
+  "description": "The line counts of the three modified cutover scripts are 311 (`cutover_304_checks.py`), 308 (`cutover_304_first_purchase.py`) and 312 (`cutover_304_evidence.py`). These counts come from a grep that includes blank lines. `purchase_verdicts.py` was split out explicitly to stay near 300 lines, but the other three files grew past that mark anyway. Each is only slightly over. The overshoot is minor, and `_check_scope`, `_check_resubmit` and `resubmit_origins` could move into a separate module."
+ },
+ {
+  "ref": "sonnet/3/1",
+  "severity": "CONCERN",
+  "title": "Mixed `fetch_status` vocabulary and bucket names are matched by string literals",
+  "location": "scripts/purchase_verdicts.py:196-216",
+  "description": "The `_NEEDS_REASON`, `_NEVER_ACCOUNTED`, `_NEEDS_PUBLICATION` and `_LISTED_NEVER` sets are built from `TickSessionStatus` values, so that part is fine. `_unaccounted` falls through to a `CutoverError` for any bucket not in those four sets, so a new status will stop the cutover. That is the intended fail-closed behaviour and is tested. However, the other `purchase_verdicts` literals, such as `ISSUE_CLOSED = \"CLOSED\"`, depend on `gh` output text. A short comment next to `ISSUE_CLOSED` shows the author considered this. Even so, `_label` compares session dates and request ranges as ISO strings (`request.start <= day < request.end`). That is correct only while the formats match exactly, and `str(date)` does match. Parsing them as `date` objects would make this robust. It is minor."
+ },
+ {
+  "ref": "sonnet/3/2",
+  "severity": "CONCERN",
+  "title": "`main` swallows `SystemExit` from argparse",
+  "location": "scripts/cutover_304_first_purchase.py:main",
+  "description": "`main` catches `SystemExit` around `parse_args` and returns `int(exc.code or 0)`. The inline comment justifies this: argparse has already printed usage, and `main` returns its exit code so the code is testable. It is a narrow, justified swallow. One edge case: `SystemExit.code` can be a string, which would make `int()` raise `ValueError`. argparse only emits ints, so this is theoretical. A simpler design would pass `argv` to a parser configured with `exit_on_error=False`, or let `SystemExit` propagate."
+ },
+ {
+  "ref": "sonnet/3/3",
+  "severity": "CONCERN",
+  "title": "Unrecoverable `--estimate` mode relies on a hand-copied state-write guard in tests",
+  "location": "test/unit/scripts/test_cutover_304_first_purchase.py:test_estimate_prints_the_command_and_buys_nothing",
+  "description": "The test asserts that no install, pass or baseline call happens by monkeypatching `install_release`, `run_passes` and `record_start_and_baselines`. `_estimate_only` also calls `evidence.mt_json` inside `judge` only when `since is not None`, which `--estimate` never triggers. That test therefore confirms the happy path but not that `judge` skips the `debug requests` read for `start=None`. Add a case in which a resubmit exists and `start=None`. It should expect the \"is a resubmit\" refusal and make no extra `mt_json` call."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "Duplicated \"want has no end date\" check",
+  "location": "scripts/cutover_304_evidence.py:72-90",
+  "description": "`coverage_reads()` in `scripts/cutover_304_evidence.py` loops over `TICK_UNIVERSE`, raises `CutoverError` for an open-ended want, and builds the `{product} {schema} want has no end date` message. `latest_want_end()` in `scripts/purchase_verdicts.py:56-68` repeats the same loop, check and message. The project rules require DRY. One shared helper that yields `(entry, want)` pairs with an end date would give a single place to change. It would also remove the need for two separate tests of the same rule."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "New tests use bare generics, which strict pyright rejects",
+  "location": "test/unit/scripts/test_purchase_verdicts.py:197-205",
+  "description": "The Python rules require strict pyright over tests, with zero errors as a merge blocker. `test_purchase_verdicts.py` has several loose annotations:\n- `_request(...) -> dict`\n- `_unit(...) -> dict`\n- `_coverage(...) -> dict`\n- `exhausted: list | None`\n- `units: list[dict] | None`\n- `_status(...) -> object`\n\nThese are `reportMissingTypeArgument` errors under strict mode. Use `dict[str, Any]` and `list[ExhaustedRequest]`, or `Sequence[Any]`."
+ },
+ {
+  "ref": "sonnet-high/2/0",
+  "severity": "CONCERN",
+  "title": "Duplicated \"want has no end date\" validation and exit-code constants",
+  "location": "scripts/cutover_304_evidence.py#coverage_reads",
+  "description": "`coverage_reads()` in `cutover_304_evidence.py` and `latest_want_end()` in `purchase_verdicts.py` each loop over `TICK_UNIVERSE` histories. Each raises the same `\"{product} {schema} want has no end date\"` error for an open-ended want. This breaks the DRY rule: the open-end rule belongs in one helper. The same applies to the exit codes. `cutover_304_evidence.py` still defines `EXIT_OK, EXIT_PARTIAL = 0, 3`. `purchase_verdicts.py` imports the same names from `manta_trading.cli.commands.tick_exit`. Two sources for one value will drift. Import the production constants in `cutover_304_evidence.py` and extract one \"history wants with fixed ends\" iterator."
+ },
+ {
+  "ref": "sonnet-high/2/1",
+  "severity": "CONCERN",
+  "title": "`__doc__` used as `str` under strict pyright",
+  "location": "scripts/cutover_304_first_purchase.py#_parser",
+  "description": "`description=__doc__.split(\"\\n\")[0]` calls `.split` on `__doc__`, which is typed `str | None`. Strict pyright (a merge blocker in the Python rules) reports `reportOptionalMemberAccess`. It also breaks silently under `python -OO`, which strips docstrings. Use an explicit module constant for the description, or raise if `__doc__` is empty."
+ },
+ {
+  "ref": "sonnet-high/2/2",
+  "severity": "CONCERN",
+  "title": "Request ranges are matched as strings, not dates",
+  "location": "scripts/purchase_verdicts.py#_label",
+  "description": "`_label` decides whether a session falls inside an exhausted request with `request.start <= day < request.end`. Both sides are `str(row[\"range_start\"])` and `str(session[\"session_date\"])`. This is correct only while `debug requests` renders both as `YYYY-MM-DD`. `_cell` renders `date` and `datetime` through `isoformat()`. If a range column ever arrives as a datetime, the lexicographic comparison silently mislabels sessions. The same string-keyed matching applies to `RequestKey` in `resubmit_origins` and `_check_scope`. Parse to `date` once in `retry_exhausted_requests` and compare `date` objects. At minimum, add a test that feeds rows rendered through the real `_cell`. The tests already do this for `symbols`, but not for ranges."
+ },
+ {
+  "ref": "sonnet-high/3/0",
+  "severity": "CONCERN",
+  "title": "`--estimate` reports BUY and prints a ceiling command for a refusal that may not be about ceilings",
+  "location": "scripts/cutover_304_checks.py:225-226",
+  "description": "With `check_ceilings=False`, `judge_estimate` returns `Estimate.BUY` as soon as the verdict is not `nothing_to_buy`. That skips the `summary[\"verdict\"] != VERDICT_ALLOWED` check, along with the ceiling checks (lines 242-245). `_estimate_only` (`scripts/cutover_304_first_purchase.py:273-275`) then prints `the PM runs: sudo ... --per-pass N --cap-30d M` whenever the outcome is BUY. Only the ceiling-based refusals are meant to be skipped. Any other refusal reason in `summary[\"reasons\"]` is reported as BUY, with a ceiling command that will not clear it. The operator would run the root command and only learn of the real refusal on the real run. The docstring says only \"short or unset ceilings are not a stop\". The code skips the whole verdict check instead. The test `test_estimate_prints_the_command_and_buys_nothing` uses `reasons: [\"ceiling\"]`, so it never exercises a non-ceiling refusal. Fix: in estimate mode, still stop on a refused verdict whose reasons are not ceiling-only, or print `summary[\"reasons\"]` alongside the command. Add a test for a non-ceiling refusal."
+ },
+ {
+  "ref": "sonnet-high/3/1",
+  "severity": "CONCERN",
+  "title": "Resubmit time comparison has no timezone guard, unlike the dataset-edge parser",
+  "location": "scripts/cutover_304_checks.py:147-165",
+  "description": "`resubmit_origins` parses `requested_at` with `datetime.fromisoformat` and only checks that it parses. `_check_resubmit` then compares it with `since`, which is tz-aware (`datetime.now(UTC).isoformat`). If a row ever renders a naive timestamp, `made < since` raises `TypeError`. `main` catches only `KeyError` and `ValueError` (`scripts/cutover_304_first_purchase.py:246-252`), so this becomes an unrecorded traceback after the install step, not a narrated `FAILED:` stop. `purchase_verdicts._edge_of` already guards this case (`edge.tzinfo is None`). The two parsers handle timestamps inconsistently. Fix: reject a naive `requested_at` in `resubmit_origins` with a `CutoverError`, as `_edge_of` does. Add a test for it."
+ },
+ {
+  "ref": "sonnet-high/3/2",
+  "severity": "CONCERN",
+  "title": "The \"no end date\" rule over `TICK_UNIVERSE` history is implemented twice",
+  "location": "scripts/cutover_304_evidence.py:72-91",
+  "description": "`coverage_reads()` in `cutover_304_evidence.py` and `latest_want_end()` in `scripts/purchase_verdicts.py:61-74` each walk `TICK_UNIVERSE[*].history`. Each raises its own `\"{product} {schema} want has no end date\"` error. This is the \"one value, one source\" and DRY situation the project rules warn about. If the open-end policy changes, two places must change. Fix: expose one iterator or helper that yields the bounded wants and raises on an open end, and build both functions on it."
+ }
+]

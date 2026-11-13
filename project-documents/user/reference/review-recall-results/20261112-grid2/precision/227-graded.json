@@ -1,0 +1,375 @@
+{
+ "case": "227",
+ "issues": [
+  {
+   "id": "227-I1",
+   "title": "The cutover runner catches only StepFailed and CalledProcessError, so any other exception skips the report the docstring promises.",
+   "members": [
+    "haiku-xhigh/1/0",
+    "haiku-xhigh/2/1",
+    "haiku-xhigh/3/0",
+    "sol/1/2",
+    "sol/2/3",
+    "sol/3/3",
+    "sonnet/1/1",
+    "sonnet/2/0",
+    "sonnet/3/1",
+    "sonnet-high/1/0",
+    "sonnet-high/2/0",
+    "sonnet-high/3/0"
+   ],
+   "grade": "REAL",
+   "confidence": "medium",
+   "why": "run_steps catches only (StepFailed, CalledProcessError), and main() writes the report only after run_steps returns. step_production reads the production health log with no exists/empty guard, shell() has no timeout, and OSError from rclone/arm.touch or IndexError on an empty log escape, so a mid-cutover failure on a host being changed leaves no report, against the module docstring. Most individual triggers are unlikely, but the broken guarantee is in new code; the author accepted it as review F002 and widened the handler and added log_tail in 94beba1b.",
+   "evidence": [
+    "scripts/cutover_227_tick_backup.py:4-6",
+    "scripts/cutover_227_tick_backup.py:224",
+    "scripts/cutover_227_tick_backup.py:269-284",
+    "scripts/cutover_227_tick_backup.py:309-312",
+    "scripts/cutover_227_host.py:56",
+    "scripts/cutover_227_host.py:82"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I2",
+   "title": "The assertion that cron commands carry no user field can never fail.",
+   "members": [
+    "haiku-xhigh/1/1",
+    "haiku-xhigh/2/2",
+    "haiku-xhigh/3/5"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "block_commands returns the command text, which starts with the absolute checkout path, so c.split('/')[0] is always '' and the assertion is vacuous. It is a test-quality defect only; the production code it covers is correct. haiku 1/1's added point, that the report test never calls main(), is also a test gap.",
+   "evidence": [
+    "test/unit/test_cutover_227.py:101",
+    "test/unit/test_cutover_227.py:194-215"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I3",
+   "title": "The new with_replication branch of provision_tick_roles.sql runs in no database-backed test.",
+   "members": [
+    "haiku-xhigh/1/2",
+    "haiku-xhigh/2/3",
+    "haiku-xhigh/3/6"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The REPLICATION branch is checked only by text order in the unit test; the DB fixture applies the file without with_replication. The branch is copied from provision_roles.sql and reads correctly (\\if :{?with_replication}, format(... %I REPLICATION) with \\gexec), so this is a missing test for a path with no shown defect.",
+   "evidence": [
+    "scripts/provision_tick_roles.sql:116-125",
+    "test/unit/test_provision_tick_lib.py:255-258"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I4",
+   "title": "Step 2 runs setup-backup --check before provisioning, and setup-backup dies when 17/tick is not in pg_lsclusters.",
+   "members": [
+    "haiku-xhigh/2/0"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "setup-backup.sh dies in check mode too when a table cluster is absent from pg_lsclusters, and step_check runs before step_provision, which is the step that can pg_createcluster. On manta9000, the only host this cutover targets, 17/tick already exists, as the finding itself says, so the run is not blocked. It matters only for a hypothetical fresh-host use of a one-off script.",
+   "evidence": [
+    "deploy/setup-backup.sh:125-127",
+    "scripts/cutover_227_tick_backup.py:87-95",
+    "scripts/provision_tick_cluster.sh:184-188"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I5",
+   "title": "tick_locks_held builds SQL with an f-string and env_value interpolates the library path into bash -c.",
+   "members": [
+    "haiku-xhigh/2/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "Both interpolations exist, but the SQL values are two integer constants and the library path is the script's own checkout location. No input that could break or inject arrives here; it is rule-conformance hardening.",
+   "evidence": [
+    "scripts/cutover_227_host.py:75",
+    "scripts/cutover_227_host.py:90-96"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I6",
+   "title": "Host constants (the '-' sentinel, ARM_FILE, RCLONE_REMOTE, bucket key, cluster names, paths) are defined in several places.",
+   "members": [
+    "haiku-xhigh/2/5",
+    "haiku-xhigh/3/4",
+    "sonnet-high/2/2",
+    "sonnet-high/3/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The duplicates exist across Python and shell (ARM_FILE in setup-backup.sh:80 and cutover:69, RCLONE_REMOTE, TABLE_NONE, 17/tick in regexes, the date format in step_weekly). None currently disagrees, so this is a maintainability and DRY point with no wrong behavior at head.",
+   "evidence": [
+    "deploy/setup-backup.sh:80-81",
+    "scripts/cutover_227_tick_backup.py:69-73",
+    "scripts/cutover_227_host.py:23-27",
+    "scripts/cutover_227_tick_backup.py:176"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I7",
+   "title": "strip_new_args hard-codes --replication-host 127.0.0.1 instead of reading it from the table row.",
+   "members": [
+    "sonnet/2/2",
+    "sonnet-high/1/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The literal is present and duplicates the 17/main row value. If the row changed, the TD3 comparison would report a change and stop the cutover, which fails safe. It agrees with the table today; the author changed it later (F003) as cleanup.",
+   "evidence": [
+    "scripts/cutover_227_helpers.py:84-88"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I8",
+   "title": "The report is named by date only, so a same-day re-run overwrites the failed run's report.",
+   "members": [
+    "haiku-xhigh/3/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "The report path is NOTES_DIR/<date>-227-cutover.md and is written with write_text, so a same-day re-run replaces it. The failure output also went to the terminal, and the cost is lost audit notes, not wrong behavior.",
+   "evidence": [
+    "scripts/cutover_227_tick_backup.py:310-312"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I9",
+   "title": "The cutover writes provision and setup output into the notes directory without the log_scrub pass the provision script uses.",
+   "members": [
+    "haiku-xhigh/3/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "True that no scrub runs before report.write_text. provision_tick_cluster.sh passes passwords through stdin and PGPASSWORD and prints no secrets, so this is defence-in-depth against output that is not shown to occur.",
+   "evidence": [
+    "scripts/cutover_227_tick_backup.py:310-312",
+    "scripts/provision_tick_cluster.sh:305-313"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I10",
+   "title": "b2_lifecycle.sh captures rclone's stderr with 2>&1 into the JSON it parses with jq.",
+   "members": [
+    "haiku-xhigh/3/3"
+   ],
+   "grade": "REAL",
+   "confidence": "high",
+   "why": "RULES=$(... rclone backend lifecycle ... 2>&1) merges stderr into the rule list, so any rclone notice makes jq's type check fail and setup-backup reports MISSING lifecycle-read, failing the check. This is the known bug, fixed in 0ccf9b00 after it broke cutover step 2 under sudo.",
+   "evidence": [
+    "deploy/lib/b2_lifecycle.sh:65-72",
+    "deploy/setup-backup.sh:240-247"
+   ],
+   "known": "B1",
+   "fail_justified": null
+  },
+  {
+   "id": "227-I11",
+   "title": "test_setup_backup.py has grown to 1072 lines.",
+   "members": [
+    "haiku-xhigh/3/7"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The file grew from 812 to 1072 lines in this diff. File size is a style point.",
+   "evidence": [
+    "test/unit/test_setup_backup.py"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I12",
+   "title": "production_changes strips the new arguments only from the new file, so every re-run after cron installation fails step 4.",
+   "members": [
+    "sol/1/0",
+    "sol/2/1",
+    "sol/3/1"
+   ],
+   "grade": "REAL",
+   "confidence": "high",
+   "why": "step_check stores the installed cron file as old_cron; after a first run that file already has --url-key etc. production_changes strips only the new side, so identical files compare unequal and step_apply raises StepFailed. That breaks the documented recovery ('fix the cause, re-run') for any failure after step 4. The author fixed it as F001 in 94beba1b by stripping both sides.",
+   "evidence": [
+    "scripts/cutover_227_helpers.py:91-99",
+    "scripts/cutover_227_tick_backup.py:95",
+    "scripts/cutover_227_tick_backup.py:114-120",
+    "scripts/cutover_227_tick_backup.py:7-8"
+   ],
+   "known": null,
+   "fail_justified": true
+  },
+  {
+   "id": "227-I13",
+   "title": "run_health ignores the health command's result and can judge a stale last log line.",
+   "members": [
+    "sol/1/1",
+    "sol/3/2",
+    "sonnet/1/0"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "run_health discards shell()'s result and reads the last line of an append-only log. backup_health_cron.sh writes a FAIL cannot_check line on most failures, which health_flags rejects; a stale pass needs the script to exit before logging (argument errors) right after an earlier clean run with the same command. The gap is true but needs unlikely conditions.",
+   "evidence": [
+    "scripts/cutover_227_tick_backup.py:157-165",
+    "scripts/backup_health_cron.sh:60-92"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I14",
+   "title": "On a cluster that never archived, pg_settings.sh never persists archive_command because it shows as (disabled).",
+   "members": [
+    "sol/2/0"
+   ],
+   "grade": "PREEXISTING",
+   "confidence": "medium",
+   "why": "pg_settings.sh reports a (disabled) archive_command as PENDING RESTART and never adds it to DRIFTED, so the tick enrolment would restart into archive_mode=on with no command; the 2026-10-05 cutover run hit this and d14f8a60 fixed it. The claim is correct and the new tick enrolment exposes it, but the defective code in deploy/lib/pg_settings.sh was not changed in base..head, and the case file excludes d14f8a60 for that reason.",
+   "evidence": [
+    "deploy/lib/pg_settings.sh:90-94",
+    "deploy/setup-backup.sh:225-228"
+   ],
+   "known": null,
+   "fail_justified": true
+  },
+  {
+   "id": "227-I15",
+   "title": "After an offsite upload failure, re-running step_weekly cannot resume because backup_prod.sh refuses an existing destination.",
+   "members": [
+    "sol/2/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "step_weekly skips only when today's base dir and the arm file both exist; otherwise it reruns the full weekly job, and backup_prod.sh exits on 'destination already exists'. The re-run fails loudly and the operator can delete the local dir or wait a day, so it is a recovery inconvenience, not wrong data.",
+   "evidence": [
+    "scripts/cutover_227_tick_backup.py:173-189",
+    "scripts/backup_prod.sh:74-75"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I16",
+   "title": "step_apply rejects pg_settings' pre-restart DRIFT lines, so the first enrolment of tick always stops at step 4.",
+   "members": [
+    "sol/3/0"
+   ],
+   "grade": "REAL",
+   "confidence": "high",
+   "why": "run_lib echoes all of pg_settings.sh's output, including the DRIFT lines printed before ALTER SYSTEM. archive_mode stays DRIFT 'on' 'off' until the restart in step 5. APPLY_ALLOWED admits only PENDING RESTART and arm-file lines, so setup_not_ok flags them and step 4 fails before the restart. The 2026-10-05 run stopped at step 4 this way, and d14f8a60 added r'^DRIFT 17/tick archive_mode ' to APPLY_ALLOWED.",
+   "evidence": [
+    "scripts/cutover_227_tick_backup.py:73",
+    "scripts/cutover_227_tick_backup.py:108-113",
+    "deploy/setup-backup.sh:151-157",
+    "deploy/lib/pg_settings.sh:85-118"
+   ],
+   "known": null,
+   "fail_justified": true
+  },
+  {
+   "id": "227-I17",
+   "title": "assert is used for type narrowing in runtime code (block_commands, run_health).",
+   "members": [
+    "sonnet/1/2",
+    "sonnet/2/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "Both asserts are present, but each is unreachable as a failure: _job_lines already filtered on the same regex, and require() raises before the assert in run_health. Stripping them under -O changes nothing; it is style.",
+   "evidence": [
+    "scripts/cutover_227_helpers.py:64",
+    "scripts/cutover_227_tick_backup.py:163-164"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I18",
+   "title": "production_lines identifies the host block by the cron user field 'root'.",
+   "members": [
+    "sonnet/1/3"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "The check j.split()[5] == 'root' exists and depends on the host jobs running as root, which the template fixes. It is a field of a root-owned generated file, not a user-visible label, and it is correct today; a robustness point.",
+   "evidence": [
+    "scripts/cutover_227_helpers.py:74-81",
+    "deploy/cron.d/manta-trading-backup"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I19",
+   "title": "The provisioning tests assert on shell and SQL source text instead of behaviour.",
+   "members": [
+    "sonnet/1/4",
+    "sonnet-high/3/3"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The new tests regex-extract script text and compare substrings and positions. That is a test-design point; no production defect follows from it.",
+   "evidence": [
+    "test/unit/test_provision_tick_lib.py:177-258"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I20",
+   "title": "Provisioning drops trading_tick_proof and the MT_PROOF_226_* keys while the 226 proof harness still references them.",
+   "members": [
+    "sonnet/3/0",
+    "sonnet-high/3/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "The removal is deliberate: the slice design at head says the proof database is gone and the MT_PROOF_226_* lines are stale. The harness and TICK_PROOF_DB_NAME are left as dead references to a one-off proof, a cleanup point rather than a regression.",
+   "evidence": [
+    "project-documents/user/slices/227-slice.backup-coverage-for-tick-archive-and-database.md:57",
+    "project-documents/user/slices/227-slice.backup-coverage-for-tick-archive-and-database.md:74",
+    "scripts/provision_tick_cluster.sh"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "227-I21",
+   "title": "The cutover tests leave step_apply, step_check, step_offsite and main() untested, and the render test exempts a nonexistent @192.",
+   "members": [
+    "sonnet-high/2/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "Those steps have no tests, and test_setup_backup.py:777 replaces '@192' although no '@192' exists under deploy/, which weakens the placeholder check (removed later in 229fa4de). These are test gaps and test quality, not production defects.",
+   "evidence": [
+    "test/unit/test_setup_backup.py:777",
+    "test/unit/test_cutover_227.py"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
+ ]
+}

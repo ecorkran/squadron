@@ -1,0 +1,492 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Visible range is not applied after a series is added",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "The range effect depends on `[mount.ready, chart, range]`. Adding a series through the facade changes none of these, so the effect does not re-run. The comment at lines 333-338 says the seam activates \"the moment it adds the first series,\" which the code does not do. The test at `src/test/use-chart-provider.translation.test.tsx:135` passes only because it calls `setRange` after `addSeries`. Reverse the order and the range is never applied. This is latent because the chart is empty in this slice, but initiative 120 adds data after mount, so the context range would be silently ignored until the user changes it. Fix: make the series count part of the effect's state so adding a series re-runs it, and add a test that adds a series first."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Operations before ready are silently dropped",
+  "location": "src/chart/use-chart-provider.ts:108-113",
+  "description": "`runGuarded` returns `undefined` with no log when `providerRef.current` is null. That covers the time before the mount effect runs. The comment at lines 101-107 justifies dropping calls after teardown, but pre-ready calls are dropped the same way. `addSeries` then returns `undefined`, which is also what a caller gets when the provider throws, so a caller cannot tell \"not ready\" from \"failed.\" CLAUDE.md prohibits silent fallbacks. Log the pre-ready drop, or return a distinguishable result, and document the two cases separately."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "Missing theme tokens silently fall back to library defaults",
+  "location": "src/routes/chart-route.tsx:35-55",
+  "description": "`readChartStyle` returns `undefined` when all tokens are empty and drops any single empty token. The chart then renders with the library's white default and no error. This is the silent fallback the project rules prohibit. `src/test/theme.test.ts` checks that `theme.css` defines these tokens, but nothing checks that `CHART_TOKENS` (lines 23-27) reads them at runtime. The e2e pixel assertion in `e2e/chart-live.spec.ts` would catch this, but only when the e2e suite runs. Fail explicitly when a required token resolves empty."
+ },
+ {
+  "ref": "haiku-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "Mount effect and hook file exceed size guidance",
+  "location": "src/chart/use-chart-provider.ts:167-324",
+  "description": "The file is 366 lines against the ~300 guide. The mount `useEffect` callback is about 158 lines against the ~50-line function guide. It holds the teardown closure, provider creation, the resize observer, subscriptions, and the failure path. Much of the length is multi-paragraph comments, and several repeat each other (the teardown order is explained at lines 180-191 and again at 195-200). The slice already split the facade out for size. The mount sequence needs the same treatment, as a module that creates and attaches the chart and returns a disposer. There is also a hazard: `teardown` (line 192) reads `observer` (declared at line 233) and `disposers` (line 239), which are declared after it. This is safe only because teardown is never called before those lines run. Declaring them first removes the trap."
+ },
+ {
+  "ref": "haiku-xhigh/1/4",
+  "severity": "CONCERN",
+  "title": "File-wide suppression of `react-hooks/refs`",
+  "location": "eslint.config.js:75-78",
+  "description": "The rule is turned off for all of `use-chart-provider.ts`. The config comment says it is needed for the `buildChartOperations(runGuarded, series)` call inside the `useMemo` at `use-chart-provider.ts:156-159`. A file-wide `off` also hides any future render-time `.current` read in that file, which is the bug class the rule exists to catch. Narrow the suppression to that line with `// eslint-disable-next-line react-hooks/refs -- <reason>`. I could not run eslint, so the claim that this is a false positive is unverified."
+ },
+ {
+  "ref": "haiku-xhigh/1/5",
+  "severity": "CONCERN",
+  "title": "Indicator effect is a no-op",
+  "location": "src/chart/use-chart-provider.ts:358-363",
+  "description": "The effect body is `if (!mount.ready) return;` followed by a comment, and nothing else. It reads `indicators` only to re-run an empty body. The comment calls it \"not a silent empty effect,\" but it is one. Under the rule to resist complexity, it adds a dependency and a context consumer with no behavior. The test at `src/test/use-chart-provider.translation.test.tsx:177` (\"fires the indicator observer without error\") can only pass, since it asserts the absence of errors and calls. Remove the effect and the `useIndicators()` call until initiative 120 needs them, or keep it and drop the test."
+ },
+ {
+  "ref": "haiku-xhigh/1/6",
+  "severity": "CONCERN",
+  "title": "Teardown-race test cannot fail",
+  "location": "src/test/use-chart-provider.errors.test.tsx:255-271",
+  "description": "The test claims a subscription callback fired after teardown is inert. The handlers the hook registers (`src/chart/use-chart-provider.ts:287-301`) do nothing except return early when disposed, and they never call the provider. The assertions that `getVisibleRange` was not called and that `resize` was called once would hold with or without the guard. The `not.toThrow()` checks cannot fail either. The disposed checks at lines 290-292 and 297-299 are therefore dead code. Either give the handlers observable work and assert it is suppressed after teardown, or remove the guards and the test."
+ },
+ {
+  "ref": "haiku-xhigh/1/7",
+  "severity": "CONCERN",
+  "title": "Test host and measurement helpers are duplicated",
+  "location": "src/test/use-chart-provider.errors.test.tsx:30-52",
+  "description": "`MEASURED`, `measuredRect()`, and the measuring `Host` are copied into `use-chart-provider.facade.test.tsx:33-60` and `use-chart-provider.translation.test.tsx:38-71`. `use-chart-provider.resize.test.tsx:30-45` has an inline variant. The `state()` and `readState()` readers are also copies (`errors.test.tsx:67`, `lifecycle.test.tsx:48`). The spy header says it exists so the suites \"share one convention rather than re-deriving a double each file,\" and `render-with-contexts.tsx` centralized the context wrapper, but the measuring host was left per-file. CLAUDE.md requires DRY. Move the measured-rect stub and a shared host into `src/test/support/`."
+ },
+ {
+  "ref": "haiku-xhigh/1/8",
+  "severity": "CONCERN",
+  "title": "Spy does not bind to `IChartProvider`",
+  "location": "src/test/support/chart-provider-spy.ts:89-90",
+  "description": "`MockChartProvider` does not declare `implements IChartProvider`. Its methods take `unknown` parameters, and `chartProviderMockFactory` returns `{ LightweightChartsProvider: unknown }`. If `IChartProvider` changes a signature, the spies still compile and the contract tests keep passing. Type the spy parameters from the interface (for example, `Parameters<IChartProvider['addSeries']>`), declare `implements IChartProvider`, and type the factory against the barrel module. `tsconfig.app.json` includes `src`, so `pnpm build` type-checks these files and would catch the drift."
+ },
+ {
+  "ref": "haiku-xhigh/1/9",
+  "severity": "CONCERN",
+  "title": "Initial resize measures a different box than the observer",
+  "location": "src/chart/use-chart-provider.ts:249-250",
+  "description": "The mount sizes the chart with `getBoundingClientRect()`, which returns the border box. The observer reports `contentRect`, which excludes the border. The container is the `section` with the `border` class (`src/routes/chart-route.tsx:92`), and `theme.css` imports Tailwind, which sets `box-sizing: border-box`. Reading the CSS, the first `resize` passes 640px for a box whose content is 638px, and the observer corrects it when it first fires. The impact is probably transient and never painted. Still, the comment at lines 243-248 says the chart matches its container on first paint, and the code does not guarantee that. Use one measurement source for both paths. I did not run the app to confirm the pixel values."
+ },
+ {
+  "ref": "haiku-xhigh/2/0",
+  "severity": "CONCERN",
+  "title": "Range is not applied when the first series is added",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "The translation effect depends on `[mount.ready, chart, range]`. `seriesCountRef` is a ref, so `addSeries` through the facade (chart-facade.ts:49-56) changes no dependency and the effect does not re-run. The comment at lines 333-338 says the effect \"activates the moment it adds the first series.\" That is false. A range set before the first series is never applied until the range changes again. The test \"applies the range once a series exists\" in `src/test/use-chart-provider.translation.test.tsx` adds the series before calling `setRange`, which hides the gap. Fix: make the count observable (state, or a dependency that changes on 0\u21921), and add a test that sets the range first and adds the series second."
+ },
+ {
+  "ref": "haiku-xhigh/2/1",
+  "severity": "CONCERN",
+  "title": "Series count drifts on pane removal, and `Math.max` hides it",
+  "location": "src/chart/chart-facade.ts:78-80",
+  "description": "The facade's `removePane` does not touch the series count. The provider's `removePane` (lightweight-charts-provider.ts:153-160) deletes only the pane handle, so series registry entries survive. If lightweight-charts also drops a pane's series when the pane is removed (unverified; node_modules is absent), `seriesCountRef` stays above the real count. The range guard then passes, `setVisibleRange` runs against an empty time scale, and the error surfaces. The `Math.max(0, \u2026)` floor at use-chart-provider.ts:150 would hide a negative drift instead of reporting it. No test covers pane removal affecting the count. Fix: derive the count from provider state, or have pane removal update it, and drop the silent floor."
+ },
+ {
+  "ref": "haiku-xhigh/2/2",
+  "severity": "CONCERN",
+  "title": "The \"first error\" contract is violated: the last error wins",
+  "location": "src/chart/use-chart-provider.ts:97-99",
+  "description": "`setOperationError` overwrites `error` on every failure (`{ ...current, error: failure }`). The documented contract at `src/chart/chart-operations.ts:77` says \"The first error from any provider operation.\" The test named \"keeps the first error rather than being reset by a later success\" in `src/test/use-chart-provider.errors.test.tsx` has one failure and one success. It never tests two failures, so it cannot catch the mismatch. Pick one behavior: keep the first error, or change the doc and rename the test."
+ },
+ {
+  "ref": "haiku-xhigh/2/3",
+  "severity": "CONCERN",
+  "title": "Pre-ready and missing-ref calls fail silently",
+  "location": "src/chart/use-chart-provider.ts:108-126",
+  "description": "`runGuarded` returns `undefined` when the provider is null, with no log and no state change. A call made before mount therefore returns `undefined`, which is indistinguishable from a provider error (that case does set state). The mount effect also returns silently when `containerRef.current` is null (lines 168-171), and the lifecycle test \"does nothing when the container ref is null\" asserts that silence. CLAUDE.md says \"Never use silent fallback values. Fail explicitly.\" The teardown-race drop is justified in comments at lines 101-106, but that justification covers only post-teardown calls, not pre-mount ones. Fix: log, or surface as `error`, when a call arrives before mount or the ref is missing. Keep the silent drop only for the post-teardown window."
+ },
+ {
+  "ref": "haiku-xhigh/2/4",
+  "severity": "CONCERN",
+  "title": "A missing theme token silently falls back to the library default",
+  "location": "src/routes/chart-route.tsx:35-55",
+  "description": "`readChartStyle` returns `undefined` for an empty token, so the chart renders with the library's default (white) background and no error. `src/chart/types/styling.ts:12-14` says \"there is no silent theme fallback hiding a missing token,\" which this code contradicts. The e2e test catches an empty `--color-surface` in CI, but a runtime theme regression stays silent. Fix: throw or surface an error when a required token is empty, and make the doc and code agree."
+ },
+ {
+  "ref": "haiku-xhigh/2/5",
+  "severity": "CONCERN",
+  "title": "The hook is hard-wired to the concrete provider",
+  "location": "src/chart/use-chart-provider.ts:173",
+  "description": "`new LightweightChartsProvider()` runs inside the hook. CLAUDE.md says to program to interfaces, and the testing rules say to use dependency injection. Without a seam, all five hook test files repeat the same `vi.mock('../chart/index.ts', \u2026)` boilerplate, and the spy must replicate the class by hand. Fix: accept an optional factory, `createProvider: () => IChartProvider = () => new LightweightChartsProvider()`, so tests can pass a fake without module mocking."
+ },
+ {
+  "ref": "haiku-xhigh/2/6",
+  "severity": "CONCERN",
+  "title": "The mount effect and the hook are far over the size guide",
+  "location": "src/chart/use-chart-provider.ts:51-366",
+  "description": "The hook file is 366 lines against the ~300-line guide. `useChartProvider` spans about 316 lines. The mount effect (lines 167-324) is about 158 lines, roughly half of them comments, against the ~50-line function guide. The facade was extracted, but the create/resize/observe/subscribe/teardown sequence stayed inline. Fix: move the mount sequence into a helper that returns a disposer, leaving the hook as a thin binding."
+ },
+ {
+  "ref": "haiku-xhigh/2/7",
+  "severity": "CONCERN",
+  "title": "Two effects do nothing in this slice",
+  "location": "src/chart/use-chart-provider.ts:358-363",
+  "description": "The indicator effect has an early return and no body. It exists only to subscribe to `useIndicators()`, which makes the hook throw outside `IndicatorProvider`. The test \"fires the indicator observer without error\" asserts that nothing happens. The range effect (340-345) is also dead on the product path, since nothing adds a series in this slice. CLAUDE.md says \"Always resist adding complexity.\" If the slice spec requires these seams, keep them and document that in one place. If not, remove the no-op effect and the `useIndicators()` coupling until initiative 120."
+ },
+ {
+  "ref": "haiku-xhigh/2/8",
+  "severity": "CONCERN",
+  "title": "The race-guard tests never show the guards are load-bearing",
+  "location": "src/test/use-chart-provider.errors.test.tsx",
+  "description": "The \"teardown race\" tests call captured subscription handlers after unmount. In the hook, those handlers contain only `if (disposedRef.current) return`, so the tests pass with or without the guard. `getVisibleRange` is never called and `resize` is called once regardless. `triggerResize` in `src/test/support/chart-provider-spy.ts` refuses to deliver to disconnected observers, so the disposed check on the ResizeObserver path (`runGuarded`) is never reached. In `src/test/use-chart-provider.translation.test.tsx`, \"does not translate after unmount\" adds no series before unmounting, so the `seriesCount === 0` guard alone blocks the call. Fix: invoke the captured observer callback directly after disconnect and assert `resize` is not called; add a series before unmount in the translation test."
+ },
+ {
+  "ref": "haiku-xhigh/2/9",
+  "severity": "CONCERN",
+  "title": "Test helpers are duplicated across four files",
+  "location": "src/test/use-chart-provider.errors.test.tsx:30-75",
+  "description": "`MEASURED`, `measuredRect`, and the measuring `Host` component are copied into the errors, facade, translation, and resize test files. `state`/`readState` is duplicated in the errors and lifecycle files. CLAUDE.md says \"Do not duplicate logic.\" `src/test/support/render-with-contexts.tsx` already shows the intended pattern, so these helpers belong in the support directory."
+ },
+ {
+  "ref": "haiku-xhigh/2/10",
+  "severity": "CONCERN",
+  "title": "A whole-file lint suppression is broader than the construct it covers",
+  "location": "eslint.config.js:55-79",
+  "description": "`react-hooks/refs` is turned off for all of `use-chart-provider.ts`, which also disables it for any future real violation in that file. The comment attributes the false positive to the `useMemo(() => buildChartOperations(runGuarded, series))` call. If that is accurate, an inline `// eslint-disable-next-line react-hooks/refs` with the reason keeps the rule active for the rest of the file. I could not run eslint to confirm the probe the comment describes."
+ },
+ {
+  "ref": "haiku-xhigh/2/11",
+  "severity": "CONCERN",
+  "title": "Playwright and smoke-spec comments describe behavior that no longer holds",
+  "location": "playwright.config.ts:6-7",
+  "description": "The header says specs run against \"the PRODUCTION build ... the same artifact `pnpm build` ships.\" The webServer now builds in `--mode e2e`, which includes the harness route, so that guarantee is false. `e2e/smoke.spec.ts:9-10` says \"The chart itself is asserted in chart-render.spec.ts,\" but `chart-render.spec.ts:14` only navigates to `/__chart-harness`. The live chart at `/` is covered by `chart-live.spec.ts`. Nothing automated checks that the production build excludes `/__chart-harness`; that relies on the manual grep described in `src/routes/router.ts:36-42`. Fix the headers, and consider an automated build-artifact check."
+ },
+ {
+  "ref": "haiku-xhigh/3/0",
+  "severity": "CONCERN",
+  "title": "Range translation is not applied when the first series is added after the range is set",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "The visible-range effect depends on `[mount.ready, chart, range]`. The series count lives in `seriesCountRef` (line 72), which is a ref. `addSeries` through the facade increments it (`src/chart/chart-facade.ts:49-56`) but triggers no render, so the effect does not re-run. If the Context range is set while the chart is empty, the effect returns early at line 341. When the first series is added later, nothing re-runs the effect, so the current range is not applied until the range changes again.\n\nThe comment at lines 337-338 says the seam \"activates the moment it adds the first series.\" That is not what happens. The test `use-chart-provider.translation.test.tsx:135-145` passes only because it adds the series before calling `setRange`. Its comment at lines 166-167 shows the ordering was chosen on purpose. No test covers \"range set, then first series added,\" which is the case initiative 120 will hit first. Fix: make the \"has series\" fact part of state so the effect depends on it, and add the missing ordering to the tests."
+ },
+ {
+  "ref": "haiku-xhigh/3/1",
+  "severity": "CONCERN",
+  "title": "Calls made before the chart is live are dropped silently",
+  "location": "src/chart/use-chart-provider.ts:108-113",
+  "description": "`runGuarded` returns `undefined` when `providerRef.current` is null or `disposedRef` is set. It does not log and does not change state. The comment at lines 101-107 justifies the drop only for the torn-down case. Before mount, the drop is silent too. React runs child effects before the parent's effect, so a child that calls `chart.addSeries(...)` from its own mount effect has the call dropped, and nothing in `error` or `ready` reports it. A null `containerRef` (lines 168-171) also leaves `ready` false with `error` null and no message. CLAUDE.md says \"never use silent fallback values.\" Fix: report a pre-ready call explicitly, and surface the null-container case through `error`. Only the post-teardown drop should stay silent."
+ },
+ {
+  "ref": "haiku-xhigh/3/2",
+  "severity": "CONCERN",
+  "title": "A missing theme token silently falls back to library default colors",
+  "location": "src/routes/chart-route.tsx:35-55",
+  "description": "`readChartStyle` maps an empty token to `undefined` (lines 37-40) and returns `undefined` when all three are empty (lines 46-48). The provider then uses its own defaults, with no log and no error. The doc comment at lines 30-34 frames this as \"the stylesheet has not been applied.\" In the shipped app, an empty token means a renamed or misspelled entry in `CHART_TOKENS`, and the chart would render with white defaults and no signal. CLAUDE.md says to fail explicitly. No unit test covers this branch, and the e2e spec only passes for the real tokens. Fix: throw, or surface through `error`, when a required token is empty."
+ },
+ {
+  "ref": "haiku-xhigh/3/3",
+  "severity": "CONCERN",
+  "title": "A failed `create()` produces a second, misleading teardown error, and the spy hides it",
+  "location": "src/chart/use-chart-provider.ts:302-309",
+  "description": "On a `create()` failure, the catch block calls `teardown()`, which calls `provider.destroy()` (line 217). `LightweightChartsProvider.destroy()` calls `assertReady()` (`src/chart/providers/lightweight-charts-provider.ts:67-72, 79-86`), and that throws because `this.chart` is still null. The teardown catch then logs \"provider teardown failed: ... not ready,\" which points at the wrong problem. One failure yields two error logs.\n\nThe tests cannot see this. `src/test/support/chart-provider-spy.ts` never throws from `destroy`, and `use-chart-provider.lifecycle.test.tsx` asserts `destroy` was called once after a failed create, which passes against the spy. Fix: skip `destroy()` when `create()` did not succeed, and add a test where `destroy` throws when create never ran, so the spy models the real contract."
+ },
+ {
+  "ref": "haiku-xhigh/3/4",
+  "severity": "CONCERN",
+  "title": "The \"inert after teardown\" tests cannot fail",
+  "location": "src/test/use-chart-provider.errors.test.tsx:255-271",
+  "description": "The hook's subscription handlers (`src/chart/use-chart-provider.ts:286-301`) have a body that is only `if (disposedRef.current) { return }`. They never call the provider, never resize, and never read a range. The test \"makes a subscription callback fired after teardown inert\" checks that the handlers don't throw, that `getVisibleRange` isn't called, and that `resize` ran once. Removing the guard changes none of those, so the test passes either way. It gives false coverage for the teardown race.\n\nThe subscriptions are also dead code in production. The comment at lines 276-278 says they exist to prove the disposer lifecycle under React, so production mounts subscriptions only to exercise them in tests. That runs against CLAUDE.md's \"resist adding complexity.\" Fix: give the handlers an observable effect a test can assert on, or remove them and test the disposer lifecycle directly against the spy."
+ },
+ {
+  "ref": "haiku-xhigh/3/5",
+  "severity": "CONCERN",
+  "title": "`error` keeps the latest failure, but the contract says it keeps the first",
+  "location": "src/chart/use-chart-provider.ts:97-99",
+  "description": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation, or null\" (`src/chart/chart-operations.ts:77`). `setOperationError` overwrites unconditionally: `setMount((current) => ({ ...current, error: failure }))`. A second failing operation replaces the first.\n\nThe test named \"keeps the first error rather than being reset by a later success\" (`use-chart-provider.errors.test.tsx:234-247`) only checks that a later success does not clear the error. Its second call succeeds, so it never checks a later failure. Decide which contract is intended. If it is \"first,\" keep the existing error when one is set and add a two-failure test. If it is \"latest,\" fix the doc and rename the test."
+ },
+ {
+  "ref": "haiku-xhigh/3/6",
+  "severity": "CONCERN",
+  "title": "`use-chart-provider.ts` is over the size guidance, and its mount effect is 158 lines",
+  "location": "src/chart/use-chart-provider.ts:167-324",
+  "description": "The file is 366 lines against the project's ~300-line guideline. The mount `useEffect` runs from line 167 to 324 and holds the mount sequence, the teardown closure, the observer, the subscriptions, and the failure path. That is well past the ~50-line function guideline. The facade and type surface were already split out. The mount lifecycle (create, size, observe, subscribe, teardown) could move to a helper in its own module, leaving the effect as a short call plus cleanup."
+ },
+ {
+  "ref": "haiku-xhigh/3/7",
+  "severity": "CONCERN",
+  "title": "The `react-hooks/refs` rule is disabled for the entire hook file",
+  "location": "eslint.config.js:55-79",
+  "description": "The suppression applies to every line of `use-chart-provider.ts`, which is where a real render-time `ref.current` read would be written. The rule's purpose is to catch that bug class. The comment justifies the suppression for two `useMemo` calls, at `use-chart-provider.ts:144-154` (the counter) and `:156-159` (the facade). Narrow the suppression to those lines with an inline `eslint-disable-next-line react-hooks/refs` carrying a reason. Then confirm with `pnpm lint` that it is the only trigger. The comment's sentence about the file \"~60% over\" the guide is also unclear and should be rewritten."
+ },
+ {
+  "ref": "haiku-xhigh/3/8",
+  "severity": "CONCERN",
+  "title": "The provider stack is composed in two places",
+  "location": "src/test/support/render-with-contexts.tsx:20-26",
+  "description": "`App.tsx:16-24` nests `SymbolTimeframeProvider` and `IndicatorProvider` around the router. `ChartContexts` repeats the same nesting for tests. If App adds or removes a provider, the hook suites still pass and stop reflecting the real tree. CLAUDE.md asks for DRY. Export one composition component and use it in both places."
+ },
+ {
+  "ref": "haiku-xhigh/3/9",
+  "severity": "CONCERN",
+  "title": "The e2e run no longer exercises the production artifact, and nothing checks that the harness is excluded from it",
+  "location": "playwright.config.ts:44",
+  "description": "The header at lines 6-7 says specs run against the production build. The `webServer` command now builds with `--mode e2e` (line 44), so e2e exercises a build that contains `/__chart-harness`. The only check that the harness is tree-shaken from production is a comment at `src/routes/router.ts:42` saying it was \"verified by grepping the production bundle.\" I found no test that repeats that check. A change such as `MODES.includes(import.meta.env.MODE)`, which the router comment says would ship the harness, would pass every suite. Fix: add a check that builds in production mode and asserts the harness route and test IDs are absent from `dist/`, and update the header."
+ },
+ {
+  "ref": "sol/1/0",
+  "severity": "CONCERN",
+  "title": "Adding data does not apply the pending visible range",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "Adding the first populated series only updates `seriesCountRef`; it neither triggers a render nor changes this effect\u2019s dependencies. Consequently, an existing Context range remains unapplied until `range` changes again. The translation test masks this by calling `setRange` after adding the series. Trigger synchronization when data becomes available and test adding data without changing the range."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "CONCERN",
+  "title": "Series existence is not a valid data-availability guard",
+  "location": "src/chart/chart-facade.ts:49-64",
+  "description": "`addSeries` increments the counter even for valid configs with `data: []`, while `updateSeries` can clear all data without updating it. The range effect therefore treats an empty time scale as populated, defeating its explicit protection against invalid range calls. Track actual data availability across additions, updates, and removals; cover empty-series and cleared-data cases."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "CONCERN",
+  "title": "Adding data does not activate range synchronization",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "Adding a series only mutates `seriesCountRef`; it neither triggers rendering nor changes an effect dependency. Consequently, adding the first populated series after readiness never applies the existing Context range. The translation test masks this by also calling `setRange`. Make data availability reactive or explicitly apply the pending range when data becomes available, and test adding data without changing Context."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "CONCERN",
+  "title": "Series count does not establish data availability",
+  "location": "src/chart/chart-facade.ts:49-64",
+  "description": "`addSeries({ type: 'line', data: [] })` increments the counter, and `updateSeries` can clear all data without adjusting it. The range effect therefore forwards calls against an empty time scale\u2014the condition its guard explicitly intends to prevent. Track whether usable time points exist, accounting for updates and removals, and cover empty-series creation and clearing the last populated series."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "CONCERN",
+  "title": "Adding the first series does not apply the current range",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "Adding a series only mutates `seriesCountRef`; it neither triggers rendering nor changes this effect\u2019s dependencies. Once an empty chart is ready, adding populated data therefore leaves the current Context range unapplied until `range` changes again. The translation test masks this by calling `setRange` after `addSeries`. Trigger synchronization when data becomes available, and test adding data without changing the range."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "CONCERN",
+  "title": "Series count does not establish that the chart contains data",
+  "location": "src/chart/use-chart-provider.ts:341",
+  "description": "The guard permits range translation after adding `{ type: 'line', data: [] }`, despite the time scale still having no points. Likewise, `updateSeries` can clear the last populated series without decrementing the count. Both paths bypass the empty-chart protection and expose the documented `setVisibleRange` failure. Track actual data availability across additions, updates, and removals; add regression tests for empty series and clearing existing data."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "Dead no-op callbacks passed to subscribe* in mount sequence",
+  "location": "src/chart/use-chart-provider.ts#useChartProvider",
+  "description": "The two subscription handlers are empty. Each only does `if (disposedRef.current) { return }` and then falls off the end, so the guard protects nothing. Two live subscriptions are held with no consumer. The stated aim is to prove the disposer lifecycle, but this adds runtime listeners and a mount-failure surface (a subscribe throw now fails the whole chart) for no product behavior. Either wire a real consumer or drop the subscriptions until initiative 120 needs them. The teardown-race test (\"makes a subscription callback fired after teardown inert\") only asserts that a no-op does nothing, so it gives false confidence."
+ },
+ {
+  "ref": "sonnet/1/1",
+  "severity": "CONCERN",
+  "title": "Hook file exceeds the ~300-line guideline and carries stale scaffolding comments",
+  "location": "src/chart/use-chart-provider.ts:1-366",
+  "description": "The file is about 366 lines, over the project's ~300-line guidance. The `useEffect` mount body is also well over the ~50-line function guidance. The header says \"This file is built up across tasks 8/10/12/14\", and the comments say \"subscriptions join here in task 12\" and \"facade (task 14)\". Those are work-process notes that are now false or meaningless, since everything has landed. Several comment blocks are also stacked back to back above `series` and `chart` (the facade comment and the counter-callback comment). Remove the task references and merge the duplicated comments. The mount/teardown sequence could be extracted to cut the length, instead of disabling `react-hooks/refs` for the whole file in `eslint.config.js`."
+ },
+ {
+  "ref": "sonnet/1/2",
+  "severity": "CONCERN",
+  "title": "Range translation gated on a non-reactive ref",
+  "location": "src/chart/use-chart-provider.ts (range-translation `useEffect`)",
+  "description": "The effect reads `seriesCountRef.current === 0`, but its dependencies are `[mount.ready, chart, range]`. A series added after the last range change never triggers the effect. The stored range is therefore not applied when data first arrives, and it only applies on the next range change. The comment calls this \"the seam initiative 120 activates\", but the seam won't work as described without a reactive signal such as state or a counter in state. Also, `seriesCountRef` is updated inside `chart-facade.ts` callbacks, and `buildChartOperations` is only exercised through the mocked provider, so the real throw-on-empty behavior isn't covered by any unit test."
+ },
+ {
+  "ref": "sonnet/1/3",
+  "severity": "CONCERN",
+  "title": "\"First error\" contract contradicts the implementation and a test name",
+  "location": "src/chart/use-chart-provider.ts (`setOperationError`)",
+  "description": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation\". `setOperationError` unconditionally overwrites with the latest failure (`{ ...current, error: failure }`). The test \"keeps the first error rather than being reset by a later success\" only checks that a later success doesn't clear the error. It never checks that a second failure leaves the first in place. Align the doc comment with the behavior, or keep the first error and add a test for it."
+ },
+ {
+  "ref": "sonnet/1/4",
+  "severity": "CONCERN",
+  "title": "Stale cross-reference in the smoke spec comment",
+  "location": "e2e/smoke.spec.ts:9-10",
+  "description": "The comment says the chart is asserted in `chart-render.spec.ts`. That spec covers the `/__chart-harness` route. The `/` chart is asserted in `chart-live.spec.ts`, which this diff adds. The smoke assertion `getByText('Chart workspace')` is also a substring match on user-visible copy. Per the project rule against using user-accessible labels as logical structure, the `chart-container` test id already covers the shell check."
+ },
+ {
+  "ref": "sonnet/2/0",
+  "severity": "CONCERN",
+  "title": "Hook file exceeds the ~300-line guide and carries stale task-number comments",
+  "location": "src/chart/use-chart-provider.ts:1-366",
+  "description": "The file is 366 lines, over the project's ~300-line target. Much of that is duplicated or stacked comment blocks. For example, two consecutive block comments sit above `series`: the \"forwarding facade\" one and the \"Counter callbacks\" one. The facade comment is orphaned and no longer describes the `useMemo` it precedes. Several comments also refer to build-process steps that mean nothing to a later reader. The header says \"forwarding facade (task 14)\" and \"built up across tasks 8/10/12/14\". The `teardown` comment says \"subscriptions join here in task 12\", but the subscription disposers are already implemented a few lines below it. Trim and reconcile these comments. The comment cleanup would likely bring the file closer to the limit."
+ },
+ {
+  "ref": "sonnet/2/1",
+  "severity": "CONCERN",
+  "title": "Visible-range translation is not re-applied when the first series is added",
+  "location": "src/chart/use-chart-provider.ts:343-348",
+  "description": "The range effect reads `seriesCountRef.current`, a ref, and depends only on `[mount.ready, chart, range]`. If a consumer adds a series after the range is set, the effect does not re-run. The chart then keeps its default viewport until `range` changes, and the test `applies the range once a series exists` only passes because it calls `setRange` after `addSeries`. The code comment says initiative 120 will \"activate\" this seam. The gap will surface there as a silent mismatch between the Context and the chart. Either track the series count as state (or expose a signal) so the effect re-runs, or document this limitation explicitly at the seam."
+ },
+ {
+  "ref": "sonnet/2/2",
+  "severity": "CONCERN",
+  "title": "`measuredRect` and the measure-ref scaffolding are copy-pasted across four test files",
+  "location": "src/test/use-chart-provider.facade.test.tsx:35",
+  "description": "The `measuredRect()` helper, the `MEASURED` constant and the `measure` ref callback are repeated in the facade, errors, translation and resize suites. The resize suite inlines the same rect as a one-liner. `render-with-contexts.tsx` was introduced to avoid exactly this kind of divergence. Move the rect stub into `src/test/support/`."
+ },
+ {
+  "ref": "sonnet/2/3",
+  "severity": "CONCERN",
+  "title": "Imports are placed after a constant declaration in the translation test",
+  "location": "src/test/use-chart-provider.translation.test.tsx:14-24",
+  "description": "`LINE_SERIES` is declared between import statements, and `chart-provider-spy` and `render-with-contexts` are imported after it. This breaks the \"sort imports\" convention. Move the constant below all imports."
+ },
+ {
+  "ref": "sonnet/2/4",
+  "severity": "CONCERN",
+  "title": "E2E palette assertion assumes the token is a 6-digit hex",
+  "location": "e2e/chart-live.spec.ts:100-106",
+  "description": "`hexToRgba` parses `--color-surface` as `#rrggbb` and has no validation. If the token becomes a short hex, `rgb()`, `oklch` or any other format, `parseInt` yields `NaN`. The assertion then fails with an opaque `NaN,NaN,NaN,255` mismatch instead of naming the unsupported format. Assert the format, or throw an explicit error on a non-matching token."
+ },
+ {
+  "ref": "sonnet/3/0",
+  "severity": "CONCERN",
+  "title": "Hook file exceeds the project's ~300-line guide, and a lint rule is disabled to cope",
+  "location": "src/chart/use-chart-provider.ts",
+  "description": "The hook is about 366 lines, over the ~300-line guide in CLAUDE.md. `eslint.config.js` also turns off `react-hooks/refs` for this file. The justification comment is thorough, but it still switches off a React-correctness rule on the file that holds the most ref-heavy logic. Two things would remove the need for the suppression:\n- Move the mount/teardown sequence into a plain helper module, for example `mountChart(container, style, onResize)`, returning a `{ provider, teardown }` object. That shrinks the file and keeps refs out of the facade's construction path.\n- Move the long narrative comment blocks into the helper module, since much of the file's length is comments."
+ },
+ {
+  "ref": "sonnet/3/1",
+  "severity": "CONCERN",
+  "title": "The range effect does not re-run when the first series is added",
+  "location": "src/chart/use-chart-provider.ts (visible-range effect, `seriesCountRef.current === 0` guard)",
+  "description": "The effect that applies the visible range reads `seriesCountRef.current`. That is a ref, not state, so it is not in the dependency array. Adding the first series therefore does not apply the `range` the Context already holds. The range reaches the chart only on the next range change. The test `applies the range once a series exists` hides this by calling `setRange(NEXT_RANGE)` after `addSeries`. Initiative 120 will hit this as soon as it adds data. Either track the series count as state, or have the `addSeries` path re-apply the current range. Add a test that adds a series without changing the range afterwards."
+ },
+ {
+  "ref": "sonnet/3/2",
+  "severity": "CONCERN",
+  "title": "Subscription handlers are effectively dead code",
+  "location": "src/chart/use-chart-provider.ts (the `subscribeCrosshairMove` and `subscribeVisibleRangeChange` callbacks)",
+  "description": "Both handlers have the body `if (disposedRef.current) { return }` and do nothing else. The comments say this is deliberate, to exercise the disposer lifecycle. It still adds a subscription pair, a retained-disposer array, and the teardown loop for zero behavior. That conflicts with \"resist adding complexity\". Defer these subscriptions until initiative 120 has a consumer, or expose them only through the facade, which already forwards them."
+ },
+ {
+  "ref": "sonnet/3/3",
+  "severity": "CONCERN",
+  "title": "Facade and error-funnel tests duplicate the same helpers across files",
+  "location": "src/test/use-chart-provider.errors.test.tsx",
+  "description": "`measuredRect`, `MEASURED`, and the `measure` ref callback are copied in the errors, facade, translation, and resize test files. The resize file inlines a slightly different version. `render-with-contexts.tsx` was extracted to avoid exactly this duplication, but these helpers were not. Move them into `src/test/support/` so changing the stub happens in one place."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "Mount-failure teardown calls `destroy()` on a provider whose `create()` threw",
+  "location": "src/chart/use-chart-provider.ts:181-225",
+  "description": "When `provider.create()` throws, the catch block calls `teardown()`, which calls `provider.destroy()`. The real `LightweightChartsProvider.destroy()` starts with `assertReady()` (`src/chart/providers/lightweight-charts-provider.ts:67-69`). That throws \"not ready\" if `chart` is still null. If `create()` failed inside `createChart`, `chart` is null. Teardown then logs a second, misleading `provider teardown failed` error that masks the real failure. The unit tests didn't catch this because the spy's `destroy()` never throws. The test \"tears down after a failed create\" asserts `destroy` was called once, which is the behavior that triggers this on the real class. Track whether `create()` completed and skip `destroy()` if it didn't. Alternatively, make the failure path dispose only what was actually built. A test against the real provider, or a spy whose `destroy` throws when it wasn't created, would cover this."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "`error` keeps the latest failure, but docs and a test name say \"first\"",
+  "location": "src/chart/use-chart-provider.ts:97-99",
+  "description": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation\" (`src/chart/chart-operations.ts:77`). The test is named \"keeps the first error rather than being reset by a later success\". `setOperationError` does `setMount((current) => ({ ...current, error: failure }))`, so a second failure overwrites the first. The test only checks that a later success doesn't clear the error. It never checks that a second failure leaves the first one in place. Either preserve the first error (`current.error ?? failure`) or change the docs and test name to \"most recent\". Also add a test with two failures."
+ },
+ {
+  "ref": "sonnet-high/1/2",
+  "severity": "CONCERN",
+  "title": "Theme-token lookup silently falls back to library defaults",
+  "location": "src/routes/chart-route.tsx:34-56",
+  "description": "`readChartStyle()` returns `undefined`, or leaves individual fields `undefined`, when a CSS token resolves empty. The provider then uses the library's white default, so a renamed or missing token gives a white chart with no error. CLAUDE.md says \"Never use silent fallback values. Fail explicitly.\" The e2e test would catch a total failure, but a single missing token such as `--color-grid` would pass unnoticed. Throw (or surface through the hook's `error`) when a required token is empty."
+ },
+ {
+  "ref": "sonnet-high/1/3",
+  "severity": "CONCERN",
+  "title": "Mount-time subscriptions use no-op handlers (dead code)",
+  "location": "src/chart/use-chart-provider.ts:275-298",
+  "description": "Both `subscribeCrosshairMove` and `subscribeVisibleRangeChange` are registered with callbacks whose only body is `if (disposedRef.current) return`. The indicator effect (`:348-358`) likewise has an empty body. This adds subscriptions and effect runs that do nothing, plus about 40 lines of explanatory comment. It also adds failure paths: a subscribe throw now fails the whole mount. The justification is \"proves the disposer lifecycle\", which the tests could do through the facade. The CLAUDE.md \"resist complexity\" principle argues for removing these until initiative 120 needs them. If they stay, they should at least be called out as intentional scaffolding in the slice docs."
+ },
+ {
+  "ref": "sonnet-high/1/4",
+  "severity": "CONCERN",
+  "title": "Hook file exceeds the ~300-line guide, and its lint suppression is file-wide",
+  "location": "src/chart/use-chart-provider.ts",
+  "description": "The file is 366 lines and the mount effect is about 150 lines, against the ~50-line function guideline. The `eslint.config.js` comment justifies disabling `react-hooks/refs` for the whole file partly by saying inlining the facade would keep the file about 60% over the guide. It is still over. The file-wide `off` also hides any real ref-during-render mistakes later added to this file. Consider extracting the mount sequence (create, resize, observer, subscriptions, teardown) into a plain helper that returns a disposer. That would shrink the effect and might let the rule stay enabled. If the suppression stays, use a targeted `eslint-disable-next-line` at the `useMemo` call instead."
+ },
+ {
+  "ref": "sonnet-high/1/5",
+  "severity": "CONCERN",
+  "title": "Range translation is skipped when the first series is added after the range was set",
+  "location": "src/chart/use-chart-provider.ts:334-340",
+  "description": "The range effect checks `seriesCountRef.current === 0`, but the ref is not state, so adding the first series does not re-run the effect. If the range was set while the chart was empty, adding a series does not apply that range. The next `range` change does. The comments describe this as a seam for initiative 120, but the behavior is a latent bug: the viewport stays out of sync with Context until the user changes the range. The test only covers \"add series, then change range\". Track the series count as state, or have `addSeries` re-apply the current range. At minimum, document and test the \"range already set before first series\" case."
+ },
+ {
+  "ref": "sonnet-high/2/0",
+  "severity": "CONCERN",
+  "title": "Visible-range translation never fires when the first series is added",
+  "location": "src/chart/use-chart-provider.ts:237-242",
+  "description": "The range effect is keyed on `[mount.ready, chart, range]` and gated on `seriesCountRef.current === 0`. A ref is not reactive, so adding a series does not re-run the effect. If the range was set while the chart was empty, the call is withheld and then never applied once data arrives. It only runs on the next change to `range`.\n\nThe comment says the seam activates \"the moment [initiative 120] adds the first series\", which overstates what the code does. The translation test sets the range after `addSeries`, so it never covers this ordering. Either re-apply the current range from the facade's `addSeries` path (for example through the `onAdded` callback), or correct the comment and add a test that pins the ordering."
+ },
+ {
+  "ref": "sonnet-high/2/1",
+  "severity": "CONCERN",
+  "title": "Theme-token read silently falls back to library defaults",
+  "location": "src/routes/chart-route.tsx:30-52",
+  "description": "`readChartStyle()` returns `undefined`, or leaves individual fields `undefined`, when a CSS token resolves empty. The chart then renders with the library's default white background. The project rule is \"Never use silent fallback values. Fail explicitly.\" The e2e spec catches this case, but the running app would show a white chart with no error and no log. A missing `--color-surface`, `--color-text-muted` or `--color-grid` is a configuration bug. Throw, or surface it through the same error region the route already renders."
+ },
+ {
+  "ref": "sonnet-high/2/2",
+  "severity": "CONCERN",
+  "title": "Subscription callbacks and the indicator effect are empty no-ops",
+  "location": "src/chart/use-chart-provider.ts:293-304",
+  "description": "`subscribeCrosshairMove` and `subscribeVisibleRangeChange` are given handlers whose only body is `if (disposedRef.current) { return }`. The indicator-observer effect (around lines 252-260) also does nothing. These are labelled as deliberate placeholders, but they are dead code that runs in production, and they affect the tests. The \"makes a subscription callback fired after teardown inert\" test in `use-chart-provider.errors.test.tsx` passes vacuously, because the handlers can't call anything whether or not the disposed guard exists. Keep the subscription lifecycle if you want to prove disposer handling, but don't count the inertness test as coverage of the disposed flag until a handler does real work."
+ },
+ {
+  "ref": "sonnet-high/2/3",
+  "severity": "CONCERN",
+  "title": "Blanket `react-hooks/refs` disable for the hook file",
+  "location": "eslint.config.js:55-79",
+  "description": "The rule is disabled for all of `use-chart-provider.ts`, so any future real ref-during-render bug in that file goes undetected. The justification is documented and scoped, which is good. `chart-facade.ts` was extracted to get under the 300-line guide, and the hook is still about 366 lines, so the extraction didn't meet that goal. A narrower option is a line-level `eslint-disable-next-line` on the `useMemo` that builds the facade, so the rest of the file stays linted."
+ },
+ {
+  "ref": "sonnet-high/2/4",
+  "severity": "CONCERN",
+  "title": "Stale task references and misplaced comment blocks in the hook",
+  "location": "src/chart/use-chart-provider.ts:17-20",
+  "description": "The header says the file is \"built up across tasks 8/10/12/14\", and the teardown comment says \"subscriptions join here in task 12\". Both are historical process notes that are now wrong, since subscriptions are already in the file. The \"forwarding facade\" comment block sits directly above the `series` counter `useMemo`, not above `chart`, which it describes, so two unrelated comment blocks are stacked back to back. Remove the task numbers and move the comment next to `chart`."
+ },
+ {
+  "ref": "sonnet-high/2/5",
+  "severity": "CONCERN",
+  "title": "Duplicated measurement and Host scaffolding across four test files",
+  "location": "src/test/use-chart-provider.errors.test.tsx:34-62",
+  "description": "`MEASURED` and `measuredRect()` are copy-pasted into the errors, facade and translation suites. The resize suite inlines the same stub. All four also hand-roll the same `measure` ref callback. `render-with-contexts.tsx` and `chart-provider-spy.ts` were centralized to avoid this kind of divergence. Move the stubbed-rect helper into `src/test/support/` so a change to the measurement stub is a one-place edit."
+ },
+ {
+  "ref": "sonnet-high/3/0",
+  "severity": "CONCERN",
+  "title": "Mount effect and hook file well over the project size guides",
+  "location": "src/chart/use-chart-provider.ts:167-324",
+  "description": "The mount effect runs 157 lines, against a guide of about 50 lines per function. The whole file is 366 lines, against about 300. The `eslint.config.js` suppression comment justifies itself by saying inlining the facade would leave the file \"~60% over\". The file is still about 22% over after the extraction. `teardown`, the mount sequence and the subscription setup could each be pulled into helpers. A `mountChart(container, style, \u2026)` function returning `{ observer, disposers }` would also make the `let observer` / `const disposers` hoisting, which `teardown` reads before it is declared, unnecessary."
+ },
+ {
+  "ref": "sonnet-high/3/1",
+  "severity": "CONCERN",
+  "title": "Visible-range translation is gated on a ref, so it cannot react to the first series being added",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "The effect reads `seriesCountRef.current` but lists only `[mount.ready, chart, range]` as dependencies. A ref change does not re-run the effect. When a series is added to an empty chart, the Context's current range is not applied. It only reaches the chart on the next `range` change. The test \"applies the range once a series exists\" avoids this by calling `setRange` after `addSeries`, so it never covers the case. The comment calls this a seam for initiative 120. Even so, the first add leaves the chart and the Context out of sync. Either apply the range inside the facade's `addSeries` path when the count goes 0\u21921, or track the count as state."
+ },
+ {
+  "ref": "sonnet-high/3/2",
+  "severity": "CONCERN",
+  "title": "Subscriptions and the indicator effect are no-ops, and the teardown-race test is vacuous",
+  "location": "src/chart/use-chart-provider.ts:262-275",
+  "description": "The crosshair and visible-range handlers contain only `if (disposedRef.current) { return }`, so both branches do nothing. The adapter still builds a crosshair payload on every mouse move for no consumer. The indicator effect at lines 358-363 is also an empty body. These are documented placeholders, but they add per-event work and dead code. The test \"makes a subscription callback fired after teardown inert\" in `src/test/use-chart-provider.errors.test.tsx` asserts that `getVisibleRange` was not called. That passes whether or not the guard exists, because the handler never calls anything. Either defer the subscriptions until a consumer exists, or test the disposer lifecycle through real handler behavior."
+ },
+ {
+  "ref": "sonnet-high/3/3",
+  "severity": "CONCERN",
+  "title": "Failed create is followed by a spurious second error from teardown",
+  "location": "src/chart/use-chart-provider.ts:218-226",
+  "description": "If `provider.create()` throws, for example because `createChart` throws, `LightweightChartsProvider.chart` is still null. `src/chart/providers/lightweight-charts-provider.ts:67-70` shows `destroy()` calls `assertReady()`, which throws. The shared `teardown` then logs a misleading \"provider teardown failed\" error right after the real \"create failed\" one. The spy never throws from `destroy`, so the unit tests miss this. Consider tracking whether `create` succeeded and skipping `destroy` when it did not."
+ },
+ {
+  "ref": "sonnet-high/3/4",
+  "severity": "CONCERN",
+  "title": "`readChartStyle` silently falls back to library defaults",
+  "location": "src/routes/chart-route.tsx:34-55",
+  "description": "`CLAUDE.md` says \"Never use silent fallback values\". When a theme token resolves empty, it is dropped without any signal. If all three are empty the function returns `undefined`, and a partial miss leaves that color at the library default. A renamed token would therefore turn the chart white with no error. The e2e test catches the case where `--color-surface` is missing. A grid or text token that goes missing is not caught. Log or throw on a missing token. At minimum, test `readChartStyle` directly, since there is no unit test for it."
+ },
+ {
+  "ref": "sonnet-high/3/5",
+  "severity": "CONCERN",
+  "title": "Stale and misplaced comments in the hook, and the smoke spec names the wrong file",
+  "location": "src/chart/use-chart-provider.ts:10",
+  "description": "- The header refers to \"task 14\" and a build-up \"across tasks 8/10/12/14\", which is process history.\n- The `teardown` comment says subscriptions \"join here in task 12\", but they already do.\n- The \"The forwarding facade\u2026\" comment block sits above the `series` memo instead of the `chart` memo it describes.\n- In `e2e/smoke.spec.ts:10` the comment says \"The chart itself is asserted in chart-render.spec.ts\". That spec covers the harness route. The product chart is covered by `chart-live.spec.ts`."
+ }
+]

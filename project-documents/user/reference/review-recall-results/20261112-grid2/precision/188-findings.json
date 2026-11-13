@@ -1,0 +1,408 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "FAIL",
+  "title": "Ceiling-sized responses are built and serialized on the event loop",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:125-126",
+  "description": "`get_candlesticks` awaits the executor for the reads, then runs `CandlesResponse.build` (line 125, up to 75,000 pydantic records) and `timeseries_response` (line 126) on the loop thread. `get_trades` does the same at lines 168-174. `timeseries_response` runs `model_dump(mode=\"json\")` and then `orjson.dumps` or `msgpack.packb` on up to ~35 MB (`serialization.py:38-44`). The Python rules say an `async def` may call synchronous code only if it runs in under 1 ms in the worst case, and CPU-bound work must go to `run_in_executor`. This work takes on the order of a second per request and stalls every other request, including `/health`.\n\nThe diff's own load-test docstring measures a 1.034 s median for the trades ceiling request. That figure includes executor time, so the loop-blocking time is at most that. The load tier misses the problem: the ceiling tests run sequentially, and the only concurrency test (`test/load/test_188_kalshi_api_nfr.py:322`) exercises market detail, which does not build a large response. The bars route (`routes/bars.py:210-218`) has the same shape at the same ceiling, so that part predates this diff. The new routes repeat it at the same scale. The fix is to move the build and serialization into the executor function, then add a test that runs a ceiling-sized request alongside small requests and asserts the small requests' latency."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "`tape_complete_through` is described as the newest trade's time, but it is the trades watermark",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188-193",
+  "description": "The field description says \"Created time of the newest stored trade.\" `tape_facts` actually returns `watermark_ts` from `kalshi.sync_state['trades']` (`serve_timeseries.py:141-144`), and the integration test `TestTapeFacts` asserts equality with the watermark. The watermark is how far the trades phase has walked, and it can be later than the newest stored trade. A client that follows the published text will misjudge freshness on a quiet market. The candle field `complete_through` (lines 124-130) states the watermark semantics explicitly, so this description is the outlier."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "`tape_filtered` says no trades are stored, but stored trades are still returned",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:194-200",
+  "description": "The description says \"True means no trades are stored for it by policy.\" `fetch_trades` and `count_trades` filter only on ticker and window (`serve_timeseries.py:257-296`). The exclusion applies only at collection time, so trades stored before a category was added to `MT_KALSHI_TRADES_EXCLUDED_CATEGORIES` are still served while the flag reports `true`. Either the description should say the exclusion governs future collection and earlier trades still appear, or the route should filter. Which one is intended is a design call for you."
+ },
+ {
+  "ref": "haiku-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "`tape_filtered` re-spells the membership test and hard-codes the parameter key, against its own docstring",
+  "location": "src/manta_trading/data/kalshi/serve_timeseries.py:147-166",
+  "description": "The docstring says \"The membership test is not re-spelled here\u2026 so a change to one cannot leave the other behind.\" The function re-implements `COALESCE(s.category, '') = ANY(...)` as `(category or \"\") in bound`, and reads `selection.params[\"trades_excluded_categories\"]`, a literal duplicated from `selection.py:168-170`. The integration test `TestTapeFiltered.test_agrees_with_the_sql_predicate` does catch divergence, so the risk is covered by a test rather than by construction. Either move the membership rule into one helper in `selection.py` that both the SQL and the Python path use, or correct the docstring to name the test as the guard."
+ },
+ {
+  "ref": "haiku-xhigh/1/4",
+  "severity": "CONCERN",
+  "title": "The candle re-nesting docstring says new columns need no edit, but they are silently dropped",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:86-98",
+  "description": "The module docstring (lines 5-9) and `from_row` say a column added to `CANDLE_COLUMNS` \"is served here without an edit.\" That is false. `CandleBidAsk`, `CandlePrice`, and `CandleRecord` list their fields by hand, and `from_row` hard-codes `flat[\"volume_fp\"]` and `flat[\"open_interest_fp\"]`. Pydantic's default `extra=\"ignore\"` means a new nested column such as `(\"yes_bid\", \"volume_dollars\")` is discarded without error. A new top-level object name would raise `KeyError` at `nested[obj]`. `test_nested_field_set_is_exactly_what_candle_columns_describes` would fail in that case, so the test catches it. The docstring should say that, and the models should be derived from the mapping or the claim removed."
+ },
+ {
+  "ref": "haiku-xhigh/1/5",
+  "severity": "CONCERN",
+  "title": "Trade rows are mapped by position into an untyped tuple",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:162-175",
+  "description": "Candles are mapped by name through `CANDLE_COLUMNS`. Trades read `values[0]` through `values[7]` by position, and `TradeRow.values` is `tuple[Any, ...]` (`serve_timeseries.py:79-82`), so strict pyright cannot check the mapping. The positions match `TRADE_COLUMNS` today (I checked this). Nothing ties them together, though: the SQL order comes from `TRADE_VALUE_COLUMNS`, the unit test hand-writes the same order, and the integration test checks only the length. Swapping the yes and no price columns in `TRADE_COLUMNS` would keep every current test green while the API returned wrong prices. Zip the row with `TRADE_VALUE_COLUMNS` by name, as the candle side does."
+ },
+ {
+  "ref": "haiku-xhigh/1/6",
+  "severity": "CONCERN",
+  "title": "`gaps.py` keeps its own window helpers, which is the duplication the new module warns about",
+  "location": "src/manta_trading/api_server/routes/gaps.py:54",
+  "description": "`windows.py`'s docstring says the day-boundary convention lives there because \"two route families now depend on it,\" and that two derivations of \"the last instant of a day\" is how one ends up exclusive by accident. `gaps.py` still defines `_window_start_utc`, identical to `windows.window_start_utc`, and `_window_end_utc`, which uses a different end convention (next midnight, half-open). `test/integration/test_gaps_window_sql.py:25-26` imports these copies. Either move the shared helpers into `windows.py` and document the half-open variant there, or narrow the docstring's claim."
+ },
+ {
+  "ref": "haiku-xhigh/1/7",
+  "severity": "CONCERN",
+  "title": "Two load-tier tests assert no latency or size bound, and a recorded constant is never checked",
+  "location": "test/load/test_188_kalshi_api_nfr.py:241-266",
+  "description": "`test_candles_at_the_admission_ceiling_records_its_response_size` measures the response size, prints it, and asserts only the row count (line 266). `CANDLES_CEILING_RESPONSE_MB = 34.80` (line 120) appears nowhere else in the repository, so the recorded measurement is not enforced. `test_markets_list_scoped_to_the_dense_event` (line 348) asserts only a count and an event ticker. The load-tier rule requires load tests to assert on latency, throughput, or resource bounds. Assert the size against the constant with a bound, and give the candle test a latency bound. The module docstring also says \"Four assertions,\" but the file has six test functions."
+ },
+ {
+  "ref": "haiku-xhigh/1/8",
+  "severity": "CONCERN",
+  "title": "Helper and test files exceed the size guidance",
+  "location": "test/load/conftest.py:446",
+  "description": "`_seed_kalshi_dense` runs from line 446 to about line 546, roughly 100 lines against the ~50-line guidance. `test/integration/test_kalshi_serving.py` is about 550 non-empty lines and `test/load/conftest.py` about 476, both over the ~300-line guidance. `conftest.py` was already over before this diff. Move the Section 4 reader tests into their own module, and split the dense seeder into one helper per `COPY` table."
+ },
+ {
+  "ref": "haiku-xhigh/2/0",
+  "severity": "FAIL",
+  "title": "Ceiling-sized responses are built and serialized on the event loop",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:125",
+  "description": "Both handlers run the database work in an executor, then build the response model and serialize it inline on the loop. `CandlesResponse.build` (line 125) constructs up to 75,000 `CandleRecord`s, and `timeseries_response` (line 126) runs `model_dump(mode=\"json\")` plus an orjson or msgpack encode over all of them. The trades handler does the same at lines 168\u2013174. The cost scales with the row ceiling. The rules say synchronous work inside an `async def` must stay under 1 ms in the worst case, and CPU-bound work must go to an executor. `bars.py:218` has the same shape, but that is a precedent for the pattern, not an exemption from the rule.\n\nThe load tier does not catch this. The trades ceiling test (`test/load/test_188_kalshi_api_nfr.py:221`) times one request end to end. The concurrency test (`:322`) uses market-detail requests. Nothing checks whether a ceiling-sized request starves other I/O. I have not measured how much of the 1.034 s median is loop time.\n\nFix: move build and serialize into the executor job, or have `_read` return the encoded `Response`. Add a load assertion that a small request issued while a ceiling request is in flight keeps its latency bound."
+ },
+ {
+  "ref": "haiku-xhigh/2/1",
+  "severity": "CONCERN",
+  "title": "Trades `tape_complete_through` is documented as the newest trade's time, but the value is the sync watermark",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188",
+  "description": "The field description (lines 188\u2013193) says \"Created time of the newest stored trade.\" The value is not that. `tape_facts` returns `sync_state.watermark_ts` (`serve_timeseries.py:143`). That column is written only by `TradeRepository.advance_watermark(window_edge)` (`trade_repository.py:272\u2013276`), whose docstring says the tape \"is complete through `window_edge`.\" The candles field at the same level says \"not 'the newest stored candle',\" which is correct. The migration comment at `market/schema/migrations/kalshi.py:232` and the `tape_facts` docstring (`serve_timeseries.py:124`) repeat the wrong definition.\n\nOpenAPI is generated from this text, so the public contract describes behavior the server does not have. A client reading \"newest trade\" will misjudge a quiet tape. Correct the description. Then decide whether the migration comment is stale or the code is wrong, and reconcile them."
+ },
+ {
+  "ref": "haiku-xhigh/2/2",
+  "severity": "CONCERN",
+  "title": "Trade rows are mapped by position, while the SELECT order comes from a different mapping",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:167",
+  "description": "`TradeRecord.from_row` assigns `values[0]` through `values[7]` to named fields. The order those values arrive in comes from `TRADE_VALUE_COLUMNS` (`serve_timeseries.py:40\u201343`), which is derived from `TRADE_COLUMNS` (`trade_repository.py:45\u201355`). If `TRADE_COLUMNS` is reordered, the SELECT changes and `from_row` does not. All the fields share compatible types, so the failure is silent. For example, `yes_price_dollars` could take the `count_fp` value.\n\nThe candle path avoids this by walking `CANDLE_COLUMNS` by name, and the trades path should do the same. No test catches the problem. The unit tests build synthetic positional `TradeRow`s in the assumed order. The integration `TestTradeWindow` in `test/integration/test_kalshi_serving.py` asserts only counts and lengths.\n\nFix: build the record from `dict(zip(TRADE_VALUE_COLUMNS, row.values, strict=True))` and call `cls(**mapping)`. Add an integration assertion that a stored trade's `yes_price_dollars` round-trips through `fetch_trades`."
+ },
+ {
+  "ref": "haiku-xhigh/2/3",
+  "severity": "CONCERN",
+  "title": "Candle `from_row` silently drops columns that have no model field, and the docstring says this cannot happen",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:86",
+  "description": "The module docstring (lines 8\u20139) says \"a column added there is served here without an edit.\" That holds only for columns whose field already exists on `CandleBidAsk` or `CandlePrice`. For a new nested name, `from_row` writes it into `nested[obj]` (line 91). Then `CandleBidAsk(**nested[\"yes_bid\"])` (lines 94\u201396) discards it, because Pydantic's default is `extra=\"ignore\"`. The response omits the column and raises no error.\n\nThe only guard is `test_nested_field_set_is_exactly_what_candle_columns_describes` in `test/unit/api_server/test_kalshi_models.py`. Fix: set `model_config = ConfigDict(extra=\"forbid\")` on the candle models so a mismatch fails at construction. Correct the docstring to match."
+ },
+ {
+  "ref": "haiku-xhigh/2/4",
+  "severity": "CONCERN",
+  "title": "`tape_filtered` re-spells the membership test, and its docstring says it does not",
+  "location": "src/manta_trading/data/kalshi/serve_timeseries.py:147",
+  "description": "The docstring (lines 150\u2013152) says the membership test \"is not re-spelled here\" and that \"a change to one cannot leave the other behind.\" The function then runs the membership test in Python, `(category or \"\") in bound` (line 166). It also reads the parameter through the literal key `\"trades_excluded_categories\"` (line 159). That string is defined in `selection.py` (lines 156 and 170), so it is now duplicated across modules.\n\nThe claim is false. A change to the comparison in `trades_filter_sql`, such as case folding, would not reach `tape_filtered`. The only guard is the five-case `TestTapeFiltered` parametrization. The `isinstance` guard at lines 160\u2013162 exists only to narrow a dict value this function reaches into.\n\nFix: compute the flag in SQL. Compose `trades_filter_sql(excluded).predicate` as a `... AS tape_filtered` column in the `market_context` statement (`_CONTEXT_QUERY`, line 85). Then delete `tape_filtered` and its guards."
+ },
+ {
+  "ref": "haiku-xhigh/2/5",
+  "severity": "CONCERN",
+  "title": "The candle ceiling load test asserts no time or resource bound, and its size constant is unused",
+  "location": "test/load/test_188_kalshi_api_nfr.py:241",
+  "description": "`test_candles_at_the_admission_ceiling_records_its_response_size` (lines 241\u2013266) asserts only that the count equals `API_MAX_BARS_PER_REQUEST`. It prints the size and checks no latency. The load-tier rule requires load tests to assert on latency, throughput, or resource bounds. This is the only load test for the candle route, which is a new network path.\n\n`CANDLES_CEILING_RESPONSE_MB = 34.80` (line 120) is defined and never referenced. The \"measured 34.80 MB\" figure guards nothing.\n\nFix: time the request with the existing `_measure` helper and assert a latency bound. Either assert the byte size against `CANDLES_CEILING_RESPONSE_MB` with a stated tolerance, or delete the constant."
+ },
+ {
+  "ref": "haiku-xhigh/2/6",
+  "severity": "CONCERN",
+  "title": "The load tier is not gated by CI, which the rules require for slices touching these paths",
+  "location": "test/load/test_188_kalshi_api_nfr.py:80",
+  "description": "The module-level `skipif` (lines 80\u201388) runs the tier only with `MT_RUN_LOAD_TESTS=1`. The module docstring's Gating section says CI wiring is deferred to slice 907. That slice file exists (`project-documents/user/slices/907-slice.ci-pipeline-and-load-test-gating.md`). The `.github/` directory has no pytest, mypy, or load-test job, so nothing enforces these bounds. The rule says \"CI must gate load tests for slices touching these paths.\"\n\nThe deferral is documented and tracked, so I rate this CONCERN, not FAIL. Land the gate with this slice, or record an explicit exception that names the rule."
+ },
+ {
+  "ref": "haiku-xhigh/3/0",
+  "severity": "FAIL",
+  "title": "Async routes build and serialize up to 75,000 rows on the event loop",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:125",
+  "description": "`get_candlesticks` (line 87) and `get_trades` (line 134) are `async def`. After the executor call they run `CandlesResponse.build` (line 125) and `TradesResponse.build` (line 168) inline, then `timeseries_response` (lines 126 and 174) inline. At the admission ceiling that means up to 75,000 pydantic models built per request, each with 16 candle columns re-nested through `from_row`. The response is then dumped with `model_dump(mode=\"json\")` and encoded with orjson or msgpack (`serialization.py:38-44`). The candle ceiling is recorded at 34.80 MB in the load test. The project rule for `async def` is that synchronous work must finish in under 1 ms in the worst case, and CPU-bound work must go through `run_in_executor`. This work is far beyond that bound, and it stalls every other request on the loop while it runs.\n\nThe load tier does not catch this. The trades ceiling test measures 1.034 s end to end, but only sequentially. The concurrency test (`test_188_kalshi_api_nfr.py:322`) uses the small market-detail response.\n\n`bars.py:210-218` has the same shape and predates this slice. The fix should cover both routes, or the slice should track bars explicitly. The fix is to move build and serialization into the executor. The read result is immutable frozen dataclasses, so the executed code touches no shared mutable state."
+ },
+ {
+  "ref": "haiku-xhigh/3/1",
+  "severity": "CONCERN",
+  "title": "Count guard and fetch run on separate snapshots, so \"one row over\" is overstated",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:112",
+  "description": "The candle count and fetch (lines 112\u2013120) and the trade count and fetch (lines 160\u2013163) are separate statements. Nothing wraps them in a `REPEATABLE READ` transaction, so each one takes its own snapshot. The trades phase commits pages of up to 1,000 rows in one statement (`trade_repository.py`, `write_page` docstring). If a page commits between the count and the fetch, the response carries the counted rows plus that page. The overage is up to a whole write batch, not the \"one row over\" that `serve_timeseries.py:6-9` promises. The 422 message can then disagree with the rows actually delivered. The never-truncated invariant still holds.\n\nFix: run count and fetch in one `REPEATABLE READ READ ONLY` transaction at the top of `_read`. The guard and the payload then describe one snapshot, and the docstring's claim becomes exact."
+ },
+ {
+  "ref": "haiku-xhigh/3/2",
+  "severity": "CONCERN",
+  "title": "Trade re-nesting is positional, and the candle object-to-model map is restated and unused",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:163",
+  "description": "`TradeRecord.from_row` maps `values[0]` through `values[7]` to fields by position (lines 167\u2013174). The selected column order comes from `TRADE_VALUE_COLUMNS` in `serve_timeseries.py`, and nothing ties the two together. The candle side is driven by `CANDLE_COLUMNS`, and the module docstring says neither direction restates the other, which is false for trades. The failure is silent. `count_fp`, `yes_price_dollars`, and `no_price_dollars` are all `Decimal`, so reordering `TRADE_COLUMNS` in `trade_repository.py` would pass validation and swap prices and counts with no error. No test pins the trade value order. `test_trade_record_serializes_its_decimals_as_strings` builds its tuple by hand in the same order, and the integration test checks only the count of values.\n\nOn the candle side, `_CANDLE_OBJECTS` (line 58) is read only for its keys (line 83). Its model values are never used, and `from_row` constructs `CandleBidAsk` and `CandlePrice` by hand.\n\nFix: build `TradeRecord` from the column names (zip `TRADE_VALUE_COLUMNS` with the values and validate the dict). Drop the unused values in `_CANDLE_OBJECTS`, or make `from_row` use them. Add a round-trip test with a distinct value in each column, so reordering fails."
+ },
+ {
+  "ref": "haiku-xhigh/3/3",
+  "severity": "CONCERN",
+  "title": "Reversed-range check and day-boundary helpers are duplicated across three route modules",
+  "location": "src/manta_trading/api_server/routes/windows.py:65",
+  "description": "`windows.py` was created so the day-boundary convention \"lives here.\" The reversed-range check and its 422 message are now spelled twice: `windows.py:65-70` and `bars.py:93-100`. The `resolve_window` docstring even says it reuses \"the bars route's reversed-range message,\" which describes a copy rather than a shared helper.\n\n`gaps.py:54-71` still defines its own `_window_start_utc` and `_window_end_utc`. Its end-of-day convention differs from `windows.py`. `gaps.py` returns next midnight, half-open (line 71). `windows.py` returns `time.max`, closed. Each is correct for its own predicate. But the `windows.py` docstring names exactly this divergence as the failure it exists to prevent.\n\nFix: have `bars._admit_range` call `resolve_window`, or extract a shared reversed-range helper. Either move `gaps` onto `windows.py` with an explicit half-open variant, or document why it keeps its own."
+ },
+ {
+  "ref": "haiku-xhigh/3/4",
+  "severity": "CONCERN",
+  "title": "`_admit_rows` and `_not_found` are duplicated between the two Kalshi route modules",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:66",
+  "description": "`_admit_rows` (lines 66\u201379) is a near copy of `_admit_rows` in `kalshi_catalog.py:81-94`. The only difference is the message tail: \"narrow start/end\" versus \"narrow the filter.\" `_not_found` (line 59) duplicates `kalshi_catalog.py:97`, which already takes the resource name as a parameter. The constants docstring calls the ceiling \"one ceiling for the whole API,\" and this gives it two enforcement spellings.\n\nFix: move `admit_rows` and `not_found` into one shared module, parameterize the hint text, and call them from both route modules."
+ },
+ {
+  "ref": "haiku-xhigh/3/5",
+  "severity": "CONCERN",
+  "title": "The concurrency assertion uses the median, which cannot see the queued half",
+  "location": "test/load/test_188_kalshi_api_nfr.py:339",
+  "description": "Sixteen concurrent requests against a pool of 8 leave the first eight connected and the other eight queued. `statistics.median` of 16 samples is the mean of the 8th and 9th sorted values, which sits right at that split. A pool regression that adds several hundred milliseconds of wait to each queued request would leave the median under the 0.6 s bound while the queued tail exceeds it. This assertion is what the docstring calls the 185 D8a contention shape.\n\nFix: assert on the maximum sample, and report the median for information."
+ },
+ {
+  "ref": "haiku-xhigh/3/6",
+  "severity": "CONCERN",
+  "title": "Docstrings say \"fourteen\" value columns; the mapping has sixteen",
+  "location": "src/manta_trading/data/kalshi/serve_timeseries.py:72",
+  "description": "`CandleRow` says it holds \"the fourteen value columns.\" `models/kalshi_timeseries.py:5` says \"the fourteen flat stored columns,\" and `test_kalshi_models.py:186` says \"The fourteen values.\" `CANDLE_COLUMNS` (`candle_repository.py:50-62`) has sixteen entries: fourteen nested OHLC, previous, and mean columns, plus `volume_fp` and `open_interest_fp`. `constants.py:1306` says sixteen, and the candle test asserts `len(values) == len(CANDLE_COLUMNS)`. The code is right and the prose is wrong.\n\nFix: correct the three docstrings to \"sixteen\" (or \"fourteen nested, two flat\")."
+ },
+ {
+  "ref": "haiku-xhigh/3/7",
+  "severity": "CONCERN",
+  "title": "`tape_filtered` re-spells the trades-filter membership test in Python",
+  "location": "src/manta_trading/data/kalshi/serve_timeseries.py:147",
+  "description": "The docstring says \"The membership test is not re-spelled here.\" The function returns `(category or \"\") in bound` (line 166). That is the Python form of the `COALESCE(s.category, '') = ANY(...)` predicate in `trades_filter_sql`. The project rule against duplicated logic points the other way, and the sibling `trade_status.py` says its predicates are \"never re-spelled.\" The parametrized `TestTapeFiltered` keeps the two in agreement, which is real mitigation. The cost is a second spelling, plus a dependence on the internal parameter key `trades_excluded_categories` (line 164).\n\nFix: compute the flag in SQL on the connection that already runs `market_context`, by embedding `trades_filter_sql(excluded).predicate` in that query. SQL then becomes the only spelling."
+ },
+ {
+  "ref": "sol/1/0",
+  "severity": "FAIL",
+  "title": "Midnight timestamps silently expand into whole-day bounds",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+  "description": "Pydantic tries `date` first and converts midnight datetime strings into dates. Verified through the endpoint: `end=2026-06-01T00:00:00Z` reaches the reader as `23:59:59.999999Z`, returning an extra day's data. Midnight timestamps with offsets also lose their offset. Both routes are affected. Preserve the distinction between date-only inputs and timestamps, and add midnight/offset regression tests."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "FAIL",
+  "title": "Large responses block the event loop",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:123-126",
+  "description": "Database reads use an executor, but model construction and serialization run synchronously inside the async handler. A local 75,000-candle benchmark measured approximately 708 ms building models plus 550 ms serializing\u2014well beyond the required 1 ms bound, blocking unrelated requests. The trades handler has the same pattern. Offload construction and serialization after releasing the connection; add a concurrent large-response/event-loop-latency test."
+ },
+ {
+  "ref": "sol/1/2",
+  "severity": "CONCERN",
+  "title": "Load tests are not enforced by CI",
+  "location": "test/load/test_188_kalshi_api_nfr.py:37-46",
+  "description": "The new load suite requires manual opt-in, and the inspected CI workflow only publishes tags. Deferring gating to slice 907 does not satisfy the requirement that network/concurrency changes gate on load tests. Add a CI job that runs this tier against a throwaway database for relevant changes."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "FAIL",
+  "title": "Midnight timestamps silently become whole-day bounds",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+  "description": "The `date | datetime` union parses `2026-06-01T00:00:00Z` as a `date`, verified with FastAPI/Pydantic. `resolve_window()` consequently expands this explicit end timestamp to `23:59:59.999999`, returning an extra day of data. Midnight timestamps with offsets also lose their timezone. Both routes are affected. Preserve the distinction between bare dates and timestamps, and add midnight/offset regression tests."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "FAIL",
+  "title": "Large responses block the event loop",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:123-126",
+  "description": "Only database reads run in the executor; model construction and serialization execute synchronously inside the async handler. An isolated benchmark using the actual candle model code at 75,000 rows took approximately **749 ms to build and 306 ms to dump**, excluding encoding. This blocks other requests and violates the required sub-millisecond synchronous-work bound. Trades have the same pattern at lines 166\u2013174.\n\nOffload construction and serialization after releasing the connection. Add a load test measuring lightweight-request latency while a ceiling-sized response is generated; concurrent market-detail requests alone do not exercise this failure.\n\nProject tests could not run because the available Python environments lack `psycopg`."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "FAIL",
+  "title": "Midnight timestamps are silently expanded into whole-day bounds",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:92-93",
+  "description": "The `date | datetime` union parses midnight timestamp strings as dates, losing their time and timezone before `resolve_window()` runs. Reproduced through the actual route: `end=2026-06-01T00:00:00Z` reaches the reader as `2026-06-01T23:59:59.999999Z`. Both endpoints therefore return rows outside explicitly requested windows; offset-midnight timestamps also lose their offset.\n\nDistinguish bare dates from timestamps before coercion. Add route tests covering midnight timestamps, timezone offsets, and bare-date expansion."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "FAIL",
+  "title": "Large response construction and serialization block the event loop",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:123-126",
+  "description": "Only database reads run in the executor. `CandlesResponse.build()` and `timeseries_response()` then execute synchronously on the event loop. The trades handler repeats this at lines 166\u2013174.\n\nUsing the permitted 75,000 candle rows, local measurement took approximately **714 ms building models plus 548 ms serializing**, blocking other requests on that worker for roughly 1.26 seconds. This violates the explicit async execution rule despite releasing the database connection first.\n\nMove model construction and serialization into executor work after releasing the connection. Add a concurrent responsiveness test while serving a ceiling-sized response; the existing concurrency test exercises only market-detail requests."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "`_window` couples the period predicate to a truthy `extra` dict",
+  "location": "src/manta_trading/data/kalshi/serve_timeseries.py:177-200",
+  "description": "`_window` takes a generic `extra: dict[str, Any] | None`. It merges that dict into the bind parameters, and then, if `extra` is truthy, it appends a hard-coded `period = %(period)s` clause. Nothing in the signature says that `extra` must contain a `period` key. A future caller who passes any other extra parameter would get a `period` predicate with no bound value. That fails at execution time with a psycopg missing-parameter error. A caller who passes an empty dict would silently drop the period filter. Make `period: int | None` an explicit keyword argument and add the clause when it is not `None`. That removes the implicit contract and the untyped dict."
+ },
+ {
+  "ref": "sonnet/1/1",
+  "severity": "CONCERN",
+  "title": "Duplicated ceiling check between the executor closure and `_admit_rows`",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:93-100",
+  "description": "The `if count > max_rows` branch inside `_read` and the later `_admit_rows(read.count, max_rows)` both encode the same ceiling comparison, in `get_candlesticks` and again in `get_trades`. The two checks have to stay in step: if the first is relaxed, `_admit_rows` still refuses, and if the second is removed, the response is built from empty rows and reports a false `count`. The two near-identical `_read` closures also repeat the seek, 404, count, guard and fetch sequence. Consider a shared helper that takes the counter and fetcher and returns `_Read`, with a single predicate such as `read.over_ceiling`."
+ },
+ {
+  "ref": "sonnet/1/2",
+  "severity": "CONCERN",
+  "title": "Load test relies on a private pool attribute and class-level mutable state",
+  "location": "test/load/test_188_kalshi_api_nfr.py:~120-165",
+  "description": "`_client` reaches into `pool._pool` with `# noqa: SLF001`. This is a psycopg_pool private detail, and a library upgrade can break it silently. The coverage is also incomplete: connections created after startup (pool growth or replacement) never receive the recording cursor factory. For assertion 2 the effect is that a missed connection records nothing. The `not fetches` assertion then passes vacuously, because the guard on `counts` only proves that some connection was recorded. `_RecordingCursor.statements` is also a class-level list that tests reassign, which makes the recorder shared global state. Pass `kwargs={\"cursor_factory\": ...}` when constructing the pool, or patch a connection class. Alternatively, assert on server-side statement logging."
+ },
+ {
+  "ref": "sonnet/1/3",
+  "severity": "CONCERN",
+  "title": "`TradeRecord.from_row` depends on positional indexing of `TradeRow.values`",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:~115-130",
+  "description": "`TradeRow.values` is `tuple[Any, ...]`, and `from_row` reads `values[0]` to `values[7]` by position. The order is implied by `TRADE_VALUE_COLUMNS`, which is derived from `TRADE_COLUMNS` minus `market_ticker`. This contradicts the module's claim that a column added to the repository mapping is served without an edit. Reordering or adding a trade column would shift the fields without a type error. This is weaker than the candle path, which walks `CANDLE_COLUMNS`. Build the record from `zip(TRADE_VALUE_COLUMNS, values)`, or have the reader return named fields. `TradeRow.values` is also typed `Any`, which hides mismatches at the boundary."
+ },
+ {
+  "ref": "sonnet/2/0",
+  "severity": "CONCERN",
+  "title": "Trade row mapping is positional, contradicting the \"driven by the mapping\" design",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:121-133",
+  "description": "`TradeRecord.from_row` reads `values[0]` through `values[7]` by position. `TRADE_VALUE_COLUMNS` in `serve_timeseries.py` is derived from `TRADE_COLUMNS` (`trade_repository.py:45`) minus `market_ticker`. Reordering or adding a column in `TRADE_COLUMNS` would silently mis-assign fields. For example, `yes_price_dollars` and `no_price_dollars` could swap and still validate as `Decimal`. The candle path walks `CANDLE_COLUMNS` and avoids this, and the module docstring claims the same property. Zip `row.values` with `TRADE_VALUE_COLUMNS` and construct from the resulting dict. `TradeRow.values: tuple[Any, ...]` also gives up type safety at this boundary. The unit test builds rows in the same positional order, so it cannot catch a drift."
+ },
+ {
+  "ref": "sonnet/2/1",
+  "severity": "CONCERN",
+  "title": "`_window` couples the `period` predicate to the truthiness of `extra`",
+  "location": "src/manta_trading/data/kalshi/serve_timeseries.py:~185-200",
+  "description": "`_window` appends `period = %(period)s` whenever `extra` is truthy, and it never checks that `\"period\"` is a key in `extra`. A future caller passing any other extra parameter would emit a `period` clause with no bound parameter, which fails at runtime. A caller passing `{}` would drop the predicate. Make `period: int | None` an explicit argument instead of an implicit dict contract."
+ },
+ {
+  "ref": "sonnet/2/2",
+  "severity": "CONCERN",
+  "title": "Load test reaches into private pool internals and uses mutable class-level state",
+  "location": "test/load/test_188_kalshi_api_nfr.py (`_RecordingCursor`, `_client`)",
+  "description": "`_client` iterates `pool._pool` (a private attribute, suppressed with `noqa: SLF001`) and sets `cursor_factory` on the live connections. This is brittle against psycopg_pool upgrades. It also only reaches connections that are idle at that moment, so any connection the pool opens later has no recording cursor and its statements go unrecorded. The over-ceiling test could then pass vacuously on its \"no fetch\" half. The count-statement assertion (`assert counts`) partly mitigates this. Passing `kwargs={\"cursor_factory\": ...}` at pool construction would be sturdier, for example through a `create_app` hook. `_RecordingCursor.statements` is shared class-level state that leaks between tests."
+ },
+ {
+  "ref": "sonnet/2/3",
+  "severity": "CONCERN",
+  "title": "Blocking DB work and unbounded row materialisation under a count-then-fetch race",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:94-117",
+  "description": "The design deliberately omits `LIMIT`, so rows inserted between the count and the fetch can exceed the ceiling, as the module docstring acknowledges. The ceiling is the only memory bound, and a ceiling-sized candle response is about 35 MB in memory as pydantic models plus the serialized body. The two steps also run on separate statements inside a `with pool.connection()` block with no explicit transaction or snapshot. That is acceptable at the current tape-write rate, but a `REPEATABLE READ` transaction would remove the race cheaply. `run_in_executor(None, ...)` uses the default executor, whose size is not tied to the pool size. This is minor."
+ },
+ {
+  "ref": "sonnet/3/0",
+  "severity": "CONCERN",
+  "title": "Response build and serialization run on the event loop for up to 75,000 rows",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:109-111",
+  "description": "Both handlers do the database work in `run_in_executor`. After that they call `CandlesResponse.build(...)` and `timeseries_response(...)` directly inside the `async def`. At the admission ceiling this means about 75k pydantic model constructions plus JSON or msgpack encoding of a response that the load test measured at 34.8 MB. The load test measured about 1 s end to end for trades. The Python rules require any synchronous work inside an async function to run in under 1ms in the worst case, otherwise it must be moved to an executor. This work blocks all other requests while it runs. The same applies to the trades handler at lines 168-174. Move build and serialization into the executor closure, or a second executor call. The existing load test checks latency for one request at a time, so it would not catch this stall. The concurrency test covers only the cheap market-detail route."
+ },
+ {
+  "ref": "sonnet/3/1",
+  "severity": "CONCERN",
+  "title": "Duplicate day-boundary helpers remain in `gaps.py`",
+  "location": "src/manta_trading/api_server/routes/gaps.py:54-59",
+  "description": "This change moves `_window_start_utc` and `_window_end_utc` out of `bars.py` into the new `routes/windows.py`. The new module docstring says a second derivation of \"the last instant of a day\" is how a bound ends up exclusive by accident. `gaps.py` still defines its own copies of both helpers, and `test/integration/test_gaps_window_sql.py` imports them from there. That is the duplication the extraction was meant to remove. Make `gaps.py` and its test use `windows.window_start_utc` and `windows.window_end_utc`."
+ },
+ {
+  "ref": "sonnet/3/2",
+  "severity": "CONCERN",
+  "title": "`TradeRecord.from_row` maps columns by position, unlike the candle mapping",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:128-141",
+  "description": "`CandleRecord.from_row` is driven by `CANDLE_COLUMNS`, and the module docstring says a column added there is served without an edit. `TradeRecord.from_row` instead hard-codes `values[0]` to `values[7]` and relies on the order of `TRADE_VALUE_COLUMNS`, which is `TRADE_COLUMNS` minus `market_ticker`. If someone reorders or adds a column in `TRADE_COLUMNS`, values land in the wrong fields with no error. Type-compatible columns would swap silently, for example `yes_price_dollars` and `no_price_dollars`. Build the record by zipping `TRADE_VALUE_COLUMNS` with `row.values` into keyword arguments, and keep a test that checks the field set against the mapping."
+ },
+ {
+  "ref": "sonnet/3/3",
+  "severity": "CONCERN",
+  "title": "`_window` uses `extra` as an implicit switch for the period predicate",
+  "location": "src/manta_trading/data/kalshi/serve_timeseries.py:190-212",
+  "description": "`_window` adds `period = %(period)s` whenever `extra` is truthy. It never checks that `extra` contains `period`. The `column` argument is used as a SQL identifier, and the `\"market_ticker\"` column is hard-coded. A different caller passing `extra` would get an unbound `%(period)s` parameter, or the wrong clause. Make `period: int | None` an explicit parameter and emit the clause when it is not `None`."
+ },
+ {
+  "ref": "sonnet/3/4",
+  "severity": "CONCERN",
+  "title": "`tape_filtered` reads a magic parameter key from `trades_filter_sql` and adds a runtime type guard",
+  "location": "src/manta_trading/data/kalshi/serve_timeseries.py:149-165",
+  "description": "The docstring says the membership test is not restated, but the function reads `selection.params[\"trades_excluded_categories\"]` and re-implements the `COALESCE(category, '') = ANY(...)` comparison in Python. The parameter name and the `isinstance` guard couple this code to the internals of `selection.py`. The integration test `test_agrees_with_the_sql_predicate` limits the drift risk. A cleaner design would put an evaluator next to `trades_filter_sql`, so the Python and SQL forms live in one module."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "Bound parsing of `date | datetime` may turn a midnight datetime into a whole-day bound",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+  "description": "`start` and `end` are typed `date | datetime | None`. Pydantic accepts a datetime string whose time is exactly zero as a `date`. In smart-union mode, ties between lax matches go to the leftmost member, which here is `date`. If so, `end=2026-06-01T00:00:00Z` is parsed as a bare date. `_as_utc` then turns it into `23:59:59.999999`, and the client gets a day of extra data without being told.\n\nI could not run this, so the behaviour is unverified. No test pins it down. The reversed-range tests use midnight-`Z` values, but they pass whichever way the union resolves. The load test's `_z(KALSHI_START)` is a midnight start, which is the same instant either way. Add a unit test that sends `end=2026-06-01T00:00:00Z` and asserts the reader receives exactly that instant. If it fails, order the union `datetime | date` or add an explicit validator."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "`TradeRecord.from_row` uses positional indexes, which contradicts the \"mapping is followed, not restated\" design",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:116-128",
+  "description": "`TradeRow.values` is `tuple[Any, ...]`. `TRADE_VALUE_COLUMNS` is derived from `TRADE_COLUMNS`, but `from_row` hard-codes `values[0]` through `values[7]`. Reordering or inserting a column in `TRADE_COLUMNS` would silently put the wrong values into the wrong fields. For example, `yes_price_dollars` and `no_price_dollars` are both Decimals, so nothing would raise.\n\nThe unit tests build `TradeRow` in the same hard-coded order, so they cannot detect this. The integration test only checks the length of `values`. Build the record by zipping `TRADE_VALUE_COLUMNS` with the values and passing them as `**kwargs`, as `CandleRecord` does. Alternatively, add a test that round-trips a real stored row through `fetch_trades` and `TradeRecord.from_row`."
+ },
+ {
+  "ref": "sonnet-high/1/2",
+  "severity": "CONCERN",
+  "title": "`_CANDLE_OBJECTS` is a dead abstraction, and the \"added column is served without an edit\" claim is inaccurate",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:1-10, 48-55, 71-90",
+  "description": "The model classes in `_CANDLE_OBJECTS` are never used. Only its keys seed `nested`, while `from_row` hard-codes `CandleBidAsk`, `CandleBidAsk` and `CandlePrice`. `flat[\"volume_fp\"]` and `flat[\"open_interest_fp\"]` are also hard-coded.\n\nThe module docstring says a column added to `CANDLE_COLUMNS` \"is served here without an edit\". That is not true:\n- A new field in an existing object has no model field. Pydantic's default `extra=\"ignore\"` drops it silently.\n- A new object raises `KeyError` at request time.\n\n`test_nested_field_set_is_exactly_what_candle_columns_describes` does catch both cases, but only in the test suite. Either use the map's values or reduce it to a key set, and reword the docstring to say the test enforces parity rather than the code."
+ },
+ {
+  "ref": "sonnet-high/1/3",
+  "severity": "CONCERN",
+  "title": "`_window` toggles the `period` predicate on the truthiness of `extra`",
+  "location": "src/manta_trading/data/kalshi/serve_timeseries.py:174-191",
+  "description": "`extra` is described as additional parameters, but a non-empty `extra` also appends the hard-coded clause `period = %(period)s`. A future caller that passes any other extra parameter would get a `period` predicate it never asked for, and the SQL would fail on a missing bind.\n\nMake it an explicit `period: int | None` argument, or let callers pass extra clauses. Related to this, the ceiling comparison `count > max_rows` is written twice in each route handler: once inside `_read` and once in `_admit_rows` (kalshi_timeseries.py:111, 160). If the two ever differ, the guard would read rows and then refuse, or refuse without reading. A single helper would remove that."
+ },
+ {
+  "ref": "sonnet-high/1/4",
+  "severity": "CONCERN",
+  "title": "The load test patches connections through a private pool attribute",
+  "location": "test/load/test_188_kalshi_api_nfr.py:150-163",
+  "description": "`_client` sets `cursor_factory` on `pool._pool` (`# noqa: SLF001`) after startup. Any connection the pool creates later, for example after recycling or on growth, will not be recorded. In that case the \"no row fetch\" assertion in `test_over_ceiling_is_refused_without_fetching_rows` could pass vacuously. It does guard against this by also asserting that a `count(*)` statement was seen, which limits the damage, but the mechanism depends on a private attribute and on the pool not replacing connections.\n\n`_RecordingCursor.statements` is also a class-level mutable list shared across tests. A `configure=` callback or `connection_class` on the pool, or a fixture-scoped recorder, would be sturdier."
+ },
+ {
+  "ref": "sonnet-high/2/0",
+  "severity": "CONCERN",
+  "title": "Model building and serialization of up to 75,000 rows runs on the event loop",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:109-111",
+  "description": "In `get_candlesticks` and `get_trades`, only the DB reads go through `run_in_executor`. After that, the async handler runs `CandlesResponse.build(...)` and `timeseries_response(...)` inline. That means constructing up to 75,000 pydantic objects (each candle has 16 `Decimal` fields plus nested models), then `model_dump(mode=\"json\")`, then `orjson.dumps` or `msgpack.packb`. The load-test constant in `test/load/test_188_kalshi_api_nfr.py` records a ceiling-sized candle response of 34.8 MB, and a ceiling trades request took about 1.0 s end to end. Most of that CPU work happens on the loop, so it blocks every other request for as long as it runs. The Python rules require synchronous code in an `async def` to run in under 1 ms, or to go to an executor. `bars.py` already serializes inline, but its payloads are much smaller, so that is not a precedent for this size.\n\nThe load tier does not catch this. It measures a single request's latency and a 16-way concurrency test on a tiny market-detail endpoint. It never measures how long a concurrent small request waits while a ceiling-sized response is being built. Move build and serialize into the executor, or into a second `run_in_executor` call. Add a load assertion that a small request stays fast while a ceiling request is in flight."
+ },
+ {
+  "ref": "sonnet-high/2/1",
+  "severity": "CONCERN",
+  "title": "`TradeRecord.from_row` maps by position, not by the column mapping",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:122-135",
+  "description": "`TradeRow.values` is `tuple[Any, ...]`, and `TradeRecord.from_row` reads `values[0]` through `values[7]`. The coupling to `TRADE_VALUE_COLUMNS` (`serve_timeseries.py`) is only implicit. If someone reorders `TRADE_COLUMNS` in `trade_repository.py`, `yes_price_dollars` and `no_price_dollars` would silently swap. Both are `Decimal`, so validation would not fail. This is also inconsistent with `CandleRecord.from_row`, which is driven by `CANDLE_COLUMNS`. Build the record from `zip(TRADE_VALUE_COLUMNS, row.values, strict=True)`, or give `TradeRow` named fields. The integration test only checks the value count (`len(TRADE_COLUMNS) - 1`), not the field order, so nothing guards the order today."
+ },
+ {
+  "ref": "sonnet-high/2/2",
+  "severity": "CONCERN",
+  "title": "Module docstring overstates what `CandleRecord.from_row` derives from `CANDLE_COLUMNS`",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:1-10",
+  "description": "The docstring says \"a column added there is served here without an edit.\" That is only true for a new field inside the existing `yes_bid`, `yes_ask` or `price` objects, and even then `CandleBidAsk` and `CandlePrice` are hand-written, so a new field is silently dropped by pydantic's default `extra=\"ignore\"`. A new top-level object makes `nested[obj][field]` raise `KeyError`. A new flat column is stored in `flat` and never read. `from_row` also hardcodes `\"yes_bid\"`, `\"yes_ask\"`, `\"price\"`, `\"volume_fp\"` and `\"open_interest_fp\"`. The `_CANDLE_OBJECTS` dict values (the model types) are never used, so only its keys matter. The unit test `test_nested_field_set_is_exactly_what_candle_columns_describes` does catch drift, which is good. Reword the docstring to say drift is caught by test rather than served automatically, and make `_CANDLE_OBJECTS` a tuple of names, or use its values."
+ },
+ {
+  "ref": "sonnet-high/2/3",
+  "severity": "CONCERN",
+  "title": "`tape_filtered` re-implements the filter's membership test and depends on a parameter-name string",
+  "location": "src/manta_trading/data/kalshi/serve_timeseries.py:#tape_filtered",
+  "description": "The docstring says the membership test \"is not re-spelled here.\" In fact the function reads `selection.params[\"trades_excluded_categories\"]` by string literal, which is defined in `selection.py`. It then re-implements the `COALESCE(s.category,'') = ANY(...)` comparison in Python as `(category or \"\") in bound`. That scatters a magic key and duplicates the logic, which the project rules forbid. Having a `# pragma: no cover` branch raise a `TypeError` on shape is a sign of the awkward coupling. A pure-Python membership predicate lives next to `trades_filter_sql` and is used by both would remove the need to introspect the SQL parameters. The integration test `TestTapeFiltered` does check parity with SQL, which mitigates this."
+ },
+ {
+  "ref": "sonnet-high/2/4",
+  "severity": "CONCERN",
+  "title": "`_window` uses the truthiness of `extra` to decide whether to add the `period` predicate",
+  "location": "src/manta_trading/data/kalshi/serve_timeseries.py:#_window",
+  "description": "`_window(column, ticker, start, end, extra)` appends `period = %(period)s` only `if extra:`. The generic `extra` params dict is merged into the parameters, and its non-emptiness is silently the switch for a hardcoded `period` clause. Any other caller passing `extra` would get a `period` predicate and no matching parameter, or the reverse. Make `period` an explicit `int | None` argument (`if period is not None: ...`), or have `_candle_window` append the clause itself."
+ },
+ {
+  "ref": "sonnet-high/3/0",
+  "severity": "CONCERN",
+  "title": "`date | datetime` query params may silently turn a midnight datetime into a whole-day bound",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+  "description": "`start` and `end` are declared `date | datetime | None`, and `resolve_window` (`routes/windows.py:38-49`) treats a `date` as a whole-day bound. This is the only place in `src` that uses this union. I could not run code in this session, so I haven't confirmed the behaviour. From my reading of pydantic v2's smart-union rules, I expect a string such as `end=2026-06-01T00:00:00Z` to validate as a `date` in lax mode. Pydantic accepts datetimes with zero time as dates, and on a tie the first union member wins. If that is right, `end` would resolve to `23:59:59.999999` instead of midnight, and a midnight `start` with a non-UTC offset would lose its offset.\n\nNo test covers this case. Midnight datetimes in `test_kalshi_timeseries.py:239,265,276` only exercise ordering and reversed ranges, and both outcomes pass those. The load test's `_ceiling_window` uses a midnight `start`, where `date` and `datetime` give the same value. Please add a test with `end=\u2026T00:00:00Z` that asserts the reader receives that exact instant. If it fails, parse the bound explicitly instead of relying on the union."
+ },
+ {
+  "ref": "sonnet-high/3/1",
+  "severity": "CONCERN",
+  "title": "`TradeRecord.from_row` indexes the tuple by position, unlike the candle path",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:132-145",
+  "description": "`CandleRecord.from_row` is driven by `CANDLE_COLUMNS`, and the module docstring says a column added there is served here without an edit. `TradeRecord.from_row` instead reads `values[0]` through `values[7]`, which silently depends on the order of `TRADE_COLUMNS` minus `market_ticker` (`trade_repository.py:45-55`). Reordering the columns would swap fields without raising an error, for example `yes_price_dollars` and `no_price_dollars`, which share a type.\n\nThe integration test (`test_kalshi_serving.py`, `test_value_count_matches_the_repository_mapping`) checks only the length of the tuple. The unit tests build `TradeRow` by hand in the same positional order, so neither one would catch a reorder. Build the record by zipping `TRADE_VALUE_COLUMNS` with `values`, or add a test that round-trips real DB rows and checks each field by name."
+ },
+ {
+  "ref": "sonnet-high/3/2",
+  "severity": "CONCERN",
+  "title": "`_window` uses a non-empty `extra` dict as a flag to add the `period` predicate",
+  "location": "src/manta_trading/data/kalshi/serve_timeseries.py:177-198",
+  "description": "`_window` adds `period = %(period)s` only when `extra` is truthy. The same dict supplies the parameter values, so the behaviour depends on a hidden coupling. A future caller passing any other `extra` key would get a `period` predicate with no `period` param, which fails at execution time. A caller passing `{}` for candles would silently drop the period filter. Take an explicit `period: int | None` argument instead, and emit both the clause and the parameter from it."
+ },
+ {
+  "ref": "sonnet-high/3/3",
+  "severity": "CONCERN",
+  "title": "`tape_filtered` re-spells a parameter key it says it doesn't re-spell",
+  "location": "src/manta_trading/data/kalshi/serve_timeseries.py:156-168",
+  "description": "The docstring says the membership test \"is not re-spelled here\". The code still hard-codes `selection.params[\"trades_excluded_categories\"]` and the `COALESCE(..., '')` semantics from `selection.py:168-170`. It also relies on the `list` type of the bound value, with a `# pragma: no cover` guard. Renaming that key in `selection.py` would turn this into a `KeyError` at request time. The parametrized integration test would catch it, but this is still a second spelling. Have `selection.py` expose the evaluator or the key as a named constant, as the project's \"define it once\" rule asks."
+ }
+]

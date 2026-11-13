@@ -1,0 +1,457 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "FAIL",
+  "title": "Multi-part review usage is dropped when parts fold",
+  "location": "src/squadron/pipeline/actions/review_fold.py:85",
+  "description": "`_metadata()` keeps only `parts[0].metadata` and sums only `TOOL_CALLS_MADE_KEY`. Each part now stamps its own usage record in `_run_part` (`src/squadron/pipeline/actions/review.py:506`), and `_review` folds all parts (`review.py:293-294`). The folded result therefore carries only part 1's `USAGE_KEY`, so turns, tokens, and cost for parts 2..N never reach run state or `sq stats run`. This hits every review the action splits, such as a split tasks breakdown. The existing parity test checks summed `tool_calls_made` after the fold (`tests/pipeline/actions/test_review_action_parts.py:286`), but nothing checks usage. Fix: sum the per-part `UsageRecord`s in `_metadata`, and add a two-part test asserting the folded record equals the sum."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Compact drops the spend of failed or partly successful calls",
+  "location": "src/squadron/pipeline/actions/compact.py:82",
+  "description": "The failure branch returns an `ActionResult` with no metadata, so any telemetry on the exception is lost. `dispatch()` does attach telemetry to a `ProviderError` (`src/squadron/pipeline/sdk_session.py:232-235`), but the compact action never reads it. Separately, `compact()` captures the summary (`sdk_session.py:493-495`) and then calls `_reconnect` (`sdk_session.py:499`). If the reconnect raises, the captured reply and its spend are discarded. D5 requires failed calls to record what they spent. Fix: stamp `exc.telemetry` in the failure branch, and have `compact()` attach the captured telemetry to any exception raised after the capture."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "Compact's success path drops the alias, so subscription cost is mislabeled",
+  "location": "src/squadron/pipeline/actions/compact.py:96",
+  "description": "The success path passes `resolved=None` to `record_from_telemetry`. `_build` then sets `alias=None` (`src/squadron/pipeline/usage_capture.py:200`), and `_is_subscription(None)` returns False (`src/squadron/cli/stats_views.py:175-179`). A provider cost on a subscription alias therefore renders as `prov` instead of `api-rate equiv.` (`stats_views.py:170`), which breaks D3. The record's `model` also holds the alias name rather than the resolved model id (`compact.py:97`), and `tests/pipeline/actions/test_compact.py:291` asserts `record.model == \"haiku\"`, locking that in. The comment at `compact.py:91-92` says no resolution is needed, but the alias is still needed for labeling. Fix: resolve the summary model via `context.resolver.resolve_full`, as the summary action does, and record the resolved model id and alias."
+ },
+ {
+  "ref": "haiku-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "Two LLM paths discard their spend, and the stats rationale says gates carry none",
+  "location": "src/squadron/pipeline/actions/findings_addressed/policy.py:62",
+  "description": "The findings-addressed judge leg calls `judge_residue` (`policy.py:62-67`), which calls `run_review_with_profile` (`src/squadron/review/addressed/judge.py:107-112`). That call's turns, usage, and cost are dropped: `JudgeLegResult` has no spend fields (`judge.py:38-44`), and the gate's metadata is `evidence.to_metadata()` with no usage (`policy.py:117`). `ActionType.GATE` is excluded from `LLM_ACTION_TYPES`, and the comment at `src/squadron/stats/usage_report.py:24-25` says gates are \"not expected to\" carry usage, so the judge's spend is invisible even to the \"no usage recorded\" line. Separately, prompt-only compact (`src/squadron/pipeline/actions/compact.py:107-150`) calls `claude_agent_sdk.query` and returns at `compact_boundary` without reading the `ResultMessage`, so its spend is never recorded. Fix: carry the judge's usage into `JudgeLegResult` and stamp it on the gate result, read the result message in prompt-only compact, and correct the comment."
+ },
+ {
+  "ref": "haiku-xhigh/1/4",
+  "severity": "CONCERN",
+  "title": "Frontmatter key names are duplicated between the writer and the stats reader",
+  "location": "src/squadron/stats/reviews_report.py:27",
+  "description": "The writer spells the keys as literals in `src/squadron/review/run_cost.py:53-61`. The reader repeats them in `_INT_KEYS` and in its `_int`, `_float`, and `_basis` calls (`reviews_report.py:27-31, 118-121, 152`). `_int` and `_float` return None for an absent key without warning, so renaming a key on the writer side silently blanks that whole column. This breaks the project's one-value-one-source rule. Fix: define the key names once beside `RunCost.frontmatter_lines` and import them in the reader."
+ },
+ {
+  "ref": "haiku-xhigh/1/5",
+  "severity": "CONCERN",
+  "title": "The stats reviews reader is tested only against hand-written frontmatter",
+  "location": "tests/stats/test_reviews_report.py:15",
+  "description": "`_artifact` (`test_reviews_report.py:15`) and `_review` (`tests/cli/test_stats.py:162`) write frontmatter by hand. Neither uses the real writer, `format_review_markdown` (`src/squadron/review/persistence.py:499`). The project rule is that a parser's fixture must match what production writes, and the reader's silent `None` defaults make drift invisible. Fix: generate fixtures with `format_review_markdown` (and `format_provider_failure_markdown` for the failure shape), then parse them with `reviews_usage_report`."
+ },
+ {
+  "ref": "haiku-xhigh/1/6",
+  "severity": "CONCERN",
+  "title": "Fold and one-shot plumbing are duplicated across the agent, session, and summary paths",
+  "location": "src/squadron/providers/sdk/agent.py:248",
+  "description": "`ClaudeSDKAgent._fold_result` (`agent.py:248-254`) and `DispatchTurns.fold_result` (`src/squadron/pipeline/sdk_turns.py:141-147`) are the same logic: read the result's usage, warn once with the same message, and fold into telemetry. Each keeps its own warn-once flag. The two one-shot runners repeat three steps: the effort note, the output-budget gate, and the usage copy (`src/squadron/pipeline/actions/dispatch.py:223-224, 240, 261` and `src/squadron/pipeline/summary_oneshot.py:115-116, 132, 172`). Fix: move the fold into one helper that takes the telemetry and a warned flag, and move the one-shot plumbing into a shared function."
+ },
+ {
+  "ref": "haiku-xhigh/1/7",
+  "severity": "CONCERN",
+  "title": "Functions and files grew well past the length guideline",
+  "location": "src/squadron/pipeline/actions/summary.py:187",
+  "description": "`_execute_summary` runs about 210 lines (from line 187 to the end of the 398-line file). `_dispatch_via_session` runs about 105 lines (`dispatch.py:515-620`), and `dispatch.py` is now 931 lines. The guide asks for roughly 50-line functions and 300-line files. Part of the length predates this diff, but the diff adds usage branching to both functions. Fix: extract the SDK-versus-one-shot capture block into helpers in `usage_capture.py`, and extract the session record building out of `_dispatch_via_session`."
+ },
+ {
+  "ref": "haiku-xhigh/2/0",
+  "severity": "FAIL",
+  "title": "Split-review provider failure returns a TypeError, discards good parts, and keeps calling the model",
+  "location": "src/squadron/pipeline/actions/review.py:493",
+  "description": "Before this change, `_run_part` re-raised a `ProviderError`. That escaped `_review` before any folding, and `execute` reported the provider's own message. Now the `ProviderError` branch returns `self._exception_result(...)` at line 493, which has `outputs={}` and `verdict=None`. Three things follow:\n\n- The loop in `_review` (lines 283\u2013294) has no early exit, so parts 2..N each still make a model call after a failure.\n- `fold_review_parts(results)` (line 294) runs `_part_input` (`review_fold.py:38`). That calls `review_input_files` (`review_outputs.py:71-76`), which returns `[]` for `outputs={}`. The fold then raises `TypeError(\"review part must name exactly one input file, got []\")` (`review_fold.py:105`).\n- `execute` (`review.py:180-182`) catches that as an unexpected error, logs a traceback, and sets the step error to the TypeError. The successful part's result is discarded and the real provider message is lost.\n\nThe single-part case is unaffected, because `fold_review_parts` returns early for one part (`review_fold.py:35-36`). `tests/pipeline/actions/test_review_action_parts.py:143-153` covers a two-part failure but asserts only `success is False` and the artifacts, so it passes despite the bug. Fix: stop the loop on a provider failure and let the error reach the step result, or have the fold skip failed parts. Add a test that asserts `result.error` and that no call happens after the failing part."
+ },
+ {
+  "ref": "haiku-xhigh/2/1",
+  "severity": "CONCERN",
+  "title": "Findings-addressed judge spend is never recorded",
+  "location": "src/squadron/review/addressed/judge.py:107",
+  "description": "`judge_residue_core` calls `run_review_with_profile` and reads only `raw_output` (line 122). The turns, usage, and cost on the returned `ReviewResult` are dropped. `JudgeLegResult` has no usage fields, and `FindingsAddressedPolicy.evaluate` returns `evidence.to_metadata()` (`findings_addressed/policy.py:110-117`) with no `stamp`. The judge runs inside a gate step, so its action type is `GATE` (`gate.py:217`), which is not in `LLM_ACTION_TYPES` (`stats/usage_report.py:26`). As a result `sq stats run` neither prices these calls nor counts them as unrecorded. The context carries a `usage_capture` (the tests pass one in), but nothing on this path reads it. Fix: thread the capture into the judge, stamp its record into the gate result, and include gate results that ran a judge in the stats set."
+ },
+ {
+  "ref": "haiku-xhigh/2/2",
+  "severity": "CONCERN",
+  "title": "Compact records lose their alias, so subscription spend is labelled as money",
+  "location": "src/squadron/pipeline/actions/compact.py:96",
+  "description": "The compact action passes `None` as the resolved model, so the record has `alias=None` and `profile=None`. `stats_views._is_subscription(None)` returns False (`cli/stats_views.py:175-179`), so a subscription-tier alias's provider cost renders as `$X prov` rather than `api-rate equiv.` (decision D3). `model=summary_model` also stores the raw step parameter, which is an alias name or `None`, not the resolved model id that dispatch and summary store. The comment at lines 91\u201392 says no resolution is needed, but the alias is still missing from the record. `tests/pipeline/actions/test_compact.py::test_capture_turn_records_usage` asserts `model == \"haiku\"` and does not check `alias`. Fix: resolve `summary_model` through `context.resolver.resolve_full` as summary does, and pass the result."
+ },
+ {
+  "ref": "haiku-xhigh/2/3",
+  "severity": "CONCERN",
+  "title": "Compact loses the summary's spend when reconnect fails",
+  "location": "src/squadron/pipeline/actions/compact.py:82",
+  "description": "`SDKExecutionSession.compact` captures the summary first (its spend is in `reply.telemetry`, `sdk_session.py:493`), then calls `_reconnect` (line 499). If `_reconnect` raises, the exception carries no telemetry, and the action's `except Exception` (line 82) returns a failure with no metadata. The summary action and dispatch both attach what they spent on failure (decision D5), so compact is the outlier. Fix: attach the captured telemetry to the exception in `compact()`, or catch and re-attach it there. Add a test that makes reconnect fail and asserts the usage record."
+ },
+ {
+  "ref": "haiku-xhigh/2/4",
+  "severity": "CONCERN",
+  "title": "SDK prompt total silently undercounts when a cache field is malformed or absent",
+  "location": "src/squadron/providers/sdk/usage.py:46",
+  "description": "The docstring (lines 29\u201330) says `prompt` is input plus both cache classes, and is `None` only when `input_tokens` is missing. The code adds only the cache classes that were reported (`add_optional` treats `None` as zero, lines 47\u201348). A malformed `cache_read_input_tokens` therefore yields `prompt` equal to the uncached input count, while `cached` is `None`. `tests/providers/sdk/test_usage.py::test_malformed_value_is_none_with_warning` asserts that exact value (`prompt=10`), which locks the undercount in. The captured real result (`tests/providers/sdk/fixtures/result_message_real.json`) has both cache keys, so current SDK output is not affected. This is still a partial sum reported as exact, which the module's own rule (\"never a 0\") forbids. Fix: make `prompt` `None` unless every component is reported, and update the test."
+ },
+ {
+  "ref": "haiku-xhigh/2/5",
+  "severity": "CONCERN",
+  "title": "Usage-fold logic is duplicated in the agent and the session",
+  "location": "src/squadron/providers/sdk/agent.py:248",
+  "description": "`ClaudeSDKAgent._fold_result` (agent.py:248-254) and `DispatchTurns.fold_result` (`pipeline/sdk_turns.py:141-147`) do the same thing: read the result's usage, warn once per call or dispatch, and fold into `RunTelemetry`. The two warning strings (agent.py:253 and sdk_turns.py:146) are already slightly different and will drift. Fix: move the read-warn-fold step onto `RunTelemetry` or into `providers/sdk/usage.py`, taking the warned flag as an argument."
+ },
+ {
+  "ref": "haiku-xhigh/2/6",
+  "severity": "CONCERN",
+  "title": "`get_all_aliases()` re-parses `models.toml` on every call, and the new code calls it on async paths",
+  "location": "src/squadron/models/aliases.py:217",
+  "description": "`get_all_aliases()` calls `load_builtin_aliases()` and `load_user_aliases()`, which read and parse TOML from disk each time, with no cache. This diff adds a call per resolve (`pipeline/resolver.py:89`, `alias if alias in get_all_aliases()`), which already made about five calls per resolve. It also adds a call per record that has no provider cost (`usage_capture.py:201` \u2192 `aliases.py:335` `price_usage`). Both run inside `async def` functions (the dispatch session and one-shot paths and `summary._execute_summary`). The project rule requires synchronous work inside `async def` to take under 1 ms; a parse of this file does not obviously meet that, and I did not measure it. Fix: load the alias table once per process or invalidate on file mtime, or pass the loaded table through the call chain."
+ },
+ {
+  "ref": "haiku-xhigh/2/7",
+  "severity": "CONCERN",
+  "title": "Pricing warnings are not deduplicated per run for reviews",
+  "location": "src/squadron/review/review_client.py:315",
+  "description": "`run_review_with_profile` passes a fresh `set()` to `resolve_cost` at lines 315 and 321, so every review in a pipeline run logs its missing-price warning again. `usage_capture.py:8-10` says the run's capture holds the pricing-warning set so each warning is logged once per alias. Reviews bypass that set. Fix: pass the run's set through, or narrow the docstring to say reviews are excepted."
+ },
+ {
+  "ref": "haiku-xhigh/2/8",
+  "severity": "CONCERN",
+  "title": "The subscription tier string is defined in several places",
+  "location": "src/squadron/cli/stats_views.py:29",
+  "description": "`SUBSCRIPTION_TIER = \"subscription\"` is defined here, but the same tier value also appears as a rank key in `pipeline/intelligence/pools/strategies.py:39` and as a label key in `cli/commands/models.py:33`. CLAUDE.md asks for comparison values to be defined once and referenced everywhere. Fix: define the cost-tier values beside `ModelAlias` in `models/aliases.py` and reference them from all three places."
+ },
+ {
+  "ref": "haiku-xhigh/2/9",
+  "severity": "CONCERN",
+  "title": "One unreadable review artifact aborts `sq stats reviews`",
+  "location": "src/squadron/stats/reviews_report.py:68",
+  "description": "`read_frontmatter` calls `path.read_text(encoding=\"utf-8\")` (`documents/frontmatter.py:66`). An `OSError` or `UnicodeDecodeError` is not caught here, so a single bad file raises out of `reviews_usage_report` and the CLI shows a traceback. The module's contract (its docstring and the `skipped` counter) says unreadable artifacts are skipped with a WARNING. Fix: catch those two exceptions around the read, log a WARNING with the path, and count it as skipped. Add a test with an invalid-UTF-8 file."
+ },
+ {
+  "ref": "haiku-xhigh/2/10",
+  "severity": "CONCERN",
+  "title": "`dispatch.py` is now 931 lines",
+  "location": "src/squadron/pipeline/actions/dispatch.py:1",
+  "description": "CLAUDE.md asks for source files of about 300 lines where practical. The file was already well over that, and this diff adds session capture, one-shot capture, the provider-failure mapping, and the `_one_shot` wrapper to it. Consider moving the usage plumbing or the session path into their own modules."
+ },
+ {
+  "ref": "haiku-xhigh/3/0",
+  "severity": "FAIL",
+  "title": "Provider failure in a split review keeps running later parts and surfaces as a TypeError",
+  "location": "src/squadron/pipeline/actions/review.py:493",
+  "description": "`_run_part` used to re-raise `ProviderError`, which aborted the part loop at lines 284\u2013293. It now returns a failed `ActionResult` (line 493), so the loop continues. Each remaining part makes a paid model call after a provider failure such as auth or rate limit. Then `fold_review_parts(results)` runs at line 294. The failed result has `outputs={}` and `verdict=None`, so `_part_input` in `pipeline/actions/review_fold.py:102-106` raises `TypeError: review part must name exactly one input file, got []`. The `execute` catch-all (`review.py:180-182`) reports that `TypeError` as the step error, so the provider error text never reaches `result.error`. Single-part reviews are unaffected, because `fold_review_parts` returns a lone part unchanged.\n\nFix: stop the loop at the first failed part and return that failure directly, so its error text is kept and later parts are not called."
+ },
+ {
+  "ref": "haiku-xhigh/3/1",
+  "severity": "CONCERN",
+  "title": "Split-review test passes for the wrong reason",
+  "location": "tests/pipeline/actions/test_review_action_parts.py:143",
+  "description": "`test_provider_failure_on_part_two_keeps_part_one` asserts only `result.success is False`, the saved artifacts and a log line. It never checks `result.error`, so it passes on the `TypeError` above. No test checks that a part-1 provider failure skips the later parts. Add `assert \"model went away\" in result.error` and a `run_review.call_count` check for the part-1 failure case. Both would fail on the current code."
+ },
+ {
+  "ref": "haiku-xhigh/3/2",
+  "severity": "CONCERN",
+  "title": "A failed compact drops the spend its summary capture already recorded",
+  "location": "src/squadron/pipeline/actions/compact.py:82",
+  "description": "`_execute_sdk_rotate` catches `Exception` and returns a failed result with no `metadata`. Two real cases lose spend. First, `SDKExecutionSession.compact` can raise a `ProviderError` that carries telemetry from `capture_summary`. Second, `_reconnect` (`pipeline/sdk_session.py:499`) can fail after `capture_summary` has already returned its `SessionReply`. In both, the telemetry is dropped. Dispatch (`_provider_failure`) and summary both stamp failed-call usage per D5; compact does not.\n\nFix: when a failure happens after the capture, attach `reply.telemetry` to the exception, and stamp it on the failed result."
+ },
+ {
+  "ref": "haiku-xhigh/3/3",
+  "severity": "CONCERN",
+  "title": "`effort_for_session` returns `None` but is used as the effort value",
+  "location": "src/squadron/pipeline/usage_capture.py:176",
+  "description": "The function is annotated `-> None` and only logs once. Its callers bind the result to `effort_sent` (`pipeline/actions/dispatch.py:572`) or `session_effort` (`pipeline/actions/summary.py:274`), then pass it to `record_from_telemetry`. The name says it returns the effort the session sends, but it returns nothing. The record's `effort` is correct only because the function always returns `None`. Changing it to return an effort would silently alter session records.\n\nFix: split this into a `log_session_effort_gap(resolved)` that returns nothing, and pass `effort_sent=None` at the call sites with a comment."
+ },
+ {
+  "ref": "haiku-xhigh/3/4",
+  "severity": "CONCERN",
+  "title": "A failed review resolves its cost twice, with separate warning sets",
+  "location": "src/squadron/pipeline/actions/review.py:487",
+  "description": "On provider failure, `review/review_client.py:315` resolves `exc.cost_usd` with a fresh `set()`. Then `UsageCapture.record_from_error` (`usage_capture.py:154`) re-resolves it through `_build` with the run's warned set. `RunCost.from_error` reads the first result and the usage record reads the second. The values match today, but the pricing logic lives in two places. For a partially priced alias, the WARNING is logged twice on a failed review. Successful reviews avoid this because `record_from_review` reuses `result.cost_usd`. The fresh `set()` also means each split part warns again.\n\nFix: have `record_from_error` take `exc.cost_usd` and `exc.cost_basis`, as `record_from_review` takes the result's cost."
+ },
+ {
+  "ref": "haiku-xhigh/3/5",
+  "severity": "CONCERN",
+  "title": "`sq stats reviews` aborts on malformed artifacts",
+  "location": "src/squadron/stats/reviews_report.py:155",
+  "description": "`_basis` runs `value in {basis.value for basis in CostBasis}`. `value` is whatever `yaml.safe_load` returned, so `costBasis:` written as a list or mapping raises `TypeError: unhashable type` and the whole report aborts. The module contract says malformed fields become `None` with a warning. Separately, `documents/frontmatter.py:66` calls `path.read_text(encoding=\"utf-8\")` without catching `OSError` or `UnicodeDecodeError`, so one unreadable artifact aborts the report instead of being counted in `skipped`. The tests cover only `costBasis: guess`, a string.\n\nFix: check `isinstance(value, str)` before the membership test. Catch `OSError` and `UnicodeDecodeError` around the read in `reviews_usage_report` so the file is counted as skipped. Add parametrized tests for a list, a mapping and non-UTF-8 content."
+ },
+ {
+  "ref": "haiku-xhigh/3/6",
+  "severity": "CONCERN",
+  "title": "Two functions are well past the length guideline, and this diff grew both",
+  "location": "src/squadron/pipeline/actions/summary.py:187",
+  "description": "`_execute_summary` runs from line 187 to line 395, about 210 lines. This diff adds usage capture to both its SDK and one-shot branches. `_dispatch_via_session` (`dispatch.py:515-620`) is about 105 lines and also grew here. CLAUDE.md asks for functions of about 50 lines.\n\nFix: extract each branch's capture-and-stamp step into a helper that returns the text and its metadata."
+ },
+ {
+  "ref": "sol/1/0",
+  "severity": "FAIL",
+  "title": "Run totals omit earlier loop iterations",
+  "location": "src/squadron/stats/usage_report.py:112-116",
+  "description": "The report reads only persisted `action_results`. However, loop execution keeps earlier iterations in `StepResult.prior_rounds`, which `StateManager._append_step()` does not serialize. A reproduced three-round loop costing $0.30 reports $0.10. Persist and include every iteration\u2019s usage, with a regression test covering multi-round execution."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "FAIL",
+  "title": "Split reviews retain only the first part\u2019s usage",
+  "location": "src/squadron/pipeline/actions/review.py:505-506",
+  "description": "Usage is stamped separately on each part, but `fold_review_parts()` copies the first part\u2019s metadata without aggregating usage. Reproducing two $0.10 parts produces a $0.10 combined record instead of $0.20. Aggregate all parts\u2019 tokens, turns, duration, and cost before persisting the combined action."
+ },
+ {
+  "ref": "sol/1/2",
+  "severity": "FAIL",
+  "title": "Failed split-review parts violate the folding contract",
+  "location": "src/squadron/pipeline/actions/review.py:487-493",
+  "description": "Returning `_exception_result()` now lets split-review execution continue with a failed part whose outputs contain no input file. `fold_review_parts()` requires exactly one input per part and raises `TypeError`; the outer handler then discards the captured usage and original failure result. Stop on failure while preserving accumulated spend, or explicitly support failed parts in the folding contract. Add a split-review provider-failure regression test."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "FAIL",
+  "title": "Run totals omit earlier loop iterations",
+  "location": "src/squadron/stats/usage_report.py:112-115",
+  "description": "The report reads only persisted `action_results`. Loop executors retain earlier iterations in `StepResult.prior_rounds`, but `StateManager._append_step` does not serialize them, and `RunStateRecorder.round_completed` records nothing. A three-call probe persisted only one action. Preserve earlier iterations\u2019 usage and test totals across multiple rounds."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "FAIL",
+  "title": "Split reviews retain only the first part\u2019s usage",
+  "location": "src/squadron/pipeline/actions/review.py:505-506",
+  "description": "Each part receives a usage record, but `fold_review_parts` copies the first part\u2019s metadata without summing usage. Two $1 parts consequently report $1 rather than $2. Their pipeline artifacts are also excluded from standalone review statistics, so the missing spend appears nowhere. Aggregate every part\u2019s usage before returning the folded result."
+ },
+ {
+  "ref": "sol/2/2",
+  "severity": "FAIL",
+  "title": "Failed split-review parts violate the folding contract",
+  "location": "src/squadron/pipeline/actions/review.py:487-493",
+  "description": "The new failure return produces an `ActionResult` with empty outputs. For multipart reviews, execution continues into `fold_review_parts`, which requires each part to identify its input file. A probe raised `TypeError: review part must name exactly one input file, got []`. The outer handler then replaces the accumulated results, losing their usage and obscuring the provider failure. Preserve part identity and explicitly handle failed parts during folding."
+ },
+ {
+  "ref": "sol/2/3",
+  "severity": "FAIL",
+  "title": "Fan-out usage is discarded before persistence",
+  "location": "src/squadron/pipeline/executor.py:2043-2046",
+  "description": "Passing the capture into branches records usage temporarily, but the fan-in reducers discard action metadata. The successful executor result retains only the reduced action; failed branches return an empty action list. A `CollectReducer` probe confirmed empty metadata despite populated branch usage. Preserve all branch usage independently of the selected output and test both successful and failed fan-outs."
+ },
+ {
+  "ref": "sol/2/4",
+  "severity": "CONCERN",
+  "title": "Failed compaction drops available telemetry",
+  "location": "src/squadron/pipeline/actions/compact.py:75-89",
+  "description": "Usage is stamped only after successful compaction. A `ProviderError` carrying completed-turn telemetry is caught and returned without metadata; a probe confirmed that reported spend disappears. Capture exception telemetry before returning failure, and preserve completed summary usage if subsequent session rotation fails."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "FAIL",
+  "title": "Run totals omit earlier loop iterations",
+  "location": "src/squadron/stats/usage_report.py:112-116",
+  "description": "The report reads only persisted `action_results`. Earlier loop iterations live in `StepResult.prior_rounds`, which `StateManager._append_step()` does not serialize. A verified two-round example costing $1 and $2 reports only $2. Persist every round\u2019s usage and add a multi-iteration report regression test."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "FAIL",
+  "title": "Split reviews retain only the first part\u2019s usage",
+  "location": "src/squadron/pipeline/actions/review.py:505-506",
+  "description": "Each part receives a usage record, but `fold_review_parts()` copies only the first part\u2019s metadata. A verified $1 plus $2 split review reports $1. Because pipeline artifacts are excluded from standalone review statistics, the remaining spend disappears from both views. Aggregate all parts\u2019 usage before persistence."
+ },
+ {
+  "ref": "sol/3/2",
+  "severity": "CONCERN",
+  "title": "Failed split-review parts violate the folding contract",
+  "location": "src/squadron/pipeline/actions/review.py:493",
+  "description": "The returned exception result has empty outputs and ordinarily no verdict. The multi-part caller continues and passes it to `fold_review_parts()`, which requires exactly one input file and a verdict per part. Verified reproduction raises `TypeError`, replacing the provider failure and losing captured usage. Stop on failure while preserving accumulated spend, or return a fold-compatible failure result."
+ },
+ {
+  "ref": "sol/3/3",
+  "severity": "CONCERN",
+  "title": "Failed compaction discards available usage",
+  "location": "src/squadron/pipeline/actions/compact.py:82-89",
+  "description": "The failure result omits usage even when the provider exception carries telemetry. A successful summary followed by reconnect failure also loses the summary\u2019s spend because `compact()` returns telemetry only after reconnecting. Preserve capture telemetry through both failure paths and test their resulting records."
+ },
+ {
+  "ref": "sol/3/4",
+  "severity": "CONCERN",
+  "title": "Malformed cost basis crashes the reviews report",
+  "location": "src/squadron/stats/reviews_report.py:155",
+  "description": "Set membership raises `TypeError` when valid YAML supplies a list or mapping for `costBasis`. Verified reproduction with `costBasis: [provider]` crashes instead of warning and retaining the row. Validate that the value is a string before membership testing; add list and mapping cases."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "Provider failure in review is logged as \"unexpected error\" with a traceback",
+  "location": "src/squadron/pipeline/actions/review.py:486",
+  "description": "The `except ProviderError` branch used to re-raise to `execute`'s catch-all. It now returns directly, and it calls `_logger.exception(\"review: unexpected error in step %s\")`. A `ProviderError` is a named, expected failure. The branch already logged a WARNING that includes the artifact path. The new call adds a misleading \"unexpected\" message and a full traceback. It also duplicates the log that the old catch-all produced. `dispatch.py` handles the same class of error with a single `_logger.error` and no traceback (issue 200). Log one line here and drop `logger.exception`."
+ },
+ {
+  "ref": "sonnet/1/1",
+  "severity": "CONCERN",
+  "title": "Usage-record lookup inside the `except` handler can mask the original provider error",
+  "location": "src/squadron/pipeline/actions/review.py:487-492",
+  "description": "`effort_sent_by_profile` calls `get_profile`, `ensure_provider_loaded` and `get_provider` inside the handler. If any of these raises, the new exception replaces the `ProviderError`. `execute`'s catch-all then reports it, so the step's recorded error is the wrong one. The failure artifact is already saved by that point, but the step error would be wrong. Compute the effort before the `try`, or wrap the usage capture so it can never mask the real failure."
+ },
+ {
+  "ref": "sonnet/1/2",
+  "severity": "CONCERN",
+  "title": "Compact failure drops the spend that the error carries",
+  "location": "src/squadron/pipeline/actions/compact.py:79-90",
+  "description": "D5 says a failed call still records what it spent. `dispatch`, `summary` and `review` all do this. In `compact`, `SDKExecutionSession.dispatch` attaches `exc.telemetry` to the `ProviderError`, but the failure path returns no `metadata` and never stamps usage. A compact that spent tokens in its capture turn and then failed (for example a reconnect failure after capture) shows up in `sq stats run` as unrecorded. A failure after capture is exactly the case where the spend is already known. Stamp the error's telemetry the same way the other actions do."
+ },
+ {
+  "ref": "sonnet/1/3",
+  "severity": "CONCERN",
+  "title": "`review_client` prices with a throwaway warning set, bypassing the per-run dedup",
+  "location": "src/squadron/review/review_client.py:310-321",
+  "description": "`resolve_cost(alias, ..., set())` is called with a fresh set on both the success and failure paths. The executor builds one `UsageCapture` per run so that each alias pricing warning fires once. A pipeline review for an alias with partial pricing therefore warns on every review. The success path prices in `review_client`, and `record_from_review` then reuses that result. There are two pricing call sites with different dedup behavior. `record_from_error` also re-prices from telemetry and ignores the `exc.cost_usd` and `exc.cost_basis` that `review_client` already set. Pick one place that prices."
+ },
+ {
+  "ref": "sonnet/2/0",
+  "severity": "CONCERN",
+  "title": "Review provider failure now returns a result with a misleading \"unexpected error\" log",
+  "location": "src/squadron/pipeline/actions/review.py:486",
+  "description": "The `except ProviderError` branch used to re-raise into `execute`'s catch-all. It now returns `_exception_result(...)` itself. It also logs `_logger.exception(\"review: unexpected error in step %s\")` for what is a named provider failure. The branch has already logged a WARNING with the artifact path. The result is a second, differently worded record of one failure, with a full traceback for an expected error. Dispatch and summary deliberately log named provider failures as a single ERROR line with no traceback (issue 200). Use `_logger.error` with the message, or drop the extra log.\n\nTwo related risks in the same handler:\n- `effort_sent_by_profile()` at line 491 calls `get_profile` and `ensure_provider_loaded`. If either raises, it replaces the original `ProviderError` and no usage record is written. Resolve it defensively, or compute it before the `try`.\n- The handler now returns a failed `ActionResult` for a part. I did not verify that the split-review caller treats a failed part the same way it treated the earlier raise (aborting the remaining parts). Confirm this in `_review` / the parts loop."
+ },
+ {
+  "ref": "sonnet/2/1",
+  "severity": "CONCERN",
+  "title": "`sq stats reviews --json` prints plain text when the directory is missing",
+  "location": "src/squadron/cli/commands/stats.py:61-63",
+  "description": "`report.missing_dir` is checked before `as_json`, so `--json` with no review directory writes `No review directory at ...` to stdout. A script piping it to a JSON parser fails. Emit a valid JSON document (empty rows, `missing_dir: true`) when `--json` is set. Alternatively, send the message to stderr."
+ },
+ {
+  "ref": "sonnet/3/0",
+  "severity": "CONCERN",
+  "title": "`sq stats reviews --json` emits plain text when the review directory is missing",
+  "location": "src/squadron/cli/commands/stats.py:60-63",
+  "description": "`stats_reviews` checks `report.missing_dir` before `as_json` and prints `No review directory at ...` to stdout. A caller piping `--json` into a parser gets non-JSON output with exit code 0. This is a silent contract break. Handle the missing-directory case after the JSON branch, or emit an empty report with `missing_dir` in the JSON. `stats_run` already honours `--json` consistently. The test `test_reviews_missing_dir_exits_0_with_message` only covers the table mode."
+ },
+ {
+  "ref": "sonnet/3/1",
+  "severity": "CONCERN",
+  "title": "Review failure path logs a misleading \"unexpected error\" ERROR, duplicating the WARNING above it",
+  "location": "src/squadron/pipeline/actions/review.py:486",
+  "description": "The old `raise` let `execute`'s catch-all log the failure. The new `except ProviderError` branch now returns directly. It calls `_logger.exception(\"review: unexpected error in step %s\", ...)` right after the provider-failed WARNING at lines 474-485. A named `ProviderError` is an expected failure, and elsewhere in this diff (`dispatch.py`, `summary.py`) it gets one ERROR line with no traceback. Each failed review therefore emits two log lines, and the second calls it \"unexpected\". Use `_logger.error` with the message, or drop one of the two lines.\n\n`effort_sent_by_profile` (called at line 491) looks up the profile and provider via `get_profile` and `get_provider`. If that lookup raises inside this handler, the exception reaches `execute`'s generic catch-all. The usage record and the artifact-path context are then lost. Compute the effort value before the `try`, or guard the lookup."
+ },
+ {
+  "ref": "sonnet/3/2",
+  "severity": "CONCERN",
+  "title": "Failed-review cost is resolved twice, and the second pass ignores the resolved value",
+  "location": "src/squadron/pipeline/usage_capture.py:record_from_error",
+  "description": "`review_client.run_review_with_profile` already resolves the failed run's cost and stores it on `exc.cost_usd` and `exc.cost_basis`. `RunCost.from_error` reads those fields. `UsageCapture.record_from_error` ignores them and passes `telemetry.cost_usd` to `_build`, which calls `resolve_cost` again. The two renderings of one failure (the artifact and the step's usage record) can therefore disagree. This is more likely if `alias` differs between the two paths, for example a bare model id. It also duplicates pricing logic that should live in one place. Reuse `exc.cost_usd` and `exc.cost_basis` in `record_from_error`, as `record_from_review` reuses `result.cost_usd`."
+ },
+ {
+  "ref": "sonnet/3/3",
+  "severity": "CONCERN",
+  "title": "Pricing-warning dedupe is bypassed in `review_client`",
+  "location": "src/squadron/review/review_client.py:313-321",
+  "description": "`UsageCapture` exists so that the executor's per-run warned set makes each pricing WARNING fire once per alias. `run_review_with_profile` calls `resolve_cost(..., set())` with a fresh set on every call. A pipeline review therefore re-warns on every review step, and the warning count differs from the dispatch and summary paths. Either thread the run's warned set through, or document that review pricing warnings are deliberately per-call."
+ },
+ {
+  "ref": "sonnet/3/4",
+  "severity": "CONCERN",
+  "title": "Dispatch `except ProviderError` now runs before more specific handlers, and the telemetry-less path is untested",
+  "location": "src/squadron/pipeline/actions/dispatch.py:404-406",
+  "description": "Moving the `ProviderError` clause above `ModelResolutionError`, `ModelPoolNotImplemented`, `KeyError`, and the other handlers changes the matching order. I did not confirm that none of those types subclasses `ProviderError`. If any does, it would now get provider-failure treatment. The tests cover the one-shot and session failure paths that carry telemetry. They do not cover a `ProviderError` that reaches `execute` directly with `usage=None`. Add one test for that path, and verify the class hierarchy."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "Provider-failure handler logs a misleading \"unexpected error\" traceback and can mask the original error",
+  "location": "src/squadron/pipeline/actions/review.py:486-493",
+  "description": "`_run_part` used to re-raise `ProviderError`, so `execute`'s catch-all produced the single ERROR log. The handler now returns `_exception_result` directly. To keep that log line, it copies `_logger.exception(\"review: unexpected error in step ...\")` into the handler. A named `ProviderError` is not unexpected, and the handler has already logged a WARNING with the artifact path. Each provider failure therefore gets two log lines at different levels, and the second says \"unexpected\". `dispatch` and `summary` log a named provider failure as one ERROR line with no traceback (`dispatch.py` `_provider_failure`, `summary.py`), so this is also inconsistent with them.\n\nSeparately, `effort_sent_by_profile` calls `get_profile`, `ensure_provider_loaded` and `get_provider` inside the `except` block. If any of them raises, the `ProviderError` that explains the failure is replaced, and nothing at that point records the usage. The effort is already known at the start of `_run_part`. Computing it before the `try`, or reading it from the profile the caller already resolved, would avoid the extra lookups on the failure path."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "LLM spend from the findings-addressed judge is not captured, so run totals undercount",
+  "location": "src/squadron/review/addressed/judge.py:107-112",
+  "description": "`judge_residue_core` calls `run_review_with_profile` without `alias`, and nothing stamps its spend into any `ActionResult`. `LLM_ACTION_TYPES` in `src/squadron/stats/usage_report.py` lists only dispatch, summary, compact and review. `sq stats run` therefore omits the judge's tokens and cost, and the \"N of M priced\" and \"no usage recorded\" lines do not mention it. If this is out of scope for slice 175, record it as a known gap in the slice docs or CHANGELOG. As it stands, \"totals\" can read lower than the real spend with no signal to the reader."
+ },
+ {
+  "ref": "sonnet-high/1/2",
+  "severity": "CONCERN",
+  "title": "Review-client cost resolution bypasses the run's pricing-warning dedup",
+  "location": "src/squadron/review/review_client.py:313-321",
+  "description": "`resolve_cost(alias, ..., set())` passes a fresh `warned` set on every call. `UsageCapture` exists so that each pricing warning fires once per alias per run, and `test_executor_gives_every_step_one_capture` asserts exactly that. Reviews in a looped pipeline step still warn every time, because the review path resolves cost in `review_client` and `record_from_review` then reuses the result. `record_from_error` also recomputes cost from telemetry and ignores the `exc.cost_usd` and `exc.cost_basis` that `review_client` set on the error. The D3 cost precedence is therefore applied in two places for failed reviews. Pass the run's `warned` set into the review path, or have `record_from_error` use `exc.cost_usd` and `exc.cost_basis`."
+ },
+ {
+  "ref": "sonnet-high/1/3",
+  "severity": "CONCERN",
+  "title": "The `\"subscription\"` cost-tier literal is redefined in the stats views",
+  "location": "src/squadron/cli/stats_views.py:29",
+  "description": "`SUBSCRIPTION_TIER = \"subscription\"` is a new constant that decides whether a cost is labelled \"api-rate equiv.\" (money or not). The same literal appears in `src/squadron/pipeline/intelligence/pools/strategies.py:39` and `src/squadron/cli/commands/models.py:33`, and `cost_tier` has no shared enum or constant. This breaks the project rule that a comparison value is defined once. Move the tier values to a single definition in `squadron.models.aliases` and import it."
+ },
+ {
+  "ref": "sonnet-high/2/0",
+  "severity": "CONCERN",
+  "title": "Provider failure in a review step is logged as an \"unexpected error\" with a full traceback",
+  "location": "src/squadron/pipeline/actions/review.py:486",
+  "description": "The new `except ProviderError` branch in `_run_part` no longer re-raises. It builds the failed result itself. Before this change the re-raise reached `execute`'s catch-all at line 181, which is the only place that logs \"unexpected error\". Moving that log call into the branch carries the wording over, but a `ProviderError` is a named, expected failure. The dispatch and summary actions log named provider failures at ERROR with no traceback (\"issue 200\" convention, `dispatch.py:457`, `summary.py`). Here the same event now produces two lines: a WARNING a few lines up that names the failure artifact, then an ERROR with a traceback saying \"unexpected\". That is misleading in diagnostics and inconsistent with the sibling actions. Use `_logger.error(\"review: step %s failed: %s\", ...)`, or drop the extra line, since the WARNING already covers the event."
+ },
+ {
+  "ref": "sonnet-high/2/1",
+  "severity": "CONCERN",
+  "title": "Failed-review cost is resolved twice, and the second pass ignores the first result",
+  "location": "src/squadron/pipeline/usage_capture.py#UsageCapture.record_from_error",
+  "description": "`review_client.py:315` resolves cost for a failed review and stores it on `exc.cost_usd` and `exc.cost_basis`. The failure artifact renders those values through `RunCost.from_error`. `record_from_error` then ignores them and calls `_build`, which runs `resolve_cost` again from `telemetry.cost_usd`. This breaks the \"one place the precedence lives\" intent. The persisted `UsageRecord` and the failure artifact are computed on separate paths, so they can drift apart. The second pass also emits the alias-pricing warning a second time for the same failure. `record_from_review` already reuses `result.cost_usd` and `result.cost_basis`. `record_from_error` should do the same with `exc.cost_usd` and `exc.cost_basis`."
+ },
+ {
+  "ref": "sonnet-high/2/2",
+  "severity": "CONCERN",
+  "title": "Per-run pricing-warning dedup is bypassed for reviews",
+  "location": "src/squadron/review/review_client.py:315",
+  "description": "`run_review_with_profile` calls `resolve_cost(..., set())` with a fresh set on every call, at lines 315 and 321. The executor comment (`executor.py`, \"One per run: its pricing-warning set makes each WARNING once per alias\") and `test_pricing_warning_once_per_capture` promise one warning per alias per run. A pipeline with several reviews, or split-review parts, on an alias with incomplete pricing now warns once per review instead of once per alias. Standalone `sq review` is unaffected. Accept an optional `warned` set from the caller, and have `ReviewAction` pass the capture's set."
+ },
+ {
+  "ref": "sonnet-high/2/3",
+  "severity": "CONCERN",
+  "title": "`sq stats reviews --json` emits non-JSON text when the review directory is missing",
+  "location": "src/squadron/cli/commands/stats.py:60-62",
+  "description": "The `missing_dir` check runs before the `as_json` branch. With `--json` and no review directory, stdout is the plain string `No review directory at ...` with exit code 0. Any script piping it into `json.loads` will fail. The missing-directory case should produce an empty JSON report (`rows: []`, with the report's `missing_dir` flag in the payload) under `--json`. The plain-text message should be used only for the table output. `reviews_report_json` also does not serialize `missing_dir`, so it should be added. No test covers `--json` with a missing directory."
+ },
+ {
+  "ref": "sonnet-high/3/0",
+  "severity": "FAIL",
+  "title": "A failed review part no longer aborts the split review, and the fold then fails with a misleading error",
+  "location": "src/squadron/pipeline/actions/review.py:486-493",
+  "description": "`_run_part` used to re-raise a `ProviderError`. It now returns `self._exception_result(...)`, which has `success=False`, `outputs={}` and `verdict=None`.\n\nThe loop in `_review` (review.py:283-294) appends that result and moves on to the next part. That makes further LLM calls after a failure, which spends tokens on a review that has already failed.\n\n`fold_review_parts` then runs over the mixed list. It calls `_part_input` and `_part_verdict` (review_fold.py:102-112) on the failed part. That raises `TypeError(\"review part must name exactly one input file\u2026\")` or `TypeError(\"review part has no verdict\")`.\n\n`execute`'s catch-all converts the `TypeError` into the step error. The real provider error, such as an auth failure or a 500, is lost from `ActionResult.error`. The failure also gets logged as a spurious \"unexpected error\".\n\nIf a failed part ever did have an input file and a verdict, the fold would return `success=True`, which hides the failure entirely.\n\nThe single-part path works, and the new test covers only that path. Nothing tests a split review in which one part fails.\n\nFix options: re-raise after recording usage, or have the loop short-circuit on `success=False`. Either way, add a multi-part failure test."
+ },
+ {
+  "ref": "sonnet-high/3/1",
+  "severity": "CONCERN",
+  "title": "Split reviews record usage for part 1 only",
+  "location": "src/squadron/pipeline/actions/review_fold.py:85-91",
+  "description": "`_metadata` copies `parts[0].metadata` and sums only `TOOL_CALLS_MADE_KEY`. Each part now carries its own `USAGE_KEY` record (review.py:506), so the folded result keeps only part 1's record.\n\n`sq stats run` therefore under-reports tokens, turns, cost and time for any split review. That undercounting is the thing slice 175 exists to prevent. Sum the records across parts, or emit one record per part."
+ },
+ {
+  "ref": "sonnet-high/3/2",
+  "severity": "CONCERN",
+  "title": "Copy-pasted `logger.exception` and a fragile call inside the `except` block",
+  "location": "src/squadron/pipeline/actions/review.py:486-492",
+  "description": "The handler logs `\"review: unexpected error in step %s\"` with `_logger.exception`. This is a provider failure, not an unexpected error, and the handler has just logged a WARNING for the same event. The message is copied from `execute`, and it produces a traceback and a duplicate line.\n\n`effort_sent_by_profile(...)` (usage_capture.py:62-70) also calls `get_profile`, `ensure_provider_loaded` and `get_provider` while handling the error. If any of these raise, the original `ProviderError` is replaced by an unrelated exception. The effort could be computed before the `try`, or this step could be made non-fatal."
+ },
+ {
+  "ref": "sonnet-high/3/3",
+  "severity": "CONCERN",
+  "title": "`--json` output is corrupted when the reviews directory is missing",
+  "location": "src/squadron/cli/commands/stats.py:60-62",
+  "description": "When `report.missing_dir` is true, the command prints the plain text `No review directory at \u2026` to stdout and returns. It does this even with `--json`, so the output is not parseable JSON for scripts. Emit an empty report as JSON when `as_json` is set, or send the message to stderr."
+ },
+ {
+  "ref": "sonnet-high/3/4",
+  "severity": "CONCERN",
+  "title": "A fresh `warned` set per review defeats the \"warn once per alias per run\" pricing warning",
+  "location": "src/squadron/review/review_client.py:313-319",
+  "description": "`run_review_with_profile` calls `resolve_cost(alias, ..., set())` on both the success path and the failure path. `UsageCapture` exists so that a run's pricing warning fires once per alias, and the test `test_pricing_warning_once_per_capture` asserts that behaviour.\n\nA pipeline review step calls `run_review_with_profile` once per part and once per step. A partially priced alias therefore warns on every call instead of once per run. Pricing is also resolved in two places, `review_client` and `UsageCapture._build`. Pass the capture's `warned` set through, or move pricing out of `review_client`."
+ },
+ {
+  "ref": "sonnet-high/3/5",
+  "severity": "CONCERN",
+  "title": "Compact records carry no alias, so cost labelling and alias pricing never apply",
+  "location": "src/squadron/pipeline/actions/compact.py:91-99",
+  "description": "The comment says \"the compact model is the alias the step named; no resolution is needed\". But `record_from_telemetry(None, \u2026)` is called with `resolved=None`, so `UsageRecord.alias` is `None`.\n\n`cost_cell` (stats_views.py:170) therefore never shows `api-rate equiv.` for a subscription alias's compact row, even though it shows it for dispatch rows. Alias pricing also can't fill in a missing cost. The comment contradicts the code.\n\nA failed compact (compact.py:82-89) also discards the spend carried on `exc.telemetry`. The other LLM actions record it under D5."
+ },
+ {
+  "ref": "sonnet-high/3/6",
+  "severity": "CONCERN",
+  "title": "`run_usage_report` catches `AttributeError`, which can mask programming errors",
+  "location": "src/squadron/stats/usage_report.py:104-107",
+  "description": "`except (OSError, ValueError, AttributeError, SchemaVersionError)` re-declares what `STATE_READ_ERRORS` in state.py:103 already enumerates. That tuple is documented as the full set of errors a present state file can raise, and it already covers `ValidationError`.\n\nCatching `AttributeError` turns real bugs in `load` into \"cannot read file\" errors. Reuse `STATE_READ_ERRORS` and fix the non-object top-level case at its source in `StateManager`.\n\n`_row` also raises a `ValueError` just to catch it a few lines later. A direct branch to the unreadable result would be clearer."
+ }
+]

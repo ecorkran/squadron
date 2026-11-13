@@ -1,0 +1,454 @@
+{
+ "case": "175",
+ "issues": [
+  {
+   "id": "175-I1",
+   "title": "Folding a split review keeps only part 1's usage record, so parts 2..N spend is lost.",
+   "members": [
+    "haiku-xhigh/1/0",
+    "sol/1/1",
+    "sol/2/1",
+    "sol/3/1",
+    "sonnet-high/3/1"
+   ],
+   "grade": "REAL",
+   "confidence": "high",
+   "why": "Each part now stamps its own USAGE_KEY record in _run_part, but review_fold._metadata copies parts[0].metadata and only sums TOOL_CALLS_MADE_KEY. The folded step result persisted to run state therefore carries part 1's tokens/turns/cost only, and pipeline review artifacts are excluded from sq stats reviews, so the rest of the spend appears nowhere. This undercounts exactly what slice 175 exists to measure.",
+   "evidence": [
+    "src/squadron/pipeline/actions/review_fold.py:85-91",
+    "src/squadron/pipeline/actions/review.py:505-506",
+    "src/squadron/stats/reviews_report.py:75-78"
+   ],
+   "known": null,
+   "fail_justified": true
+  },
+  {
+   "id": "175-I2",
+   "title": "A provider failure in one part of a split review no longer stops the loop and makes the fold raise TypeError, hiding the provider error.",
+   "members": [
+    "haiku-xhigh/2/0",
+    "haiku-xhigh/3/0",
+    "sol/1/2",
+    "sol/2/2",
+    "sol/3/2",
+    "sonnet-high/3/0"
+   ],
+   "grade": "REAL",
+   "confidence": "high",
+   "why": "The ProviderError branch of _run_part used to re-raise; it now returns _exception_result with outputs={} and verdict None. _review's loop has no early exit, so later parts still make paid model calls, then fold_review_parts calls _part_input which raises TypeError('review part must name exactly one input file, got []'). execute's catch-all reports that TypeError as the step error, dropping the provider message and the per-part usage records.",
+   "evidence": [
+    "src/squadron/pipeline/actions/review.py:283-294",
+    "src/squadron/pipeline/actions/review.py:486-493",
+    "src/squadron/pipeline/actions/review_fold.py:38",
+    "src/squadron/pipeline/actions/review_fold.py:102-106",
+    "src/squadron/pipeline/actions/review.py:180-182"
+   ],
+   "known": null,
+   "fail_justified": true
+  },
+  {
+   "id": "175-I3",
+   "title": "The existing two-part provider-failure test passes on the TypeError because it never checks result.error or call count.",
+   "members": [
+    "haiku-xhigh/3/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "test_provider_failure_on_part_two_keeps_part_one asserts only success is False, artifacts and a log line, so it is green despite the bug in 175-I2. The claim is true, but it is a test-strength point; the defect itself is graded in I2.",
+   "evidence": [
+    "tests/pipeline/actions/test_review_action_parts.py:143-153"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I4",
+   "title": "A failed SDK compact drops the spend carried on the ProviderError or captured before a reconnect failure.",
+   "members": [
+    "haiku-xhigh/1/1",
+    "haiku-xhigh/2/3",
+    "haiku-xhigh/3/2",
+    "sol/2/4",
+    "sol/3/3",
+    "sonnet/1/2"
+   ],
+   "grade": "REAL",
+   "confidence": "medium",
+   "why": "SDKExecutionSession.dispatch now attaches telemetry to a ProviderError, and compact() captures the summary reply before _reconnect; but CompactAction's except branch returns a failed ActionResult with no metadata, and a reconnect failure discards reply.telemetry. Dispatch, summary and review all stamp failed-call usage per D5, and success criterion 2 names failed compact actions. The row shows as unrecorded rather than silently, but the spend is lost.",
+   "evidence": [
+    "src/squadron/pipeline/actions/compact.py:82-89",
+    "src/squadron/pipeline/sdk_session.py:234",
+    "src/squadron/pipeline/sdk_session.py:493-499"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I5",
+   "title": "Compact usage records are built with resolved=None, so alias is None and subscription costs are labeled as provider money.",
+   "members": [
+    "haiku-xhigh/1/2",
+    "haiku-xhigh/2/2",
+    "sonnet-high/3/5"
+   ],
+   "grade": "REAL",
+   "confidence": "medium",
+   "why": "compact.py calls record_from_telemetry(None, ...), so _build sets alias=None. cost_cell only labels a provider cost 'api-rate equiv.' when _is_subscription(record.alias) is true, and returns False for None, so every SDK compact row on a subscription alias renders '$X prov', contradicting D3, while dispatch and summary rows for the same alias are labeled correctly. The comment claiming no resolution is needed is wrong for labeling.",
+   "evidence": [
+    "src/squadron/pipeline/actions/compact.py:91-99",
+    "src/squadron/pipeline/usage_capture.py:200",
+    "src/squadron/cli/stats_views.py:165-179"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I6",
+   "title": "Findings-addressed judge spend (and prompt-only compact spend) is not recorded and gates are excluded from LLM action counting.",
+   "members": [
+    "haiku-xhigh/1/3",
+    "haiku-xhigh/2/1",
+    "sonnet-high/1/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "True that judge_residue_core's review spend is never stamped and GATE is not in LLM_ACTION_TYPES, but the judge code was not changed in this diff and the slice design explicitly lists the addressed-findings judge as out of scope; compact capture is scoped to the SDK session path. This is a documented scope gap, not a defect in the changed code.",
+   "evidence": [
+    "project-documents/user/slices/175-slice.usage-and-cost-tracking.md:55",
+    "project-documents/user/slices/175-slice.usage-and-cost-tracking.md:36",
+    "src/squadron/stats/usage_report.py:24-28"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I7",
+   "title": "Review frontmatter cost key names are spelled separately in the writer and the stats reader.",
+   "members": [
+    "haiku-xhigh/1/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "run_cost.py writes the key literals and reviews_report.py repeats them in _INT_KEYS and its _int/_float/_basis calls. It is a DRY point; the keys currently agree, so nothing is wrong at head.",
+   "evidence": [
+    "src/squadron/stats/reviews_report.py:26-31",
+    "src/squadron/stats/reviews_report.py:108-123"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I8",
+   "title": "The reviews reader tests use hand-written frontmatter instead of the real writer.",
+   "members": [
+    "haiku-xhigh/1/5"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "The fixtures are hand-written. This is a test-coverage concern for an already-working reader, not a defect.",
+   "evidence": [
+    "tests/stats/test_reviews_report.py:15"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I9",
+   "title": "Usage-fold and one-shot plumbing logic is duplicated between the SDK agent and the session turns.",
+   "members": [
+    "haiku-xhigh/1/6",
+    "haiku-xhigh/2/5"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "ClaudeSDKAgent._fold_result and DispatchTurns.fold_result do the same read-warn-fold steps. Duplication is a maintainability point with no wrong behavior at head.",
+   "evidence": [
+    "src/squadron/providers/sdk/agent.py:248-254",
+    "src/squadron/pipeline/sdk_turns.py:141-147"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I10",
+   "title": "dispatch.py, _execute_summary and _dispatch_via_session exceed the length guidelines.",
+   "members": [
+    "haiku-xhigh/1/7",
+    "haiku-xhigh/2/10",
+    "haiku-xhigh/3/6"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "File and function length are style guideline points; the lengths largely predate the diff and cause no defect.",
+   "evidence": [
+    "src/squadron/pipeline/actions/dispatch.py:1",
+    "src/squadron/pipeline/actions/summary.py:187"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I11",
+   "title": "SDK prompt token total is a partial sum when a cache field is malformed.",
+   "members": [
+    "haiku-xhigh/2/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "read_result_usage adds only the cache classes that parse, so a malformed cache value gives prompt equal to the uncached count; the code matches its docstring and logs a WARNING. Real SDK results carry both keys as ints, so this is hardening against input that does not arrive.",
+   "evidence": [
+    "src/squadron/providers/sdk/usage.py:43-48"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I12",
+   "title": "get_all_aliases re-parses models.toml on each call and the diff adds calls on async paths.",
+   "members": [
+    "haiku-xhigh/2/6"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "resolver._resolved now calls get_all_aliases per resolve, adding to several existing calls. An unmeasured performance point with no shown effect.",
+   "evidence": [
+    "src/squadron/pipeline/resolver.py:89"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I13",
+   "title": "review_client prices with a fresh warned set, bypassing the per-run pricing-warning dedup.",
+   "members": [
+    "haiku-xhigh/2/7",
+    "sonnet/1/3",
+    "sonnet/3/3",
+    "sonnet-high/1/2",
+    "sonnet-high/2/2",
+    "sonnet-high/3/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "resolve_cost(..., set()) at review_client lines 315 and 321 means a partially priced alias warns once per review instead of once per run. True, but the only effect is repeated WARNING lines; costs are correct.",
+   "evidence": [
+    "src/squadron/review/review_client.py:315",
+    "src/squadron/review/review_client.py:321",
+    "src/squadron/pipeline/executor.py:549-550"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I14",
+   "title": "record_from_error re-resolves a failed review's cost instead of reusing exc.cost_usd/cost_basis.",
+   "members": [
+    "haiku-xhigh/3/4",
+    "sonnet/3/2",
+    "sonnet-high/2/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "review_client resolves cost onto the exception, then UsageCapture.record_from_error calls _build which resolves again from the same telemetry and the same alias (settings.resolved.alias is passed to both), so the values agree. The effect is duplicated pricing logic and a possible second warning, not wrong data.",
+   "evidence": [
+    "src/squadron/review/review_client.py:315",
+    "src/squadron/pipeline/usage_capture.py:154-174",
+    "src/squadron/pipeline/actions/review.py:446"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I15",
+   "title": "The subscription cost-tier literal is defined again in stats_views rather than once.",
+   "members": [
+    "haiku-xhigh/2/8",
+    "sonnet-high/1/3"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "SUBSCRIPTION_TIER='subscription' duplicates a value used in other modules. Style/DRY rule point; behavior is correct.",
+   "evidence": [
+    "src/squadron/cli/stats_views.py:29"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I16",
+   "title": "An unreadable or non-UTF-8 review artifact aborts sq stats reviews instead of being skipped.",
+   "members": [
+    "haiku-xhigh/2/9"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "read_frontmatter calls path.read_text without catching OSError/UnicodeDecodeError, and reviews_usage_report does not catch them. True, but artifacts are written by squadron as UTF-8, so this is hardening against input that does not normally arrive.",
+   "evidence": [
+    "src/squadron/documents/frontmatter.py:66",
+    "src/squadron/stats/reviews_report.py:67-72"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I17",
+   "title": "A list or mapping costBasis value raises TypeError (unhashable) in the reviews report.",
+   "members": [
+    "haiku-xhigh/3/5",
+    "sol/3/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "_basis tests value in a set, which raises TypeError for an unhashable YAML value. True, but squadron writes costBasis as a scalar string, so only a hand-corrupted artifact triggers it.",
+   "evidence": [
+    "src/squadron/stats/reviews_report.py:151-158"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I18",
+   "title": "effort_for_session is annotated -> None yet its result is used as the effort value.",
+   "members": [
+    "haiku-xhigh/3/3"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The function always returns None and callers bind it to effort_sent, which is the intended D7 value today. Naming/clarity point with no wrong behavior.",
+   "evidence": [
+    "src/squadron/pipeline/usage_capture.py:176-183",
+    "src/squadron/pipeline/actions/dispatch.py:572",
+    "src/squadron/pipeline/actions/summary.py:274"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I19",
+   "title": "sq stats run omits earlier loop rounds because only the final round's action_results are persisted.",
+   "members": [
+    "sol/1/0",
+    "sol/2/0",
+    "sol/3/0"
+   ],
+   "grade": "REAL",
+   "confidence": "high",
+   "why": "Loop steps keep earlier rounds in StepResult.prior_rounds, but StateManager._append_step serializes only step_result.action_results and RunStateRecorder.round_completed records nothing. The new run_usage_report reads only persisted action_results, so a multi-round loop reports only its last round, contradicting the slice's stated 'the cost of a loop is the whole loop' and 'run totals include failed attempts'.",
+   "evidence": [
+    "src/squadron/stats/usage_report.py:112-116",
+    "src/squadron/pipeline/state.py:507-508",
+    "src/squadron/pipeline/executor.py:223-226",
+    "src/squadron/pipeline/run_observer.py:52-53",
+    "project-documents/user/slices/175-slice.usage-and-cost-tracking.md:157"
+   ],
+   "known": null,
+   "fail_justified": true
+  },
+  {
+   "id": "175-I20",
+   "title": "Fan-out branch usage records are discarded by the fan-in reducers and on branch failure.",
+   "members": [
+    "sol/2/3"
+   ],
+   "grade": "REAL",
+   "confidence": "medium",
+   "why": "The diff passes usage_capture into fan-out branches, but CollectReducer and FirstPassReducer build a new ActionResult without metadata, and the failed-branch path returns action_results=[]. The persisted action has type 'fan_out', which is not in LLM_ACTION_TYPES, so the lost spend is not even counted as unrecorded.",
+   "evidence": [
+    "src/squadron/pipeline/executor.py:2072-2093",
+    "src/squadron/pipeline/intelligence/fan_in/reducers.py:62-83",
+    "src/squadron/stats/usage_report.py:26-28"
+   ],
+   "known": null,
+   "fail_justified": true
+  },
+  {
+   "id": "175-I21",
+   "title": "The review ProviderError branch logs a misleading 'unexpected error' with a traceback after its WARNING.",
+   "members": [
+    "sonnet/1/0",
+    "sonnet/2/0",
+    "sonnet/3/1",
+    "sonnet-high/1/0",
+    "sonnet-high/2/0",
+    "sonnet-high/3/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The new branch calls _logger.exception('review: unexpected error ...'). Before the diff the re-raise reached execute's catch-all, which logged the same message with a traceback, so log output is unchanged; the wording is merely inaccurate and inconsistent with dispatch.",
+   "evidence": [
+    "src/squadron/pipeline/actions/review.py:486",
+    "src/squadron/pipeline/actions/review.py:180-182"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I22",
+   "title": "effort_sent_by_profile inside the except block could raise and mask the original ProviderError.",
+   "members": [
+    "sonnet/1/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "effort_sent_by_profile calls get_profile, ensure_provider_loaded and get_provider for the same profile run_review_with_profile has already looked up and loaded, so those calls cannot realistically fail at that point. Speculative hardening.",
+   "evidence": [
+    "src/squadron/pipeline/usage_capture.py:56-63",
+    "src/squadron/pipeline/actions/review.py:487-492"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I23",
+   "title": "sq stats reviews --json prints plain text when the review directory is missing.",
+   "members": [
+    "sonnet/2/1",
+    "sonnet/3/0",
+    "sonnet-high/2/3",
+    "sonnet-high/3/3"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "The missing_dir check runs before the as_json branch, so --json outputs 'No review directory at ...' with exit 0. True, but the only shipped consumers (the sq-stats skill and slash command) display output rather than parse it, and the case is a project with no reviews directory.",
+   "evidence": [
+    "src/squadron/cli/commands/stats.py:60-65"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I24",
+   "title": "Moving the dispatch except ProviderError clause above other handlers could misroute subclasses.",
+   "members": [
+    "sonnet/3/4"
+   ],
+   "grade": "FALSE",
+   "confidence": "high",
+   "why": "None of the later-handled types subclass ProviderError: ModelResolutionError and ModelPoolNotImplemented subclass Exception, ContextForgeError subclasses Exception, ProjectRulesError subclasses RuntimeError, and KeyError is builtin. The reordering changes no matching.",
+   "evidence": [
+    "src/squadron/pipeline/actions/dispatch.py:404-406",
+    "src/squadron/pipeline/resolver.py:93-97",
+    "src/squadron/project_rules/errors.py:6",
+    "src/squadron/integrations/context_forge.py:33"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-I25",
+   "title": "run_usage_report catches AttributeError and re-declares STATE_READ_ERRORS.",
+   "members": [
+    "sonnet-high/3/6"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The except tuple is broader than STATE_READ_ERRORS and includes AttributeError, which could relabel a bug as an unreadable file. A maintainability point; no wrong behavior shown.",
+   "evidence": [
+    "src/squadron/stats/usage_report.py:107-110",
+    "src/squadron/pipeline/state.py:103-109"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
+ ]
+}

@@ -1,0 +1,513 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "FAIL",
+  "title": "Bounded minute firing cannot stop early: the streaming `mt-run` call blocks until the pass ends",
+  "location": "scripts/cutover_common.py:341-363",
+  "description": "`fire_unit_until` calls `run([\"mt-run\", *mt_run_args], sudo=True, check=False, stream=True)` at line 356. `run()` is a plain `subprocess.run` with no Popen, so the call blocks until `mt-run` exits (lines 65-70). `mt-run minute` does not exit early: after `systemctl start --no-block` it loops `while is_running \"${unit}\"; do sleep 2; done` (deploy/mt-run:127-129). So `wait_for_unit_or_line` (line 357) is only reached after the unbounded minute pass has already ended. That is the ten-hour firing #22 is meant to end. The stop-on-trailing-line path only runs if an operator interrupts `mt-run`.\n\nThe unit tests miss this. `_fire` in `test/unit/test_cutover_921.py#TestBoundedFiringAndRecord` patches `cutover_common.run` to return immediately, so the blocking is never modelled. Fix: start the unit without blocking (Popen, or `systemctl start --no-block` directly) and let the journal poll own the wait. Add a test whose fake `run` blocks."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "FAIL",
+  "title": "Acceptance passes when verify emits no verdict",
+  "location": "scripts/cutover_921_minute_sessions.py:265-273",
+  "description": "Success is defined as the absence of the literal `FAIL` and `[WAIT]` in the output (`ok = \"FAIL\" not in report and \"[WAIT]\" not in report and aborted is None`). Any output without a verdict therefore counts as passing:\n\n- `repair --verify` hits `RepairScanTimeout`, prints `scan refused: \u2026` to stderr, and exits 2 (`scripts/repair_921_minute_sessions.py:340-343`). `_repair` concatenates stderr into the text (`cutover_921\u2026:101`), so no `FAIL` appears and the run reports `CUTOVER COMPLETE`.\n- Any uncaught exception in `_run` (`repair_921_minute_sessions.py:346-353`, which has no handler) produces a traceback with no literal `FAIL`. Line 265 then prints \"every acceptance bar met\" on the same basis.\n- `_repair` discards the return code (`cutover_921\u2026:103-104`).\n\nThe `ok` line predates this diff, but the diff edits it and it is the cutover's exit verdict. Fix: require an explicit `[PASS]` for each bar and the health line, and treat a non-zero exit or missing verdict as failure. Add tests where verify returns a traceback or \"scan refused\" and assert the cutover fails."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "FAIL",
+  "title": "The sudoers rule grants root-equivalent execution, contrary to its header",
+  "location": "deploy/sudoers.d/manta-ops:8-13",
+  "description": "- **`MT_RUN = /usr/local/bin/mt-run *`.** When `mt-run` runs as root with a readable env file, it `exec`s `/opt/manta-trading/.venv/bin/mt \"$@\"` as root (`deploy/mt-run:165-168`). The NOPASSWD grant therefore runs the production CLI as root with any arguments, not just `minute`, `daily`, `kalshi`, or `data kalshi status`.\n- **`MT_INSTALL = <operator checkout>/deploy/install-production.sh --ref *`.** The root-run script is read from the operator's own checkout. The rule's path sits under `/home/manta`, so I am assuming the `manta` account can write it; that needs confirming on the host. If so, the account can edit the script and run it as root with NOPASSWD. Extra arguments are also allowed, since `*` matches anything. This is equivalent to unrestricted root.\n- **`MT_READ = /usr/bin/cat /etc/manta-trading.env`.** This gives passwordless read of every credential in the env file. The migrate check needs only the database URL.\n- **`is-active` in `MT_UNITS` (line 7)** is unused under sudo. `unit_active` (`cutover_common.py:77-79`) and `mt-run`'s `is_running` (`deploy/mt-run:45`) call `systemctl` without sudo.\n\nThe header's claim of \"exactly the commands those scripts issue, nothing wider\" is false. Fix: pin exact argv (for example `mt-run minute`, `mt-run daily`, `mt-run kalshi`, `mt-run data kalshi status --json`); run the installer from a root-owned copy; drop `is-active` and the broad `cat`."
+ },
+ {
+  "ref": "haiku-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "The cutover's own repair/verify command is not covered by the sudoers rule",
+  "location": "scripts/cutover_921_minute_sessions.py:93-105",
+  "description": "`_repair` runs `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode>` (lines 96-100). No rule in `deploy/sudoers.d/manta-ops` matches that interpreter path. Sudo will therefore prompt for a password on `--check`, `--apply`, and each `--verify` poll. `_verify_when_fresh` polls for up to 75 minutes, and the credential timestamp lapses after 5 minutes by default. Unattended or non-interactive runs will fail or stall. Add the exact argv and verify with `sudo -l -U manta`."
+ },
+ {
+  "ref": "haiku-xhigh/1/4",
+  "severity": "CONCERN",
+  "title": "Per-session judgement turns any empty session in a chunk into a terminal failure",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:901-916",
+  "description": "`judge_chunk_by_sessions` returns PARTIAL if any judged session in the chunk lacks a bar in (open, close] (`minute_sessions.py:66-91`). The code cannot distinguish that from a session not yet published, a halt, a session before provider history, or an illiquid name with no trades that day. PARTIAL maps to UNKNOWN, which increments `attempt_count` (`minute.py:1142-1151`). The whole chunk is then re-requested each hourly cycle until `attempt_count` reaches `MAX_RETRY_COUNT` (5), at which point the row becomes RETRY_EXHAUSTED and is excluded from selection. Under the old classifier this chunk was SUCCESS.\n\nBars are still inserted, so no data is lost. But up to five full-chunk requests are spent, a fully collected gap ends terminal, and the log at lines 909-916 asserts \"provider has not published them\", which the code cannot know. The tests cover single-session fixtures only; none has a legitimately empty session inside a multi-session chunk. Decide the policy explicitly, reword the log to what is known, and add that test."
+ },
+ {
+  "ref": "haiku-xhigh/1/5",
+  "severity": "CONCERN",
+  "title": "Cagg freshness probe duplicates the catalog read and drops the health signals",
+  "location": "src/manta_trading/data/gaps/repair_921.py:182-222",
+  "description": "The probe re-implements the refresh-job lookup, and it omits the signals that make a job's health meaningful:\n\n- It ignores `scheduled` and `last_run_status`. A paused or failing refresh job makes `freshness.stale` true indefinitely. `--verify` then waits and tells the operator the \"hourly refresh has not caught up\", which misdiagnoses a paused job. `cagg_freshness.py` already produces `NOT_SCHEDULED` and `LAST_RUN_FAILED` for this (`_evaluate`, lines 755-772).\n- It does not apply the `nullif(last_successful_finish, '-infinity')` normalization that `cagg_freshness.py:68-72` documents as raising psycopg `DataError` for a never-run policy. Here the error would escape `run_verify`, and the fail-open verdict above would then report success.\n- It compares bar `created_at` against the job's finish time. A refresh that started before a bar was written but finished after it would be judged fresh. The safe comparator is the run's start time.\n\nThe view-name join itself is correct. Reuse `_read_refresh_job` (`cagg_freshness.py:270-313`) and compare against run start. The existing test asserts only SQL substrings (`test/unit/test_repair_921.py#TestVerifyWaitsForTheCagg`), so add a real-database check in `test/integration/test_cagg_freshness.py`."
+ },
+ {
+  "ref": "haiku-xhigh/1/6",
+  "severity": "CONCERN",
+  "title": "Log file omits the acceptance evidence it is meant to preserve",
+  "location": "scripts/cutover_common.py:57-62",
+  "description": "`start_log` tees only `say()` lines. The verify verdicts come from `_repair`, which calls `print(output)` (`cutover_921\u2026:102`). The mt-run and journal output is streamed and never captured. The file the closing message calls \"full narration\" (`cutover_921\u2026:278`) therefore lacks the `[PASS]`/`[FAIL]` lines, which are the artifact the commit message says it exists to keep. Separately, `start_log` (lines 226-228) creates `project-documents/user/notes/` relative to the current directory before `preflight` (line 232) checks that the directory is the checkout root. Route `_repair` output through `say`, and move `start_log` after `preflight`."
+ },
+ {
+  "ref": "haiku-xhigh/1/7",
+  "severity": "CONCERN",
+  "title": "`fire_unit_until` duplicates `fire_unit`",
+  "location": "scripts/cutover_common.py:341-383",
+  "description": "Both functions take the journal cursor, record the start, print the streaming notice, run `mt-run`, wait, print the `sudo -v` notice, and run `sudo -v`. The diff copied the `sudo -v` print into `fire_unit`. `wait_for_unit_to_end` and `wait_for_unit_or_line` also repeat the same poll-and-print loop. CLAUDE.md asks for no duplicated logic. One `fire_unit(unit, args, until=None)` covers both, and the fix for the blocking-call finding above naturally unifies them."
+ },
+ {
+  "ref": "haiku-xhigh/2/0",
+  "severity": "FAIL",
+  "title": "fire_unit_until cannot stop a firing early because mt-run blocks until the unit exits",
+  "location": "scripts/cutover_common.py:356-358",
+  "description": "`fire_unit_until` calls `run([\"mt-run\", *mt_run_args], sudo=True, check=False, stream=True)` and only afterwards calls `wait_for_unit_or_line` (line 357). `deploy/mt-run` does not return while the unit runs. `start_and_stream` issues `systemctl start --no-block` (deploy/mt-run:127), then loops `while is_running \"${unit}\"; do sleep 2; done` (line 129). `subprocess.run` therefore blocks for the whole unbounded firing. By the time the trailing-line check runs, the unit has ended, so `reached and unit_active(unit)` (line 358) is false and `stop_unit` never runs. The cutover still waits for the full backfill, which is the problem #22 was meant to fix.\n\nThe test `test_the_minute_firing_stops_once_the_trailing_phase_completes` mocks `run` and `unit_active`, so it cannot detect this. Fix: start the unit directly with `sudo systemctl start --no-block <unit>` (already allowed by `MT_UNITS`) and poll with `wait_for_unit_or_line`. Add a test that asserts the start call does not block."
+ },
+ {
+  "ref": "haiku-xhigh/2/1",
+  "severity": "FAIL",
+  "title": "The sudoers rule grants root execution of a script the operator account can rewrite",
+  "location": "deploy/sudoers.d/manta-ops:9,13",
+  "description": "`MT_INSTALL` lets `manta` run `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh --ref *` as root with NOPASSWD. That file is in the operator's own checkout, which is what `install()` resolves (scripts/cutover_common.py:134). The account that runs the scripts can rewrite that file and then execute it as root, which is a root shell in one step. The header's \"limited root\" claim does not hold. I did not verify the file owner on the host; the conclusion assumes the checkout is writable by `manta`, which the `/home/manta` layout implies.\n\nFix: install a root-owned copy outside the checkout (for example under `/usr/local/sbin`, updated by root from a pinned ref) and grant NOPASSWD on that path only. Alternatively, drop the NOPASSWD entry and keep the password prompt for the installer."
+ },
+ {
+  "ref": "haiku-xhigh/2/2",
+  "severity": "CONCERN",
+  "title": "The sudoers rule does not match what the scripts actually run",
+  "location": "scripts/cutover_921_minute_sessions.py:96-100",
+  "description": "The header says the rule covers \"exactly the commands those scripts issue\". But `_repair` runs `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode>`, and no rule covers that interpreter. Each repair and verify call falls back to a password prompt, and `sudo -n` fails. The installer path also disagrees: `install()` resolves it from `__file__` (scripts/cutover_common.py:134), while the rule hard-codes one checkout path, so running from any other checkout (including a worktree) prompts for a password. Add the interpreter, narrowly, for this script's three modes. Either pin the installer location or document that the checkout must match."
+ },
+ {
+  "ref": "haiku-xhigh/2/3",
+  "severity": "CONCERN",
+  "title": "MT_RUN wildcard exposes the whole production mt CLI to root",
+  "location": "deploy/sudoers.d/manta-ops:8",
+  "description": "`/usr/local/bin/mt-run *` matches any arguments. Non-verb arguments go to `run_production_mt` (deploy/mt-run:160-168). When run as root, that function sources `/etc/manta-trading.env` and `exec`s `/opt/manta-trading/.venv/bin/mt \"$@\"` as root. The cutover scripts need only `mt-run minute`, `mt-run daily`, `mt-run kalshi`, and `mt-run data kalshi status --json`. Narrow the rule to those invocations."
+ },
+ {
+  "ref": "haiku-xhigh/2/4",
+  "severity": "CONCERN",
+  "title": "Ctrl-C does not leave the script waiting; it aborts it and restarts the timers",
+  "location": "scripts/cutover_common.py:352-355",
+  "description": "The printed text \"Ctrl-C only detaches, the script keeps waiting\" is not true for the Python process. Nothing in `cutover_common` installs a SIGINT handler, so Ctrl-C raises `KeyboardInterrupt` inside `subprocess.run`, which kills the `mt-run` child and unwinds `main()`. The unwind runs `finally: _release_timers(held)` (scripts/cutover_921_minute_sessions.py:274-275), which restarts the minute and daily timers while the unit may still be running. The same wording exists in the pre-existing `fire()` and `fire_unit()`, but `fire_unit_until` copies it. Catch the interrupt around the firing and wait for the unit (or keep the timers held) instead of releasing them."
+ },
+ {
+  "ref": "haiku-xhigh/2/5",
+  "severity": "CONCERN",
+  "title": "The narration log omits the acceptance output it is meant to record",
+  "location": "scripts/cutover_921_minute_sessions.py:101-102",
+  "description": "Only `say()` lines are teed into the log file (scripts/cutover_common.py:57-62). The file is described as \"the cutover's report\" and, at exit, as the \"full narration\". But `_repair` writes the repair output with `print(output)` (line 102), and the sub-step lines in `cutover_common` (wait loops, sudo prompts, streamed `mt-run` output) also bypass `say()`. The `[PASS]`/`[FAIL]`/`[WAIT]` lines that decide the exit code are therefore absent from the file. Route `_repair`'s output through `say`, or drop the \"full narration\" wording."
+ },
+ {
+  "ref": "haiku-xhigh/2/6",
+  "severity": "CONCERN",
+  "title": "The cagg freshness probe duplicates the refresh-job query and drops its '-infinity' guard",
+  "location": "src/manta_trading/data/gaps/repair_921.py:198-209",
+  "description": "`cagg_freshness_for_session` re-spells the refresh-job lookup that `market/maintenance/cagg_freshness.py` already has as `_JOB_SQL` and `_read_refresh_job` (lines 73-83 and 270-313). The existing query normalizes `last_successful_finish = '-infinity'` to NULL, and the module's own comment (cagg_freshness.py:68-72) says psycopg raises `DataError` on that value. The new copy selects the raw column, so a refresh policy that has never finished makes `--verify` raise instead of reporting. Share the lookup rather than copying it."
+ },
+ {
+  "ref": "haiku-xhigh/2/7",
+  "severity": "CONCERN",
+  "title": "The truncated-day fix reaches the seed only on some daemon code paths",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:752-772",
+  "description": "`uncovered_days` only takes effect inside `if seed_from is not None` (line 752). `seed_from` is set when the symbol has UNKNOWN gap rows (full seed, lines 738-739) or when the gap frontier `MAX(gap_end)` trails `target_end` (lines 740-750). In the frontier case the seed covers only sessions at or after the frontier. A truncated session older than the newest gap row, on a symbol with no UNKNOWN rows, is never passed to the seed. That contradicts the docstring of `_build_truncated_index` (minute.py:355-363), which says truncated sessions are re-seeded. The only forwarding test, `test_do_minute_symbol_forwards_uncovered_days_to_the_seed`, forces `has_unknown_gaps=True`, so it covers only the full-seed branch. Add a frontier-branch test with an older truncated day, then either change the seed decision or document the limit. I did not check this against production data."
+ },
+ {
+  "ref": "haiku-xhigh/2/8",
+  "severity": "CONCERN",
+  "title": "The daemon now depends on the slice-921 repair module",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:60-63",
+  "description": "The steady-state daemon imports `build_truncated_day_index` and `RepairScanTimeout` from `data/gaps/repair_921.py`, a module written as a one-off slice repair. Retiring slice 921 would leave the daemon depending on repair tooling. Move the truncated-day index and its predicate into a shared gaps module that both the daemon and the repair import."
+ },
+ {
+  "ref": "haiku-xhigh/2/9",
+  "severity": "CONCERN",
+  "title": "The 04:05 firing rationale is wrong for standard time, which is the current period",
+  "location": "src/manta_trading/constants.py:157-165",
+  "description": "The comment says 20:00 ET is 00:00 UTC and that 04:05 \"leaves an hour over the provider's upper bound\". That holds only on daylight time. DST ended 2026-11-01, so ET is UTC-5 now. 20:00 ET is then 01:00 UTC, two to three hours later is 03:00\u201304:00 UTC, and 04:05 leaves about five minutes. The cited measurement is from 2026-09-10 (EDT). Restate the margin in UTC for both offsets. An early firing is limited by the design, since a spillover-only session stays PARTIAL and is retried at 13:05, consuming one of `MAX_RETRY_COUNT` = 5 attempts (constants.py:69). So this is a documentation and margin problem, not data loss."
+ },
+ {
+  "ref": "haiku-xhigh/2/10",
+  "severity": "CONCERN",
+  "title": "Verify verdict markers are scattered across two scripts",
+  "location": "scripts/cutover_921_minute_sessions.py:204",
+  "description": "The verdict protocol between `repair_921_minute_sessions.py` (which prints `[WAIT]`, `[FAIL]`, `[PASS]`) and the cutover is a substring match on literals. `\"[WAIT]\"` appears at cutover lines 204, 265, and 273, and in the repair's print at repair_921_minute_sessions.py:288. CLAUDE.md says a comparison value used in conditionals must be defined once. Define the markers as constants in one module and build both the printed lines and the checks from them. A changed spelling in the repair would currently make `\"[WAIT]\" in text` silently false and the cutover would accept."
+ },
+ {
+  "ref": "haiku-xhigh/3/0",
+  "severity": "FAIL",
+  "title": "The minute firing is never stopped early because `mt-run` blocks until the unit exits",
+  "location": "scripts/cutover_common.py:356",
+  "description": "`fire_unit_until` calls `run([\"mt-run\", ...], sudo=True, check=False, stream=True)` and only then calls `wait_for_unit_or_line` (line 357). `deploy/mt-run` starts the unit with `systemctl start --no-block` (line 127) and then loops `while is_running \"${unit}\"; do sleep 2; done` (line 129). So `mt-run minute` returns only after the minute unit has stopped. The minute firing is unbounded (backfill runs until quota is gone), so the call at line 356 blocks for the whole firing. By the time line 357 runs, the unit is inactive, and the stop branch at lines 358\u2013360 never acts on a live unit. The result is the ~10-hour firing that #22 was meant to end.\n\nThe test `test/unit/test_cutover_921.py#TestBoundedFiringAndRecord._fire` mocks `run` to return at once and feeds `unit_active` a scripted sequence. It encodes the assumption that `mt-run` returns while the unit is still active, so it cannot catch this.\n\nFix: start the unit without blocking (`sudo systemctl start --no-block mt-minute-pass.service` is already covered by `MT_UNITS`), or run `mt-run minute` as a `Popen` child, poll the journal for the line, stop the unit, then wait for the child. Add a test that fails if the stop happens only after the `mt-run` process has exited."
+ },
+ {
+  "ref": "haiku-xhigh/3/1",
+  "severity": "FAIL",
+  "title": "The sudoers rule grants root on a script in the operator's writable checkout",
+  "location": "deploy/sudoers.d/manta-ops:9",
+  "description": "`MT_INSTALL` lets `manta` run `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh --ref *` as root with NOPASSWD. That file sits in the operator's own checkout, which the operator must be able to write (they `git pull` there). Whoever can edit it can run arbitrary code as root with a single `sudo` call, so the \"limited root\" grant becomes unrestricted root for `manta`. The installer's own header (`deploy/install-production.sh:27-28`) avoids trusting the operator's checkout for units, but the root execution still comes from that checkout, which may hold uncommitted changes.\n\nAlso, `install()` (`scripts/cutover_common.py:134`) resolves the path with `Path(__file__).resolve()`. The rule therefore matches only when the checkout sits at that exact path and is not behind a symlink.\n\nFix: install the installer as a root-owned copy outside the home directory (for example `/usr/local/sbin/mt-install`, `0755 root:root`), point `MT_INSTALL` at that path, and have the cutover call it by that path."
+ },
+ {
+  "ref": "haiku-xhigh/3/2",
+  "severity": "FAIL",
+  "title": "The narration log omits the repair and verify output that the report depends on",
+  "location": "scripts/cutover_921_minute_sessions.py:95",
+  "description": "`_repair` captures the repair script's stdout and stderr and emits them with `print(output)` (line 102), not `say`. `start_log` tees only `say` lines (`scripts/cutover_common.py:57-62`). The `[PASS]`, `[FAIL]` and `[WAIT]` lines, which are the acceptance numbers, therefore never reach the log file. The final message (`CUTOVER INCOMPLETE \u2014 read the FAIL lines`, line 277) points to lines the log does not contain. The `mt-run` output and the wait-loop `print` lines are missing from the log for the same reason.\n\nThe commit's stated purpose is that \"the narration is the cutover's report; it gets a file.\" That is not met. The test `test_say_tees_to_the_log_file` only exercises `say`, so it cannot catch this.\n\nFix: route `_repair` output and the other `print` calls through one tee helper that writes to stdout and the log, and add a test that a `[FAIL]` line returned by `_repair` appears in the file."
+ },
+ {
+  "ref": "haiku-xhigh/3/3",
+  "severity": "CONCERN",
+  "title": "The sudoers rule does not cover the repair step, and its header claim is inaccurate",
+  "location": "deploy/sudoers.d/manta-ops:1",
+  "description": "The header says the rule covers \"Exactly the commands those scripts issue.\" It does not. `_repair` (`scripts/cutover_921_minute_sessions.py:96-100`) runs `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode>` on every `--check`, `--apply` and `--verify`. None of the aliases match that command, so the cutover prompts for a password at its first repair step, or fails without a TTY. In the other direction, `MT_UNITS` lists `systemctl is-active`, which `unit_active` never runs under sudo.\n\nFix: run the repair as the service user (`sudo -u manta-trading ...`), which is the same pattern as `MT_GIT`, and add that alias. Do not grant root to a repository script."
+ },
+ {
+  "ref": "haiku-xhigh/3/4",
+  "severity": "CONCERN",
+  "title": "The 04:05 UTC firing has about five minutes of margin in standard time",
+  "location": "src/manta_trading/constants.py:164",
+  "description": "The docstring says \"04:05 leaves an hour over the provider's upper bound,\" and it justifies that with \"20:00 ET = 00:00 UTC.\" Both hold only during EDT. From November 1 to March 8, 20:00 ET is 01:00 UTC, and the provider's stated 2\u20133 h upper bound is 04:00 UTC. Today (2026-11-12) is in standard time, so the 04:05 firing is about five minutes past the bound. The measurements in the docstring (01:21 and 11:27 UTC on 2026-09-10) bracket the window but include nothing near 04:00 UTC.\n\nThe new judgement should keep the row and retry on the 13:05 firing, so the likely cost is a delay rather than data loss. The comment is still wrong for half the year. Fix the comment, and consider a later UTC time or a measurement. The constant is single-sourced, so the change touches `constants.py`, `mt-minute-pass.timer`, and the tests that assert the times."
+ },
+ {
+  "ref": "haiku-xhigh/3/5",
+  "severity": "CONCERN",
+  "title": "The cagg freshness probe duplicates an existing catalog query and drops its `-infinity` guard",
+  "location": "src/manta_trading/data/gaps/repair_921.py:182",
+  "description": "`cagg_freshness_for_session` re-implements the `timescaledb_information.jobs` + `job_stats` lookup that `market/maintenance/cagg_freshness.py` already has (`_JOB_SQL`, lines 73\u201383, and `_read_refresh_job`, line 270). The existing SQL normalizes the value with `nullif(s.last_successful_finish, '-infinity'::timestamptz)`, and its comment (lines 67\u201372) says psycopg raises `DataError` on `-infinity` for a policy that has never succeeded. The new query selects `stats.last_successful_finish` directly, so a never-succeeded policy makes `--verify` raise an uncaught `DataError` rather than reporting WAIT or FAIL. The new query also skips the probe statement-timeout guard that `_read_refresh_job` applies.\n\nFix: reuse `_read_refresh_job` (promote it to a public name) and take `last_refresh` from `.last_successful_finish`."
+ },
+ {
+  "ref": "haiku-xhigh/3/6",
+  "severity": "CONCERN",
+  "title": "The cutover loop fires more minute passes while verify reports WAIT",
+  "location": "scripts/cutover_921_minute_sessions.py:259",
+  "description": "The loop breaks only when verify reports neither FAIL nor WAIT (line 265). A WAIT means the cagg has not caught up, not that trailing work remains, so a stale cagg causes another full minute firing. Each firing runs to quota (see the first finding), so a persistent WAIT (for example a paused cagg policy, which verify cannot distinguish) spends the quota of up to five more firings. The run then reports \"reached the 6-firing ceiling\" (line 269), which misstates the cause. The trailing-completion result `_completed` is also ignored (line 260).\n\nFix: report WAIT as its own outcome and do not refire on it. Use the trailing-completion signal to decide whether another firing is needed."
+ },
+ {
+  "ref": "haiku-xhigh/3/7",
+  "severity": "CONCERN",
+  "title": "The minute timer's stagger comment is out of date",
+  "location": "deploy/systemd/mt-minute-pass.timer:2",
+  "description": "The unit description and the comment at lines 6\u20137 say the minute pass is \"staggered 30 minutes behind mt-daily-pass.timer.\" The daily timer fires at 00:35 and 12:35 UTC, so the 04:05 firing is 3 h 30 min after it. Only the 13:05 firing is still 30 minutes behind. The rationale (\"never start simultaneously\") still holds, but the stated offset is wrong."
+ },
+ {
+  "ref": "sol/1/0",
+  "severity": "FAIL",
+  "title": "Journal monitoring starts only after the pass exits",
+  "location": "scripts/cutover_common.py:356-360",
+  "description": "`run()` uses blocking `subprocess.run()`. Meanwhile, `deploy/mt-run:129` waits until the service finishes. Consequently, `wait_for_unit_or_line()` cannot observe trailing completion or stop backfill while it runs\u2014the original unbounded wait remains. Start the service non-blockingly before polling. Add a regression test that exercises the wrapper\u2019s blocking behavior."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "FAIL",
+  "title": "Passwordless root execution targets an operator-controlled checkout",
+  "location": "deploy/sudoers.d/manta-ops:9",
+  "description": "`MT_INSTALL`, granted on line 13, executes a script from the operator\u2019s checkout as root. An operator able to modify that checkout can replace the script and obtain unrestricted passwordless root execution. Install the privileged entry point in a root-owned location with non-writable parent directories."
+ },
+ {
+  "ref": "sol/1/2",
+  "severity": "FAIL",
+  "title": "Unit wildcard permits operations on unrelated services",
+  "location": "deploy/sudoers.d/manta-ops:7",
+  "description": "Sudoers argument wildcards match whitespace, so `systemctl stop mt-minute-pass.service ssh.service` also matches this rule. The grant therefore extends beyond `mt-*` units. Enumerate exact commands or use a root-owned wrapper that validates every unit argument. See the [official sudoers documentation](https://github.com/sudo-project/sudo/blob/main/docs/sudoers.man.in)."
+ },
+ {
+  "ref": "sol/1/3",
+  "severity": "CONCERN",
+  "title": "Truncated days do not influence whether or where seeding runs",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:765-771",
+  "description": "`uncovered_days` is considered only after the existing seed gate. With stored bars, only terminal gaps, and no unknown gaps, that gate either skips seeding or starts at the gap frontier (`717-750`). Truncated days behind that frontier remain excluded despite appearing in the new index. Incorporate those days into the seed decision and bounded repair window; test the terminal-only case."
+ },
+ {
+  "ref": "sol/1/4",
+  "severity": "CONCERN",
+  "title": "Saved narration omits the acceptance measurements",
+  "location": "scripts/cutover_common.py:57-62",
+  "description": "Only `say()` output reaches the log. Repair results\u2014including acceptance numbers and FAIL/WAIT details\u2014use `print(output)` in `scripts/cutover_921_minute_sessions.py:102`, while subprocess streams also bypass the file. The advertised \u201cfull narration\u201d therefore loses the evidence needed to diagnose an incomplete cutover. Persist these outputs and test that acceptance details appear in the saved report."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "FAIL",
+  "title": "Bounded firing waits for the entire pass before polling",
+  "location": "scripts/cutover_common.py:356-360",
+  "description": "`run()` uses blocking `subprocess.run()`. Meanwhile, `deploy/mt-run:129` waits until the service exits. Consequently, journal polling and the early-stop logic cannot execute while the pass runs\u2014the cutover still waits through unbounded backfill. Start the service non-blockingly, then monitor its journal. Add a test that exercises the real wrapper\u2019s blocking behavior rather than mocking `run()` to return immediately."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "FAIL",
+  "title": "Restricted sudo grants root execution of an operator-controlled script",
+  "location": "deploy/sudoers.d/manta-ops:9",
+  "description": "`MT_INSTALL`, granted passwordless root access on line 13, executes a script from the operator\u2019s development checkout. The operator can modify that script and execute arbitrary commands as root; restricting its arguments to `--ref` provides no protection. Install a root-owned helper outside operator-writable directories, and ensure its privileged inputs cannot introduce arbitrary executable code.\n\nTests could not run: the available Python interpreter has no `pytest` module."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "FAIL",
+  "title": "The bounded firing still waits for the entire pass",
+  "location": "scripts/cutover_common.py:356-357",
+  "description": "`run()` uses blocking `subprocess.run()`. The invoked `deploy/mt-run` waits for the service to finish in `start_and_stream()` (lines 127\u2013129). Consequently, journal polling cannot begin while the pass is running, and the new stop-on-trailing-completion behavior does not work. Start the unit non-blockingly before polling. Add a test exercising the wrapper\u2019s blocking behavior rather than mocking it away."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "FAIL",
+  "title": "The limited sudo policy permits root execution of an operator-controlled script",
+  "location": "deploy/sudoers.d/manta-ops:9",
+  "description": "`MT_INSTALL`, granted passwordless root execution on line 13, points into the operator\u2019s checkout. Modifying that script\u2014or replacing it through a writable parent directory\u2014allows arbitrary root execution, regardless of the `--ref` restriction. Install a root-owned entry point beneath root-owned directories and constrain the privileged operations it exposes."
+ },
+ {
+  "ref": "sol/3/2",
+  "severity": "CONCERN",
+  "title": "Truncated days behind the seed frontier remain unrepaired",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:765-771",
+  "description": "Passing `uncovered_days` does not expand the seed window. When existing gaps are all terminal, surrounding code seeds only from `_gap_frontier`, or skips seeding if that frontier reaches `target_end`. A truncated day before that frontier is therefore excluded even when the new index identifies it. Seed the identified truncated sessions explicitly without resetting unrelated terminal gaps, and test this terminal-only state."
+ },
+ {
+  "ref": "sol/3/3",
+  "severity": "CONCERN",
+  "title": "The narration log omits the acceptance evidence",
+  "location": "scripts/cutover_common.py:60-66",
+  "description": "Only `say()` messages reach the new log. Repair output\u2014including acceptance measurements and failure details\u2014is emitted through plain `print()` in `_repair()`, while subprocess output is streamed directly to the terminal. The advertised \u201cfull narration\u201d therefore still loses the evidence needed to audit the cutover. Persist those outputs and errors alongside the narration."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "Sudoers rule lets the operator run an operator-owned script as root",
+  "location": "deploy/sudoers.d/manta-ops:9",
+  "description": "`MT_INSTALL` allows `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh --ref *` as root with no password. That path sits in the `manta` user's own checkout, so `manta` can edit the script and then run it as root. This is effectively unrestricted root, which contradicts the header comment (\"nothing wider\").\n\nThe `--ref *` argument is also an open wildcard. `mt-run *` and `systemctl ... mt-*` use the same open wildcard style. Sudoers `*` also matches spaces and slashes, so extra arguments can follow. Install the script to a root-owned path, or accept that this rule is full root and say so in the comment."
+ },
+ {
+  "ref": "sonnet/1/1",
+  "severity": "CONCERN",
+  "title": "Import ordering violates the required ruff `I` rule",
+  "location": "scripts/cutover_921_minute_sessions.py:45-52",
+  "description": "The `cutover_common` import block puts `NOTES_DIR, fire_unit_until, start_log` ahead of `CutoverError, fire_unit, install, ...`, so it is not sorted. The same problem appears in these places:\n- `scripts/repair_921_minute_sessions.py`: `cagg_freshness_for_session` comes before `CheckReport`.\n- `test/unit/test_repair_921.py`: `CaggFreshness, cagg_freshness_for_session, SymbolFindings` is unsorted.\n- `src/manta_trading/data/acquisition/daemon/minute.py`: the `minute_sessions` and `gaps.repair_921` imports come before `gaps.minute_coverage`.\n\n`pyproject.toml` selects `I`, so `ruff check` should flag these."
+ },
+ {
+  "ref": "sonnet/1/2",
+  "severity": "CONCERN",
+  "title": "Extra pool connection opened per chunk while another is held",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:~905",
+  "description": "`_do_minute_symbol` calls `pool.connection()` again for `fetch_session_bounds` inside its fetch loop. I did not confirm whether the outer `conn` is still held at that point. Nested checkouts risk pool exhaustion or deadlock when workers are concurrent, and every chunk now pays for an additional query. Reuse the existing connection if it is still held, or confirm the pool size and concurrency make this safe."
+ },
+ {
+  "ref": "sonnet/1/3",
+  "severity": "CONCERN",
+  "title": "Duplicated heavy mock setup in tests",
+  "location": "test/unit/data/acquisition/daemon/test_minute.py (TestChunkJudgedBySessions)",
+  "description": "`test_last_bar_before_the_chunk_end_is_still_success` copies the roughly 60-line pool, transaction and patch scaffolding from `_run`. `_run` should take bounds, gap end and a logger option so the test can reuse it. Separately, the `[WAIT]` and `FAIL` checks in the cutover script match on substrings of printed text, which is fragile. Pre-existing code already does this for `FAIL`, and the diff extends it."
+ },
+ {
+  "ref": "sonnet/2/0",
+  "severity": "CONCERN",
+  "title": "Root-NOPASSWD sudoers rule runs a script from a user-writable path",
+  "location": "deploy/sudoers.d/manta-ops:9",
+  "description": "`MT_INSTALL` lets `manta` run `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh --ref *` as root with no password. That file is in the operator's own home directory, so the operator, or anything running as them, can edit it and then run it as root. This makes the \"limited root\" header untrue, because the rule is effectively full root. The script should be installed to a root-owned path such as `/usr/local/libexec`. Failing that, the rule needs a constraint that cannot be bypassed by editing the checkout. `scripts/cutover_common.py:133-135` builds the same checkout-relative path, so it would need to change with the rule."
+ },
+ {
+  "ref": "sonnet/2/1",
+  "severity": "CONCERN",
+  "title": "Sudoers wildcards also match extra arguments",
+  "location": "deploy/sudoers.d/manta-ops:7-8",
+  "description": "In sudoers, `*` also matches spaces. `systemctl stop mt-*` therefore matches `systemctl stop mt-x sshd`, and `mt-run *` and `--ref *` match any arguments at all. The rule is wider than the comment says (\"exactly the commands those scripts issue\"). I did not check what `mt-run` itself accepts. The `systemctl` rules should name the units explicitly. The `mt-run` rule should list the specific subcommands the scripts use, which are `minute`, `kalshi` and `data kalshi status --json`."
+ },
+ {
+  "ref": "sonnet/2/2",
+  "severity": "CONCERN",
+  "title": "Import ordering breaks ruff `I` in several files",
+  "location": "scripts/cutover_921_minute_sessions.py:45-52",
+  "description": "In the `cutover_common` import, `NOTES_DIR`, `fire_unit_until` and `start_log` are placed before `CutoverError`. In `scripts/repair_921_minute_sessions.py`, `cagg_freshness_for_session` comes before `CheckReport`. In `minute.py`, the new `minute_sessions` and `repair_921` imports sit before `gaps.minute_coverage`, and `gaps.compute_missing_ranges` is in the middle. In `test_repair_921.py`, `cagg_freshness_for_session` comes before `SymbolFindings`. The project's required ruff `I` rule would flag all of these."
+ },
+ {
+  "ref": "sonnet/2/3",
+  "severity": "CONCERN",
+  "title": "Timer comments no longer match the schedule",
+  "location": "deploy/systemd/mt-minute-pass.timer:6",
+  "description": "The comment says the pass is \"Staggered 30 minutes behind mt-daily-pass.timer\". With the move from 01:05 to 04:05, that offset is probably no longer true. I did not inspect `mt-daily-pass.timer`. The comment should be updated or the stagger re-verified."
+ },
+ {
+  "ref": "sonnet/2/4",
+  "severity": "CONCERN",
+  "title": "Log file is overwritten and its failures are unhandled",
+  "location": "scripts/cutover_common.py:45-62",
+  "description": "`start_log` uses `write_text`, which truncates any existing file. `say` also reopens the file on every line, and an `OSError` mid-cutover would crash the run partway through a destructive operation. The timestamped name in the cutover script avoids collisions today. Using `open(\"x\")` or `\"a\"` in `start_log` would remove that risk, and failures in `say` should be handled deliberately. `_LOG_FILE` is also module-global mutable state."
+ },
+ {
+  "ref": "sonnet/3/0",
+  "severity": "CONCERN",
+  "title": "Sudoers rule gives root to a script the operator can edit, plus wildcard arguments",
+  "location": "deploy/sudoers.d/manta-ops:9",
+  "description": "`MT_INSTALL` lets `manta` run `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh --ref *` as root with no password. That script sits in a checkout the `manta` account owns, so `manta` can edit it and then run it as root. The rule is therefore equivalent to full root for that account, which contradicts the header's \"nothing wider\". `MT_RUN` is `/usr/local/bin/mt-run *` and `MT_UNITS` is `mt-*`, so both accept any arguments. They are only as narrow as `mt-run` and `systemctl` happen to be. `MT_READ` hands over the file that holds the secrets (`/etc/manta-trading.env`). The comment also does not say that the install path is a hard-coded home directory. Fix this by having the sudo rule point at a root-owned copy of the installer, for example under `/usr/local/sbin`, or by documenting the account as fully trusted. Also confirm that `mt-run` validates its arguments."
+ },
+ {
+  "ref": "sonnet/3/1",
+  "severity": "CONCERN",
+  "title": "Import ordering violates the required ruff `I` rule",
+  "location": "scripts/cutover_921_minute_sessions.py:45-50",
+  "description": "The new names are not in sorted position:\n- In `scripts/cutover_921_minute_sessions.py`, `NOTES_DIR`, `fire_unit_until` and `start_log` come before `CutoverError`.\n- In `scripts/repair_921_minute_sessions.py`, `cagg_freshness_for_session` comes before `CheckReport`.\n- In `src/manta_trading/data/acquisition/daemon/minute.py`, the `minute_sessions` and `repair_921` imports come before `gaps.minute_coverage`.\n- In `test/unit/test_repair_921.py`, `cagg_freshness_for_session` comes before `SymbolFindings`.\n\nRuff's isort rule would flag these, and the guide requires `I` to be enabled. Run `ruff check --fix`."
+ },
+ {
+  "ref": "sonnet/3/2",
+  "severity": "CONCERN",
+  "title": "Cagg freshness probe can report \"fresh\" when it is stale",
+  "location": "src/manta_trading/data/gaps/repair_921.py:170-222",
+  "description": "`stale` compares `last_successful_finish` with `max(created_at)`. A refresh job that started before the last bars were written but finished after them looks fresh, even though it never materialized those bars. The `job_stats` view also has `last_run_started_at`. Comparing the bar's `created_at` with the refresh's start time is the safe choice. `last_successful_finish` can also be NULL while `last_run_status` shows a failure, and the code reads that as \"stale\". The retry loop then waits 75 minutes with no explanation. This is an edge case and a narrow one, but the probe is what decides acceptance."
+ },
+ {
+  "ref": "sonnet/3/3",
+  "severity": "CONCERN",
+  "title": "Test setup copy-pasted across the new daemon tests",
+  "location": "test/unit/data/acquisition/daemon/test_minute.py:2342-2470",
+  "description": "`test_last_bar_before_the_chunk_end_is_still_success` repeats about 50 lines of the conn, pool, lock and patch scaffolding that `_run` already builds. `TestTruncatedDayAwareSeeding` repeats it again. Move this into a fixture or helper and parametrize on `(bounds, bars, chunk_end)`. The duplication goes against DRY and the one-concept-per-test guidance, and it will make later changes costly."
+ },
+ {
+  "ref": "sonnet/3/4",
+  "severity": "CONCERN",
+  "title": "Stale timer comment",
+  "location": "deploy/systemd/mt-minute-pass.timer:6",
+  "description": "The comment says the minute pass is \"Staggered 30 minutes behind mt-daily-pass.timer\". The daily pass fires at 00:35/12:35, and the minute pass now fires at 04:05/13:05. The stagger is no longer 30 minutes and the first firing is now in a different place. Update the comment and add the reason for the new 04:05 time."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "Sudoers rule grants root-equivalent access to the `manta` account",
+  "location": "deploy/sudoers.d/manta-ops:8-13",
+  "description": "The header says \"exactly the commands those scripts issue, nothing wider\". Three entries are wider than that:\n\n- **`MT_INSTALL` runs a user-owned script as root.** The rule allows `/home/manta/.../deploy/install-production.sh --ref *` as root. That file lives in the operator's own checkout, which `manta` can write. Anyone who can edit the script, or who gets `manta` access, gets unrestricted root. `--ref *` is also unconstrained. To close the hole, the script would have to be root-owned and non-writable by `manta` (for example, installed under `/usr/local/sbin`). The rule would then name that path.\n- **Sudoers `*` also matches spaces.** `systemctl stop mt-*` therefore matches `systemctl stop mt-x sshd.service`, and the same applies to `start` and `restart`. The wildcard is not limited to `mt-` units.\n- **`MT_RUN` is broad.** `/usr/local/bin/mt-run *` passes any arguments through. As root, `deploy/mt-run` executes the production `mt` CLI with the credentials from `/etc/manta-trading.env`. `MT_READ` also lets `manta` read that file outright. The repository's `cutover_common.py` does use that read (line 226), so it is intentional, but it should be documented as a deliberate exposure of secrets.\n\nThe file also names only the 921-related commands. The 265 and 268 cutover scripts issue `sudo tee`, `cp` and `grep` against the env file, and the header's claim does not cover those."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "`[WAIT]` and `FAIL` verdict markers are scattered string literals",
+  "location": "scripts/cutover_921_minute_sessions.py:204",
+  "description": "`[WAIT]` is defined as a literal in `scripts/repair_921_minute_sessions.py:288`. The cutover script then matches it by substring at lines 204, 265 and 273, next to the existing `\"FAIL\"` substring checks. The tests repeat it again. Project rules say a comparison value must be defined once. If the producer's wording changes, the cutover silently stops waiting and the `[WAIT]` handling in `ok` stops working. Because `WAIT` is a three-way verdict, a shared constant or an exit code would be sturdier than parsing printed text. Today `run_verify` returns a plain `False` for both FAIL and WAIT, so the caller cannot tell them apart without parsing."
+ },
+ {
+  "ref": "sonnet-high/1/2",
+  "severity": "CONCERN",
+  "title": "The narration log is opened before the working-directory preflight",
+  "location": "scripts/cutover_921_minute_sessions.py:226-231",
+  "description": "`start_log(NOTES_DIR / ...)` runs before `preflight(args.ref)`. `NOTES_DIR` is a relative path (`cutover_common.py:32`). `preflight` is what checks that the script is running from the dev checkout root (it checks `deploy/` and `.env`, `cutover_common.py:95`). Run from any other directory, the script first creates `project-documents/user/notes/` and a log file there, and only then raises `CutoverError`. Starting the log after `preflight` fixes this. The log also doesn't capture the streamed `run(..., stream=True)` output or the bare `print` lines, only `say`. The docstring calls it \"the cutover's report\", which overstates what it holds."
+ },
+ {
+  "ref": "sonnet-high/1/3",
+  "severity": "CONCERN",
+  "title": "Cagg freshness compares job finish time with row `created_at`",
+  "location": "src/manta_trading/data/gaps/repair_921.py#cagg_freshness_for_session",
+  "description": "`stale` is `last_successful_finish < max(created_at)`. A refresh materializes the data present when it started, not when it finished. A bar written between the start and finish of the refresh job passes as \"fresh\" while the cagg has not seen it. The probe also does not account for a refresh policy `end_offset`, which can leave the newest buckets unmaterialized after a successful refresh. The window may be small, but this check exists to prevent a wrong verdict, so the race should at least be documented. Using `last_successful_start`, if the view exposes it, would remove the first problem. I did not verify the `job.hypertable_name = <cagg>` join against a live TimescaleDB, so that join is untested."
+ },
+ {
+  "ref": "sonnet-high/1/4",
+  "severity": "CONCERN",
+  "title": "Import ordering violates the project's ruff `I` rule",
+  "location": "scripts/cutover_921_minute_sessions.py:45-50",
+  "description": "The project selects `I` in `pyproject.toml`, but several import blocks look unsorted:\n\n- `scripts/cutover_921_minute_sessions.py` lists `NOTES_DIR, fire_unit_until, start_log, CutoverError, fire_unit, \u2026`.\n- `scripts/repair_921_minute_sessions.py` puts `cagg_freshness_for_session` before `CheckReport`.\n- `minute.py` inserts the `daemon.minute_sessions` and `gaps.compute_missing_ranges` imports ahead of `gaps.minute_coverage`.\n- `test_repair_921.py` puts `cagg_freshness_for_session` before `SymbolFindings`.\n\nRun `ruff check --select I --fix` on these files."
+ },
+ {
+  "ref": "sonnet-high/1/5",
+  "severity": "CONCERN",
+  "title": "Test setup is copy-pasted and one test duplicates `_run`",
+  "location": "test/unit/data/acquisition/daemon/test_minute.py:2339-2470",
+  "description": "`test_last_bar_before_the_chunk_end_is_still_success` re-implements the roughly 50-line mock harness that `_run` already provides, with only different bounds and bars. `TestTruncatedDayAwareSeeding` repeats the connection, transaction and lock mocks a third time. `_run` should accept `bounds` and `gap_end` parameters and the shared mocks should become fixtures in `conftest.py`. The tests also patch about ten internals of `_do_minute_symbol`, so they assert wiring more than behavior. The pure `minute_sessions` tests are good and cover the key predicate."
+ },
+ {
+  "ref": "sonnet-high/2/0",
+  "severity": "FAIL",
+  "title": "`fire_unit_until` blocks until the unit ends, so the early stop never runs",
+  "location": "scripts/cutover_common.py:342-355",
+  "description": "`fire_unit_until` calls `run([\"mt-run\", *mt_run_args], sudo=True, check=False, stream=True)` and only then calls `wait_for_unit_or_line`. `run` wraps a blocking `subprocess.run`. `deploy/mt-run` `start_and_stream` (lines 127-143) starts the unit and loops `while is_running \"${unit}\"; do sleep 2; done`. So `mt-run minute` returns only after the pass has ended. By the time the journal-line polling starts, the unit is already gone, and `reached and unit_active(unit)` is never true. The ten-hour firing that issue #22 set out to fix is unchanged.\n\nThe new tests patch `cutover_common.run` and `unit_active`, so they can't see this. The function needs to start the unit without waiting. Options are `systemctl start --no-block` through the sudoers-listed commands, or running `mt-run` under `Popen` and polling while it runs. The tests should then model a blocking `mt-run`."
+ },
+ {
+  "ref": "sonnet-high/2/1",
+  "severity": "CONCERN",
+  "title": "Sudoers rule is effectively full root, and its header says otherwise",
+  "location": "deploy/sudoers.d/manta-ops:9-13",
+  "description": "The header says \"Exactly the commands those scripts issue, nothing wider\". The rule is wider than that.\n- `MT_INSTALL` names a script inside the operator's own checkout (`/home/manta/.../deploy/install-production.sh`). The `manta` user can edit that file and then run it as root with no password.\n- `MT_RUN = /usr/local/bin/mt-run *` accepts any arguments. `mt-run` falls through to `run_production_mt \"$@\"` (`deploy/mt-run:197`). That runs the production `mt` CLI with the service credentials from `/etc/manta-trading.env`, as `manta-trading` or root.\n- The `systemctl ... mt-*` wildcards match any trailing arguments.\n\nIf this is an accepted trade-off for a single trusted operator, say so in the header instead of claiming a narrow grant. Otherwise install the script root-owned and not user-writable, and restrict the `mt-run` and `mt-*` arguments. The `MT_READ` grant for `cat /etc/manta-trading.env` is inherent to `cutover_common.py:226`, but it exposes all secrets in that file and should be called out."
+ },
+ {
+  "ref": "sonnet-high/2/2",
+  "severity": "CONCERN",
+  "title": "Cagg-freshness probe probably matches nothing, so verify may wait forever",
+  "location": "src/manta_trading/data/gaps/repair_921.py:200-212",
+  "description": "The job lookup filters `job.hypertable_name = %s` with the cagg view name (`minute_4hour_ohlcv`). In TimescaleDB, `timescaledb_information.jobs.hypertable_name` for a continuous-aggregate refresh policy normally holds the internal materialization hypertable (`_materialized_hypertable_N`), not the view name. I couldn't check this against a live database. If it is true, `job_row` is `None`, `last_refresh` is `None`, and `CaggFreshness.stale` is `True` whenever any bar exists. `--verify` would then answer WAIT on every run.\n\nA missing job row is also silently folded into \"stale\". That conflicts with the project rule against silent fallbacks, and it should raise or report that no refresh policy was found. The unit test (`test_the_probe_reads_the_job_stats_and_the_session_chunk`) uses a mock cursor and asserts only that the SQL text contains the proc name, so it can't catch a wrong join key. Run the query against a real TimescaleDB, or join through `continuous_aggregates.materialization_hypertable_name`."
+ },
+ {
+  "ref": "sonnet-high/2/3",
+  "severity": "CONCERN",
+  "title": "Import order is broken in several files, which fails the required `I` ruff rule",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:50-68",
+  "description": "`pyproject.toml` selects `I`. Several import blocks are out of isort order.\n- `minute.py`: `data.acquisition.daemon.minute_sessions` sits after `data.gaps`, with a stray blank line splitting the first-party block. `data.gaps.repair_921` also comes before `data.gaps.minute_coverage`.\n- `scripts/cutover_921_minute_sessions.py:45-52`: `NOTES_DIR, fire_unit_until, start_log, CutoverError, ...` is not sorted. The `# noqa: E402` comment doesn't cover I001.\n- `scripts/repair_921_minute_sessions.py:60`: `cagg_freshness_for_session` comes before `CheckReport`.\n- `test/unit/test_repair_921.py:30`: `CaggFreshness, cagg_freshness_for_session, SymbolFindings, ...` is out of order.\n\nRun `ruff check --fix`."
+ },
+ {
+  "ref": "sonnet-high/2/4",
+  "severity": "CONCERN",
+  "title": "The `\"[WAIT]\"` sentinel is a bare string repeated across modules",
+  "location": "scripts/cutover_921_minute_sessions.py:204-266",
+  "description": "`repair_921_minute_sessions.py` prints a literal `\"[WAIT]\"`. The cutover script then does substring matches on `\"[WAIT]\"` and `\"FAIL\"` in four places (`_verify_when_fresh`, the loop condition, the `ok` computation, and the tests). Changing the token would need edits in several files. The project rule is to define such a value once and reference it everywhere. Put the WAIT marker in one constant, or better, have `--verify` return a distinct exit code instead of text matching. Also, `_verify_when_fresh` runs twice in the happy path, so the final acceptance step can add up to another 75 minutes of polling."
+ },
+ {
+  "ref": "sonnet-high/2/5",
+  "severity": "CONCERN",
+  "title": "Production daemon now depends on a one-off repair module",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:56-63",
+  "description": "`minute.py` imports `RepairScanTimeout` and `build_truncated_day_index` from `data.gaps.repair_921`, which is named for a single slice's repair script. The recurring trailing walk now relies on it. Move the truncated-day index into a durable gaps module such as `minute_coverage`, and keep `repair_921` as a consumer of it."
+ },
+ {
+  "ref": "sonnet-high/2/6",
+  "severity": "CONCERN",
+  "title": "An extra pool connection and query for every minute chunk",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:901-904",
+  "description": "Each chunk now opens a separate `pool.connection()` just to run `fetch_session_bounds`. The chunk loop already opens a connection for the write a few lines later. Across thousands of symbols with many chunks, that is an added round-trip per chunk. Reuse the per-chunk connection, or fetch the bounds once per symbol for the gap's range.\n\nA related behavior change is worth confirming. A session the provider hasn't published now produces PARTIAL, which increments `attempt_count` and can promote the row to `RETRY_EXHAUSTED`. That is correct for the 01:05 case. A permanently empty session, such as a half day with no data, could also exhaust its retries. The tests don't cover that path."
+ },
+ {
+  "ref": "sonnet-high/3/0",
+  "severity": "FAIL",
+  "title": "NOPASSWD sudo rule runs a script the grantee can edit, so it grants root",
+  "location": "deploy/sudoers.d/manta-ops:9",
+  "description": "`MT_INSTALL` lets `manta` run `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh --ref *` as root with no password. That path is inside `manta`'s own home directory, so `manta` can rewrite the script and then run the edited copy as root. That is passwordless root, which contradicts the header's \"exactly the commands those scripts issue, nothing wider\".\n\nThe trailing `*` in sudoers also matches any further arguments, not just a ref. The installer should live at a root-owned path such as `/opt` or `/usr/local/sbin`. The cutover script would call it from there instead of resolving it from `__file__` (`scripts/cutover_common.py:134`). The rule would also hard-code the checkout path, so it breaks silently if the repo is cloned anywhere else."
+ },
+ {
+  "ref": "sonnet-high/3/1",
+  "severity": "CONCERN",
+  "title": "Wildcard command aliases allow much more than the stated commands",
+  "location": "deploy/sudoers.d/manta-ops:7-8",
+  "description": "In sudoers, `*` matches spaces and additional arguments. `systemctl stop mt-*` therefore also permits `systemctl stop mt-x sshd.service`, and the same applies to `start` and `restart`. This is not a root shell, but it is wider than \"a named unit\".\n\n`mt-run *` is wider still. For any argument that isn't a pass kind, `deploy/mt-run:197` falls through to `run_production_mt`. That runs the production `mt` CLI as `manta-trading` with every `MT_*` credential from the env file. The alias is effectively \"run any `mt` command with production credentials\".\n\nEnumerate the exact units and the exact `mt-run` verbs the scripts use: `minute`, `data kalshi status --json`, and so on."
+ },
+ {
+  "ref": "sonnet-high/3/2",
+  "severity": "CONCERN",
+  "title": "Sudoers rule omits a command the cutover issues, and exposes the env file",
+  "location": "deploy/sudoers.d/manta-ops:5-10",
+  "description": "`_repair` in `scripts/cutover_921_minute_sessions.py:96-100` runs `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode>`. No alias covers it. It would prompt for a password, with stdout and stderr captured, in the middle of an unattended cutover. The header's \"exactly the commands those scripts issue\" is therefore false.\n\n`MT_READ` grants `cat /etc/manta-trading.env` as root. That file holds all production credentials, including the maintenance DB URL. This works against the project's split-role principle, and the file should not be readable this way."
+ },
+ {
+  "ref": "sonnet-high/3/3",
+  "severity": "CONCERN",
+  "title": "Per-session judging can retry quota-limited fetches indefinitely for symbols with no-trade sessions",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:891-907",
+  "description": "`judge_chunk_by_sessions` returns PARTIAL whenever any session whose close is at or before `chunk_end` has no bar in `(open, close]`. That is right for the unpublished-day case. It also fires for sessions where the symbol simply didn't trade: halts, illiquid names, or an IPO session that opens before the first print.\n\nFor a multi-session backfill chunk of up to 120 days, one such session turns the whole chunk PARTIAL. `_advance_minute_gap` then keeps the row and increments `attempt_count`, so the same chunk is refetched until it reaches RETRY_EXHAUSTED. Each attempt spends credits against a limited quota, and the cutover itself gates on credits.\n\nThe old 4-day tolerance did not have this failure for mid-chunk gaps. I found no test for \"bars on sessions before and after an empty session in one chunk\". Add one, and decide explicitly whether only the newest session should be judged for the unpublished case."
+ },
+ {
+  "ref": "sonnet-high/3/4",
+  "severity": "CONCERN",
+  "title": "Cagg freshness compares against `last_successful_finish`, which can report a bar as materialized when it isn't",
+  "location": "src/manta_trading/data/gaps/repair_921.py:196-221",
+  "description": "A refresh that starts before a bar is written and finishes after it makes `last_refresh >= newest_bar_written`. That reads as fresh, but the refresh never saw the bar, so the original \"1 bar\" misread can recur. The comparison should use the job's last start time (`last_run_started_at`), not its finish time.\n\nWhether the policy's `end_offset` also hides recent buckets is not visible in this diff, and I did not check it. The tests only assert SQL substrings against mocks. Nothing exercises the probe against a real TimescaleDB, and I did not confirm that `created_at` exists on `minute_ohlcv`."
+ },
+ {
+  "ref": "sonnet-high/3/5",
+  "severity": "CONCERN",
+  "title": "Import blocks are out of isort order, so the required ruff `I` rule will fail",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:50-68",
+  "description": "`pyproject.toml` selects `I`, but these import blocks are unsorted:\n- `minute.py`: `...daemon.minute_sessions` is placed after `data.gaps`. `gaps.repair_921` sits before `gaps.minute_coverage`, and the first-party blocks are split by a blank line.\n- `scripts/cutover_921_minute_sessions.py:46-49`: `NOTES_DIR, fire_unit_until, start_log, CutoverError, fire_unit`.\n- `scripts/repair_921_minute_sessions.py:60`: `cagg_freshness_for_session` before `CheckReport`.\n- `test/unit/test_repair_921.py:30-31`: `CaggFreshness, cagg_freshness_for_session, SymbolFindings`.\n\nRun `ruff check --fix` and `ruff format`."
+ },
+ {
+  "ref": "sonnet-high/3/6",
+  "severity": "CONCERN",
+  "title": "Production daemon now imports the one-off repair module",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:60-63",
+  "description": "The daemon depends on `data/gaps/repair_921.py` for `build_truncated_day_index` and `RepairScanTimeout`. A slice-numbered repair module becomes a permanent runtime dependency of the acquisition path. The truncated-day index is now shared logic. Move it into a neutral module such as `minute_coverage` or a `truncated_days` module, and have both the daemon and the repair script import from there.\n\nThe daemon also runs this scan on every cycle with a 600s timeout, and a timeout only logs and continues. That is acceptable, but the per-cycle cost is not documented anywhere."
+ },
+ {
+  "ref": "sonnet-high/3/7",
+  "severity": "CONCERN",
+  "title": "Duplicated daemon test setup, and a fragile mock of `_logger`",
+  "location": "test/unit/data/acquisition/daemon/test_minute.py:2321-2490",
+  "description": "`test_last_bar_before_the_chunk_end_is_still_success` copy-pastes about 60 lines of pool, conn, lock and patch scaffolding from `_run`. Reuse `_run` with parameters for the bounds, the gap end and the bars. Two tests also assert on the log string `\"not published\"` and on `args[4]`, which pins the message wording and argument positions rather than behaviour."
+ }
+]

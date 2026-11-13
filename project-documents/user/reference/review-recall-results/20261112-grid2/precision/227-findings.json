@@ -1,0 +1,331 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Unexpected exceptions skip the cutover report",
+  "location": "scripts/cutover_227_tick_backup.py:269-284",
+  "description": "`run_steps` catches only `StepFailed` and `CalledProcessError`. Any other exception escapes it, and `main()` writes the report only after `run_steps` returns (lines 309-312). The run then ends in a traceback with no report, the failing step stays `not run`, and the docstring's promise (lines 4-6) that \"the report is still written\" is broken.\n\nConcrete triggers in the code: `step_production` reads `backup-health.log` with `.splitlines()[-1]` (line 224), which raises `IndexError` on an empty file and `FileNotFoundError` if it is missing. `tick_locks_held` calls `int(psql(...))` (`scripts/cutover_227_host.py:96`), which raises `ValueError` on empty output. `conf_sums` uses an unguarded `next()` (`scripts/cutover_227_host.py:82`), which raises `StopIteration` if 17/main is absent from `pg_lsclusters`. `step_production` runs after step 4 has already installed the cron file, so an exception there leaves the operator with no record of the state.\n\nFix: wrap the `run_steps` call in `try/finally` in `main()` so the report is always written and records the exception. That is the top-level process-boundary handler CLAUDE.md allows (option c). Add a test that drives `main()` with a step raising `IndexError` and asserts the report exists. No test here exercises `main()`."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "A test asserts nothing, and the report-path test never reaches `main()`",
+  "location": "test/unit/test_cutover_227.py:101",
+  "description": "`assert all(\"manta \" not in c.split(\"/\")[0] for c in commands.values())` cannot fail. Every command from `block_commands` starts with the absolute checkout path, so `split(\"/\")[0]` is always `\"\"`. The intended check is that the cron user field was stripped, e.g. `not c.startswith(\"manta \")`.\n\nSeparately, `test_failed_step_stops_later_steps_and_report_still_written` (line 194) never calls `main()` and never checks a file on disk. It calls only `render_report` (line 212), so the \"report is still written\" contract is untested. That is why the crash path above is not caught."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "The REPLICATION branch of the roles SQL runs in no database test",
+  "location": "scripts/provision_tick_roles.sql:116-125",
+  "description": "The `\\if :{?with_replication}` branch (`ALTER ROLE %I REPLICATION`) is the one manta9000's tick cluster will run for the first time, via `ensure_databases` in `scripts/provision_tick_cluster.sh:274`. The shared `provisioned_tick_db` fixture (`test/tick_support/database.py:43-48`) applies the file without `with_replication`, so that branch never executes in any database-backed test. The unit tests in `test/unit/test_provision_tick_lib.py:250-258` check only the literal text of the call and the order of two substrings in the SQL file.\n\nA psql syntax error or `\\gexec` mistake in that branch would first surface during the production cutover's provisioning step. Fix: parametrize the fixture to apply the file with `-v with_replication=1` and assert `pg_roles.rolreplication` for the migrate role, including the re-run case."
+ },
+ {
+  "ref": "haiku-xhigh/2/0",
+  "severity": "CONCERN",
+  "title": "Step 2 aborts on any host where 17/tick is not yet in pg_lsclusters",
+  "location": "scripts/cutover_227_tick_backup.py:87",
+  "description": "`step_check` runs `setup-backup.sh --check` before `step_provision`, and its expected text (lines 236-237) says \"17/tick not yet set up\". But `deploy/setup-backup.sh:125-127` dies, in check mode too, when any table cluster is missing from `pg_lsclusters` (\"nothing changed\"). `test_cluster_absent_from_pg_lsclusters_is_fatal` in `test/unit/test_setup_backup.py` pins that behavior. On a host without `17/tick`, setup-backup prints no SUMMARY, so `step_check` fails at lines 90-92 and provisioning (step 3) is never reached. On manta9000 the cluster already exists (the fixture in `test/unit/test_setup_backup.py` records `17/tick` online there on 2026-10-04), so the production run is not blocked. The script's own contract still cannot be met on a fresh host, such as the second-host acceptance run in runbook 210. Either run provisioning before the check, or have setup-backup report an absent cluster as MISSING items instead of dying."
+ },
+ {
+  "ref": "haiku-xhigh/2/1",
+  "severity": "CONCERN",
+  "title": "Unexpected exceptions skip the report the docstring promises",
+  "location": "scripts/cutover_227_tick_backup.py:269",
+  "description": "`run_steps` catches only `StepFailed` and `CalledProcessError` (line 274). Any other exception escapes `main()` before `report.write_text` (line 312), so no report is written and the step stays \"not run\". The docstring (lines 4-6) says the report is still written on failure. Realistic triggers:\n- `conf_sums()` raises `StopIteration` when `17/main` is absent from `pg_lsclusters` (`scripts/cutover_227_host.py:82`).\n- `step_production` reads `backup-health.log` with no `exists()` guard (line 224), while `run_health` guards the same read (lines 159-160). A missing log raises `FileNotFoundError`, and an empty one raises `IndexError`.\n- `main()` indexes `production_lines(...)[0]` (line 293).\n\nFix: wrap the run in `main()` with a top-level handler that logs with `logger.exception`, writes the report with outcome FAIL, and re-raises. That satisfies the CLAUDE.md rule for a process boundary."
+ },
+ {
+  "ref": "haiku-xhigh/2/2",
+  "severity": "CONCERN",
+  "title": "Vacuous assertion in the tick-command test",
+  "location": "test/unit/test_cutover_227.py:101",
+  "description": "`assert all(\"manta \" not in c.split(\"/\")[0] for c in commands.values())` can never fail. `block_commands()` returns the text after the user field, which starts with the checkout path (`/home/manta/...`). So `split(\"/\")[0]` is `\"\"`, and `\"manta \" not in \"\"` is always true. Replace it with an assertion that can fail, such as every command starting with `f\"{CHECKOUT}/scripts/\"`."
+ },
+ {
+  "ref": "haiku-xhigh/2/3",
+  "severity": "CONCERN",
+  "title": "The REPLICATION grant is tested only by source-text order",
+  "location": "test/unit/test_provision_tick_lib.py:255",
+  "description": "The branch that grants REPLICATION (`scripts/provision_tick_roles.sql:116-125`) is checked only by asserting that `ALTER ROLE %I REPLICATION` appears before `\\else` in the file. No test runs the artifact with `-v with_replication=1`. The integration fixture `apply_artifact` (`test/tick_support/database.py:36-54`) applies the file without that variable, so the grant never executes in any tier. A regression that drops the grant, or grants it when not requested, would pass. Add an integration test that runs the artifact with and without the variable and asserts `rolreplication` for `tick_migrate`."
+ },
+ {
+  "ref": "haiku-xhigh/2/4",
+  "severity": "CONCERN",
+  "title": "SQL built with an f-string, and shell code built by interpolation",
+  "location": "scripts/cutover_227_host.py:92",
+  "description": "`tick_locks_held` builds its query with an f-string (line 94). The project rule says never f-string SQL. No injection path exists today, because the keys are two integer constants. The same pattern appears at line 75, where `env_value` interpolates the library path into a `bash -c` string. The env-file path and key are passed as positional arguments, but the library path is not, so a checkout path containing a double quote would break the command. Fix: bind the lock keys as psql `-v` variables, as `provision_tick_roles.sql` does with `tick_db`, and pass the library path as `$3`."
+ },
+ {
+  "ref": "haiku-xhigh/2/5",
+  "severity": "CONCERN",
+  "title": "The \"no value\" sentinel and other host constants are defined in several places",
+  "location": "deploy/lib/render_cron.sh:39",
+  "description": "`-` is the \"no value\" sentinel of the cluster table. It is defined three times: `TABLE_NONE=-` in `deploy/lib/render_cron.sh:39`, `TABLE_NONE=-` in `deploy/lib/b2_lifecycle.sh:34`, and `_NONE = \"-\"` in `scripts/backup_clusters.py:19`. Other host facts are also spelled in more than one place, against CLAUDE.md's rule to define each value once:\n- `ARM_FILE=RECONCILE-ARMED` (`deploy/setup-backup.sh:80`) and `ARM_FILE = \"RECONCILE-ARMED\"` (`scripts/cutover_227_tick_backup.py:69`).\n- The bucket variable name `MT_BACKUP_S3_BUCKET`, as a literal at `deploy/setup-backup.sh:129`, as `BUCKET_KEY` at `scripts/cutover_227_host.py:27`, and as `BUCKET_KEY` at `deploy/lib/b2_lifecycle.sh:33`.\n- The cluster identity, spelled `17/tick` (`TICK` in `scripts/cutover_227_helpers.py`), `postgresql@17-tick` (`scripts/cutover_227_host.py:23`), and regex literals `17/tick` (`scripts/cutover_227_tick_backup.py:72-73`).\n\nFix: define the sentinel once in `deploy/lib/backup_clusters.sh`, which already documents the convention, and reference it from both shell scripts. Derive `TICK_UNIT` and the regexes from `TICK`."
+ },
+ {
+  "ref": "haiku-xhigh/3/0",
+  "severity": "CONCERN",
+  "title": "Unexpected exceptions skip the report the docstring promises",
+  "location": "scripts/cutover_227_tick_backup.py:269-284",
+  "description": "The module docstring says that on any failure \"the report is still written\". `run_steps` catches only `StepFailed` and `CalledProcessError`, and `main()` has no `try/finally` around it. Other exceptions escape before `report.write_text` at line 312. Realistic cases: `read_text()` on a missing `backup-health.log` (line 224), `CRON_FILE.read_text()` at line 95, `IndexError` on an empty `base.log` (line 181), and `conf_sums()` at `scripts/cutover_227_host.py:82`, where `next(...)` has no default and raises `StopIteration` if `17/main` is missing from `pg_lsclusters`. The run then fails with a traceback and no audit file. Either wrap the step runner so every exception records a FAIL step and still writes the report, or fix the docstring."
+ },
+ {
+  "ref": "haiku-xhigh/3/1",
+  "severity": "CONCERN",
+  "title": "A same-day re-run overwrites the failure report",
+  "location": "scripts/cutover_227_tick_backup.py:310",
+  "description": "The report is named `<date>-227-cutover.md`, so a second run on the same day replaces the first run's report. The documented recovery is \"fix the cause, re-run\", which is exactly when the failed run's evidence gets lost. The sibling scripts use timestamps: `scripts/provision_tick_cluster.sh:112` and `cutover_921`'s `%Y%m%dT%H%M%SZ`. Use a timestamped name."
+ },
+ {
+  "ref": "haiku-xhigh/3/2",
+  "severity": "CONCERN",
+  "title": "The report is written into a git-tracked directory without the credential scan the sibling script applies",
+  "location": "scripts/cutover_227_tick_backup.py:310-312",
+  "description": "`provision_tick_cluster.sh:351-353` runs `log_scrub` before it copies its log into `project-documents/user/notes/`. The cutover records provision's full output (`step_provision`, via `record()` at `scripts/cutover_227_host.py:109-114`) and the setup-backup and health output, then writes them to the same directory with no scrub. The likelihood is low, since the provision script avoids printing secrets, but the rule the sibling enforces is not applied here. Reuse `log_scrub` on the report before writing it."
+ },
+ {
+  "ref": "haiku-xhigh/3/3",
+  "severity": "CONCERN",
+  "title": "`b2_lifecycle.sh` folds rclone's stderr into the JSON it parses",
+  "location": "deploy/lib/b2_lifecycle.sh:65-70",
+  "description": "`RULES=$(... rclone backend lifecycle ... 2>&1)` merges every stderr line into the rule list. Any log line rclone writes on a successful run then makes `jq` fail. That is reported as `MISSING <cluster> lifecycle-read`, which setup-backup tallies as not-OK, so the check fails with the rules readable. This is probably a real risk: setup-backup runs as root under sudo, where rclone may have no config file and would print a \"config file not found\" notice. I could not run rclone here to confirm the exact output. Capture stdout alone, and send stderr to a separate variable that is only shown on failure."
+ },
+ {
+  "ref": "haiku-xhigh/3/4",
+  "severity": "CONCERN",
+  "title": "The same values are scattered across cutover, setup-backup, and the cron scripts",
+  "location": "scripts/cutover_227_tick_backup.py:68-73",
+  "description": "- `CHECK_ALLOWED` and `APPLY_ALLOWED` hard-code `17/tick`, `cron\\.d`, and the item labels `arm-file` and `PENDING RESTART`, all of which match setup-backup's output text. Renaming an item in setup-backup breaks the cutover silently.\n- `ARM_FILE` is defined here (line 69) and again in `deploy/setup-backup.sh:80`.\n- `PUSH_MIN_AGE` exists in three places: `PUSH_MIN_AGE_S = 120` (line 68), `PUSH_MIN_AGE_SEC=120` in `scripts/cron_weekly_backup.sh:54`, and `MIN_AGE=2m` in `scripts/sync_wal_offsite.sh:34`.\n- `CRON_FILE`, `TICK_UNIT`, `HOST_BACKUP_ROOT`, and `RCLONE_REMOTE` are each defined in Python and again in setup-backup.sh.\n- `strip_new_args` (`scripts/cutover_227_helpers.py:87`) hard-codes `127.0.0.1`, which is also in `deploy/backup-clusters.conf:20`.\n\nEach value should have one definition that the others read."
+ },
+ {
+  "ref": "haiku-xhigh/3/5",
+  "severity": "CONCERN",
+  "title": "A vacuous assertion in the cutover tests",
+  "location": "test/unit/test_cutover_227.py:101",
+  "description": "`all(\"manta \" not in c.split(\"/\")[0] for c in commands.values())` always passes. `commands` values are the command strings after the user field, and they start with `/home/...`, so `split(\"/\")[0]` is always `\"\"`. The assertion is meant to catch a user name leaking into the command, and it cannot fail. Delete it, or check `c` directly."
+ },
+ {
+  "ref": "haiku-xhigh/3/6",
+  "severity": "CONCERN",
+  "title": "The REPLICATION grant branch is never executed by any test",
+  "location": "scripts/provision_tick_roles.sql:116-125",
+  "description": "The new `\\if :{?with_replication}` block issues `ALTER ROLE ... REPLICATION`, a powerful role attribute. `test/tick_support/database.py` runs the roles file without `with_replication` (no match for \"replication\" in that directory), so the grant path never runs. The only coverage is `test/unit/test_provision_tick_lib.py:255-258`, which checks that the `ALTER` text appears before `\\else`. That passes even if the grant is moved outside the guard. Add an integration case that runs the file with `-v with_replication=1` and asserts `rolreplication` for `tick_migrate` and its absence when the variable is not passed."
+ },
+ {
+  "ref": "haiku-xhigh/3/7",
+  "severity": "CONCERN",
+  "title": "`test_setup_backup.py` has grown to 1072 lines",
+  "location": "test/unit/test_setup_backup.py",
+  "description": "This diff adds roughly 250 lines to a file that already exceeded the ~300-line guideline. Split it by subject: argument parsing, the cluster table, render, and lifecycle."
+ },
+ {
+  "ref": "sol/1/0",
+  "severity": "FAIL",
+  "title": "Cron comparison prevents recovery by rerunning the cutover",
+  "location": "scripts/cutover_227_helpers.py:95-99",
+  "description": "`production_changes()` strips new arguments only from `new`. After cron installation, a rerun captures the already-updated file as `old`, so identical cron files compare as different and step 4 fails. This blocks the documented recovery path for failures in later steps. Normalize both sides and add a post-installation rerun regression test."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "CONCERN",
+  "title": "Failed health commands can pass using stale results",
+  "location": "scripts/cutover_227_tick_backup.py:157-165",
+  "description": "`run_health()` ignores the command result and reads the existing log\u2019s last line without checking that this invocation appended it. If execution or log redirection fails, an earlier clean summary can incorrectly pass the health gates. Require fresh log evidence and distinguish expected unhealthy results from execution failures."
+ },
+ {
+  "ref": "sol/1/2",
+  "severity": "CONCERN",
+  "title": "Host I/O failures bypass the promised failure report",
+  "location": "scripts/cutover_227_tick_backup.py:269-281",
+  "description": "Only `StepFailed` and `CalledProcessError` are handled. File reads, `arm.touch()`, or a missing executable can raise `OSError`, escaping before `main()` writes the report. Handle these failures at the process boundary and ensure completed-step evidence is written on failure. Add coverage for a host I/O exception."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "FAIL",
+  "title": "Initial setup never persists the disabled archive command",
+  "location": "deploy/setup-backup.sh:225-228",
+  "description": "The new tick setup invokes `pg_settings.sh` while `archive_mode` is off. That library treats `archive_command=(disabled)` as restart-only and never adds it to the settings to persist. With no existing command, it also reports source-file DRIFT, which `step_apply` rejects before reaching the restart. Persist the command despite its disabled effective value, and test initial setup with archiving off."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "FAIL",
+  "title": "Production comparison rejects every post-install rerun",
+  "location": "scripts/cutover_227_helpers.py:95-99",
+  "description": "Only the new cron lines have their added arguments stripped. After the first installation, `step_check` captures already-updated lines as `old`, so comparing an unchanged installed file against itself reports differences and stops step 4. This was reproduced with the helper. Normalize both sides and add an already-installed rerun test."
+ },
+ {
+  "ref": "sol/2/2",
+  "severity": "CONCERN",
+  "title": "Weekly recovery cannot resume after an upload failure",
+  "location": "scripts/cutover_227_tick_backup.py:176-179",
+  "description": "If the base backup succeeds locally but its offsite upload fails, today's directory exists without an arm file. A retry invokes the full weekly command again, but `backup_prod.sh` rejects the existing destination before retrying its upload. Resume upload and reconciliation from the verified local backup rather than requiring its deletion or waiting another day."
+ },
+ {
+  "ref": "sol/2/3",
+  "severity": "CONCERN",
+  "title": "Filesystem failures bypass the promised failure report",
+  "location": "scripts/cutover_227_tick_backup.py:269-281",
+  "description": "The handler catches only `StepFailed` and `CalledProcessError`. Operations inside steps can raise `OSError`\u2014for example, reading a missing production health log or creating the arm file. Those failures escape `run_steps`, so `main` never writes the report despite potentially completed host changes. Handle these failures at the orchestration boundary and guarantee report generation."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "FAIL",
+  "title": "Successfully repaired settings still abort the cutover",
+  "location": "scripts/cutover_227_tick_backup.py:111-113",
+  "description": "`pg_settings.sh` prints initial `DRIFT` lines before applying changes and reporting their final state. `setup_backup` preserves that output, and `setup_not_ok` rejects every historical drift\u2014even settings subsequently reported `OK`. Consequently, initial tick configuration changes abort step 4 before the restart. Evaluate a fresh check or final per-item status instead, and test an actual drift \u2192 applied \u2192 OK sequence."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "FAIL",
+  "title": "Re-running after cron installation always fails",
+  "location": "scripts/cutover_227_helpers.py:95-96",
+  "description": "Only the new cron lines have their added arguments stripped. On a rerun, `ctx.old_cron` already contains those arguments, so comparing an unchanged post-cutover file against itself reports differences and aborts step 4. This prevents the documented recovery procedure after any later failure. Normalize both sides and add a post-cutover rerun regression test."
+ },
+ {
+  "ref": "sol/3/2",
+  "severity": "CONCERN",
+  "title": "Failed health commands can pass using an old log",
+  "location": "scripts/cutover_227_tick_backup.py:157-165",
+  "description": "`run_health` discards the command result and accepts the existing log\u2019s last summary. If the command fails before appending\u2014for example, because its script is unavailable or its log cannot be written\u2014a previous clean summary can satisfy both health gates. Require evidence that this invocation produced a new summary, while retaining the intentional allowance for stale-only flags during the first check."
+ },
+ {
+  "ref": "sol/3/3",
+  "severity": "CONCERN",
+  "title": "Ordinary filesystem failures bypass the promised failure report",
+  "location": "scripts/cutover_227_tick_backup.py:269-281",
+  "description": "The step runner catches only `StepFailed` and `CalledProcessError`. File reads, `arm.touch()`, and process startup can raise `OSError`; empty logs can raise `IndexError`. These escape before `main` writes the report, potentially after host changes have occurred. Record operational exceptions at the process boundary and ensure report generation runs on failure."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "Health step can pass on a stale log line",
+  "location": "scripts/cutover_227_tick_backup.py:run_health",
+  "description": "`run_health` runs the cron health command through `shell()` and ignores its return code. It then takes the last line of `backup-health.log` and checks the `FLAGS` values. If the job fails to start or crashes before logging, the last line is still the previous run's output. Steps 7 and 10 then pass or fail on old data, and step 10 is meant to prove the state after the weekly and metadata jobs. The step should check the exit status. It should also confirm the line is newer than the run, for example by comparing the log's line count or mtime before and after the call."
+ },
+ {
+  "ref": "sonnet/1/1",
+  "severity": "CONCERN",
+  "title": "Unguarded `[-1]` indexing on log files",
+  "location": "scripts/cutover_227_tick_backup.py:step_production",
+  "description": "`step_production` reads `(ctx.main.backup_root / \"backup-health.log\").read_text().splitlines()[-1]` with no existence or emptiness check. A missing or empty production log raises `FileNotFoundError` or `IndexError`. Neither is caught by `run_steps`, which handles only `StepFailed` and `CalledProcessError`. The run then crashes before the report is written. That breaks the stated guarantee that the report is always written. `run_health` and `step_weekly` guard this case, so this step should do the same, or `run_steps` should also catch `OSError` and `IndexError`."
+ },
+ {
+  "ref": "sonnet/1/2",
+  "severity": "CONCERN",
+  "title": "`assert` used for runtime narrowing in production code",
+  "location": "scripts/cutover_227_helpers.py:block_commands",
+  "description": "`block_commands` asserts `match is not None`, and `run_health` asserts `flags is not None`. Both are control flow, and `python -O` strips them. The `run_health` assert follows a `require()` call that the type checker cannot see through. Replace them with an explicit `if ...: raise StepFailed(...)`, or make `require` a `NoReturn`-style guard."
+ },
+ {
+  "ref": "sonnet/1/3",
+  "severity": "CONCERN",
+  "title": "Host block identified by the literal user `root`",
+  "location": "scripts/cutover_227_helpers.py:production_lines",
+  "description": "`production_lines` finds the host block with `j.split()[5] == \"root\"`. `main()` derives the cron user from the first production job line. Both depend on the user column of rendered text instead of the structure the template defines (the `# host:` marker and the `# cluster` markers). The project rules say not to use user-visible labels as logical structure. This check breaks if the host job's user changes. Parse by block marker instead."
+ },
+ {
+  "ref": "sonnet/1/4",
+  "severity": "CONCERN",
+  "title": "Provisioning-script tests assert on source text",
+  "location": "test/unit/test_provision_tick_lib.py:_script_function",
+  "description": "The new tests regex-extract function bodies and assignments from `provision_tick_cluster.sh`. They then assert on literal strings such as `'-v with_replication=1 -f - < \"$ROLES_SQL\"'`, or run a reconstructed program. This checks the implementation text, not behaviour, and breaks on harmless refactors. `test_roles_sql_grants_replication_only_when_asked` only compares string positions in the SQL file. The `hba_content` test runs the real function, so it is acceptable. The others should be exercised against the real SQL, or a stubbed `psql`."
+ },
+ {
+  "ref": "sonnet/2/0",
+  "severity": "CONCERN",
+  "title": "Unexpected exceptions skip the cutover report",
+  "location": "scripts/cutover_227_tick_backup.py:243-256",
+  "description": "The module docstring says the first failure stops the run and \"the report is still written\". `run_steps` only catches `StepFailed` and `CalledProcessError`. Several steps can raise other exceptions on ordinary host conditions:\n- `step_production` and `run_health` call `read_text().splitlines()[-1]`. This raises `IndexError` on an empty log file. `step_production` also raises `FileNotFoundError` if the log is absent, because it has no `exists()` guard.\n- `step_weekly` has the same `[-1]` risk on `base.log`.\n- `tick_commands()` and `step_check` read `CRON_FILE` unguarded.\n- `shell()` and `psql()` have no timeout, so a hung job blocks the run indefinitely.\n\nAn uncaught exception skips `report.write_text(...)`. That loses the expected-vs-seen record, which is the main audit trail for a production cutover. Wrap the step call so unexpected exceptions are recorded as FAIL and the report is still written, either with a documented top-level handler or a `try/finally` around the report write. Also guard the empty-file cases explicitly."
+ },
+ {
+  "ref": "sonnet/2/1",
+  "severity": "CONCERN",
+  "title": "Production code uses `assert` for runtime narrowing",
+  "location": "scripts/cutover_227_helpers.py:block_commands; scripts/cutover_227_tick_backup.py:run_health",
+  "description": "`assert match is not None` and `assert flags is not None` serve as runtime checks. They disappear under `python -O`. In `run_health`, `require(...)` already raises when the condition fails, so the assert only placates the type checker. Return or raise explicitly instead (for example, build the tuple inside the guard)."
+ },
+ {
+  "ref": "sonnet/2/2",
+  "severity": "CONCERN",
+  "title": "Host facts and argument literals are duplicated instead of sourced from the cluster table",
+  "location": "scripts/cutover_227_helpers.py:strip_new_args",
+  "description": "`strip_new_args` hardcodes `--replication-host 127.0.0.1`, while the value belongs to the `deploy/backup-clusters.conf` row. `MAIN`/`TICK`, `HOST_BACKUP_ROOT = /data/backup`, `TICK_UNIT` and `RCLONE_REMOTE` are likewise re-declared in the cutover. `deploy/setup-backup.sh` also defines `RCLONE_REMOTE=b2` itself. This breaks the project's \"define a value once\" rule. If the table changes, the TD3 production-line guard silently diverges, or fails for the wrong reason. Derive the replication host from the production row, and reference the shared constants where possible."
+ },
+ {
+  "ref": "sonnet/3/0",
+  "severity": "CONCERN",
+  "title": "Provisioning drops the proof database and URLs, but the 226 proof harness still depends on them",
+  "location": "scripts/provision_tick_cluster.sh:79-93",
+  "description": "`provision_tick_cluster.sh` no longer creates `trading_tick_proof`. It no longer writes `MT_PROOF_226_DB_URL` or `MT_PROOF_226_MAINTENANCE_URL` to `.env`. It also stops admitting `trading_tick_proof` in pg_hba, and `test_provision_tick_lib.py:230` asserts the name is absent from the script. The proof harness still expects all of these:\n- `scripts/proof_226/common.py:21-22` reads the two `MT_PROOF_226_*` variables.\n- `scripts/proof_226_tick.py` and `scripts/proof_226/guard.py` target the database.\n- `src/manta_trading/data/tick/constants.py:288` still defines `TICK_PROOF_DB_NAME`.\n\nNothing in the diff retires the harness or says it is superseded by the 228 restore drill. A fresh provision can no longer run it, which leaves dead or unrunnable code. Either remove or mark the harness as retired, or state in the slice docs that it is intentionally orphaned."
+ },
+ {
+  "ref": "sonnet/3/1",
+  "severity": "CONCERN",
+  "title": "An unguarded failure in the production-verification step skips the report",
+  "location": "scripts/cutover_227_tick_backup.py:211-220",
+  "description": "The module docstring promises that the report is written even when a step fails. `run_steps` only catches `StepFailed` and `CalledProcessError`. In `step_production`, `(ctx.main.backup_root / \"backup-health.log\").read_text().splitlines()[-1]` raises `FileNotFoundError` if the log is missing, or `IndexError` if it is empty. Either one escapes `run_steps` and `main`, so no report is written. This is the last step, after all the tick changes have been applied, so the record matters most here. `run_health` already guards the same pattern with `log.exists()`. Reuse that guard, or turn the failure into `require(...)`. Similarly, `main()` at line ~296 does `production_lines(...)[0]` and raises `IndexError` on a cron file with no job lines."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "Cutover can crash without writing its report, and health verdicts can rest on a stale log line",
+  "location": "scripts/cutover_227_tick_backup.py#run_health",
+  "description": "The module docstring says the first failure stops the run and the report is still written. That only holds for `StepFailed` and `CalledProcessError`, the two types `run_steps` catches. Several steps can raise something else:\n- **`run_health`:** `log.read_text().splitlines()[-1]` raises `IndexError` on an empty log.\n- **`step_production`:** the same `[-1]` read has no `exists()` guard at all, so a missing log raises `FileNotFoundError`.\n- **`conf_sums`:** `next(...)` raises `StopIteration` if `17/main` is absent from `pg_lsclusters`.\n- **`main()`:** `production_lines(...)[0]` raises a bare `IndexError` on an empty cron file.\n\nAny of these aborts `main()` before `report.write_text(...)`. That loses the evidence on exactly the failure path the report exists for. A `try/finally` around `run_steps` that writes the report, or converting these reads into `StepFailed`, would fix it.\n\nSeparately, `run_health` ignores the exit code of `shell(...)` and takes the last line of an append-only log with no freshness check. The same log is also written by the installed 30-minute cron job. If the health command fails before it appends, for example when the append to the log fails under `set -e`, steps 7 and 10 read the previous run's `archive=0 stale=0` line and pass. I'd check `result.returncode` and require that the line's timestamp is newer than the start of the call."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "A table value and several host facts are hard-coded again in the cutover scripts",
+  "location": "scripts/cutover_227_helpers.py:87",
+  "description": "`strip_new_args` hard-codes `\" --replication-host 127.0.0.1\"`. That value belongs to `deploy/backup-clusters.conf` (the `17/main` row's `replication_host`), which `BackupCluster.replication_host` already exposes. If the row changes, the table, the rendered cron file and this stripping helper drift apart. When that happens the TD3 \"production lines gain only the new arguments\" guard reports a false change and blocks the cutover, or masks a real one. It should take the value from `ctx.main`, as it already does for `url_key`.\n\nOther constants are duplicated between the shell and Python tiers in the same way, against the \"define once\" rule in CLAUDE.md:\n- **`RCLONE_REMOTE = \"b2\"`:** also defined in `setup-backup.sh`.\n- **`CRON_FILE`:** also `CRON_TARGET` in `setup-backup.sh`.\n- **`ARM_FILE = \"RECONCILE-ARMED\"`:** also defined in `setup-backup.sh`.\n- **`HOST_BACKUP_ROOT = Path(\"/data/backup\")`:** the same literal as the `17/main` row's `backup_root`.\n- **`TICK_UNIT = \"postgresql@17-tick\"`:** derivable from `TICK`.\n\nEach one is a single-edit hazard."
+ },
+ {
+  "ref": "sonnet-high/2/0",
+  "severity": "CONCERN",
+  "title": "Unexpected exceptions skip the cutover report the docstring promises",
+  "location": "scripts/cutover_227_tick_backup.py#run_steps",
+  "description": "The module docstring says the first failure stops the run and \"the report is still written\". `run_steps` only catches `StepFailed` and `CalledProcessError`. Several steps can raise other exceptions, and those escape `main()` before `report.write_text(...)` runs:\n- `run_health` (lines 157-165) guards with `log.exists()`, but an existing empty log makes `splitlines()[-1]` raise `IndexError`.\n- `step_production` (line 224) reads the production health log with no existence or emptiness check. That is `FileNotFoundError` or `IndexError`.\n- `conf_sums` in `cutover_227_host.py` uses `next(...)` with no default, so it raises `StopIteration`.\n- `tick_locks_held` calls `int(psql(...))`, which raises `ValueError` on unexpected output.\n\nA cutover that dies mid-way on a production host then leaves no `<date>-227-cutover.md`, which is the one record of what was seen. Convert these into `require(...)` failures, or catch `(OSError, IndexError, ValueError, StopIteration)` in `run_steps` with the same record-and-stop treatment.\n\n`run_health` (line 164) and `block_commands` also use `assert x is not None` for type narrowing in production code. `python -O` strips those asserts. Making `require` return `NoReturn` on failure, or raising explicitly, would remove the need."
+ },
+ {
+  "ref": "sonnet-high/2/1",
+  "severity": "CONCERN",
+  "title": "Gaps in the cutover tests, and one weakened assertion",
+  "location": "test/unit/test_cutover_227.py",
+  "description": "The tests cover the pure helpers, `step_weekly`, `step_restart`, `step_switch` and `step_production` well. The steps that gate production safety have no test:\n- `step_apply`, which runs the \"production cron lines gain only the new args\" gate through `production_changes`.\n- `step_check`, `step_guards` and `step_offsite`, including the `--min-age` arithmetic for `wal/`.\n- `run_health` with a missing or empty log. This is the failure in the previous finding.\n- `main()`'s cron-user and bucket guards.\n\nTwo smaller test-quality points:\n- `test/unit/test_setup_backup.py` has `assert \"@\" not in text.replace(\"@192\", \"\")`. I found no `@192` anywhere under `deploy/`, so the replace appears to be a leftover. It weakens the unfilled-placeholder assertion it sits in. Restore `\"@\" not in text`.\n- `test/unit/test_provision_tick_lib.py` asserts source text. Examples are `'-v with_replication=1 -f - < \"$ROLES_SQL\"' in body` and the `CREATED_DATABASES=(trading_tick)` literal. These check how the script is written, not what it does. They break on harmless reformatting and don't catch a behavioral regression. The `hba_content` render test is the better pattern."
+ },
+ {
+  "ref": "sonnet-high/2/2",
+  "severity": "CONCERN",
+  "title": "Host constants and a log-format contract are repeated across languages",
+  "location": "scripts/cutover_227_host.py:25-32",
+  "description": "CLAUDE.md says a value used in comparisons or lookups should be defined once. Several are now spelled in more than one place:\n- `HOST_BACKUP_ROOT = Path(\"/data/backup\")` in `cutover_227_host.py`. It also appears as 17/main's `backup_root` in `deploy/backup-clusters.conf`, and as the `--backup-root` the cutover hands to `setup-backup.sh`.\n- `RCLONE_REMOTE = \"b2\"` in the cutover and `RCLONE_REMOTE=b2` in `setup-backup.sh`.\n- `ARM_FILE = \"RECONCILE-ARMED\"` in the cutover, `setup-backup.sh`, and the `--armed` path in `manta-trading-backup.cluster`.\n- `MT_BACKUP_S3_BUCKET` in `b2_lifecycle.sh` (`BUCKET_KEY`), `setup-backup.sh` and `cutover_227_host.py`.\n- `step_weekly` (line 176) skips on `base/<datetime.now():%Y%m%d>`. That silently depends on `cron_weekly_backup.sh:123` using `date +%Y%m%d`. If the format drifts, the skip never fires. A same-day or later re-run then executes the weekly job again, and once the arm file exists that includes the armed reconcile.\n\nThe two config parsers (`backup_clusters.sh` and `backup_clusters.py`) also duplicate rule logic. The parity test mitigates this and the cross-language split is understandable. Still, add a comment at each duplicated constant naming its twin, or have the cutover read the shared values from one place."
+ },
+ {
+  "ref": "sonnet-high/3/0",
+  "severity": "CONCERN",
+  "title": "Cutover loses its report on any unexpected exception",
+  "location": "scripts/cutover_227_tick_backup.py#run_steps",
+  "description": "The module docstring promises that the first failure stops the run and the report is still written. `run_steps` only catches `StepFailed` and `CalledProcessError`. Several steps can raise something else:\n- `step_production` runs `(ctx.main.backup_root / \"backup-health.log\").read_text().splitlines()[-1]`. It raises `FileNotFoundError` if the log is absent, or `IndexError` if it is empty. `run_health` guards the same read for the tick log, but this one is unguarded.\n- `conf_sums()` in `cutover_227_host.py` uses `next(... for r in rows if ...)` with no default. That raises a bare `StopIteration` if `17/main` is missing from `pg_lsclusters`.\n- A missing `rclone`, `sudo` or `bash` raises `FileNotFoundError` from `subprocess.run`.\n\nIn each case the traceback escapes `main()` and `report.write_text(...)` never runs. That is the failure mode where an operator needs the record most, partway through a host-mutating cutover. Convert these cases to `StepFailed` with a message, using `require` as the other steps do. Otherwise have `run_steps` record the exception on the step, as a top-level handler at a process boundary, and continue to write the report."
+ },
+ {
+  "ref": "sonnet-high/3/1",
+  "severity": "CONCERN",
+  "title": "Cluster names and host facts are re-spelled as literals instead of defined once",
+  "location": "scripts/cutover_227_tick_backup.py:CHECK_ALLOWED",
+  "description": "`TICK = \"17/tick\"` and `MAIN` are defined in `cutover_227_helpers.py`. The cutover still repeats the same values elsewhere:\n- `CHECK_ALLOWED` and `APPLY_ALLOWED` hard-code `17/tick` inside regexes.\n- `TICK_UNIT = \"postgresql@17-tick\"` re-encodes the cluster name.\n- `RCLONE_REMOTE = \"b2\"` in `cutover_227_host.py` duplicates `RCLONE_REMOTE=b2` in `setup-backup.sh`.\n- `HOST_BACKUP_ROOT = Path(\"/data/backup\")` duplicates the operator-supplied `--backup-root` and the `17/main` row's `backup_root`.\n\nThis breaks the CLAUDE.md rule \"changing a value should require editing exactly one place\". It also undermines the stated purpose of `backup_clusters.py`, which is that no tick path is a literal in a script. Build the regexes with `re.escape(TICK)`, derive the unit name from `TICK`, and take the host root from the table or a single shared constant."
+ },
+ {
+  "ref": "sonnet-high/3/2",
+  "severity": "CONCERN",
+  "title": "Tick provisioning no longer creates the proof database, but the 226 proof harness still depends on it",
+  "location": "scripts/provision_tick_cluster.sh:79-93",
+  "description": "The script drops `trading_tick_proof` and the `MT_PROOF_226_*` URL keys. These are still referenced elsewhere:\n- `scripts/proof_226/common.py:21-22` reads `MT_PROOF_226_DB_URL` and `MT_PROOF_226_MAINTENANCE_URL`.\n- `scripts/proof_226/cli.py` and `scripts/proof_226/guard.py` reference `trading_tick_proof`.\n- `src/manta_trading/data/tick/constants.py:288` still defines `TICK_PROOF_DB_NAME`.\n\nOn a freshly provisioned host the harness has neither a database nor `.env` keys. The harness unit tests use fakes, so nothing flags this. If retiring the proof database is intended, remove or mark the harness and constant as retired. If not, the provisioning change is a regression. The scope of this change doesn't say which."
+ },
+ {
+  "ref": "sonnet-high/3/3",
+  "severity": "CONCERN",
+  "title": "Provisioning tests assert source text rather than behavior",
+  "location": "test/unit/test_provision_tick_lib.py:177-258",
+  "description": "The new tests slice the shell script with regexes and compare strings. For example, `test_parent_directories_755_data_directory_700` compares assignment lines, and `test_roles_are_applied_with_replication` checks that a substring is present in the function body. `test_roles_sql_grants_replication_only_when_asked` only checks that `ALTER ROLE` appears before `\\else`. These tests pass if the text is present even when the behavior is wrong, and they fail on harmless reformatting. The `hba_content` test is the better pattern because it executes the function. The SQL gating (`\\if :{?with_replication}`) is the part that needs real execution. Run it against a throwaway database the fixture creates, which the project's database-safety rules allow."
+ }
+]

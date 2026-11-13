@@ -1,0 +1,401 @@
+{
+ "case": "u103",
+ "issues": [
+  {
+   "id": "u103-I1",
+   "title": "The visible-range effect gates on a ref, so a series added after the range settles never applies the range.",
+   "members": [
+    "haiku-xhigh/1/0",
+    "haiku-xhigh/2/0",
+    "haiku-xhigh/3/0",
+    "sol/1/0",
+    "sol/2/0",
+    "sol/3/0",
+    "sonnet/1/2",
+    "sonnet/2/1",
+    "sonnet/3/1",
+    "sonnet-high/1/5",
+    "sonnet-high/2/0",
+    "sonnet-high/3/1"
+   ],
+   "grade": "REAL",
+   "confidence": "high",
+   "why": "The effect reads seriesCountRef.current but depends only on [mount.ready, chart, range]; the facade's addSeries only bumps the ref, so no re-run happens and the Context range is not applied until it changes. The translation test calls setRange after addSeries and hides it. This is known bug B1, fixed later in f0ebfb4 by mirroring the count into state; latent at head because the slice adds no series.",
+   "evidence": [
+    "src/chart/use-chart-provider.ts:340-345",
+    "src/chart/use-chart-provider.ts:144-154",
+    "src/chart/chart-facade.ts:49-56"
+   ],
+   "known": "B1",
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I2",
+   "title": "The series count is not a data-availability gate: an empty-data series or an updateSeries that clears data lets setVisibleRange run on an empty time scale.",
+   "members": [
+    "sol/1/1",
+    "sol/2/1",
+    "sol/3/1"
+   ],
+   "grade": "REAL",
+   "confidence": "medium",
+   "why": "addSeries increments the count regardless of config.data length and updateSeries never touches it, so the guard passes with an empty time scale. lightweight-charts' logicalRangeForTimeRange calls ensureNotNull on timeToIndex, which throws 'Value is null', surfacing as a chart error through runGuarded. Latent in this slice (no series), like B1; later code (use-price-volume-series.ts header) works around exactly this by never holding an empty series.",
+   "evidence": [
+    "src/chart/chart-facade.ts:49-64",
+    "src/chart/use-chart-provider.ts:341",
+    "node_modules/lightweight-charts/dist/lightweight-charts.development.mjs:6088-6092"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I3",
+   "title": "Removing a pane does not decrement the series count, so the count can drift above the real number of series.",
+   "members": [
+    "haiku-xhigh/2/1"
+   ],
+   "grade": "UNSURE",
+   "confidence": "low",
+   "why": "The facade's removePane does not call series.onRemoved and the provider's removePane (pre-existing) only deletes the pane handle. Whether lightweight-charts drops the pane's series is not evident from model._internal_removePane, which only splices the pane; even if it does, the resulting setVisibleRange throw is surfaced as error state, not silent. Settle by adding a series to a second pane, removing the pane, and calling setVisibleRange in a browser.",
+   "evidence": [
+    "src/chart/chart-facade.ts:78-80",
+    "src/chart/use-chart-provider.ts:149-151"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I4",
+   "title": "Operations called before the chart is live are dropped silently by runGuarded.",
+   "members": [
+    "haiku-xhigh/1/1",
+    "haiku-xhigh/2/3",
+    "haiku-xhigh/3/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "runGuarded returns undefined with no log when providerRef is null; the comment documents dropping calls unless the chart is live, and consumers have `ready` to gate on. No caller in this slice issues pre-ready calls. The findings also note the null-container early return is silent, but none identify the control defect (the effect never re-runs when the container appears late, because the dependency is the stable ref object), so this is not credited as the control.",
+   "evidence": [
+    "src/chart/use-chart-provider.ts:101-113",
+    "src/chart/use-chart-provider.ts:167-171"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I5",
+   "title": "readChartStyle silently falls back to library default colors when a theme token resolves empty.",
+   "members": [
+    "haiku-xhigh/1/2",
+    "haiku-xhigh/2/4",
+    "haiku-xhigh/3/2",
+    "sonnet-high/1/2",
+    "sonnet-high/2/1",
+    "sonnet-high/3/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "True: empty tokens map to undefined and all-empty returns undefined, and styling.ts claims there is no silent theme fallback hiding a missing token. But it is a documented choice for environments without the stylesheet, the tokens exist in theme.css, and the e2e spec asserts the surface color; the risk is a future token rename, i.e. hardening against misconfiguration rather than a defect that arrives at head.",
+   "evidence": [
+    "src/routes/chart-route.tsx:29-55",
+    "src/chart/types/styling.ts:12-14"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I6",
+   "title": "use-chart-provider.ts exceeds the ~300-line file guide and its mount effect far exceeds the ~50-line function guide.",
+   "members": [
+    "haiku-xhigh/1/3",
+    "haiku-xhigh/2/6",
+    "haiku-xhigh/3/6",
+    "sonnet-high/3/0",
+    "sonnet/1/1",
+    "sonnet/2/0",
+    "sonnet/3/0",
+    "sonnet-high/1/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The file is 366 lines and the mount effect spans lines 167-324, much of it comments. True but a size/style guideline with no behavioral effect.",
+   "evidence": [
+    "src/chart/use-chart-provider.ts:167-324"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I7",
+   "title": "react-hooks/refs is disabled for the whole hook file instead of the one construct that false-positives.",
+   "members": [
+    "haiku-xhigh/1/4",
+    "haiku-xhigh/2/10",
+    "haiku-xhigh/3/7",
+    "sonnet-high/2/3"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "eslint.config.js turns the rule off for all of use-chart-provider.ts with a documented justification. Narrowing it is a lint-hygiene point; no current defect results.",
+   "evidence": [
+    "eslint.config.js:55-79"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I8",
+   "title": "The indicator observer effect has an empty body and only adds a Context dependency.",
+   "members": [
+    "haiku-xhigh/1/5",
+    "haiku-xhigh/2/7"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The effect returns early or does nothing; it is documented as a deliberate placeholder for initiative 120. Dead code and a vacuous test, no wrong behavior.",
+   "evidence": [
+    "src/chart/use-chart-provider.ts:347-363"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I9",
+   "title": "The crosshair and visible-range subscriptions are registered with no-op handlers.",
+   "members": [
+    "sonnet/1/0",
+    "sonnet/3/2",
+    "sonnet-high/1/3",
+    "sonnet-high/2/2",
+    "sonnet-high/3/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "Both handlers contain only `if (disposedRef.current) return`. This is documented as proving the disposer lifecycle; it adds dead code and a little per-event work but no incorrect behavior.",
+   "evidence": [
+    "src/chart/use-chart-provider.ts:286-301"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I10",
+   "title": "The teardown-race tests pass whether or not the disposed guards exist.",
+   "members": [
+    "haiku-xhigh/1/6",
+    "haiku-xhigh/2/8",
+    "haiku-xhigh/3/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "Because the handlers do nothing, asserting that a post-teardown callback calls nothing cannot fail. Test-quality issue on code that has no observable behavior to protect.",
+   "evidence": [
+    "src/chart/use-chart-provider.ts:286-301",
+    "src/test/use-chart-provider.errors.test.tsx:255-271"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I11",
+   "title": "Measured-rect and Host test scaffolding is duplicated across four hook test files.",
+   "members": [
+    "haiku-xhigh/1/7",
+    "haiku-xhigh/2/9",
+    "sonnet/2/2",
+    "sonnet/3/3",
+    "sonnet-high/2/5"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The helpers are repeated per test file while other test support was centralized. DRY in tests only.",
+   "evidence": [
+    "src/test/use-chart-provider.errors.test.tsx:30-52",
+    "src/test/use-chart-provider.facade.test.tsx:33-60"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I12",
+   "title": "The provider spy is not typed against IChartProvider, so interface drift would not break the tests.",
+   "members": [
+    "haiku-xhigh/1/8"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The spy's vi.fn signatures use `unknown` parameters and do not declare implements IChartProvider. Test typing hardening.",
+   "evidence": [
+    "src/test/support/chart-provider-spy.ts:22-32"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I13",
+   "title": "The initial resize uses the border box while the ResizeObserver reports the content box.",
+   "members": [
+    "haiku-xhigh/1/9"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "getBoundingClientRect includes the section's 1px border; contentRect does not, so the first size is off by 2px until the observer fires. Transient and the finding itself calls it probably never painted.",
+   "evidence": [
+    "src/chart/use-chart-provider.ts:249-250",
+    "src/chart/use-chart-provider.ts:257-268",
+    "src/routes/chart-route.tsx:88-93"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I14",
+   "title": "`error` is documented as the first operation error but setOperationError keeps the latest.",
+   "members": [
+    "haiku-xhigh/2/2",
+    "haiku-xhigh/3/5",
+    "sonnet/1/3",
+    "sonnet-high/1/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "setOperationError unconditionally replaces error, contradicting the doc at chart-operations.ts:77 and the test name. Which error is displayed is a doc/contract mismatch with negligible user impact; fixing the doc or adding `current.error ?? failure` are both trivial.",
+   "evidence": [
+    "src/chart/use-chart-provider.ts:97-99",
+    "src/chart/chart-operations.ts:77"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I15",
+   "title": "The hook constructs LightweightChartsProvider directly instead of taking an injected factory.",
+   "members": [
+    "haiku-xhigh/2/5"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "True at line 173; tests use module mocking instead. A design/testability preference, not a defect.",
+   "evidence": [
+    "src/chart/use-chart-provider.ts:173"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I16",
+   "title": "Playwright now builds in e2e mode, so its header claim about testing the production artifact is false and nothing checks the harness is excluded from production.",
+   "members": [
+    "haiku-xhigh/2/11",
+    "haiku-xhigh/3/9"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The webServer command uses `--mode e2e` while the header still says specs run the production artifact. Stale comment plus a missing guard test; no runtime defect.",
+   "evidence": [
+    "playwright.config.ts:6-7",
+    "playwright.config.ts:44"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I17",
+   "title": "A failed create() leads teardown to call destroy() on an uncreated provider, logging a second misleading error.",
+   "members": [
+    "haiku-xhigh/3/3",
+    "sonnet-high/1/0",
+    "sonnet-high/3/3"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "If createChart throws, provider.chart stays null and destroy() throws from assertReady; teardown catches it and logs 'provider teardown failed' after the real 'provider create failed'. The real failure is still logged first and committed as error state, so the result is log noise, not lost or wrong behavior.",
+   "evidence": [
+    "src/chart/use-chart-provider.ts:216-222",
+    "src/chart/use-chart-provider.ts:302-309",
+    "src/chart/providers/lightweight-charts-provider.ts:67-86"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I18",
+   "title": "The Context provider nesting is duplicated between App.tsx and the test wrapper.",
+   "members": [
+    "haiku-xhigh/3/8"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "App and ChartContexts both nest SymbolTimeframeProvider around IndicatorProvider. Test-maintenance DRY point.",
+   "evidence": [
+    "src/app/App.tsx:16-24",
+    "src/test/support/render-with-contexts.tsx:20-26"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I19",
+   "title": "The smoke spec comment points at the wrong spec for the live chart and matches on user-visible copy.",
+   "members": [
+    "sonnet/1/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "smoke.spec.ts says the chart is asserted in chart-render.spec.ts, which covers the harness route; chart-live.spec.ts covers '/'. Stale comment.",
+   "evidence": [
+    "e2e/smoke.spec.ts:9-10"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I20",
+   "title": "Hook comments carry stale task-number notes and a misplaced facade comment block.",
+   "members": [
+    "sonnet-high/2/4",
+    "sonnet-high/3/5"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "The header references tasks 8/10/12/14, the teardown comment says subscriptions join in task 12, and the facade comment sits above the series memo. Comment hygiene only.",
+   "evidence": [
+    "src/chart/use-chart-provider.ts:10-20",
+    "src/chart/use-chart-provider.ts:128-143",
+    "src/chart/use-chart-provider.ts:185-186"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I21",
+   "title": "A constant is declared between import statements in the translation test.",
+   "members": [
+    "sonnet/2/3"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "LINE_SERIES sits between imports. Style.",
+   "evidence": [
+    "src/test/use-chart-provider.translation.test.tsx:14-24"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-I22",
+   "title": "The e2e hexToRgba helper assumes a six-digit hex token with no validation.",
+   "members": [
+    "sonnet/2/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "True; a different color format would fail with an opaque NaN mismatch rather than a clear error. Test diagnostics only.",
+   "evidence": [
+    "e2e/chart-live.spec.ts:100-106"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
+ ]
+}

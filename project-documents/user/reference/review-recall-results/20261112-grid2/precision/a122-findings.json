@@ -1,0 +1,331 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "FAIL",
+  "title": "Observer poll state is wiped by every other project's observe() call",
+  "location": "src/amoeba/runner/observe.py:108",
+  "description": "`RunnerTenant` builds one `RunObserver` (tenant.py:74) and passes it to every `ProjectTick` (tenant.py:133). `observe()` starts by rebuilding `_last_poll`, `_overdue` and `_faulted` from only the entries it was given (observe.py:108-111). Each tick observes projects in turn, so project B's call discards project A's poll times and A's next call discards B's. This happens even when B has no runs, because `observe([])` still prunes everything. In practice every in-flight run is polled on every tick, not at most once per `run_poll_interval_seconds`, which is the documented contract (settings.py:83-84; slice 122 D10). With the poll times gone, least-recently-polled ordering sees every run as never polled (observe.py:112-114), so the starvation guard in the slice doc (line 327) does not hold across ticks. Overdue and fault state are also dropped between calls.\n\nNo test covers this. Every observer test uses one project (`Rig` in tests/runner/observe_support.py), and the two-project tenant tests do not assert poll counts. Fix: prune once per tick against every project's live entries, or key state by project and prune only that project's keys. Add a test where one project has no runs and assert one poll per interval per run."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "FAIL",
+  "title": "No load test for the Runner's budgeted subprocess and poll path",
+  "location": "src/amoeba/runner/tenant.py:93",
+  "description": "`tests/load/` holds load tests for crash loops, cf_watch, inbox, recovery, serve, verdict and feed. None exercises the Runner (`grep` for runner in tests/load finds nothing). The Additional Review Rules (python.md, Testing & Quality) require at least one load test for code on the concurrency or environment-layer paths, and say the load tier asserts on latency, throughput or budget bounds. `RunnerTenant.tick` launches detached children, polls them, and bounds each tick with `TickBudget` (D10). That is the case the rule names, and the bug above is the kind a unit test misses. The slice doc never mentions a load test. Add one in `tests/load/` that runs several projects with in-flight runs against the stub `sq`, asserts poll count per interval and tick wall time against `tick_deadline_seconds`, and gate it in CI."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "A poll fault on an unconfirmed launch is not replayed between polls",
+  "location": "src/amoeba/runner/observe.py:171-193",
+  "description": "For a confirmed run, `_confirmed` replays the standing fault from `_faulted` on ticks between polls (lines 140-145). The comment at lines 92-93 says that is so an escalation does not look recovered. The unconfirmed path never reads `_faulted`. `_unconfirmed` returns LAUNCHING (line 185) or calls `_still_overdue` (line 187), which adds a fault only for an entry already in `_overdue`. A poll failure in `_after_launch_poll` (lines 233-234) stores the fault and returns, and the next tick adds nothing. `_close_recovered` then closes the `run_observation_failed` escalation, and it reopens at the next poll. The escalation flaps. The test that covers this, `test_a_failed_poll_after_an_exit_is_a_fault_and_the_entry_stays` in tests/runner/test_observe_launch.py, checks one tick only. Fix: replay `_faulted` in `_unconfirmed` the way `_confirmed` does, and add a second-tick assertion."
+ },
+ {
+  "ref": "haiku-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "Expected faults lose detail: first payload wins, and each recurring fault costs a write",
+  "location": "src/amoeba/runner/faults.py:120-143",
+  "description": "`raise_expected_faults` calls `store.raise_project_escalation` once per fault. The store returns an already-open row unchanged (src/amoeba/store/project_escalations.py:58-59), so the escalation keeps the payload of the first fault of that kind ever raised. Two `run_observation_failed` faults for different runs in one tick: the second run's id and detail are dropped. A `launch_overdue` escalation keeps the stderr tail from when it first opened, so an operator sees stale evidence. Each recurring fault also opens a `BEGIN IMMEDIATE` write transaction every tick even when nothing is written. Fix: update the open row's payload, or raise once per kind with the current details, and skip the store call for kinds already open this tick."
+ },
+ {
+  "ref": "haiku-xhigh/1/4",
+  "severity": "CONCERN",
+  "title": "The tenant's re-raise branch does not log before re-raising",
+  "location": "src/amoeba/runner/tenant.py:142-144",
+  "description": "`except (*STORE_FAILURES, UpstreamShapeError): raise` re-raises without `logger.exception`. The Python rules require re-raise after logging at ERROR via `logger.exception`, and the slice's own task doc says the same (122-tasks line 46). Partial coverage downstream: `sqlite3.Error` reaches the CLI's `logger.exception` (cli/main.py:318-322), but `UpstreamShapeError` is printed as one line with no traceback (cli/main.py:295-297). The codebase's other re-raise handlers log first (recovery.py:226-230, review_scan.py:53-54). Fix: add `logger.exception(\"runner tick aborted for project %s\", project_id)` before the `raise`."
+ },
+ {
+  "ref": "haiku-xhigh/1/5",
+  "severity": "CONCERN",
+  "title": "The one broad catch is not at a process boundary",
+  "location": "src/amoeba/runner/tenant.py:145",
+  "description": "The rules allow a broad catch only as a top-level handler at a process boundary (python.md, Functions & Error Handling). `ResidentProcess` calls `tenant.tick(self)` with no try (src/amoeba/process/host.py:275), so the process boundary is the CLI handler at cli/main.py:318. The catch at tenant.py:145 isolates one project: it logs with `logger.exception`, writes an escalation and returns. That is a deliberate design (D8; slice doc lines 277 and 436; the count test in tests/runner/test_tenant.py), and it does not swallow silently. But it fits neither clause (a) nor clause (c) as written, so the rules do not cover it. Either add a scoped, commented exception for per-unit isolation to the rules and keep the count test, or narrow the catch to the exceptions a tick can raise."
+ },
+ {
+  "ref": "haiku-xhigh/1/6",
+  "severity": "CONCERN",
+  "title": "Journal parameter keys are defined in three places",
+  "location": "src/amoeba/runner/launch.py:121-122",
+  "description": "`PARAM_PIPELINE = \"pipeline\"` and `PARAM_PARAMS = \"params\"` are defined here, again in src/amoeba/process/observers/sq_runs.py:42-43, and as literals in src/amoeba/store/journal_models.py:81 (the required keys for `SQ_RUN`). This slice added `PARAM_CHECKOUT` to the store beside `PARAM_RUN_ID`, but left the other two keys in the runner. Changing one key now means editing three modules, which goes against \"define it once\". Fix: define `PARAM_PIPELINE` and `PARAM_PARAMS` in `journal_models.py`, build `REQUIRED_PARAMETER_KEYS` from them, and import them in the runner and in `sq_runs.py`."
+ },
+ {
+  "ref": "haiku-xhigh/1/7",
+  "severity": "CONCERN",
+  "title": "LaunchTracker.confirm is dead in production, and launch state is set elsewhere",
+  "location": "src/amoeba/runner/launch.py:257-259",
+  "description": "No code under `src/` calls `LaunchTracker.confirm`. Production confirms launches by writing `tracked.confirmed = True` directly in `RunObserver._confirm` (observe.py:275-277), which bypasses the tracker that owns the state. Only tests call `tracker.confirm`. The method also raises `KeyError` for an unknown id (line 259), while `forget` tolerates one (line 263). Fix: have the observer call `LaunchTracker.confirm` and remove the direct write, or delete the method and make `TrackedLaunch` immutable."
+ },
+ {
+  "ref": "haiku-xhigh/1/8",
+  "severity": "CONCERN",
+  "title": "faults.py's docstring says escalation writes come later; they are already here",
+  "location": "src/amoeba/runner/faults.py:4",
+  "description": "The module docstring says \"Escalation writes join this module in a later task.\" The module now contains `raise_expected_faults` (line 120) and `escalate` (line 152), both of which write to the store, plus the runtime objects `NodeContext` and `TickFaults`. It is no longer only a shared vocabulary. Fix: correct the docstring, or move the store-writing functions to their own module so the vocabulary module has no store writes."
+ },
+ {
+  "ref": "haiku-xhigh/2/0",
+  "severity": "FAIL",
+  "title": "Observer prunes other projects' poll and fault state",
+  "location": "src/amoeba/runner/observe.py:108-111",
+  "description": "`RunObserver.observe` rebuilds its state from the entries it is given. It filters `_last_poll`, `_overdue` and `_faulted` to `live = {entry.id for entry in entries}`. The observer is one object shared by every project: `RunnerTenant` builds it once (tenant.py:74) and passes it to each `ProjectTick` (tenant.py:133). Each `ProjectTick` passes only its own project's entries (tick.py `_run_entries`). So ticking project A erases project B's last-poll times and standing poll faults, and the reverse. An empty project erases everything. With two or more projects, every in-flight run is polled on every tick. The `ProcessSettings` docstring says `run_poll_interval_seconds` is the least time between polls (settings.py:83). The default idle wait is 1 s (settings.py:87), so the `sq runs wait` spawn rate can rise by up to about 15\u00d7. Standing poll faults are also dropped, so their escalations close and reopen. Every observer test uses a single project, so none of this is caught. Fix: prune against the union of all projects' entries, or key the state per project. Add a two-project test that asserts poll counts."
+ },
+ {
+  "ref": "haiku-xhigh/2/1",
+  "severity": "CONCERN",
+  "title": "A persistent planner error spins the resident loop",
+  "location": "src/amoeba/runner/tenant.py:145-149",
+  "description": "The broad catch escalates on the project path, where `raise_project_escalation` returns the open row unchanged and writes nothing (project_escalations.py:58-59). It then returns `(TickResult.COMPLETE, True)` unconditionally. `RunnerTenant.tick` returns that `True`, which contradicts its own docstring (tenant.py:96-99). The host runs `worked = tenant.tick(self) or worked` (host.py:275) and skips the idle wait when `worked` is true (host.py:253-254). So a planner that raises every tick causes back-to-back full tracebacks, one `BEGIN IMMEDIATE` per pass, and write-lock churn against the other tenants. Production planners are empty today, so this is dormant, but slice 125 adds them. `tests/runner/test_tenant.py#test_an_unexpected_exception_is_logged_and_the_other_project_still_ticks` asserts `wrote` is true and pins the wrong behavior. Fix: return whether the escalation actually wrote, and consider a backoff."
+ },
+ {
+  "ref": "haiku-xhigh/2/2",
+  "severity": "CONCERN",
+  "title": "An unconfirmed launch does not replay its standing poll fault",
+  "location": "src/amoeba/runner/observe.py:171-193",
+  "description": "The comment at observe.py:92-94 says a poll fault is replayed between polls so its escalation does not close. Only `_confirmed` reads `_faulted` (lines 137-145). In `_unconfirmed`, when the child has exited and the poll is not yet due, the code calls `_still_overdue`, which adds nothing unless the launch is overdue, and returns LAUNCHING. The next `_close_recovered` (tick.py) then closes the `run_observation_failed` escalation. The following poll reopens it. So the escalation opens and closes once per poll interval. `test_a_failed_poll_after_an_exit_is_a_fault_and_the_entry_stays` checks only one tick. The replay test uses an entry with no tracked child, so it takes the confirmed path. Fix: consult `_faulted` on the unconfirmed path too, and add a multi-tick test."
+ },
+ {
+  "ref": "haiku-xhigh/2/3",
+  "severity": "CONCERN",
+  "title": "Same-kind faults collapse into one stale detail",
+  "location": "src/amoeba/runner/faults.py:120-143",
+  "description": "`raise_expected_faults` calls `raise_project_escalation` once per fault. The store returns the already-open row unchanged for the same `(project, kind)` (project_escalations.py:58-59). So if two CF links fail in one tick, only the first one's detail is stored. While the kind keeps recurring, the open row keeps naming whichever fault came first, even after that one has recovered. The docstring says only that a repeat writes nothing; it does not mention the loss. `test_a_failed_link_raises_one_escalation...` covers one link only. Fix: either merge the subjects into the payload on recurrence or key the row on the subject, and add a two-subject test."
+ },
+ {
+  "ref": "haiku-xhigh/2/4",
+  "severity": "CONCERN",
+  "title": "run_id is read and validated four different ways",
+  "location": "src/amoeba/runner/observe.py:127-129",
+  "description": "Four sites read the run id from journal parameters. `observe._observe_one` (lines 127-129) checks `isinstance` and non-empty. `finish._run_id` (finish.py, `#_run_id`) checks `isinstance` only. `launch._text_parameter` (launch.py:166-170) checks both. `faults._in_flight_run_ids` does no check: `str(entry.parameters[PARAM_RUN_ID])` turns a `None` into the string `\"None\"` and writes it into an operator-facing payload. The coercion is latent because `_launch` always writes a string, but it is the silent fallback the project rules forbid. Fix: one helper next to `PARAM_RUN_ID` in the store, used by all four sites. Put it in the store, because `faults.py` cannot import `launch.py` without a cycle."
+ },
+ {
+  "ref": "haiku-xhigh/2/5",
+  "severity": "CONCERN",
+  "title": "The Runner has no load-tier test",
+  "location": "src/amoeba/runner/tenant.py#RunnerTenant.tick",
+  "description": "The Python rules require at least one `tests/load/` test for code on the concurrency or environment-layer paths, and CI must gate it. The Runner spawns subprocesses, polls, and bounds each tick by `TickBudget`. The budget tests use a fake clock (`tests/runner/test_budget_coverage.py`), which cannot show a tick overrunning in wall time. None of the files under `tests/load/` mention the runner, and the slice documents do not name a load test. Fix: add a load test with realistic project and run counts that asserts tick wall time against the deadline and the poll count against the interval."
+ },
+ {
+  "ref": "haiku-xhigh/3/0",
+  "severity": "FAIL",
+  "title": "A caught tick exception reports work done, so the loop never idles under a recurring fault",
+  "location": "src/amoeba/runner/tenant.py:149",
+  "description": "`_tick_project` returns `TickResult.COMPLETE, True` after the broad catch, whether or not `escalate()` wrote anything. `escalate()` writes nothing when the node is already blocked (`faults.py:172-182`), and `raise_project_escalation` returns the open row unchanged on a repeat (`store/project_escalations.py:58-59`). So a fault that recurs every tick reports work every tick. `RunnerTenant.tick` passes that `True` up (`tenant.py:111-116`), and `ResidentProcess._loop` skips its idle wait when a tenant reports work (`process/host.py:252-254, 275`).\n\nThe result is a loop with no pause that logs a full traceback on every pass (`tenant.py:146`) and takes SQLite's write lock on every pass (`BEGIN IMMEDIATE`, `project_escalations.py:54`). This breaks the `Tenant.tick` contract (\"Returns whether any work was done\", `host.py:79-80`) and the `RunnerTenant.tick` docstring (\"True only if something was written\", `tenant.py:96-97`). A planner that raises on each call reproduces it: `decide` runs with the node context cleared, so the escalation is project-scoped and deduplicated.\n\nThe tests miss it. `test_an_unexpected_exception_is_logged_and_the_other_project_still_ticks` asserts `wrote` only because the other project launched. Fix: have `escalate()` report whether it wrote and return that value from the catch. Add a test that ticks a single failing project twice and asserts `tick()` returns `False` on the second call."
+ },
+ {
+  "ref": "haiku-xhigh/3/1",
+  "severity": "CONCERN",
+  "title": "Unconfirmed launches lose their poll fault between polls, so the escalation closes and reopens",
+  "location": "src/amoeba/runner/observe.py:183-187",
+  "description": "For a confirmed run, `_confirmed` replays a standing poll fault between polls (`observe.py:140-145`). `_unconfirmed` never reads `_faulted`. If a launch's child has exited or is past grace, and its poll failed (`_after_launch_poll`, lines 233-234), the ticks between polls reach `_still_overdue` (line 187). That raises nothing unless the entry is already in `_overdue` (line 260), and a `PollFailure` never adds it there.\n\nThe run then reports LAUNCHING with no fault. `_close_recovered` (`tick.py:194-200`) closes the `run_observation_failed` escalation, and the next poll reopens it. The state also flips FAULT \u2192 LAUNCHING \u2192 FAULT. The only test of this path observes once (`test_a_failed_poll_after_an_exit_is_a_fault_and_the_entry_stays`, `tests/runner/test_observe_launch.py`). Fix: replay `_faulted` in `_unconfirmed` as `_confirmed` does, and add a test that asserts the fault is present on the tick between polls."
+ },
+ {
+  "ref": "haiku-xhigh/3/2",
+  "severity": "CONCERN",
+  "title": "One `RunObserver` is shared by all projects, so each project's pass discards the others' poll cadence",
+  "location": "src/amoeba/runner/observe.py:108-111",
+  "description": "`RunnerTenant` builds one observer (`tenant.py:74-82`) and passes it to every `ProjectTick` (`tenant.py:133`). `observe()` starts by rebuilding `_last_poll`, `_overdue` and `_faulted` from the current project's entries only (`observe.py:108-111`). With two or more projects that have runs in flight, each project's pass drops the other's state. Every run then looks never-polled and is polled on every tick, not once per `run_poll_interval_seconds` (D6). That multiplies `sq` spawns and spends the tick deadline sooner, which pushes other projects into CUT_OFF.\n\n`ResidentProcess` hosts several projects (`host.py:165`, `project_ids`), so this is the ordinary configuration. `PRODUCTION_PLANNERS` is empty in this slice, so nothing launches yet, but slice 125 will. No observe test uses two projects. Fix: keep poll and fault state per project, either one observer per project or state keyed by `(project_id, entry_id)` and pruned per project. Add a two-project test asserting a run is not re-polled inside its interval after the other project ticks."
+ },
+ {
+  "ref": "haiku-xhigh/3/3",
+  "severity": "CONCERN",
+  "title": "The `cf` probe's failure detail drops stderr",
+  "location": "src/amoeba/runner/probes.py:131-133",
+  "description": "`probe_link` captures both streams, but on a non-zero exit it quotes only stdout: `head = completed.stdout[:OUTPUT_HEAD_CHARS]`, then `exited {returncode}: {head}`. A `cf` that reports its error on stderr, as the stub's FAIL mode does, produces an escalation and a WARNING that end in `exited 1: ` with no reason. `poll_run` quotes the stderr tail on an unexpected exit (`process/sq_outcome.py:124-127`), so the two probes handle the same failure differently. Fix: quote the stderr tail on a non-zero exit. Have `FakeCf` return stderr text, and extend `test_a_non_zero_exit_names_the_exit_code` to assert it appears in `detail`."
+ },
+ {
+  "ref": "haiku-xhigh/3/4",
+  "severity": "CONCERN",
+  "title": "Any exit code 2 from `sq run` with no run state stops the whole process",
+  "location": "src/amoeba/runner/observe.py:243-247",
+  "description": "The usage-error classification uses the exit code alone (`exit_code == USAGE_ERROR_EXIT_CODE`). `ProjectTick._record_finished` turns that into `UpstreamShapeError` (`tick.py:132-140`), and the tenant re-raises it (`tenant.py:142-144`). The resident process then exits 15 for every project.\n\nExit 2 is also a common code for argument-parse errors. A node whose parameters `sq` rejects would therefore read as \"sq lacks --run-id\" and stop the Runner. The operator's message would point the wrong way, even though the stderr tail is recorded. The repo's stubs only exercise the `--run-id` case, so I could not confirm what `sq` returns for other argument errors. Confirm that before slice 125 launches work, and key the shape classification on the missing-option stderr signature, not the exit code alone. Test: exit 2 with an unrelated stderr line should block the node, not raise."
+ },
+ {
+  "ref": "haiku-xhigh/3/5",
+  "severity": "CONCERN",
+  "title": "The tenant's two except clauses do not match the project's exception rule",
+  "location": "src/amoeba/runner/tenant.py:141-149",
+  "description": "Rule (a) requires logging with `logger.exception` before a re-raise. The store and shape re-raise at lines 142-144 logs nothing. At the process boundary, `StoreError` and `UpstreamShapeError` print one line with no traceback (`cli/main.py:295-308`). Only other errors reach the traceback at `cli/main.py:318-322`.\n\nThe broad catch at line 145 neither re-raises nor sits at a process boundary, so it falls outside form (c). It isolates one project and carries on. The `# noqa: BLE001` silences the mechanical check, and the module docstring's \"the Runner's one process boundary\" is inaccurate. Decide whether per-project isolation is an accepted exception. If it is, record it as a waiver in the slice or rules doc and correct the docstring and comment. If not, log store and shape errors with `logger.exception` before re-raising."
+ },
+ {
+  "ref": "haiku-xhigh/3/6",
+  "severity": "CONCERN",
+  "title": "The Runner has no load test, though the rules and CI require one",
+  "location": "src/amoeba/runner/tenant.py",
+  "description": "The Python rules require a `tests/load/` test for code on concurrency or environment-layer paths, asserting latency, throughput, or resource bounds. CI runs that tier as its own step (`.github/workflows/ci.yml:54`). This slice adds a tick budget, detached `sq` launches, and per-project polling, and none of it has a load test. `tests/load/` covers crash loops, recovery scale, and concurrent inbox writes, but not the Runner. The slice document does not mention load tests or record a waiver.\n\nAdd a load test with several projects and a realistic run count that asserts the tick deadline holds and `sq` calls per interval stay bounded. It would also have caught the shared-observer finding above. If the PM accepts a deferral, record it in the slice."
+ },
+ {
+  "ref": "haiku-xhigh/3/7",
+  "severity": "CONCERN",
+  "title": "`faults.py` docstring says escalation writes come later, but they are already in the module",
+  "location": "src/amoeba/runner/faults.py:3-4",
+  "description": "\"Escalation writes join this module in a later task.\" `raise_expected_faults` (line 120) and `escalate` (line 152) are defined here now, so the docstring contradicts the code. The `tick.py` module docstring (lines 3-5) places the reconciliation-read slot \"in observe\", but the code marker sits after `observe()` in `ProjectTick.run` (`tick.py:94`). Update both."
+ },
+ {
+  "ref": "sol/1/0",
+  "severity": "FAIL",
+  "title": "Observing one project deletes other projects\u2019 polling state",
+  "location": "src/amoeba/runner/observe.py:108-111",
+  "description": "`RunnerTenant` shares one observer across all projects, but these lines retain only the current project\u2019s entries. Ticking another project\u2014even an empty one\u2014erases polling timestamps, overdue markers, and cached faults. Reproduced A \u2192 empty B \u2192 A polling A twice at the same clock time despite the configured interval. Scope observer state and cleanup per project, and add a multi-project regression test."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "CONCERN",
+  "title": "Launch can start after the deadline or a stop request",
+  "location": "src/amoeba/runner/tick.py:176-187",
+  "description": "The budget check happens before journaling, but the database commit and log creation precede `Popen` without another check. If that work crosses the deadline or receives a stop request, the child still launches. Reproduced a journal operation advancing beyond the deadline and requesting stop: launch proceeded and `_act` returned `COMPLETE`. Recheck immediately before spawning and explicitly reconcile any journaled-but-unlaunched entry."
+ },
+ {
+  "ref": "sol/1/2",
+  "severity": "CONCERN",
+  "title": "Unconfirmed launches lose standing poll faults between polls",
+  "location": "src/amoeba/runner/observe.py:186-187",
+  "description": "After an unconfirmed launch receives `PollFailure`, subsequent ticks inside the polling interval call `_still_overdue` without replaying `_faulted`. Reproduced the state changing from `FAULT` to `LAUNCHING` with no reported fault one second later, although no successful poll occurred. Consequently, `_close_recovered` can close the escalation prematurely. Replay standing faults until a usable observation supersedes them."
+ },
+ {
+  "ref": "sol/1/3",
+  "severity": "CONCERN",
+  "title": "Repeated unexpected faults bypass the idle interval",
+  "location": "src/amoeba/runner/tenant.py:145-149",
+  "description": "The exception handler always reports a write, even when `escalate` deduplicates an existing escalation or finds an already-blocked node. `ResidentProcess._loop` waits only when tenants report no work, so a persistent exception produces a tight retry-and-error-log loop. Have escalation report whether it actually changed the store, and combine that with `tick.wrote` instead of returning unconditional `True`."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "FAIL",
+  "title": "Preserve observer state across projects",
+  "location": "src/amoeba/runner/observe.py:108-111",
+  "description": "`RunnerTenant` shares one observer across projects, but these lines discard all state absent from the current project\u2019s entries. Observing project B therefore erases project A\u2019s polling timestamps and standing faults. Reproduced: observing A, empty B, then A at the same clock polls A twice despite its 15-second interval. Partition state by project and add a multi-project regression test."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "CONCERN",
+  "title": "Retain unconfirmed-launch faults between polls",
+  "location": "src/amoeba/runner/observe.py:186-187",
+  "description": "After an unconfirmed launch returns `PollFailure`, ticks before the next poll bypass `_faulted` and return `LAUNCHING` without replaying the fault. Reproduced at seconds 0 and 1: `FAULT` becomes `LAUNCHING` with no new evidence. Consequently, `ProjectTick._close_recovered` closes the escalation prematurely. Replay standing observation faults here, as the confirmed path does."
+ },
+ {
+  "ref": "sol/2/2",
+  "severity": "FAIL",
+  "title": "Recheck the budget immediately before spawning",
+  "location": "src/amoeba/runner/tick.py:176-187",
+  "description": "The budget check precedes journaling and log creation, not the subprocess launch. If those operations consume the remaining time\u2014or a stop arrives during them\u2014`Popen` still starts. Reproduced with a journal operation advancing the clock: a deadline of 5 permitted `Popen` at 6 and returned `COMPLETE`. Check the budget at the spawn boundary and explicitly handle an issued entry whose launch is deferred."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "FAIL",
+  "title": "Observing one project erases other projects\u2019 polling state",
+  "location": "src/amoeba/runner/observe.py:108-111",
+  "description": "`RunnerTenant` shares one observer across projects, but each `observe()` retains only the current project\u2019s entries. Visiting project B\u2014even with no runs\u2014deletes A\u2019s poll timestamps, overdue markers, and cached faults. Consequently, A is polled every tick instead of respecting `run_poll_interval_seconds`, and least-recently-polled fairness breaks. Scope observer state and cleanup per project; add a multi-project regression test."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "FAIL",
+  "title": "Launch can start after the budget expires or shutdown is requested",
+  "location": "src/amoeba/runner/tick.py:176-187",
+  "description": "The budget check precedes journal creation and its synchronous database commit. If that operation consumes the remaining deadline, or a stop request arrives during it, `launch()` still starts the subprocess without another check. Pass the budget through to the launch boundary and explicitly handle a journaled command whose launch is deferred. Test deadline expiry and shutdown during `journal_issue()`."
+ },
+ {
+  "ref": "sol/3/2",
+  "severity": "CONCERN",
+  "title": "Unconfirmed launches falsely recover between failed polls",
+  "location": "src/amoeba/runner/observe.py:186-187",
+  "description": "A failed launch poll caches `RUN_OBSERVATION_FAILED` in `_faulted`, but this interval-skipping branch never replays it. The next tick reports `LAUNCHING` without that fault, allowing `ProjectTick._close_recovered()` to close the escalation despite no successful observation. Replay standing poll faults here, as `_confirmed()` does, and test consecutive ticks with fresh fault collections."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "A launch that raises after journaling is never recorded as a launch failure",
+  "location": "src/amoeba/runner/tick.py:166-186",
+  "description": "`_launch` journals the entry with `journal_issue` and then calls `launch()`. `launch()` raises `ValueError` for unusable parameters. Examples are an empty `checkout`, a non-string `params` value, or a `build_argv` rejection of a `,` in a value. `_launch` re-runs `build_argv` before journaling, but only on `action.params`. The checks in `launch()` (`_text_parameter`, `_params_parameter`) run only after the entry is written. If one of them raises, the entry is left unresolved with no tracked child and no launch log. The tenant's broad catch then escalates it. The node has a run in flight, so `escalate` takes the project-scoped path. On later ticks the observer treats the untracked entry as confirmed, polls it and gets `not_found`. That resolves it as `RunVanished` (\"vanished: Squadron has no state\"), a misleading cause. Validate `checkout` (non-empty) before journaling. Alternatively, catch the `ValueError` in `_launch` and record it through `finish.record` as a `LaunchFailed` with `SPAWN_ERROR`."
+ },
+ {
+  "ref": "sonnet/1/1",
+  "severity": "CONCERN",
+  "title": "`observe.py` exceeds the file-size guideline and mixes several concerns",
+  "location": "src/amoeba/runner/observe.py",
+  "description": "The file is about 326 lines, over the project's ~300-line guideline. It combines poll cadence, confirmed-run classification, unconfirmed-launch handling, overdue and fault replay state (`_overdue`, `_faulted`, `_last_poll`), and log reading. `_after_launch_poll` takes seven arguments. Splitting the unconfirmed-launch path into its own module would improve cohesion and bring the file under the limit."
+ },
+ {
+  "ref": "sonnet/1/2",
+  "severity": "CONCERN",
+  "title": "Settings validation uses string-keyed `getattr` and skips one new bound",
+  "location": "src/amoeba/runner/factory.py:34-52",
+  "description": "`validate_settings` looks up fields with `getattr(settings, name)` from a tuple of string names. A renamed field would fail at runtime instead of under pyright strict. `launch_grace_seconds` is consumed by the observer but is not checked for being non-negative. A negative value would silently make every launch overdue immediately. Access the fields directly, for example with `(name, value)` pairs built from attributes. Also add `launch_grace_seconds` to the checks."
+ },
+ {
+  "ref": "sonnet/2/0",
+  "severity": "CONCERN",
+  "title": "Line exceeds 88 chars; ruff E501 will fail lint",
+  "location": "src/amoeba/runner/tenant.py:145",
+  "description": "The `except Exception as error:  # noqa: BLE001 - the Runner's one process boundary (D8)` line is over 88 characters. The grep confirmed it is the only over-length line in `src/amoeba/runner`. The baseline ruff config selects `E` and sets `line-length = 88`, so E501 should flag it, and `BLE001` is already suppressed on that line. Move the justification onto a separate comment line above the `except`, keeping a short `# noqa: BLE001` on the `except` line. I did not run `ruff check` to confirm the failure."
+ },
+ {
+  "ref": "sonnet/2/1",
+  "severity": "CONCERN",
+  "title": "Run-id and entry-parameter validation duplicated in three places",
+  "location": "src/amoeba/runner/finish.py:139",
+  "description": "`finish._run_id`, `observe.RunObserver._observe_one` and `launch._text_parameter` each check that the journal entry's run id (or other parameter) is a non-empty string. They raise `ValueError` with slightly different messages. `_observe_one` also accepts an empty string while `_run_id` in `finish.py` does not, so the same entry can pass one check and fail the other. Put one accessor next to `JournalEntry` or in `launch.py` and use it from all three places, as the DRY rule requires."
+ },
+ {
+  "ref": "sonnet/2/2",
+  "severity": "CONCERN",
+  "title": "Test reaches into private tenant state, and the single-`except` guard is brittle",
+  "location": "tests/runner/test_tenant.py:190",
+  "description": "`test_the_runner_package_has_exactly_one_broad_except` counts the substring `except Exception` in source text. A comment or docstring containing that text would break it, and a different broad form such as `except BaseException` would not be counted. `test_factory.py` also reads `tenant._planners` and `test_tenant.py` reads `tenant._tracker`, both with pyright suppressions. Rely on the `BLE` ruff rule for the first, and on public behaviour for the second, instead of source-text or private-attribute checks."
+ },
+ {
+  "ref": "sonnet/3/0",
+  "severity": "CONCERN",
+  "title": "observe.py exceeds the file-size guideline and mixes two state machines",
+  "location": "src/amoeba/runner/observe.py",
+  "description": "`observe.py` is about 326 lines, over the ~300-line guideline. It carries the confirmed-run poll classifier, the unconfirmed-launch grace and overdue logic, and four per-entry dicts and sets (`_last_poll`, `_overdue`, `_faulted` and the tracker). `_unconfirmed`, `_check_line` and `_after_launch_poll` pass 6\u20137 arguments between them. Splitting the unconfirmed-launch path into its own module or class would shrink the file and make the state easier to reason about."
+ },
+ {
+  "ref": "sonnet/3/1",
+  "severity": "CONCERN",
+  "title": "Settings validation uses string-keyed `getattr`",
+  "location": "src/amoeba/runner/factory.py:34-50",
+  "description": "`validate_settings` iterates over field names as string literals and reads them with `getattr(settings, name)`. A rename of a `ProcessSettings` field would fail at runtime rather than in pyright strict mode. It also scatters the field names, which the project's \"define it once\" rule discourages. Reading the fields directly, for example from a tuple of `(name, value)` pairs, would keep the checking static."
+ },
+ {
+  "ref": "sonnet/3/2",
+  "severity": "CONCERN",
+  "title": "Tests import private helpers from other test modules",
+  "location": "tests/runner/test_budget_coverage.py:20",
+  "description": "`test_budget_coverage.py` imports `_link` from `runner.test_probes` and needs a `pyright: ignore[reportPrivateUsage]` to do so. `_link` should move to `tick_support.py` or a conftest, so that one test module does not depend on another test module's private helper. `test_tenant.py` and `test_factory.py` also reach into private attributes (`_tracker`, `_planners`) with ignores. That couples those tests to the implementation rather than to behavior."
+ },
+ {
+  "ref": "sonnet/3/3",
+  "severity": "CONCERN",
+  "title": "Crash harness relies on type-ignores and runtime monkeypatching",
+  "location": "tests/runner/crash_entry.py:105-120",
+  "description": "`_hooked` returns `tuple[object, object]`, and `main` then passes the pieces to `RunnerTenant` with `# type: ignore[arg-type]`. `_arm_resolve_kill` replaces `Store.journal_resolve` on the class for the whole process. This is acceptable in a throwaway subprocess, but the loose typing is why the ignores are needed. Typing the returns as `PopenFactory` and `Callable[[str], RunPoll]` would remove most of them. The tests are meant to be under strict pyright, and this pattern cuts against that."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "`LaunchTracker.confirm` is dead in production code and duplicated by direct mutation",
+  "location": "src/amoeba/runner/launch.py:257-259",
+  "description": "`LaunchTracker.confirm()` has no caller under `src/`. Only tests call it. `RunObserver._confirm` (`src/amoeba/runner/observe.py:276`) instead sets `tracked.confirmed = True` on the `TrackedLaunch` directly. That gives two ways to confirm a launch, and the tested one is not the one production uses. Tests that call `tracker.confirm` therefore don't exercise the real confirmation path. Route `_confirm` through `LaunchTracker.confirm` and keep the `_overdue` bookkeeping there, or drop the method and make the tests mutate state the way production does."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "`_close_recovered` can close an `unexpected_fault` escalation after one clean tick",
+  "location": "src/amoeba/runner/tick.py#ProjectTick._close_recovered",
+  "description": "`_close_recovered` closes every open project escalation whose `fault_kind` is not in this tick's `TickFaults.kinds()`. `unexpected_fault` is written by `escalate()` in `faults.py`. It goes straight to `store.raise_project_escalation`, never through `TickFaults`, so it is never in the recurring set. The next tick that completes without cut-off therefore closes it. That includes the case where the node had a run in flight and `escalate` deliberately took the project-scoped path instead of blocking the node. A real, intermittent planner or decide bug would open and close an escalation within seconds, and no human gets a durable signal. If that is intended, say so in the `_close_recovered` docstring. If not, close only kinds the tick can re-observe (`run_observation_failed`, `launch_overdue`, `cf_probe_failed`) and leave `unexpected_fault` for a human to close. The store docstring says the `fault_kind` vocabulary is the Runner's. That makes an explicit allowlist cheap and safe against other writers later."
+ },
+ {
+  "ref": "sonnet-high/1/2",
+  "severity": "CONCERN",
+  "title": "Run-id and parameter validation is duplicated in three places",
+  "location": "src/amoeba/runner/finish.py:139-143",
+  "description": "The \"entry has an unusable run id\" check exists in `finish._run_id`, in `RunObserver._observe_one` (`observe.py:127-129`) and, as `_text_parameter`, in `launch.py`. They have the same failure shape but slightly different rules (the observer also rejects an empty string). The project guidelines require DRY. Extract one `run_id_of(entry)` helper next to `PARAM_RUN_ID` use, probably in `launch.py`, and have `finish` and `observe` call it. Then the rule can't drift between modules."
+ },
+ {
+  "ref": "sonnet-high/3/0",
+  "severity": "CONCERN",
+  "title": "Run-id extraction from a journal entry is duplicated three times, with different strictness",
+  "location": "src/amoeba/runner/observe.py:127-129",
+  "description": "The same rule, that an `sq_run` entry must carry a non-empty string `run_id`, is written separately in three places:\n- `observe.py:127-129` in `_observe_one` raises `ValueError` on a missing or empty id.\n- `finish.py:141-145` in `_run_id` raises `ValueError` only when the id is not a string. An empty string passes.\n- `launch.py:166` `_text_parameter(entry, PARAM_RUN_ID)` raises on a missing or empty id.\n\n`faults.py:194-198` in `_in_flight_run_ids` skips validation and calls `str(entry.parameters[PARAM_RUN_ID])`. That raises `KeyError` for a malformed entry. It does this inside `escalate`, which is the last-resort fault path, so the failure surfaces from the one place that must not raise. The project rules say not to duplicate logic and not to scatter comparison values.\n\nDefine one helper, for example `run_id_of(entry)`, in one module (probably `launch.py`) that raises `ValueError`. Use it in `observe`, `finish` and `faults`. For `escalate`, decide explicitly what a malformed entry means."
+ }
+]

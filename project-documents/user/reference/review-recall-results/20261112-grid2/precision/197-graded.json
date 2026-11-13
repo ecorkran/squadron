@@ -1,0 +1,486 @@
+{
+  "case": "197",
+  "issues": [
+    {
+      "id": "197-I1",
+      "title": "cf errors (and other unexpected exceptions) during item resume escape as a traceback with exit 1, which the ResumeExit contract defines as FLAGGED.",
+      "members": [
+        "haiku-xhigh/1/0",
+        "haiku-xhigh/2/1",
+        "haiku-xhigh/3/1"
+      ],
+      "grade": "REAL",
+      "confidence": "medium",
+      "why": "resume_item catches only _Stop, GitEnvironmentError and OSError, and handle_item_resume catches only typer.Exit. _select_item and _open_dependencies call cf_client.list_slices directly and evaluate_each_source runs the cf sources, so a ContextForgeError (or a cycle ValueError from order_by_dependencies) escapes asyncio.run and exits 1. D8 defines exit 1 as FLAGGED for an automated caller, so a crash is indistinguishable from 'flagged again'. Only the target read is wrapped (read_integration_target -> GitEnvironmentError), so a full cf outage is caught first, which keeps this to cf command failures mid-resume.",
+      "evidence": [
+        "src/squadron/pipeline/item_resume.py:124-135",
+        "src/squadron/pipeline/item_resume.py:292",
+        "src/squadron/pipeline/item_resume.py:333",
+        "src/squadron/cli/commands/run_item.py:89-105"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I2",
+      "title": "The blanket except OSError in resume_item reports any OSError, including a missing pipeline from load_pipeline, as a batch-report write failure with HALTED.",
+      "members": [
+        "haiku-xhigh/2/2",
+        "haiku-xhigh/3/0",
+        "sonnet-high/1/0",
+        "sonnet-high/2/1",
+        "sonnet-high/3/0"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "_validate calls load_pipeline(state.pipeline) unguarded; its FileNotFoundError is an OSError, so it reaches the except OSError and returns HALTED (3) with 'cannot write the batch report', where REJECTED (2) with an accurate message fits. Any other OSError (git binary, state read) gets the same wrong label. The finding sonnet-high/1/0 says FileNotFoundError prints a traceback, which is wrong (it is caught as OSError); only loader validation errors would escape. Rare path, wrong message and code but loud; the message was later changed in 39dda24d.",
+      "evidence": [
+        "src/squadron/pipeline/item_resume.py:133-135",
+        "src/squadron/pipeline/item_resume.py:186"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I3",
+      "title": "BatchReport.load lets a non-object item escape as AttributeError and turns missing index/name into the string 'None'.",
+      "members": [
+        "haiku-xhigh/1/1",
+        "haiku-xhigh/2/3",
+        "haiku-xhigh/3/3",
+        "sol/1/3",
+        "sol/2/3",
+        "sol/3/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "from_json does data.get(...) on each item, so an item like null raises AttributeError, which load's except (KeyError, TypeError, ValueError) does not catch, breaking the documented BatchReportLoadError contract; a missing index or name becomes 'None'. True, but report.json is written only by squadron itself, so this needs a hand-edited or corrupted file; the result is a loud traceback, and a 'None' index simply fails _check_record with REJECTED.",
+      "evidence": [
+        "src/squadron/pipeline/batch_report.py:164-170",
+        "src/squadron/pipeline/batch_report.py:330-340"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I4",
+      "title": "_write_atomic leaves its NamedTemporaryFile behind when the write or rename fails (and the reports become mode 0600).",
+      "members": [
+        "haiku-xhigh/1/2",
+        "haiku-xhigh/2/4",
+        "haiku-xhigh/3/4",
+        "sonnet/1/0",
+        "sonnet-high/1/2",
+        "sonnet-high/2/0",
+        "sonnet-high/3/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "The temp file is created with delete=False and the except OSError branch logs and re-raises without unlinking it, so each failed write leaves a hidden .name.XXXX file; mkstemp also makes the renamed reports 0600. Real but low impact: it only occurs when the disk is already failing, the names do not end in .json so list_runs ignores them, and the previous report stays intact. Fixed later in 39dda24d.",
+      "evidence": [
+        "src/squadron/pipeline/batch_report.py:343-355"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I5",
+      "title": "list_tasks now requires 'completed' and 'total' and raises a bare KeyError without them; TaskEntry defaults both to 0.",
+      "members": [
+        "haiku-xhigh/1/3",
+        "haiku-xhigh/2/10",
+        "haiku-xhigh/3/8",
+        "sonnet-high/1/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "int(e['completed']) and int(e['total']) are hard lookups, so a cf that omits them raises KeyError rather than ContextForgeError. context-forge's task listing has emitted completed/total since 2026-03 (packages/cli/src/commands/task.ts), so this needs a months-old cf. The 0 defaults are only reachable from hand-built entries (tests); production always passes explicit values. Hardening and style, not a defect at head.",
+      "evidence": [
+        "src/squadron/integrations/context_forge.py:58-59",
+        "src/squadron/integrations/context_forge.py:183-184"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I6",
+      "title": "item_resume types cf_client as Any and BodyRunner returns object, erasing the client and result contracts.",
+      "members": [
+        "haiku-xhigh/1/4",
+        "haiku-xhigh/2/5",
+        "sonnet/2/2",
+        "sonnet-high/2/3",
+        "sonnet-high/3/6"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "resume_item, _resume_locked, _git_precondition, _select_item and _open_dependencies take cf_client: Any and BodyRunner returns Awaitable[object]. True, but it is a typing gap; the calls made are correct for ContextForgeClient, which is what run_item passes.",
+      "evidence": [
+        "src/squadron/pipeline/item_resume.py:60",
+        "src/squadron/pipeline/item_resume.py:109-116"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I7",
+      "title": "run_item.py imports private helpers back from run.py inside a function, forming a circular dependency.",
+      "members": [
+        "haiku-xhigh/1/5",
+        "haiku-xhigh/2/6",
+        "haiku-xhigh/3/9",
+        "sonnet/1/1",
+        "sonnet/2/1",
+        "sonnet/3/0",
+        "sonnet-high/1/3",
+        "sonnet-high/2/2",
+        "sonnet-high/3/4"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "run.py imports run_item at module level and handle_item_resume imports _apply_param_overrides and _run_pipeline_sdk from run.py locally with reportPrivateUsage suppressions. Accurate layering/style point with no behavioral effect; it was refactored away in 39dda24d.",
+      "evidence": [
+        "src/squadron/cli/commands/run_item.py:61-65",
+        "src/squadron/cli/commands/run.py:24"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I8",
+      "title": "pipeline_mutates does not count dispatch, so judge-cycle (a non-committing revise loop) runs without the project lock.",
+      "members": [
+        "haiku-xhigh/1/6"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "_MUTATING_STEP_TYPES lists DESIGN, TASKS, IMPLEMENT, DEVLOG, BRANCH, and a loop only counts with commit_each_iteration, so judge-cycle's revise dispatch is unlocked. That matches D11's stated scope exactly (steps that commit or move cf); a concurrent judge-cycle in the same checkout would at worst make a batch see a dirty tree and halt explicitly. A scope question, not a defect against the design.",
+      "evidence": [
+        "src/squadron/pipeline/run_lock.py:36-45",
+        "src/squadron/data/pipelines/judge-cycle.yaml:16-29"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I9",
+      "title": "The mutating-step allowlist fails open for step types added later.",
+      "members": [
+        "haiku-xhigh/2/8",
+        "sonnet/3/2",
+        "sonnet-high/2/4",
+        "sonnet-high/3/2"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "A step type not in _MUTATING_STEP_TYPES is treated as non-mutating with no warning. True, but it concerns hypothetical future step types; every current mutating pipeline classifies correctly per D11.",
+      "evidence": [
+        "src/squadron/pipeline/run_lock.py:36-67"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I10",
+      "title": "_validate builds the report.json file name by hand instead of using BatchReport.json_path / REPORT_JSON_SUFFIX.",
+      "members": [
+        "haiku-xhigh/1/7"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "item_resume.py:187 formats f'{run_id}.{each.name}.report.json' while batch_report.json_path builds the same name from REPORT_JSON_SUFFIX. Duplicated constant; the names agree today. Later centralized in 20ceecff.",
+      "evidence": [
+        "src/squadron/pipeline/item_resume.py:187",
+        "src/squadron/pipeline/batch_report.py:299-300"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I11",
+      "title": "Item resume treats a deferred in-plan dependency as open while batch selection does not, so a dependent the batch ran can never be resumed.",
+      "members": [
+        "haiku-xhigh/2/0",
+        "haiku-xhigh/3/6"
+      ],
+      "grade": "REAL",
+      "confidence": "low",
+      "why": "_cf_slices_ready_to_implement builds open_in_plan excluding _EXCLUDED_STATUSES (complete and deferred), so a batch runs a slice whose dependency is deferred; _open_dependencies flags any dependency whose status is not COMPLETE, so on resume the same item is flagged 'dependency N not complete' and its body never runs. Each side follows its own design paragraph (D2 vs D8 step 2), so the paths genuinely disagree. Confidence is low because which behavior is intended for deferred dependencies is a design call, and the case is uncommon. Not B1: B1 is a merged slice still reading open in cf.",
+      "evidence": [
+        "src/squadron/pipeline/sources.py:48",
+        "src/squadron/pipeline/sources.py:257",
+        "src/squadron/pipeline/item_resume.py:333-335"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I12",
+      "title": "_execute_each_step and executor.py keep growing, and the accept-decision short-circuit is pasted into both loop executors.",
+      "members": [
+        "haiku-xhigh/2/7",
+        "sonnet/3/1",
+        "sonnet-high/2/5"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "_execute_each_step spans about 100 lines and _loop_accept_decision_result is called identically at two sites next to the existing duplicated skip check. Size and duplication points with no behavioral defect.",
+      "evidence": [
+        "src/squadron/pipeline/executor.py:1157",
+        "src/squadron/pipeline/executor.py:1293",
+        "src/squadron/pipeline/executor.py:1511-1610"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I13",
+      "title": "run_dry_run._item_label still reads the 'flag_reason' literal instead of FLAG_REASON_KEY.",
+      "members": [
+        "haiku-xhigh/2/9"
+      ],
+      "grade": "PREEXISTING",
+      "confidence": "high",
+      "why": "The literal is in run_dry_run.py, which base..head does not touch; the diff only added the constant elsewhere. The value matches, so nothing breaks today.",
+      "evidence": [
+        "src/squadron/cli/commands/run_dry_run.py:92"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I14",
+      "title": "Item resume finalizes the batch run's state with one item's result and appends an each StepState, which can make a later plain --resume report all steps complete.",
+      "members": [
+        "haiku-xhigh/3/2"
+      ],
+      "grade": "UNSURE",
+      "confidence": "low",
+      "why": "Confirmed in code: _run_pipeline skips init_run for a given run_id but still calls state_mgr.finalize(run_id, result), and the step callback appends the each step's StepState, so first_unfinished_step can return None after a halted batch while not_run items remain. Whether run state is meant to track item resumes is not specified in D8, and at head a plain resume of a halted each step reruns the whole source anyway. Settled by the PM stating the intended run-state semantics after item resume, or by an end-to-end run: halt a batch, item-resume one item, then plain --resume.",
+      "evidence": [
+        "src/squadron/cli/commands/run.py:238",
+        "src/squadron/cli/commands/run.py:279",
+        "src/squadron/pipeline/state.py:459-471"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I15",
+      "title": "A halted item's record is built with no step results, so it loses the slice branch it entered.",
+      "members": [
+        "haiku-xhigh/3/5"
+      ],
+      "grade": "PREEXISTING",
+      "confidence": "medium",
+      "why": "_finish_each_report passes a literal [] to from_item for the in-flight item, so branch is None. That [] was there before the diff (base had the same from_item(item, position, [], reason) call); the diff only added flag_kind. Item resume's restore path uses the current branch, not record.branch, so the effect is informational.",
+      "evidence": [
+        "src/squadron/pipeline/executor.py:1490"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I16",
+      "title": "_pre_flag silently defaults a missing flag_kind to NOT_READY.",
+      "members": [
+        "haiku-xhigh/3/7",
+        "sonnet/1/3"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "FlagKind(str(item.get(FLAG_KIND_KEY, FlagKind.NOT_READY))) defaults the kind, and _cf_slices_needing_tasks sets flag_reason without a kind. The default gives the correct kind for every current producer, so this is a style/rule point.",
+      "evidence": [
+        "src/squadron/pipeline/executor.py:1617"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I17",
+      "title": "Three separate atomic-write helpers and a duplicated flock sequence.",
+      "members": [
+        "haiku-xhigh/3/10"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "batch_report, state and metrology each have their own _write_atomic, and run_lock repeats the flock probe from metadata_lock. A DRY point with no defect.",
+      "evidence": [
+        "src/squadron/pipeline/batch_report.py:343",
+        "src/squadron/pipeline/run_lock.py:111-141"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I18",
+      "title": "Item resume on a slices-plan run rejects a review_unresolved item because its design now exists and cf.undesigned_slices no longer selects it.",
+      "members": [
+        "sol/1/0",
+        "sol/2/0",
+        "sol/3/0"
+      ],
+      "grade": "REAL",
+      "confidence": "high",
+      "why": "_select_item re-evaluates the run's source; slices-plan uses cf.undesigned_slices, which drops any slice with a design file. A review_unresolved planning item has a design by definition, so it falls through to the 'no longer selected' REJECTED path for both retry and accept. The design's Integration Requirements say item resume must work on slices-plan runs, accept on review_unresolved included. test_item_resume_on_a_planning_batch hides it by returning no design only when the plan argument is passed.",
+      "evidence": [
+        "src/squadron/pipeline/item_resume.py:286-305",
+        "src/squadron/pipeline/sources.py:134-143",
+        "tests/pipeline/test_item_resume_plan_batches.py:34-39"
+      ],
+      "known": null,
+      "fail_justified": true
+    },
+    {
+      "id": "197-I19",
+      "title": "Item resume's git precondition acts on cf's integration target without checking that a linked worktree is registered.",
+      "members": [
+        "sol/1/1",
+        "sol/2/1"
+      ],
+      "grade": "REAL",
+      "confidence": "medium",
+      "why": "enter_slice_branch calls _require_registered_worktree before using the target, but _git_precondition reads the target and may call restore_target (commit leftovers, checkout) with no such check. In an unregistered worktree that target belongs to the primary checkout, so resume can switch to the wrong branch, and planning pipelines (no branch step) would then commit there. This is an edge case and the leftovers commit lands on the slice branch, so it does not block a merge.",
+      "evidence": [
+        "src/squadron/pipeline/item_resume.py:230-242",
+        "src/squadron/pipeline/branch_ops.py:95-96",
+        "src/squadron/pipeline/branch_ops.py:123-141"
+      ],
+      "known": null,
+      "fail_justified": false
+    },
+    {
+      "id": "197-I20",
+      "title": "Item resume runs synchronous git, cf and file I/O directly inside async functions.",
+      "members": [
+        "sol/1/2",
+        "sol/2/2",
+        "sol/3/2",
+        "sonnet/1/2",
+        "sonnet/2/0",
+        "sonnet-high/3/5"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "_resume_locked and helpers call run_git, restore_target, dirty_paths, cf_client.list_slices and report.write synchronously. True, but the CLI runs this single coroutine under asyncio.run with nothing else on the loop, so there is no observable effect.",
+      "evidence": [
+        "src/squadron/pipeline/item_resume.py:139-160",
+        "src/squadron/pipeline/item_resume.py:230-242"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I21",
+      "title": "Bare next() without a default in ItemRerun.replace/_outcome/_reconcile, and a dead raise AssertionError after the with block.",
+      "members": [
+        "sonnet/1/4",
+        "sonnet/2/3"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "next() without a default would raise StopIteration if the index were absent, but _check_record has already verified the record exists and the item index matches the request, so it cannot fire. The trailing AssertionError is dead code for the type checker.",
+      "evidence": [
+        "src/squadron/pipeline/batch_report.py:378",
+        "src/squadron/pipeline/item_resume.py:136",
+        "src/squadron/pipeline/item_resume.py:164"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I22",
+      "title": "run() is oversized and repeats the SDK/PROMPT_ONLY dispatch in its resume branches.",
+      "members": [
+        "sonnet/2/4"
+      ],
+      "grade": "PREEXISTING",
+      "confidence": "medium",
+      "why": "The duplicated match blocks in the resume and implicit-resume branches were already there; the diff only wraps each existing call in _locked and does not add a new copy as the finding says. The item-resume branch calls handle_item_resume, not another dispatch.",
+      "evidence": [
+        "src/squadron/cli/commands/run.py:1231-1257",
+        "src/squadron/cli/commands/run.py:1289-1315"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I23",
+      "title": "_write_each_report's signature exceeds the 104-column line limit.",
+      "members": [
+        "sonnet/3/3"
+      ],
+      "grade": "FALSE",
+      "confidence": "high",
+      "why": "The cited line at executor.py:1454 is exactly 104 characters, within line-length = 104, and the named test files have no line over 104. ruff would not flag it.",
+      "evidence": [
+        "src/squadron/pipeline/executor.py:1454",
+        "pyproject.toml:71"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I24",
+      "title": "The per-item report write has no fsync, and a per-item write failure ends the batch without that being documented or tested.",
+      "members": [
+        "sonnet/3/4"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "Writes go through asyncio.to_thread with temp-and-rename, so the loop is not blocked. The lack of fsync and the undocumented 'write failure ends the batch' behavior are hardening and docs points; D12 already states that a report write failure fails the run.",
+      "evidence": [
+        "src/squadron/pipeline/executor.py:1598"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I25",
+      "title": "_locked takes an already-created coroutine and must close it when the lock is refused.",
+      "members": [
+        "sonnet-high/3/3"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "_locked receives a coroutine object and calls run_coroutine.close() on lock refusal; that is correct, but a factory or nullcontext would be simpler. Complexity point only.",
+      "evidence": [
+        "src/squadron/cli/commands/run.py:944-955"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I26",
+      "title": "New test helpers and tests use type: ignore and untyped signatures.",
+      "members": [
+        "sonnet-high/3/7"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "item_resume_support.py and several tests carry type: ignore[no-untyped-def] and [attr-defined]. A test typing point with no effect on product behavior.",
+      "evidence": [
+        "tests/pipeline/item_resume_support.py:176",
+        "tests/cli/commands/test_run_lock_cli.py:79"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "197-I27",
+      "title": "item_params pops reserved keys inside a generator expression, so a reserved key stored as None is dropped without a warning.",
+      "members": [
+        "sonnet-high/3/8"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "The comprehension mutates params and reports only non-None values, so a None-valued reserved key is removed silently. Harmless (the key is removed as intended) and only a readability point; the assert in run.py is guarded by check_item_flags.",
+      "evidence": [
+        "src/squadron/pipeline/item_resume.py:257",
+        "src/squadron/cli/commands/run.py:1201"
+      ],
+      "known": null,
+      "fail_justified": null
+    }
+  ]
+}

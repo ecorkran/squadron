@@ -1,0 +1,317 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Calendar outage escapes as an unmapped traceback instead of exit 4",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:63",
+  "description": "`calendar_sessions` catches only `psycopg.OperationalError` and `CalendarNotFoundError` around `sessions_between`. `TradingCalendar` reads through `self._pool.connection()` (`src/manta_trading/data/base/trading_calendar.py:194`). An unreachable server through `psycopg_pool` surfaces as `PoolTimeout`, not `OperationalError`. The codebase already catches it for this reason (`src/manta_trading/cli/commands/data.py:416`, `src/manta_trading/data/acquisition/daemon/daily.py:770`). `PoolTimeout` is not in `exit_code_for` (`src/manta_trading/cli/commands/tick_exit.py:54-57`), so `run_mapped` re-raises it and the user gets a traceback. That contradicts the module docstring (\"a calendar \u2026 outage raises (\u2192 exit 4)\") and `READ_EPILOG`. The only unreachable-database test covers the tick database (`test/integration/data/test_tick_status_cli.py`, `test_an_unreachable_tick_database_exits_4`). Separately, `OutOfPopulatedRangeError` also maps to exit 4 through `TickCalendarError`, which the epilog's \"unreachable\" wording does not describe. I could not reproduce the pool behavior here. The basis is the library's documented behavior plus the codebase's own handlers. Fix: catch `PoolTimeout` alongside `OperationalError`, and add a test with a closed calendar port."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "`caught_up` reports a result when the wanted range is unknown",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:217",
+  "description": "`wanted` becomes `None` when `_wanted_end` returns `None`, which happens when a tier is set, the universe `end` is unset, and no edge row exists. `_scope` then ignores the wanted range. Line 217 still passes `wanted=wanted_start is not None`, so `caught_up` is evaluated over held sessions alone and can return `True`. The output then reads \"caught up: yes\" next to \"edge: never observed\". `caught_up`'s own contract says `None` means no wanted range (`src/manta_trading/data/tick/tick_status.py:152-156`). Fix: `wanted=wanted is not None`. This is latent today because the only universe entry has `tier=None` (`src/manta_trading/data/tick/universe.py:45-47`)."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "The raw-count proof is not scoped to the product",
+  "location": "src/manta_trading/data/tick/status_reads.py:154",
+  "description": "`raw_counts` counts every `tick_trade` row in each session window, with no filter on instrument or unit. `_session_row` (`src/manta_trading/data/tick/tick_coverage.py:81-90`) builds its instrument list from every key in `raw`, so any instrument with raw rows but no ledger row for this shape is reported as a mismatch, and the verb exits 3. `tick_trade` is one table for all products. It has no product column (`src/manta_trading/market/schema/migrations/tick.py:222-245`), and the universe comment says slice 231 adds GC. Once a second product is ingested, `mt data tick coverage --product ES` will flag that product's instruments. This is not reachable today because only ES is configured, and the single-product tests cannot show it. `tick_trade.unit_id` is `NOT NULL` (`tick.py:244`), so scoping the scan to the shape's current unit ids would also give an exact per-unit match against the ledger. Add a test that inserts a row for another instrument inside a session window and asserts `check == \"ok\"`."
+ },
+ {
+  "ref": "haiku-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "`age()` prints nonsense for negative ages",
+  "location": "src/manta_trading/cli/commands/tick_status_render.py:43",
+  "description": "`edge_age_seconds` is `now - observed_at` (`tick_status_build.py:212`). `now` comes from the status host's clock, and `observed_at` is the `now` the acquiring run passed to `_upsert_edge` (`src/manta_trading/data/tick/availability.py:108-118`), not a database default. Any skew of one second or more makes the age negative. `age` does not guard for that, and `divmod` floors the negative values, so `age(-30)` returns `\"-1d 23h\"`. The line then prints \"observed -1d 23h ago\". Fix: handle negative ages explicitly (for example, \"clock skew: observed N s in the future\"). Add a unit test for negative and zero input. No test covers `age` today."
+ },
+ {
+  "ref": "haiku-xhigh/1/4",
+  "severity": "CONCERN",
+  "title": "`build_coverage` has no range guard",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:94",
+  "description": "The `end <= start` check exists only in the CLI (`src/manta_trading/cli/commands/tick_store_cmds.py:216-222`). `build_coverage` is the function slice 230's API is meant to serialize (per the `tick_status_build` docstring). With `end <= start`, the session filter `start <= s.session_date < end` matches nothing, so the result has `mismatched: false` and reads as a pass. Fix: validate in `build_coverage` and raise, and keep the CLI's friendly message."
+ },
+ {
+  "ref": "haiku-xhigh/1/5",
+  "severity": "CONCERN",
+  "title": "The raw-count scan has no supporting index, and its plan is unverified",
+  "location": "src/manta_trading/data/tick/status_reads.py:154",
+  "description": "The `tick_trade` key is `(instrument_id, ts_event, sequence, sequence_ordinal)`, and the migration says \"no index beyond the key\" (`tick.py:215-218`). `raw_counts` joins with a non-equality `ts_event BETWEEN open AND close` against an unnest of sessions. Nothing in the schema supports a `ts_event` range scan, so each session window may read whole chunks. The docstring's \"the one scan\" is therefore unverified. `sql.md` asks for `EXPLAIN ANALYZE` before performance claims. I could not run it here. Run it on a realistic multi-month range and record the result before relying on coverage over long ranges."
+ },
+ {
+  "ref": "haiku-xhigh/1/6",
+  "severity": "CONCERN",
+  "title": "Tier-configured status logic has no integration coverage",
+  "location": "test/integration/data/test_tick_status_build.py",
+  "description": "Every integration test uses the ES entry, which has `tier=None` (`universe.py:45-47`). Untested end to end: `_wanted_end` and the wanted-range scope in `_scope`; the `caught up: yes/no; holed [...]` rendering (`tick_status_render.py:84-87`); the `tier: \u2026, wanted from` line; and holed-session reporting in a wanted range. `test_tick_status.py` covers `caught_up` in isolation only. Caught-up and holed sessions are the verb's main reporting, so add an integration test that sets a tier and an edge and asserts that output. Such a test would also catch the `caught_up` bug above."
+ },
+ {
+  "ref": "haiku-xhigh/2/0",
+  "severity": "CONCERN",
+  "title": "caught-up reports yes/no when the wanted range has a start but no known end",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:217",
+  "description": "`wanted` is only set when both `wanted_start` and `wanted_end` exist (lines 186\u2013193). But line 217 passes `wanted=wanted_start is not None` to `caught_up`. For a product with a tier, no `entry.end`, and no observed edge, `_scope` returns only the sessions that held units touch. `caught_up` then evaluates just those, so it can print `caught up: yes` while sessions in the wanted range are never checked, including gaps before the first held day. The slice 225 doc says a product without a wanted range is \"n/a\", and the `caught_up` docstring (`tick_status.py:152-156`) says the same. The integration test only exercises the tier-`None` ES entry (`universe.py:46`), so this path has no coverage. Fix: pass `wanted=wanted is not None`, and add a test with a tier set and no edge."
+ },
+ {
+  "ref": "haiku-xhigh/2/1",
+  "severity": "CONCERN",
+  "title": "`calendar_sessions` copies the error translation from `product_session_days`",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:63",
+  "description": "`calendar_sessions` (lines 63\u201375) repeats `product_session_days` (`tick_calendar.py:67-81`) almost line for line. Both open a `TradingCalendar`, catch `(psycopg.OperationalError, CalendarNotFoundError)` and `OutOfPopulatedRangeError`, re-raise each as `TickCalendarError` with the same messages, and close in `finally`. That mapping decides the exit code through `exit_code_for`, so it should exist once. Fix: move a blocking `sessions_between` wrapper into `tick_calendar.py` and have both callers use it."
+ },
+ {
+  "ref": "haiku-xhigh/2/2",
+  "severity": "CONCERN",
+  "title": "`status_reads` repeats the unit/request join and breaks the manifest modules' single-home rule",
+  "location": "src/manta_trading/data/tick/status_reads.py:50",
+  "description": "`_UNITS` repeats `UNIT_FROM` from `manifest_reads.py:90`. That join is also written inline in `manifest_reads.py` at lines 167\u2013170 and 199\u2013201. The docstring at `manifest_reads.py:5-6` says every SQL statement on `tick_request` and `tick_archive_unit` lives in one of three modules (`manifest_reads`, `manifest_request_reads`, `manifest_repo`). `status_reads.py` is a fourth home. Fix: import `UNIT_FROM`, or move the status SQL into one of those three modules."
+ },
+ {
+  "ref": "haiku-xhigh/2/3",
+  "severity": "CONCERN",
+  "title": "`raw_counts` joins on a range predicate; the cost is unmeasured",
+  "location": "src/manta_trading/data/tick/status_reads.py:166",
+  "description": "`raw_counts` joins `tick_trade` to `unnest(...)` on `t.ts_event BETWEEN s.open_ns AND s.close_ns`. A range predicate cannot drive a hash or merge join, so Postgres will likely run a nested loop that compares each tick row in the range against every session in the array. The cost scales as rows \u00d7 sessions. The `WHERE` bound limits the rows scanned, but not the per-row work. I did not measure this. The project's SQL rules require `EXPLAIN ANALYZE` for tuning, so run it on a realistic multi-month range before relying on `coverage`. A per-session `LATERAL` count over `tick_trade` is one alternative to benchmark."
+ },
+ {
+  "ref": "haiku-xhigh/2/4",
+  "severity": "CONCERN",
+  "title": "Exit 4 covers more than the epilog says, and the calendar-outage path is untested",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:70",
+  "description": "- `calendar_sessions` converts `OutOfPopulatedRangeError` into `TickCalendarError`, and `exit_code_for` maps that to `EXIT_STORAGE` (`tick_exit.py:54-57`). A `--start` or `--end` outside the calendar's populated span therefore exits 4 (\"storage\"). `READ_EPILOG` (`tick_store_cmds.py:37-42`) lists exit 1 for input errors and exit 4 only for an unreachable database, so this case matches neither.\n- `READ_EPILOG` promises exit 4 when the calendar database is unreachable. `calendar_sessions` catches only `psycopg.OperationalError` and `CalendarNotFoundError`. `TradingCalendar.__init__` creates `ConnectionPool(..., open=True)` (`trading_calendar.py:154`), so connection failures surface later, in `_ensure_loaded` (line 194). I could not confirm which exception class the pool raises. No test covers an unreachable calendar on `status` or `coverage`; `test_tick_status_cli.py:147` only covers the tick database.\n\nFix: decide whether an out-of-range input is preflight (exit 1), then add a test with an unreachable calendar URL that asserts the code the epilog states."
+ },
+ {
+  "ref": "haiku-xhigh/3/0",
+  "severity": "CONCERN",
+  "title": "Status reports \"caught up: yes\" when the wanted range was never evaluated",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:217",
+  "description": "`_product_status` sets `wanted` to `None` when `wanted_end` is unknown (lines 189-193), so `_scope` covers only the held units. Line 217 still passes `wanted=wanted_start is not None`, which is true whenever a start is configured. `caught_up` returns `all(...)` over the verdicts, and `all([])` is `True`. A product with `tier` and `start` set, no `tick_dataset_edge` row, and no units therefore gets `caught_up=True`, and `print_status` renders \"caught up: yes\" (`tick_status_render.py:81-87`). For a verb whose purpose is to prove completeness, this is a silent fallback. The shipped universe has `tier=None` (`universe.py:46`), so it is latent today, but it becomes reachable once an operator sets a tier and start before the first pass. Fix: pass `wanted=wanted is not None` and render the unknown-end case explicitly."
+ },
+ {
+  "ref": "haiku-xhigh/3/1",
+  "severity": "CONCERN",
+  "title": "Raw-count scan is not scoped to the shape's units or instruments",
+  "location": "src/manta_trading/data/tick/status_reads.py:166",
+  "description": "`raw_counts` counts every `tick_trade` row in each session window for any instrument, with no `unit_id` or instrument filter. The ledger side is scoped to the shape (`_SHAPE_WHERE`, lines 55-59). `_session_row` (`tick_coverage.py:81`) builds the instrument set as the union of ledger and raw keys, so a foreign-instrument row in a session window becomes a `Mismatch` with ledger 0, and the CLI exits 3. Foreign rows are possible: ingest selects every verified tier unit when no `--unit-id` is given (`ingest_select.py:84-92`), and `_not_selectable` does not check shape for named units (`ingest_select.py:95-107`). An adopted job for another product can therefore land in `tick_trade`. The universe has one product today, so this is latent. Once a second product shares the database and the GLBX calendar, `coverage --product ES` will report false mismatches. Confidence is medium: I did not trace `adopt`'s shape acceptance end to end. Fix: restrict the raw scan to the shape's current `unit_id`s (`tick_trade` carries `unit_id`, `migrations/tick.py:244`), which mirrors the ledger definition. Add a test with a foreign-shape unit inside the window."
+ },
+ {
+  "ref": "haiku-xhigh/3/2",
+  "severity": "CONCERN",
+  "title": "Negative edge age renders as \"-1d 23h\"",
+  "location": "src/manta_trading/cli/commands/tick_status_render.py:43",
+  "description": "`age` applies chained `divmod` to `int(seconds)`. For negative input, floor division yields negative components, and `if days:` then fires. By hand, `age(-5)` and `age(-3600)` both return `-1d 23h`. The input is `now - edge.observed_at` (`tick_status_build.py:212`). `observed_at` is written with the pass process's `run.clock()` (`availability.py:150`), and status reads its own `utc_now()` (`tick_store_cmds.py:187,197`). The ingest docstring says ingest runs on a host without the Databento key, so the two hosts' clocks can differ, and a status host behind the pass host yields a negative age. No test covers `age`. Fix: refuse or clamp negative ages explicitly, and add a parametrized test that includes negative values."
+ },
+ {
+  "ref": "haiku-xhigh/3/3",
+  "severity": "CONCERN",
+  "title": "Raw scan is likely O(trades \u00d7 sessions) and unmeasured",
+  "location": "src/manta_trading/data/tick/status_reads.py:166",
+  "description": "`raw_counts` joins `tick_trade` to an `unnest` of sessions on `ts_event BETWEEN open AND close`. A range predicate cannot be hashed or merged, so the likely plan is a nested loop that compares each trade row against each session, which is O(rows \u00d7 sessions). For a long range over a dense product, that is expensive. The diff has no EXPLAIN ANALYZE, and `sql.md` asks for one when tuning. I could not measure this, so the finding is unverified. Fix: measure on a realistic range first. If it is confirmed, use a per-session bounded aggregate (chunk exclusion on `ts_event`) or a LATERAL join so each trade row is touched once."
+ },
+ {
+  "ref": "haiku-xhigh/3/4",
+  "severity": "CONCERN",
+  "title": "Calendar-session helper duplicates `product_session_days`",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:63",
+  "description": "`calendar_sessions` builds `TradingCalendar(calendar_id, url)`, maps `psycopg.OperationalError`, `CalendarNotFoundError` and `OutOfPopulatedRangeError` to `TickCalendarError`, and closes the calendar in `finally`. `tick_calendar.product_session_days` (lines 67-81) does the same with the same three branches. The helper also lives in the status module, although `TickCalendarError` and the calendar code are in `tick_calendar.py`. Fix: move one shared function into `tick_calendar.py` and call it from both places."
+ },
+ {
+  "ref": "haiku-xhigh/3/5",
+  "severity": "CONCERN",
+  "title": "Test gaps on the wanted-range path and the new helpers",
+  "location": "test/integration/data/test_tick_status_build.py:87",
+  "description": "Every new integration test uses `TICK_UNIVERSE[0]`, which has `tier=None` (`universe.py:46`). Line 87 pins `caught_up is None`. As a result, none of these run: `_wanted_end`, the wanted branch of `_scope`, `caught_up` returning True or False, `holed_sessions`, or tier rendering. A single test with a tier and start would have caught the first finding. Also untested: `age()` (no test imports it), the cross-shape exclusion in `raw_counts` (`test_tick_status_reads.py:117-132` uses one unit), and the no-contracts branch of `_product_lines`. Fix: add a parametrized case with a configured tier and start, covering no edge and no units."
+ },
+ {
+  "ref": "haiku-xhigh/3/6",
+  "severity": "CONCERN",
+  "title": "Unannotated SQL fragments may fail strict pyright",
+  "location": "src/manta_trading/data/tick/status_reads.py:50",
+  "description": "`_UNITS`, `_LEDGER_UNITS` and `_SHAPE_WHERE` are plain module-level strings, so pyright infers `str`. They are interpolated into `conn.execute(f\"...\")` at lines 84-85, 101-103 and 133-138. Every sibling module annotates this kind of fragment as `LiteralString` (`manifest_reads.py:84-91`, `ingest_select.py:63`, `manifest_repo.py:163`), which is what lets pyright check psycopg's `LiteralString` query argument. Strict pyright is a merge blocker in this project. I could not run pyright, and I did not confirm the installed psycopg signature, so treat this as likely rather than confirmed. Fix: annotate the three constants `LiteralString`."
+ },
+ {
+  "ref": "sol/1/0",
+  "severity": "FAIL",
+  "title": "Compare ledger and raw counts within one consistent snapshot",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:109-113",
+  "description": "The CLI supplies an autocommit connection, so these queries see separate snapshots. If ingestion commits between them, coverage compares the old ledger with newly inserted raw rows and reports corruption, exiting 3 despite a valid database. Supersession can produce the same race. Use a read-only repeatable-read transaction encompassing the report reads, and add a concurrent-ingest regression test."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "CONCERN",
+  "title": "Raw counts include unrelated request shapes",
+  "location": "src/manta_trading/data/tick/status_reads.py:166-172",
+  "description": "`ledger_totals` filters by dataset, symbols and symbology, but `raw_counts` filters only timestamps. Valid rows belonging to another request shape therefore appear as unexpected records in this product\u2019s coverage. Ingestion supports shapes beyond the configured universe through `planning_product`. Define matching scope for both sides without hiding genuinely unexpected rows, and test multiple shapes sharing a session window."
+ },
+ {
+  "ref": "sol/1/2",
+  "severity": "CONCERN",
+  "title": "Coverage repeatedly scans all instrument-session keys on the event loop",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:81",
+  "description": "Each session expands and scans both complete count dictionaries, making report assembly quadratic in the number of sessions and allocating a temporary tuple each time. This runs synchronously inside `build_coverage`. A local probe with 100,000 keys took approximately 4.4 ms for just one session, exceeding the mandated 1 ms synchronous-work limit. Group counts by session once, offload substantial processing, and add a realistic coverage latency/event-loop load test."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "FAIL",
+  "title": "Coverage compares counts from different database snapshots",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:109-113",
+  "description": "Ledger totals and raw counts are separate queries on the autocommit connection supplied by `_read`. If ingestion commits between them, coverage compares the old ledger against newly committed trades and falsely reports corruption, exiting 3. Ingestion\u2019s transaction does not prevent this reader-side race. Run the report within a read-only, repeatable-read transaction and add a concurrent-ingestion regression test."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "CONCERN",
+  "title": "Coverage repeatedly scans every aggregate on the event loop",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:81",
+  "description": "Each `_session_row` expands and scans both complete dictionaries to find one session\u2019s instruments. Across all sessions, this produces quadratic growth and runs synchronously inside `build_coverage`. A local benchmark with 2,520 sessions and 40 instruments took approximately 0.64 seconds for just 100 session rows, exceeding the async synchronous-work limit. Group counts by session once, and offload substantial processing from the event loop.\n\nTests could not run: the available project Python environment lacks `pytest`."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "FAIL",
+  "title": "Coverage compares counts from different database snapshots",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:109-113",
+  "description": "The CLI supplies an autocommit connection, so ledger and raw counts are separate snapshots. If ingestion commits between these reads, coverage compares the old ledger with new raw rows and falsely reports corruption (exit 3). Supersession can cause the same problem. Run the report within a read-only REPEATABLE READ transaction and add a concurrent-ingest regression test."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "CONCERN",
+  "title": "Raw counts are not scoped to the selected request shape",
+  "location": "src/manta_trading/data/tick/status_reads.py:166-173",
+  "description": "`ledger_totals` filters by dataset, symbols and symbology, but `raw_counts` counts every instrument in the session windows. Records ingested under another request shape therefore appear as raw-only mismatches for the selected product. Apply equivalent ownership scoping to the raw query while retaining detection of unexpected rows within that scope."
+ },
+ {
+  "ref": "sol/3/2",
+  "severity": "CONCERN",
+  "title": "Coverage repeatedly scans all count keys on the event loop",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:81-82",
+  "description": "Every session reconstructs and scans all ledger/raw keys, making report assembly quadratic in the session count. An isolated execution of this function with 250 sessions and 100 instruments took approximately 244 ms synchronously, violating the project's event-loop discipline. Group counts by session once, and move potentially substantial report assembly off the event loop."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "Runtime invariant enforced with a module-level `assert`",
+  "location": "src/manta_trading/cli/commands/tick_status_render.py:27-29",
+  "description": "The check that `_BUCKET_ROWS` covers every `TickSessionStatus` uses `assert`. Python strips asserts under `-O`, so a bucket added to the enum later would go unreported in optimized runs without any error. The project says to fail explicitly. Replace it with an explicit `if ... raise RuntimeError(...)`, or add a unit test that compares the two sets."
+ },
+ {
+  "ref": "sonnet/1/1",
+  "severity": "CONCERN",
+  "title": "Exception-to-exit-code mapping depends on a caller-supplied tuple",
+  "location": "src/manta_trading/cli/commands/tick_store_cmds.py:67-80",
+  "description": "`run_mapped` checks `isinstance(exc, storage)` before `exit_code_for`. This lets `TickDatabaseUnreachable` override the \"preflight\" mapping for the read verbs only. It works, and `tick_exit.py` already maps `TickCalendarError` and `psycopg.OperationalError` to storage. However, exit-code policy is now split between `tick_exit.py`, which the design says defines it once, and a per-verb parameter. `_read_storage()` also needs a function-local import just to build a one-element tuple. A cleaner option is a dedicated `TickReadUnreachable` exception, or a `read_only` flag passed to `exit_code_for`. As written, the \"one place\" invariant is weakened."
+ },
+ {
+  "ref": "sonnet/1/2",
+  "severity": "CONCERN",
+  "title": "Long functions and mixed responsibilities in the status builder and renderer",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:_product_status",
+  "description": "`_product_status` is about 45 lines. It builds the wanted range, verdicts, contract lines, buckets and the DTO in one body. `_product_lines` in `tick_status_render.py` is about 60 lines, over the ~50-line guideline. `tick_status_build.py` is also about 245 lines and defines a generic `jsonable` helper. `tick_coverage.py` imports `jsonable` and other shared helpers from this module, so those helpers belong in a smaller shared module. This isn't blocking."
+ },
+ {
+  "ref": "sonnet/2/0",
+  "severity": "CONCERN",
+  "title": "Raw-count scan is not scoped to the product's shape",
+  "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+  "description": "`raw_counts` counts every `tick_trade` row in the session window, grouped by instrument. It has no filter for the product's dataset, symbols or instruments. `ledger_totals` is filtered by `Shape`. `_session_row` in `tick_coverage.py` takes the union of instruments from both maps. Any instrument that belongs to another product therefore shows up with ledger 0 and raw N, and is reported as a mismatch. `build_coverage` would then exit 3 spuriously.\n\n`TICK_UNIVERSE` currently holds only ES (`universe.py:46`), so this does not bite today. It will as soon as a second product is added. Either restrict the raw scan to the product's instruments, or document and test the single-product assumption."
+ },
+ {
+  "ref": "sonnet/2/1",
+  "severity": "CONCERN",
+  "title": "Module-level `assert` used as the exhaustiveness guard",
+  "location": "src/manta_trading/cli/commands/tick_status_render.py:29-31",
+  "description": "The check that `_BUCKET_ROWS` covers every `TickSessionStatus` is a bare `assert`. It is stripped under `python -O`, and it raises `AssertionError` at import time, which would break the whole CLI. A unit test asserting the same equality would enforce it without the import-time risk. The test file has no such test."
+ },
+ {
+  "ref": "sonnet/2/2",
+  "severity": "CONCERN",
+  "title": "Duplicate `shape_units` query and O(n\u00b2) filtering in status build",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:_scope, session_verdicts, _product_status",
+  "description": "`_scope` calls `shape_units(conn, shape_of(entry))`. `session_verdicts` then calls it again for the same product, so each product pays for the same query twice. `[c for c in lines if c not in spreads]` is a list-membership test using dataclass equality, which is quadratic in contract count. Filtering on `c.instrument_class != SPREAD_CLASS` would avoid it. Neither issue is severe, but both are easy to fix. Pass the fetched units through, and filter on the class directly."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "Raw-count scan is not scoped to the product's shape, so coverage will false-flag once a second product exists",
+  "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+  "description": "`raw_counts` counts every `tick_trade` row in the session time windows, for all instruments. `ledger_totals` is filtered by the product's shape (dataset, symbols, stype_in, tier units). `build_coverage` runs once per universe entry and compares the two in `_session_row`. Any instrument that belongs to another product, or is not covered by this shape, appears with ledger 0 and raw N. That is reported as a mismatch and exits 3. `TICK_UNIVERSE` currently holds only `ES` (`universe.py:45`), so nothing fails today. Adding a second product would make `coverage` fail for every product with overlapping sessions. Scope the raw scan to the shape's instruments, for example by joining the ledger's instrument ids. Alternatively, assert and document the single-product assumption at the call site."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "`caught_up` reports \"yes\" vacuously when a tier is configured but the wanted range is unknown",
+  "location": "src/manta_trading/data/tick/tick_status_build.py#_product_status",
+  "description": "`wanted` is `None` when the edge has never been observed and the entry has no `end`. `caught_up` is still called with `wanted=wanted_start is not None`. In that case the verdicts cover only sessions that already hold units, and an empty or all-complete list makes `caught_up` return `True` (`tick_status.py:159`). The render then prints \"caught up: yes\", though nothing established what was wanted. The project rule says to fail explicitly rather than use silent fallbacks. Pass `wanted=wanted is not None`, so this case reports `n/a`. A separate \"range unknown\" state would be better if the distinction matters. The CLI tests don't cover this combination, so add a case for it."
+ },
+ {
+  "ref": "sonnet-high/1/2",
+  "severity": "CONCERN",
+  "title": "Duplicate `shape_units` query per product in status",
+  "location": "src/manta_trading/data/tick/tick_status_build.py#_scope",
+  "description": "`_scope` calls `shape_units` to find the held days. `session_verdicts` then calls it again for the same shape. That is two identical manifest scans per product on each `status` run. Fetch the units once and pass them to both. This would also remove the chance of the two reads seeing different snapshots."
+ },
+ {
+  "ref": "sonnet-high/1/3",
+  "severity": "CONCERN",
+  "title": "Module-level `assert` guards the bucket layout",
+  "location": "src/manta_trading/cli/commands/tick_status_render.py:25-28",
+  "description": "The check that `_BUCKET_ROWS` covers every `TickSessionStatus` is a bare `assert`. It is stripped under `python -O`, and an import-time `AssertionError` is a poor failure mode for a CLI. A unit test asserting the same set equality would give the same protection without the runtime hazard."
+ },
+ {
+  "ref": "sonnet-high/2/0",
+  "severity": "CONCERN",
+  "title": "`caught_up` can report \"yes\" when the wanted range is unknown",
+  "location": "src/manta_trading/data/tick/tick_status_build.py#_product_status",
+  "description": "When a product has a tier but the dataset edge has never been observed and `entry.end` is `None`, `_wanted_end` returns `None`, so `wanted` is `None`. `caught_up` is still called with `wanted=wanted_start is not None`, which is `True`. Scope then falls back to only the sessions already held.\n\n`caught_up` ends in `all(...)` over those verdicts. With nothing held, that is vacuously `True`, so the report says `caught up: yes`. Even with some sessions held, the answer covers only those sessions, not the range the product wants. This is the silent fallback the project rules forbid. It is latent today because `TICK_UNIVERSE` has `tier=None`, but it will surface when a tier is configured before the first `pass` has observed an edge.\n\nTreat \"wanted configured but end unknown\" as its own state. Return `None` or \"unknown\", or raise."
+ },
+ {
+  "ref": "sonnet-high/2/1",
+  "severity": "CONCERN",
+  "title": "`raw_counts` is not scoped to the product's shape",
+  "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+  "description": "`raw_counts` counts every `tick_trade` row in the session windows, grouped by instrument. The ledger side (`ledger_totals`) is filtered to the product's shape. `build_coverage` runs once per universe entry, so a second product would fail the check in the first product's windows:\n- Its instruments have raw rows but no ledger rows.\n- They show up as mismatches (ledger 0, raw n), which makes `coverage` exit 3 falsely.\n\nIt works today only because `TICK_UNIVERSE` has one entry (`ES`). Restrict the raw scan to the product's instruments, for example by joining on the shape's ledger or definition instrument IDs, or document that coverage supports one product."
+ },
+ {
+  "ref": "sonnet-high/2/2",
+  "severity": "CONCERN",
+  "title": "Calendar error mapping duplicated",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:62-75",
+  "description": "`calendar_sessions` repeats the open/try/except/close pattern and the same error mapping as `product_session_days` in `tick_calendar.py:67-81`. Both map `psycopg.OperationalError` and `CalendarNotFoundError` to \"unavailable\" and `OutOfPopulatedRangeError` to a calendar error. The diff did refactor shared helpers elsewhere (`utc_midnight`, `days_touched`). The same treatment fits here, for example a shared `sessions_between` wrapper in `tick_calendar.py` that `product_session_days` also uses. Otherwise the two mappings will drift."
+ },
+ {
+  "ref": "sonnet-high/3/0",
+  "severity": "CONCERN",
+  "title": "Render branches have no direct tests",
+  "location": "src/manta_trading/cli/commands/tick_status_render.py:51-111",
+  "description": "`_product_lines` has several branches: no tier configured, edge never observed, `caught_up` of `None` or holed, and \"contracts: none with ingested records yet\". `age()` is also untested. A grep of `test/` found no unit test importing `tick_status_render`, and none of those strings appear in the new tests. The integration tests (`test_tick_status_cli.py`) only exercise the single \"ingested, tier-less, edge-less\" path. The \"no contracts\" message came from a late bug-fix commit and has no regression test, and `age()` (with its `divmod` arithmetic) has no boundary tests (0 s, 59 s, 1 h, 1 d). Pure string-building functions like these are cheap to parametrize. `print_coverage`'s mismatch lines are covered only through exit-code and \"mismatch\" substring checks."
+ },
+ {
+  "ref": "sonnet-high/3/1",
+  "severity": "CONCERN",
+  "title": "Import-time `assert` guards a runtime invariant",
+  "location": "src/manta_trading/cli/commands/tick_status_render.py:34-36",
+  "description": "The check that `_BUCKET_ROWS` covers every `TickSessionStatus` is a module-level `assert`. It is stripped under `python -O`, so a new status would then be silently dropped from the report. A failure also surfaces as an import error for the whole CLI. A unit test asserting the same set equality would enforce it without those problems. Alternatively, derive the layout from the enum."
+ },
+ {
+  "ref": "sonnet-high/3/2",
+  "severity": "CONCERN",
+  "title": "`shape_units` is queried twice per product",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:96-107,150-179",
+  "description": "`_product_status` calls `_scope`, which runs `shape_units(conn, shape_of(entry))`. It then calls `session_verdicts`, which runs the same query again. It also calls `contract_lines`, which re-joins the same unit/request/ledger set. The unit read is a full-shape scan with no date bound, so each product pays for it twice. Passing the first result into `session_verdicts` would remove the duplicate query and the chance of the two reads seeing different data."
+ },
+ {
+  "ref": "sonnet-high/3/3",
+  "severity": "CONCERN",
+  "title": "Loosened connection types at the read boundary",
+  "location": "src/manta_trading/cli/commands/tick_store_cmds.py:164-176,213-217",
+  "description": "`_read` takes `Callable[[Any, str], ...]`, and the inner `read(conn: Any, ...)` in `tick_coverage` is also `Any`. The project already defines `Conn = psycopg.AsyncConnection[Any]` in `manifest_reads`. Using it here keeps strict pyright able to check the callbacks. `_read_storage()` exists only to lazily import one class, and it adds indirection. The same lazy import could sit inline in `tick_status` and `tick_coverage`, or `TickDatabaseUnreachable` could be passed directly."
+ },
+ {
+  "ref": "sonnet-high/3/4",
+  "severity": "CONCERN",
+  "title": "`run_mapped` storage override is order-dependent",
+  "location": "src/manta_trading/cli/commands/tick_store_cmds.py:70-80",
+  "description": "`TickDatabaseUnreachable` subclasses `TickPreflightError`, so `exit_code_for` still returns exit 1 for it in the writers. The read verbs get exit 4 only because they pass a `storage` tuple to `run_mapped`. Exit-code mapping is now split between `tick_exit.exit_code_for` and a per-call override, which cuts against the \"defined once, in `tick_exit.py`\" statement in the module docstring. Handling the subclass in `exit_code_for` would keep one source of truth. The writers would need a decision on whether unreachable means exit 1 or 4 there too. The behaviour is tested and the override is documented, so this is a design smell and not a bug."
+ }
+]

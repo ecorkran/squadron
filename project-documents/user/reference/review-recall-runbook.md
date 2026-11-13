@@ -128,3 +128,16 @@ Append one dated line per batch: cases, configs, runs per config, recall, link t
   - Sonnet with no tools found almost as much as sonnet with tools (5 vs 4), so on this set sonnet's tools did not help it.
   - Verdict strength varies: sol and haiku-xhigh issue FAIL often (26 and 16 of 30). Precision (how many of those findings are real) is not scored; a high-recall config that cries FAIL on everything is not yet shown to be better.
   - Cost for sdk configs is the SDK's reported number on a subscription, not a charge. Haiku-xhigh took the longest of the sdk runs, 6 minutes median.
+- 20261113 grid 2 precision: every CONCERN and FAIL finding from haiku-xhigh, sol, sonnet-high and sonnet (560) was grouped into distinct issues per case (221) and graded against the code at head by one agent per case: REAL (should be fixed before merge), MINOR (true, low value), FALSE, PREEXISTING, UNSURE. Rules: `review-recall-results/20261112-grid2/precision/BRIEF.md`; graded files, `report.py` and the human review file `REVIEW.md` in the same folder. **Agent grades, not yet checked by a person.** I checked two sol-only REAL issues against the code (227-I12, which the author later fixed in `94beba1b`; 175-I19); both held.
+
+  | Config | Findings | REAL | MINOR | FALSE | Precision | REAL per run | FAIL justified |
+  |---|---|---|---|---|---|---|---|
+  | haiku-xhigh | 235 | 57 | 166 | 2 | 24% | 1.9 | 13 of 23 |
+  | sol | 91 | 72 | 18 | 0 | 79% | 2.4 | 30 of 50 |
+  | sonnet-high | 128 | 24 | 103 | 1 | 19% | 0.8 | 2 of 3 |
+  | sonnet | 106 | 13 | 87 | 4 | 12% | 0.4 | 0 of 0 |
+
+  Notes:
+  - Almost nothing is false (7 of 560); the noise is MINOR. haiku-xhigh's recall lead comes with about 5.5 minor findings per run.
+  - sol leads on both axes: fewest findings, most real ones, and 41 REAL issues in total of which sol alone found 14 (for example 307's estimate pricing the installed release and 227's re-run comparison). Its FAIL verdicts are justified 30 of 50 times, so it still over-rates severity.
+  - REAL counts include real defects beyond the 14 known bugs; recall in grid 2 counts only the known bugs.
