@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Check session usability before switching models",
+      "description": "After a reconnect fails, `_reconnect` records `unusable_reason` and leaves the session with a client that did not connect. `set_model()` does not check that state, but the session dispatch path calls it before `dispatch()` performs its usability check. A later step can therefore send a model-switch request to the known-unusable client instead of failing immediately with the recorded reason.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:168-177"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Do not report failed stop requests as stopped tasks",
+      "description": "When `stop_task()` raises, the method logs the error but still clears the ledger and sets `background_tasks_stopped` to the number of tasks attempted. The dispatch metadata can therefore claim agents were stopped when their stop requests failed; those agents may still be running while subsequent pipeline steps proceed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:329-344"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Add a load test for background-agent waiting",
+      "description": "This adds asynchronous SDK-stream waiting, idle timeouts, and task-stop requests on a network path. The new tests in `tests/pipeline/test_sdk_session.py` use scripted clients, but there is no load test exercising this path under a realistic configuration and asserting latency, throughput, or resource bounds, as required for network and concurrency paths.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:215-320"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Check session usability before switching models",
+      "location": "src/squadron/pipeline/sdk_session.py:168-177",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Do not report failed stop requests as stopped tasks",
+      "location": "src/squadron/pipeline/sdk_session.py:329-344",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Add a load test for background-agent waiting",
+      "location": "src/squadron/pipeline/sdk_session.py:215-320",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:37:45.916360",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 59,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 37331,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "xhigh",
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2300307,
+  "cached_tokens": 2021017,
+  "cache_write_tokens": null,
+  "completion_tokens": 68742,
+  "reasoning_tokens": 66190,
+  "duration_seconds": 658.5072426251136,
+  "cost_usd": 0.08251017,
+  "cost_basis": "alias_pricing"
+}

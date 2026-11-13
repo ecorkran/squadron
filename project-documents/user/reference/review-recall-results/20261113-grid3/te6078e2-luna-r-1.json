@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Malformed timestamp meaning leaks an `AttributeError`",
+      "description": "`Timestamp` does not validate that `meaning` is a `TimeMeaning`. If a caller constructs `Timestamp(100, \"bad\")` and passes it to `SignalEvent`, this check correctly detects that the meaning is not `AVAILABLE_AT`, but formatting the error accesses `self.time.meaning.value` and raises `AttributeError` instead of `InvalidSignalError`. Validate the meaning\u2019s type before formatting it, and cover this case with a test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/signals.py:76-80"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Malformed timestamp meaning leaks an `AttributeError`",
+      "location": "src/manta_trading_engine/core_model/signals.py:76-80",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:23:29.289397",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 3978,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 249939,
+  "cached_tokens": 202684,
+  "cache_write_tokens": null,
+  "completion_tokens": 4858,
+  "reasoning_tokens": 4321,
+  "duration_seconds": 69.02288429182954,
+  "cost_usd": 0.009181340000000001,
+  "cost_basis": "alias_pricing"
+}

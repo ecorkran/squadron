@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sonnet-high/1/1",
+  "P1": "sonnet-high/1/0"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The `-> object` annotations and the 35 suppressions are real, but they only affect type checking in test helpers. No code behaves wrongly, and the broad `pytest.raises(Exception, match=\"E2BIG\")` is a minor tightening, not a defect."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 13.9,
+ "duration_seconds": 13.84703866718337,
+ "cost_usd": 0.5876536,
+ "effort": "high",
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=166228, cached=97242, cache_write=68978, completion=777, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The `-> object` annotations and the 35 suppressions are real, but they only affect type checking in test helpers. No code behaves wrongly, and the broad `pytest.raises(Exception, match=\"E2BIG\")` is a minor tightening, not a defect.\nF1: DROP \u2014 The `-> object` annotations and the 35 suppressions are real, but they only weaken type checking in test helpers and cause no wrong behavior; the broad `pytest.raises(Exception, match=\"E2BIG\")` is a minor tightening, not a defect."
+}

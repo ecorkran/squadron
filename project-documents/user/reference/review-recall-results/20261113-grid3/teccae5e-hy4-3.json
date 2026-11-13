@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`source_bar_stamping` is the only enum field without an exact-type runtime guard",
+      "description": "`Market.__post_init__` validates `source_bar_stamping` with `if self.source_bar_stamping not in SOURCE_BAR_STAMPINGS` (a `frozenset` of `TimeMeaning` members, `markets.py:48-50`), while every other enum field in the same module goes through `_require_instance` \u2014 `session_mode` at `markets.py:64-66`, `continuity_kind` at `markets.py:102-104`, each calendar ref at `markets.py:146`, each basis at `markets.py:165`. The `_require_instance` helper's own comment at `markets.py:133` states the policy: \"Runtime guard: callers may pass values the static types forbid.\" `test_markets.py:113-125` explicitly asserts a plain `\"regular\"` string is rejected for `session_mode`, but `test_markets.py:121-122` only tries `AVAILABLE_AT`/`EVENT_TIME` enum members for stamping; no test covers a plain `\"period_start\"`.\n\n`StrEnum` members compare equal to their values, and since `str.__hash__` precedes `Enum.__hash__` in the MRO, they hash like their values too. So `Market(..., source_bar_stamping=\"period_start\", ...)` passes the membership test and stores a plain `str` in a field declared `TimeMeaning`. `canonical.py:194-201` then encodes it via `_encode_str` rather than `_encode_enum`; the bytes happen to match, so identity does not drift, but any consumer doing an identity/enum check (as `test_markets.py:161` does with `is meaning`, and as 140's availability logic is expected to) silently takes the wrong branch. The same looseness extends to `calendar_id_for` (`markets.py:106-113`), where `ref.session_mode == mode` also accepts a plain string. Add `_require_instance(self.source_bar_stamping, TimeMeaning, \"market.source_bar_stamping\")` plus a rejection row to `REJECTED_MARKETS`, and consider guarding the lookup parameters.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:94"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`Market`'s declared field types reject the iterables its docstring and tests promise",
+      "description": "The `Market` docstring (`markets.py:74-75`) says \"`session_calendars` and `adjustment_bases` accept any iterable and are stored normalized\", and the design's Implementation Details repeat \"Market accepts any iterable for `session_calendars` and `adjustment_bases`\". But the dataclass fields are annotated `tuple[SessionCalendarRef, ...]` and `frozenset[AdjustmentBasis]` (`markets.py:83,85`); only the private normalizers accept `Iterable` (`markets.py:143-144, 160-161`). `test_markets.py:151-156` and `test_markets.py:38-47` pass a generator, a `set` and `list`s \u2014 but only by unpacking a `dict[str, Any]`, which hides the mismatch from pyright. `pyproject.toml` sets `typeCheckingMode = \"strict\"` and CI (`ci.yml`) gates `uv run pyright`, so any statically typed caller (e.g. slice 140's metadata adapter building a `Market` from a list) gets `reportArgumentType` despite following the documented contract. Either type the constructor parameters as `Iterable` via an explicit `__init__` (keeping the stored attributes as tuple/frozenset), or change the docstring/design to state that callers must pass normalized values. Note `_normalize_bases` also builds `frozenset(bases)` before validating elements (`markets.py:161-165`), so a non-iterable or unhashable value from a dynamic caller escapes as a bare `TypeError` instead of the documented `InvalidMarketError`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:74-85"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unused `SIXTY_SECONDS_NS` constant in the uniformity test",
+      "description": "`SIXTY_SECONDS_NS = 60_000_000_000` is defined but never referenced: `UNIFORM_ROWS` (`test_market_uniformity.py:36-42`) hardcodes each expected end as a hand-written literal, and a repository-wide grep finds no other use of the name. The literals are intentional per the task breakdown (\"expected end is the start plus 60 seconds as a literal\"), so the constant is dead code that also leaves the 60-second bar width defined in two competing places. Delete it, or use it to derive the expected ends if the hand-written-oracle requirement is relaxed.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "tests/core_model/test_market_uniformity.py:34"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`source_bar_stamping` is the only enum field without an exact-type runtime guard",
+      "location": "src/manta_trading_engine/core_model/markets.py:94",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`Market`'s declared field types reject the iterables its docstring and tests promise",
+      "location": "src/manta_trading_engine/core_model/markets.py:74-85",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Unused `SIXTY_SECONDS_NS` constant in the uniformity test",
+      "location": "tests/core_model/test_market_uniformity.py:34",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:35:33.445332",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 14,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 202759,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 525930,
+  "cached_tokens": 455104,
+  "cache_write_tokens": null,
+  "completion_tokens": 55081,
+  "reasoning_tokens": 52948,
+  "duration_seconds": 512.548819999909,
+  "cost_usd": 0.107942876,
+  "cost_basis": "alias_pricing"
+}

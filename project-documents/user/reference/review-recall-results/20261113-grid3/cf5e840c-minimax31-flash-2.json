@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Editor-backup file with a stale duplicate test committed to the repo",
+      "description": "`packages/core/tests/services/CoreServiceFactory.test.ts-E` is the classic Emacs backup suffix (`.ts-E`) and is a full, now-stale copy of `packages/core/tests/services/CoreServiceFactory.test.ts`. It predates the `createContextPipeline` signature change and still calls `createContextPipeline(FIXTURE_PROJECT_PATH)` / `createContextPipeline(checkout)` with a single argument in five places (lines 29, 35, 59, 99, 119, 141 of the backup) \u2014 i.e. it encodes exactly the API this slice removed. It also duplicates the `path` import (`import { join } from 'path'` plus `import { dirname } from 'path'`, lines 5\u20137).\n\nVitest's default include pattern does not match `.test.ts-E`, and TypeScript does not treat `-E` as a TS extension, so nothing currently fails \u2014 which is precisely the risk: the file is invisible to the toolchain, will drift further from the real test, and a rename back to `.test.ts` would resurrect the old one-argument calls as type errors. It should be deleted from the branch rather than left in the tree.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1-146"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The decline remedy is defined twice, with two different wordings",
+      "description": "`packages/core/src/adoption/adoptionResolver.ts:24` defines\n`const DECLINE_REMEDY = 'To treat the project as new instead: cf config set adoption.state declined';`\nand embeds it in the two `AdoptionError` messages (missing profile/prompt, failed state write).\n\n`packages/core/src/adoption/adoptionFacts.ts` (`describeState`, ~line 84) renders its own variant inside the Adoption Facts bullets:\n`To treat the project as new instead: \\`cf config set adoption.state declined\\`.` \u2014 same instruction, different formatting (no backticks vs. backticks, and a trailing period).\n\nAGENTS.md requires that a value used across the code be defined once. Here the same user-facing remedy reaches the user through two channels (the thrown error and the prompt section) and will read differently depending on which one fired. It should live in one exported constant (the facts renderer already imports from `contracts.js`, which imports nothing, so the constant belongs there or in `adoptionFacts.ts` with the resolver importing it).",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:24"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "ContextIntegrator's constructor now takes seven positional optional parameters",
+      "description": "The slice adds `resolveAdoptionFn: AdoptionResolver | null = null` as the seventh positional parameter of `ContextIntegrator`'s constructor (`packages/core/src/services/ContextIntegrator.ts:84-97`), after `resolveIntegrationBranchFn` and `resolvePermissivenessFn`.\n\nThe TypeScript rules in AGENTS.md state: \"Prefer named parameters (via object destructuring) when a function takes 3+ parameters.\" At seven parameters, all but the first nullable, the call sites are order-sensitive and easy to mis-order silently \u2014 e.g. `new ContextIntegrator(engine, true, readFileFn, resolveTaskFilesForPrompt, resolveIntegrationBranchForPrompt, resolvePermissivenessForPrompt, createAdoptionResolver(...))` in `packages/core/src/services/CoreServiceFactory.ts:48-56`, and the test helper `new ContextIntegrator(engine, true, () => PROFILES, null, null, null, resolver)` in `packages/core/tests/services/ContextIntegrator.test.ts`. TypeScript cannot catch a swapped pair of same-typed resolvers. Moving the resolvers into a single options object (`{ taskFiles, integrationBranch, permissiveness, adoption }`) would keep the next addition cheap.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:84-97"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The outcome\u2192selection mapping is switched in three places",
+      "description": "`isSelected` in `adoptionResolver.ts` switches over `AdoptionOutcome | typeof NOT_EVALUATED`, and `adoptionFacts.ts` switches over the same union twice more (`describeOutcome` and `describeSourceVolume`, each with its own `const unhandled: never` default branch). The three switches must stay in agreement: a new `kind` added for slice 263 or 264 compiles against `never` in two files but only fails at runtime in the third if a case is missed.\n\nThis is inherent to a discriminated union with an exhaustive-check pattern, so it is not a defect; it is duplication worth noting because the archived slice review (261-review.slice.detection-and-adoption-state.md:90) already raised \"the design also duplicates the outcome-to-selection mapping\". A single `describeOutcome`-style table (e.g. a `Record<kind, { selected: boolean; describe: ... }>`) would collapse the three switches into one source of truth.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:52-67"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The CLI integration test now exercises a different write policy than the CLI",
+      "description": "`packages/cli/tests/integration/build.integration.test.ts` is titled \"cf build integration \u2014 core pipeline parity\" and asserts that the CLI and MCP share `createContextPipeline`, but all four calls now pass `{ adoptionStateWrites: 'read-only' }` (lines 42, 51, 58, 65) while `packages/cli/src/commands/build.ts:84` passes `'persist'`.\n\nThat is the right choice for test hygiene (no fixture gets a mutated `.context-forge.toml`), but it means the \"parity\" this file claims no longer covers the CLI's actual policy. The `'persist'` path is covered elsewhere (`packages/core/tests/adoption/adoptionBuild.integration.test.ts` default, and `packages/mcp-server/tests/integration/adoptionParity.test.ts`), so the gap is small \u2014 but the test name now overstates what it verifies. Either rename it or add one case that runs the CLI's `persist` policy.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/integration/build.integration.test.ts:42-65"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The explicit `brownfield-adoption` escape hatch still reads (and validates) the adoption state",
+      "description": "`decide()` calls `readAdoptionState(checkoutPath)` before it checks the `explicit` flag:\n\n```ts\nconst state = await readAdoptionState(checkoutPath);\nif (explicit) return { state, outcome: NOT_EVALUATED };\n```\n\nThe slice design (D4) describes the explicit instruction as skipping \"the decide step, so no state check, planning check or source walk\", so that it \"must not depend on detection\". In practice the state is still read \u2014 which is needed for the state bullet (D8), so reading it is justified \u2014 but `readAdoptionState` throws `AdoptionError` when the stored value is not one of `ADOPTION_STATES` (`packages/core/src/adoption/adoptionState.ts:18-29`). A project with a hand-edited invalid `[adoption] state` therefore cannot use `--it brownfield-adoption` as the documented escape hatch: the build fails before it can reach the prompt.\n\nThis is a corner case, and the failure is explicit rather than silent, so I am not treating it as a blocker \u2014 but it is worth confirming that D4's \"no state check\" wording and the implementation agree.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:38-42"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`adoption.state` may be satisfied by a user-scope config value",
+      "description": "`readAdoptionState` goes through `ConfigManager.get('adoption.state')`, and `ConfigManager.get` falls back to the **user** config file (`packages/core/src/config/ConfigManager.ts:157-168`) before the built-in default. The key is declared `scope: ConfigScope.Shared` (`packages/core/src/config/ConfigKeys.ts:112-121`), i.e. it is meant to live in the project's `.context-forge.toml` and travel with the repository.\n\nIf `cf config set adoption.state \u2026` writes to the user-scope file by default (I could not verify the CLI's default scope within this review's tool budget \u2014 unverified), then a user-level `declined` would silently apply to every project on that machine, contradicting the shared-scope intent. Worth confirming the CLI's `config set` default scope and, if it is user-level, documenting that `adoption.state` must be set per project.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionState.ts:18"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Editor-backup file with a stale duplicate test committed to the repo",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1-146",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The decline remedy is defined twice, with two different wordings",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:24",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "ContextIntegrator's constructor now takes seven positional optional parameters",
+      "location": "packages/core/src/services/ContextIntegrator.ts:84-97",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The outcome\u2192selection mapping is switched in three places",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:52-67",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The CLI integration test now exercises a different write policy than the CLI",
+      "location": "packages/cli/tests/integration/build.integration.test.ts:42-65",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The explicit `brownfield-adoption` escape hatch still reads (and validates) the adoption state",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:38-42",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`adoption.state` may be satisfied by a user-scope config value",
+      "location": "packages/core/src/adoption/adoptionState.ts:18",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:04:50.646526",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 110177,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1065239,
+  "cached_tokens": 910592,
+  "cache_write_tokens": null,
+  "completion_tokens": 28872,
+  "reasoning_tokens": 25106,
+  "duration_seconds": 203.38495324994437,
+  "cost_usd": 0.026634269,
+  "cost_basis": "alias_pricing"
+}

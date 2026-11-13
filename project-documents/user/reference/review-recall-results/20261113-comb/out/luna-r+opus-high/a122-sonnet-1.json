@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/2",
+  "P1": "sonnet/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The examples given can't happen: `checkout` is a `Path`, so `str()` never gives an empty string, `params` is typed `Mapping[str, str]`, and `build_argv` already rejects bad params before journaling. That leaves only a bug in our own planner, and the production planner list is empty in this slice."
+  ],
+  "F2": [
+   "DROP",
+   "The `getattr` lookup is a style point, and `launch_grace_seconds` is an existing setting the change didn't introduce. A negative value only happens if the operator passes one with an explicit flag."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 35.9,
+ "duration_seconds": 35.861665167147294,
+ "cost_usd": 0.7990718000000001,
+ "effort": "high",
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=379859, cached=293360, cache_write=86487, completion=2371, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The examples given can't happen: `checkout` is a `Path`, so `str()` never gives an empty string, `params` is typed `Mapping[str, str]`, and `build_argv` already rejects bad params before journaling. That leaves only a bug in our own planner, and the production planner list is empty in this slice.\nF2: DROP \u2014 The `getattr` lookup is a style point, and `launch_grace_seconds` is an existing setting the change didn't introduce. A negative value only happens if the operator passes one with an explicit flag.\nF1: DROP \u2014 The cited inputs can't happen: `checkout` is a `Path`, so `str()` never gives an empty string, `params` is typed `Mapping[str, str]`, and `build_argv` already rejects bad params before journaling. That leaves only a bug in our own planner, and the production planner list is empty in this slice.\nF2: DROP \u2014 The `getattr` lookup is a style point, and `launch_grace_seconds` is an existing setting the change didn't introduce. A negative value only happens if the operator passes one with an explicit flag."
+}

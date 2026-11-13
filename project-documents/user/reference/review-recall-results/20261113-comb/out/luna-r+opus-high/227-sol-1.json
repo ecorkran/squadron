@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The cron template adds `--url-key` and `--remote` to the 17/main lines, but `production_changes()` strips them only from `new`. A rerun after step 4 reads the updated cron file as `old`, so the comparison reports changes and step 4 fails, which blocks the documented \"re-run the whole script\" recovery."
+  ],
+  "F2": [
+   "KEEP",
+   "run_health()` ignores the result of `shell()` and reads the log's last line without checking that this run wrote it. If the health command fails before logging, an earlier clean `FLAGS` line can pass the step 7 or step 10 gate."
+  ],
+  "F3": [
+   "DROP",
+   "An uncaught `OSError` still stops the run with a visible traceback, so nothing fails silently. The only loss is the report file for that run, which is low value for a one-shot operator script."
+  ]
+ },
+ "wall_seconds": 43.6,
+ "duration_seconds": 43.547296500066295,
+ "cost_usd": 0.7651669999999999,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=356526, cached=274883, cache_write=81631, completion=2810, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The cron template adds `--url-key` and `--remote` to the 17/main lines, but `production_changes()` strips them only from `new`. A rerun after step 4 reads the updated cron file as `old`, so the comparison reports changes and step 4 fails, which blocks the documented \"re-run the whole script\" recovery.\nF2: KEEP \u2014 `run_health()` ignores the result of `shell()` and reads the log's last line without checking that this run wrote it. If the health command fails before logging, an earlier clean `FLAGS` line can pass the step 7 or step 10 gate.\nF3: DROP \u2014 An uncaught `OSError` still stops the run with a visible traceback, so nothing fails silently. The only loss is the report file for that run, which is low value for a one-shot operator script.\nF1: KEEP \u2014 The cron template adds `--url-key`/`--remote` to the 17/main lines, but `production_changes()` strips them only from `new`, so a rerun after step 4 compares an already-updated `old` against a stripped `new` and fails, blocking the documented rerun recovery.\nF2: KEEP \u2014 `run_health()` ignores the result of `shell()` and takes the log's last line without checking this run wrote it, so a health command that fails before logging can pass step 7 or step 10 on an earlier clean `FLAGS` line.\nF3: DROP \u2014 An uncaught `OSError` still stops the run with a visible traceback, so nothing fails silently; only the report file is lost, which is low value for a one-shot operator script."
+}

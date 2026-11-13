@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "`SDKExecutionSession.auto_memory` assumes `base_options.env` is never None",
+      "description": "`auto_memory` does `AUTO_MEMORY_DISABLE_ENV not in self.base_options.env`. Every production builder (`open_pipeline_session`, used by both `cli/commands/run.py:348` and the executor's lazy connect) always sets `env` via `sdk_settings_options`, and the sibling `setting_sources` property explicitly tolerates `None` \u2014 so `env` is the one option field this dataclass's invariants leave implicit. The test fake `tests/pipeline/conftest.py::scripted_session` builds `ClaudeAgentOptions(cwd=\".\", permission_mode=\"bypassPermissions\")` with no `env`, and if any test or future builder ever reaches `session.auto_memory` on such an object it raises `TypeError` rather than answering. One line hardens the invariant: `return AUTO_MEMORY_DISABLE_ENV not in (self.base_options.env or {})`. No current production or test path trips this, hence NOTE.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#auto_memory"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`default_system_prompt_preset_used` \u2192 `system_prompt_mode` rename: residual readers not fully verifiable",
+      "description": "The diff removes `ReviewResult.default_system_prompt_preset_used` and updates all in-diff consumers (`review/models.py`, `review/persistence.py`'s `_PRESET_MODES` check, `review/review_client.py`, and the test suite). I verified the persistence code handles `None` safely (`None in _PRESET_MODES` is `False`) and that `to_dict()` emits the new keys. However, I could not exhaustively grep the repository for any out-of-diff reader of the old attribute name (e.g., save-targets, frontmatter consumers, or tooling that reads hand-built results). If one exists it would now `AttributeError` at runtime; if the test suite passes, this is a non-issue \u2014 flagging only for the record since the hunk evidence alone can't prove absence.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`sdk_session.py` exceeds the ~300-line guideline",
+      "description": "The file is now ~470 lines after absorbing the idle-timeout, reconnect-usability, and settings-policy logic. The slice did the right structural move \u2014 pure turn bookkeeping went to `sdk_turns.py` and settings to `providers/sdk/settings.py` \u2014 and the remainder is one cohesive lifecycle class, so the guideline's \"where practical\" applies; noting it so a future slice can consider moving the dispatch/turn-reading block (`dispatch`, `_collect_turns`, `_read_turn_with_retry`, `_read_turn`) into a companion module if the file keeps growing.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes are observable and test-covered with the new code",
+      "description": "Verified against the implementation: (1) idle-timeout while waiting on background agents logs a WARNING naming the agents and records `background_tasks_stopped` (`test_silence_while_waiting_stops_agents_and_returns`, `test_stop_task_failure_is_logged_and_next_id_still_stopped`); (2) foreground turns are explicitly timer-free and a test asserts the config read never happens (`test_slow_foreground_turn_has_no_timer`); (3) a failed rotation reconnect marks the session unusable, ERROR-logs with traceback, and later items are flagged rather than silently re-queried (`test_items_after_failed_reconnect_are_flagged_unusable` asserts the fresh client's `query` is never called); (4) a leftover injected follow-up turn is discarded with a WARNING carrying its final text (`test_leftover_injected_turn_is_dropped_and_logged`); (5) stream-end with active agents fails with a named `ProviderError` (`test_stream_end_with_agent_tracked_raises`); (6) subagent prose is excluded from the response (`test_subagent_prose_is_not_part_of_the_response`); (7) the D7 final-text tail flows into both executor-level and `each`-batch flag reasons, asserted end-to-end in `test_executor.py` and `test_executor_each.py`. This matches the failure-mode enumeration rule: each path has a log/metadata signal and a test asserting it.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:233-300"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`SDKExecutionSession.auto_memory` assumes `base_options.env` is never None",
+      "location": "src/squadron/pipeline/sdk_session.py#auto_memory",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`default_system_prompt_preset_used` \u2192 `system_prompt_mode` rename: residual readers not fully verifiable",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`sdk_session.py` exceeds the ~300-line guideline",
+      "location": "src/squadron/pipeline/sdk_session.py",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Failure modes are observable and test-covered with the new code",
+      "location": "src/squadron/pipeline/sdk_session.py:233-300",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:37:05.701544",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 29,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 175091,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1947013,
+  "cached_tokens": 1307136,
+  "cache_write_tokens": null,
+  "completion_tokens": 46967,
+  "reasoning_tokens": 42744,
+  "duration_seconds": 494.19316791696474,
+  "cost_usd": 0.32225468,
+  "cost_basis": "alias_pricing"
+}

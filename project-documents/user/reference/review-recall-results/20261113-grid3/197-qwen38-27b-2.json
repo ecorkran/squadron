@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Item-resume runs blocking git/cf/file I/O directly on the event loop",
+      "description": "`resume_item`/`_resume_locked` are `async def`, but the code calls a dozen blocking operations straight on the loop instead of through `asyncio.to_thread`:\n- `_validate` \u2192 `state_manager.load` (file read), `load_pipeline` (file + YAML parse), `BatchReport.load` (file + JSON parse);\n- `_git_precondition` \u2192 `read_integration_target` (a `cf` subprocess), `current_branch` / `restore_target` / `dirty_paths` / `verify_git_state` (many `git` subprocesses, each bounded at 30s but the cf call has **no** timeout at all \u2014 `ContextForgeClient._run` uses `subprocess.run` without `timeout=`);\n- `_select_item` \u2192 `evaluate_each_source` (the source itself does synchronous `cf` + per-slice design/review file reads) and a `git merge-base` call;\n- `_reconcile` / the dependency path \u2192 `run.report.write` (file writes).\n\nThe project Python rule is explicit: any sync code inside an await-able function must run in <1ms in the worst case, and \"Reviewers MUST verify this.\" Every other blocking call in the pipeline is already routed through `asyncio.to_thread` (`branch.py`, `commit.py`, `dispatch.py`, `review.py`, and even the executor's report write at `executor.py:1459`), so this new module breaks both the <1ms guarantee and the established convention. The concrete consequence: a hung `cf` (unbounded) or slow `git` stalls the loop with no progress indicator and delays KeyboardInterrupt handling / the `finally: session.disconnect()` cleanup. Fix by wrapping the git/cf/file work (or the whole `_validate`/`_git_precondition`/`_select_item`/`report.write` blocks) in `await asyncio.to_thread(...)`.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py#_git_precondition"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No load-test for the new run-lock concurrency path",
+      "description": "The Python rules require that \"any code on the \u2026 concurrency \u2026 paths [requires] at least one load test\" in the `tests/load/` tier, asserting latency/throughput/resource bounds, not just functional correctness. `run_lock.py` is new cross-process concurrency code, and the tests added for it live in `tests/pipeline/test_run_lock.py` / `tests/cli/commands/test_run_lock_cli.py`. Notably `test_a_killed_holder_releases_the_lock` does exercise real cross-process behavior (a child holds the flock, is killed, and the parent polls release with a 5s deadline), which partially covers the spirit \u2014 but there is no `tests/load/` entry for the lock (or the item-resume git paths), and nothing asserts the lock's timing/contention bounds under a realistic concurrent configuration. A small `tests/load/` test would close the tier requirement.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/test_run_lock.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Pruned runs leave their batch reports behind",
+      "description": "`prune` unlinks only the `{run_id}.json` state file, but slice 197 now writes a sibling `{run_id}.{step}.report.md` and `{run_id}.{step}.report.json` for every mutating/each run. `list_runs` correctly skips the `.report.json` files, so they don't corrupt listing \u2014 but they are never cleaned up, so orphaned reports accumulate in `~/.config/squadron/runs` (or the runs dir) as runs are pruned. Worth extending `prune` (or a companion sweep) to delete a run's report files when the run is pruned.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/state.py#prune"
+    },
+    {
+      "severity": "PASS",
+      "title": "Single-sourced flag/exit/param constants and fail-closed git semantics",
+      "description": "The flag kinds (`FlagKind`), exit codes (`ResumeExit`), reserved param keys (`control_params`), and report schema constants are each defined once and referenced everywhere (routing reads `flag_kind`, \"never `reason`\"; `reserved_param_error` drives both the `-p` rejection and the YAML `params:` block rejection). Git preconditioning fails closed (a non-slice branch or dirty target \u2192 REJECTED with \"nothing changed\"; an unknown state \u2192 HALTED), and rejections take the lock only briefly before touching nothing. This matches the \"one value, one source\" and fail-fast conventions well.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py#FlagKind"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Item-resume runs blocking git/cf/file I/O directly on the event loop",
+      "location": "src/squadron/pipeline/item_resume.py#_git_precondition",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No load-test for the new run-lock concurrency path",
+      "location": "tests/pipeline/test_run_lock.py",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Pruned runs leave their batch reports behind",
+      "location": "src/squadron/pipeline/state.py#prune",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Single-sourced flag/exit/param constants and fail-closed git semantics",
+      "location": "src/squadron/pipeline/batch_report.py#FlagKind",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:54:35.347866",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 317433,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 2262605,
+  "cached_tokens": 1971072,
+  "cache_write_tokens": null,
+  "completion_tokens": 82287,
+  "reasoning_tokens": 79463,
+  "duration_seconds": 428.47787004103884,
+  "cost_usd": 0.34955292,
+  "cost_basis": "alias_pricing"
+}

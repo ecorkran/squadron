@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The new load tests are not gated in CI",
+      "description": "The load tests are opt-in via `MT_RUN_LOAD_TESTS=1`, and the file documents that CI does not run them yet. The review rules require CI to gate load tests for changes on network and concurrency paths; these new API routes and pool usage fall within that requirement.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py#pytestmark"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The trades watermark is described as the newest stored trade",
+      "description": "The `tape_complete_through` description calls the value the \u201cCreated time of the newest stored trade.\u201d The implementation reads `sync_state.watermark_ts`, whose documented meaning is that the tape is complete through that instant\u2014not that a trade was stored at that instant. This can mislead API consumers about what the field guarantees.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188-191"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The new load tests are not gated in CI",
+      "location": "test/load/test_188_kalshi_api_nfr.py#pytestmark",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The trades watermark is described as the newest stored trade",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188-191",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:32:24.780028",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 42,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 10225,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 734638,
+  "cached_tokens": 628664,
+  "cache_write_tokens": null,
+  "completion_tokens": 9777,
+  "reasoning_tokens": 7927,
+  "duration_seconds": 110.77587170805782,
+  "cost_usd": 0.02177254,
+  "cost_basis": "alias_pricing"
+}

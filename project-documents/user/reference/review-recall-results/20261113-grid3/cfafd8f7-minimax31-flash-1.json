@@ -1,0 +1,315 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`cf check --fix` with `--slice` now silently skips the confirmation preview and prompt",
+      "description": "In `runRoutedFix`, the `confirm` flag is computed as `singleSlice === null && explicitFix && !opts.yes`, and the entire preview/prompt block is additionally gated on `args.allSlices`. The previous code (visible in the diff) prompted for confirmation in **all** fix modes when `--yes` was absent \u2014 including `--slice N --fix`. Now `cf check --fix --slice 250` writes files with no confirmation and no preview at all, while `cf check --fix` (all slices) does prompt. This is a silent behavior change in a destructive path with no test covering it: the new test file only exercises `--slice ... --fix --json` and `--fix --yes`. The comment (\"Only an explicit all-slices `--fix` previews and prompts\") documents the new rule but nothing in the diff or tests explains why single-slice prompting was dropped. Either the old confirmation guarantee was intentional (and is now lost) or it was accidental (and should be pinned by a test).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/check.ts:249-252"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cf check --fix` no longer prints the dry-run findings before applying fixes in the multi-checkout `--yes` path",
+      "description": "`printCheckOutput(dryRun, ...)` is only called inside `if (args.confirm)`. With `--yes` (or with `workflow.auto_fix`), the dry-run result is computed and thrown away; the user sees only the post-fix output. In the old code the `--yes` path also skipped the pre-print, so this is consistent \u2014 but the new code adds `printFixPlan(plan)` (a routed preview) inside the same `confirm` block, so the multi-checkout preview is also skipped under `--yes`. `cf check --fix --yes` in a two-worktree project therefore reports neither the plan nor the deferrals before writing, and the deferral list only appears afterwards via `printRoutedFixResult` \u2014 which is only invoked when `showWorktree` is true *and* the result is a fix result. Note `printCheckOutput` calls `printRoutedFixResult` only in the `fixRes && showWorktree` branch, so the deferred list is reachable, but the routing preview is not.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/check.ts:255-281"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`printRoutedFixResult` is only reached when `showWorktree` is true, so deferred fixes are silently dropped in the single-worktree case",
+      "description": "`printCheckOutput` branches: `if (fixRes && showWorktree) { printRoutedFixResult(fixRes); ... } else if (fixRes) { ...summary... }`. `showWorktree` is computed as `projectViews.some((v) => v.worktree !== undefined)`, and `buildAttributedViews` only attaches a worktree when `worktrees.length > 1`. A project with a **single registered worktree** (the common \"migrated default\" shape described in `mergeCheckResults.ts`) therefore has `showWorktree === false`, and any `deferred` entries \u2014 which `planRoutedFixes` only produces for multi-view runs, so this is fine for deferrals \u2014 but also `commits` are only non-empty for multi-view runs. So this is currently unreachable. Still, the coupling \"routed report only when showWorktree\" is implicit and fragile: the `deferred`/`commits` fields on `ConsistencyFixResult` are now always present (even for single-checkout, as `[]`), and the report path keys off an unrelated flag. A more robust condition would be `fixRes.deferred.length > 0 || fixRes.commits.length > 0`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/output/checkReport.ts:94-108"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Deferred findings are counted twice in the CLI's \"fixed\" accounting",
+      "description": "In `applyPlanEntry`, when a commit fails and the restore succeeds (`outcome.restored === true`), the code does `fixed -= fixLog.length; fixLog = []`. But `fixed` came from `applied.fixed`, which counts *successful writes*, and `fixLog.length` equals the number of successful writes too. That part is consistent. The real problem is the **plan-time** deferral accounting: `planRoutedFixes` already removed plan-time-deferred findings from `entry.result.findings`, so `applyFixes` never sees them and `fixed` never counted them \u2014 correct. However `applyFixPlan` returns `{ ...merged, deferred: [...plan.deferred, ...merged.deferred] }`, and `merged.deferred` comes from `mergeFixResults(perView, ...)`, which sums `r.deferred` across views. `applyPlanEntry` returns `{ ...entry.checked, fixed, fixLog, fixErrors, deferred, commits }` where `deferred` is the *apply-time* deferrals only \u2014 so plan-time and apply-time deferrals are correctly separated and concatenated once. This is fine, but it is worth noting that `entry.checked` is spread into the per-view result, so `fixed`/`fixLog` are overwritten while `findings`/`totalFindings`/`summary` come from the full dry-run. `totalFindings` therefore counts findings that were deferred and never written, while `fixed` counts only written ones. The CLI prints `Fixed N of M findings`, where M includes deferred ones. There is no test asserting the \"fixed of total\" line for the deferred case, so this accounting is unverified.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:262-281"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`console.error` used for a non-error diagnostic in a library module",
+      "description": "`commitViewWrites` calls `console.error('cf check --fix: commit failed in ...', commitErr)` directly from `@context-forge/core`, a library package. This hard-codes the CLI command name into the core package and writes to stderr even when the caller is MCP (where the caller then returns a JSON result containing the same failure). The MCP test `workflowCheckRouting.test.ts` does not cover a failing commit, so the double-reporting (stderr + JSON) is unverified. Core has no logger abstraction (the grep shows only `console.error` usage), so this matches existing convention, but the `cf check --fix:` prefix in a core module that is also driven by MCP is a naming-drift smell.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:229"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fix-routing logic duplicated between the CLI and MCP server",
+      "description": "The MCP tool now re-implements the same plan-then-apply sequence as `packages/cli/src/commands/check.ts`: build scoped views, pick `check` vs `checkAll`, resolve the invoking checkout, call `planRoutedFixes`, then `applyFixPlan`. The CLI has this in `runRoutedFix`; the MCP has it inline in the tool handler. The project conventions explicitly call out \"Do not duplicate logic. Respect DRY\", and the existing codebase went out of its way to share `buildAttributedViews`/`runAttributed`/`mergeCheckResults` between exactly these two consumers \"so the invariant cannot drift\". The same argument applies here: the routing pipeline (scope views \u2192 resolve invoking checkout \u2192 plan \u2192 apply) is duplicated and can drift. Extracting a shared helper into `@context-forge/core/node` (e.g. `runRoutedCheck`) would match the established pattern.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/workflowTools.ts:270-296"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`resolveInvokingCheckout` compares realpaths of view roots but the CLI passes `views` that may include a view with no `projectPath`",
+      "description": "`realpathOrNull` returns `null` for a path that does not exist, and the comparison is `realpathOrNull(v.view.projectPath) === realTop`. If a registered worktree's directory has been deleted, its view root resolves to `null` and never matches \u2014 which is the intended \"not registered\" outcome. But if the *invoking* checkout's own directory was deleted mid-run, `gitExec` would fail first and the \"not inside a git checkout\" error is raised. Both paths behave sensibly; noting only that `views.find` returns the **first** matching view, and `buildAttributedViews` produces one view per registered worktree \u2014 if two registered worktrees share the same path (e.g. a migrated project with `projectPath` duplicated across entries), the first wins arbitrarily. `fixOwnership.ts` documents the analogous case explicitly; `resolveInvokingCheckout` does not.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:87-100"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`fixRelPath` uses a non-null assertion on `fixAction`",
+      "description": "`fixRelPath` does `finding.fixAction!.filePath`. It is exported (public API from `routedFixes.ts`) and is only safe because every current caller has already filtered on `f.fixable && f.fixAction`. Since it is exported from the module (though not re-exported from `node.ts`), a future caller could hit the assertion. The `!` operator is not banned by the TypeScript rules in `AGENTS.md` (which ban `any` and discourage `as`), but an exported function with a latent crash is worth tightening \u2014 e.g. accept `filePath: string` instead of the whole finding.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:58-61"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`onlyFixable` is a misnomer \u2014 it does not filter to fixable findings",
+      "description": "`onlyFixable(result, findings)` returns `{ ...result, findings }` with no filtering at all; the filtering happens at the call sites. The name promises a behavior the function does not implement, which is exactly the kind of \"documentation contradicts the code\" issue the conventions warn about. Consider `withFindings` or `subsetFindings`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:99-101"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`plannedFixCount` counts findings, not distinct files, and can exceed the number of writes",
+      "description": "`plannedFixCount` sums `e.result.findings.length`. Two findings can target the same file (e.g. a `task-vs-plan` checkbox fix and a `frontmatter-vs-computed` status fix on the same slice design), so the prompt \"Apply N fix(es) as planned?\" counts findings, while `FIX_COMMIT_MESSAGE`/`commits[].files` count files. The test `check-worktree-fix.test.ts` asserts `expect(preview).toContain('will commit in ' + wtb)` but never asserts the count, so this labeling is unverified.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/output/fixReport.ts:92-94"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`deferred` in `planRoutedFixes` can contain duplicate deferrals for the same finding across views",
+      "description": "Each view routes its own findings. When the same logical finding exists in two views (the stale-copy case), the non-owner view defers it with `NOT_OWNER` and the owner view keeps it \u2014 one deferral, one write. That is the intended contract and the test asserts `deferred` has length 1. But in the `OWNER_UNRESOLVED` case the test asserts three deferrals with the same `subjectIndex` (950) \u2014 one per rule, not one per finding. The `DeferredFix.finding` therefore carries the specific rule, so the three entries are distinguishable, but a consumer that groups by `subjectIndex` alone would triple-count. The CLI's `printDeferred` prints one line per entry, so the user sees \"Left alone 3 fix(es)\" for what is arguably one logical inconsistency with three separate file writes. This may be intended, but it is not documented in the type.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:176-200"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test fixture seeds files into the primary before `git add -A`, but the CLI test's `addPrimaryOwnedFix` writes uncommitted files",
+      "description": "`addPrimaryOwnedFix` writes a plan entry and a task file into `primary` without committing. The fixture's `createGitWorktreeFixture` commits the seed, so the primary checkout is dirty for the duration of the test. The test then asserts `porcelain(wtb).toBe('')` \u2014 but never asserts the primary's state \u2014 and the assertion `expect(out).toContain('Fixed 2 finding(s)')` depends on the primary's dirty files being picked up by the checker. Because the primary is the invoking checkout, `planRoutedFixes` sets `commit: false` for it and no readiness gate runs, so the dirty state is harmless. Still, the test does not assert that the invoking checkout's writes were left uncommitted, which is the whole point of the \"invoking checkout, uncommitted\" note it is matching on. A `porcelain(primary)` assertion would pin that.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/check-worktree-fix.test.ts:262-274"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`packages/cli/tests/commands/check-worktree-attribution.test.ts` mocks `@context-forge/core/node` without the new exports",
+      "description": "This test file (not in the diff, but affected by it) still uses a full `vi.mock('@context-forge/core/node', () => ({...}))` factory that does not provide `planRoutedFixes`, `applyFixPlan`, or `resolveInvokingCheckout`. Its cases are all read-only (`cf check` without `--fix`), so the new exports are never reached and the suite still passes. But the moment a `--fix` case is added here it will fail with an unhelpful \"not a function\" rather than a routing assertion. The two files that *do* exercise fix mode were updated to use `vi.importActual`; this one was not.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/check-worktree-attribution.test.ts:31-47"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`commitPathsIfChanged` returns the sha of `HEAD` after committing, but `commitPathIfChanged` semantics changed subtly",
+      "description": "`commitPathIfChanged` now delegates to `commitPathsIfChanged`, which is correct DRY. However `commitPathsIfChanged` does **not** call `isGitRepo` first, so it throws on a non-repo (the doc says so explicitly and the test asserts it). `commitPathIfChanged` still calls `isGitRepo` and returns `false`. The asymmetry is documented but means the two functions have different failure modes for the same conceptual operation \u2014 a reader could reasonably expect them to behave the same on a non-repo path. The existing test for `commitPathIfChanged` is unaffected; no test covers `commitPathIfChanged` on a non-repo, so its `false` return path is unverified after the refactor.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts:132-146"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`cf check --fix` with `--slice` now silently skips the confirmation preview and prompt",
+      "location": "packages/cli/src/commands/check.ts:249-252",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`cf check --fix` no longer prints the dry-run findings before applying fixes in the multi-checkout `--yes` path",
+      "location": "packages/cli/src/commands/check.ts:255-281",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`printRoutedFixResult` is only reached when `showWorktree` is true, so deferred fixes are silently dropped in the single-worktree case",
+      "location": "packages/cli/src/output/checkReport.ts:94-108",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Deferred findings are counted twice in the CLI's \"fixed\" accounting",
+      "location": "packages/core/src/introspection/routedFixes.ts:262-281",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`console.error` used for a non-error diagnostic in a library module",
+      "location": "packages/core/src/introspection/routedFixes.ts:229",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Fix-routing logic duplicated between the CLI and MCP server",
+      "location": "packages/mcp-server/src/tools/workflowTools.ts:270-296",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`resolveInvokingCheckout` compares realpaths of view roots but the CLI passes `views` that may include a view with no `projectPath`",
+      "location": "packages/core/src/introspection/routedFixes.ts:87-100",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`fixRelPath` uses a non-null assertion on `fixAction`",
+      "location": "packages/core/src/introspection/routedFixes.ts:58-61",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`onlyFixable` is a misnomer \u2014 it does not filter to fixable findings",
+      "location": "packages/core/src/introspection/routedFixes.ts:99-101",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`plannedFixCount` counts findings, not distinct files, and can exceed the number of writes",
+      "location": "packages/cli/src/output/fixReport.ts:92-94",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`deferred` in `planRoutedFixes` can contain duplicate deferrals for the same finding across views",
+      "location": "packages/core/src/introspection/routedFixes.ts:176-200",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test fixture seeds files into the primary before `git add -A`, but the CLI test's `addPrimaryOwnedFix` writes uncommitted files",
+      "location": "packages/cli/tests/commands/check-worktree-fix.test.ts:262-274",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`packages/cli/tests/commands/check-worktree-attribution.test.ts` mocks `@context-forge/core/node` without the new exports",
+      "location": "packages/cli/tests/commands/check-worktree-attribution.test.ts:31-47",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`commitPathsIfChanged` returns the sha of `HEAD` after committing, but `commitPathIfChanged` semantics changed subtly",
+      "location": "packages/core/src/guides/gitExec.ts:132-146",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:28:48.399610",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 463122,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1707612,
+  "cached_tokens": 1490816,
+  "cache_write_tokens": null,
+  "completion_tokens": 119536,
+  "reasoning_tokens": 114909,
+  "duration_seconds": 862.9243484591134,
+  "cost_usd": 0.062556212,
+  "cost_basis": "alias_pricing"
+}

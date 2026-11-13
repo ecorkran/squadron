@@ -1,0 +1,171 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Ceiling-sized serialization runs on the event loop",
+      "description": "The async handlers put only the DB reads in `run_in_executor`; `src/manta_trading/api_server/routes/kalshi_timeseries.py:125-126` and `src/manta_trading/api_server/routes/kalshi_timeseries.py:168-174` then synchronously build the Pydantic response and call `timeseries_response` on the event-loop thread. `src/manta_trading/api_server/serialization.py:28` performs `model_dump(mode=\"json\")` plus `orjson.dumps`/`msgpack.packb`, which is CPU-bound and far above the required <1 ms bound for synchronous work inside an `async def`; `src/manta_trading/constants.py:1285-1310` records a 75,000-row candle response at 34.80 MB. Move model construction and serialization into an executor/thread (or otherwise return the bytes without blocking the loop), and add a concurrency assertion that another request is not starved during a ceiling-sized response.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:125-174"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Load tier prod-URL guard is skipped and not multiline-aware",
+      "description": "The new load-test docstring at `test/load/test_188_kalshi_api_nfr.py:45-50` claims the production-URL guard enforces safety mechanically, but the guard at `test/load/test_167_data_status_nfr.py:214-241` scans `splitlines()` and only flags a line containing both the variable name and an env-read marker; that misses the exact multiline `os.environ.get(\\n \"MT_TIMESCALE_DB_URL\")` shape the project rules call out. `test/_prod_url_guard.py:32-36` has the required multiline-aware regex and `test/_prod_url_guard.py:39-55` exposes the shrink-only ratchet, but the load tier does not call it; integration and unit tiers do at `test/integration/test_integration_prod_url_guard.py:60` and `test/unit/test_unit_prod_url_guard.py:34`. The old guard is also hidden behind the module-level `MT_RUN_LOAD_TESTS` skip at `test/load/test_167_data_status_nfr.py:55-56`, so normal test runs do not execute the safety check at all. Wire the load tier to `assert_ratchet` in an unskipped guard test.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:45-50"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Load tests for network/concurrency paths are not gated by CI",
+      "description": "`test/load/test_188_kalshi_api_nfr.py:37-47` explicitly documents that the load tier is manual-only and \u201cNothing here is enforced by CI today,\u201d and `test/load/test_188_kalshi_api_nfr.py:80-86` skips the module unless `MT_RUN_LOAD_TESTS=1`. The inspected `.github/workflows/ci.yml:1-20` is publish-on-tag only and has no test job. This slice adds API/network/concurrency paths with large-response and pool-contention risks, and the Additional Review Rules require CI to gate load tests for those paths; a manual-only suite does not satisfy that requirement. Add a CI job that runs the gated load tier for affected slices.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:37-47"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Time-series documentation contradicts stored schema and watermark semantics",
+      "description": "`src/manta_trading/api_server/models/kalshi_timeseries.py:5-10` and `src/manta_trading/data/kalshi/serve_timeseries.py:72` describe \u201cfourteen\u201d candle value columns, but the repository mapping and migration at `src/manta_trading/market/schema/migrations/kalshi.py:308-329` store sixteen values: fourteen nested OHLC/price fields plus `volume_fp` and `open_interest_fp`. Separately, `src/manta_trading/api_server/models/kalshi_timeseries.py:188-192` describes `tape_complete_through` as \u201cCreated time of the newest stored trade,\u201d while the schema comment at `src/manta_trading/market/schema/migrations/kalshi.py:444-446` defines `sync_state['trades'].watermark_ts` as \u201cthe tape is complete through this instant \u2026 NOT the newest stored trade.\u201d These are public response-model descriptions and should match the persisted semantics consumers rely on.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:5-10"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Shared ceiling admission logic is duplicated between route modules",
+      "description": "`src/manta_trading/api_server/routes/kalshi_timeseries.py:66-78` reimplements `_admit_rows` from `src/manta_trading/api_server/routes/kalshi_catalog.py:81-94`; both enforce the same configured row ceiling, status code, error prefix, and number formatting, differing only in the advice string (\u201cnarrow start/end\u201d vs \u201cnarrow the filter\u201d). This violates the project\u2019s DRY/single-source rule: a policy or error-shape change now has two edit points. Extract a shared helper that accepts the remediation text or a small enum/constant for the advice.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:66-78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Trade-row boundary is untyped and positionally restated",
+      "description": "`src/manta_trading/data/kalshi/serve_timeseries.py:80-82` declares `TradeRow.values` as `tuple[Any, ...]`, and `src/manta_trading/api_server/models/kalshi_timeseries.py:163-176` hard-codes `values[0]` through `values[7]` into Pydantic fields with specific `datetime`, `str`, `Decimal`, and `bool` types. The candle path deliberately follows `CANDLE_COLUMNS` at `src/manta_trading/api_server/models/kalshi_timeseries.py:76-99`, but the trade path restates column order as magic indexes, so a new or reordered `TRADE_COLUMNS` entry is not caught by the type checker and may only fail late during response validation. Use a typed DTO or build `TradeRecord` from the same column mapping used by the reader, with a parity test on field-to-column mapping rather than only row length.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:80-82"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Ceiling-sized serialization runs on the event loop",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:125-174",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Load tier prod-URL guard is skipped and not multiline-aware",
+      "location": "test/load/test_188_kalshi_api_nfr.py:45-50",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Load tests for network/concurrency paths are not gated by CI",
+      "location": "test/load/test_188_kalshi_api_nfr.py:37-47",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Time-series documentation contradicts stored schema and watermark semantics",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:5-10",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Shared ceiling admission logic is duplicated between route modules",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:66-78",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Trade-row boundary is untyped and positionally restated",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:80-82",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:43:48.237955",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 426724,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2708560,
+  "cached_tokens": 2341248,
+  "cache_write_tokens": null,
+  "completion_tokens": 110680,
+  "reasoning_tokens": 106927,
+  "duration_seconds": 1131.5984806248453,
+  "cost_usd": 0.340685312,
+  "cost_basis": "alias_pricing"
+}

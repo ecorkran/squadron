@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Worktree resolution is discarded, so the gate validates the wrong tree (or nothing)",
+      "description": "`validateFrontmatterAction` destructures only `{ id }` from `resolveProjectWorktree`, then loads the raw `ProjectData` via `store.getById(id)` and uses `project.projectPath` as the document root. In `packages/cli/src/utils/project.ts#resolveProjectWorktree` step 2, a CWD match against a registered worktree returns a `worktreeId` and the resolver's whole purpose is worktree-aware routing; other commands honor it (`packages/cli/src/commands/build.ts:44` uses `resolveProject(store, id, worktreeId)`, and `packages/cli/src/commands/check.ts:208-212` builds `applyWorktreeOverlay` views). Consequently, from a registered worktree: (a) with no paths, `discoverAllDocuments` scans the **main** worktree's `project-documents/user`, not the current worktree's staged documents; (b) with relative staged paths, `packages/core/src/schema/frontmatterFileValidator.ts:47-64` resolves them against `process.cwd()` but checks containment against the main root, so every path starts with `..` and is silently skipped \u2014 the command prints \"No inconsistencies found (0 files checked)\" and exits 0 while checking nothing; (c) with `--fix`, `updateFrontmatterField` receives absolute paths in the main worktree and mutates files outside the tree the caller is working in. For a commit gate this is a false-green result, and for `--fix` it is a data-integrity hazard. Note that `resolveProjectWorktree` returns no `worktreeId` when `--project` is explicit, so using the overlay alone is insufficient \u2014 the root must be derived from the current worktree path. No test in `packages/cli/tests/commands/validate.test.ts` covers a worktree-resolved project.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:89-102"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`handleError`'s new second parameter is consumed by process-level event listeners",
+      "description": "`handleError(err: unknown, exitCode = 1)` is registered directly as a listener at `packages/cli/src/index.ts:171-172`: `process.on('uncaughtException', handleError)` and `process.on('unhandledRejection', handleError)`. Node invokes those listeners with a **second argument** \u2014 the origin string (`'uncaughtException' | 'unhandledRejection'`) for uncaught exceptions and the rejected `Promise` for unhandled rejections. Before this change the extra argument was ignored; now `packages/cli/src/utils/errors.ts:71` passes it to `process.exit(exitCode)`, so the top-level crash path exits with an invalid code (or throws while validating the code type) instead of the documented default `1`. The specific `process.on` overload may fall through to the generic `(...args: any[]) => void` overload, so `tsc` stays green and this regression is invisible at build time. Wrap the handlers (`process.on('uncaughtException', (err) => handleError(err))`) or keep the exit-code override in a separate function. `packages/cli/tests/utils/errors.test.ts` only calls `handleError` with one or zero arguments, so it cannot catch this.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/errors.ts:46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `--fix` composition test asserts a mock argument, not the file's `dateUpdated`",
+      "description": "The test named `--fix that resolves everything exits 0` doubles as the only guard for the slice's central composed guarantee (per `project-documents/user/tasks/923-tasks.frontmatter-validate-command-dateupdated-stamp.md`, Task 15(d) and review F006). Its assertion is `mockUpdateFrontmatterField.mock.calls[0][3]` matches `/^\\d{8}$/` \u2014 the writer is fully mocked at `packages/cli/tests/commands/validate.test.ts:10-17`, so no file is ever read or written. The comment at lines 114-115 claims this proves `--fix` stamps `dateUpdated`; it only proves a date-shaped 4th argument was forwarded, which would still pass if `updateFrontmatterField` ignored the stamp entirely. This is exactly the \"assert implementation rather than behavior\" pattern the testing rules warn against. `packages/core/tests/introspection/ConsistencyChecker.applyFixesIntegration.test.ts` covers the *other* fix pipeline (`applyFixes`) with real files, but nothing covers `cf validate frontmatter --fix` end-to-end. Add an integration case that writes a real temp doc with an invalid status, runs the command unmocked, and asserts both `status` and `dateUpdated` in the resulting file.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate.test.ts:93-118"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"wrong docType literal\" test is vacuous and the `docType` values constraint is unreachable",
+      "description": "Task 11 required \"one case proving a wrong `docType` literal ... is still caught by the existing value-constraint logic\". The test named `a wrong docType literal is still caught by the value-constraint logic` never supplies a wrong literal: it passes `docType: 'devlog'`, `docType: 'gate-evidence'`, and `docType: 'not-a-real-doctype'`, and asserts `toHaveLength(0)` for all three. Nothing is \"caught\"; the inline comments describe behavior the assertions do not exercise. This is not merely a weak test \u2014 the behavior is impossible: `packages/core/src/schema/frontmatterSchema.ts#validateFrontmatter` step 2 looks up `FRONTMATTER_SCHEMAS[data.docType]` and returns early on a miss, so step 4's `values` check for `docType` can only ever compare a schema key against its own declared literal. The `values: ['review-resolution']` etc. in the three new schemas (`packages/core/src/schema/frontmatterSchema.ts:118-142`) are therefore dead constraints. Either add a test that genuinely exercises a mismatched literal/value (which requires changing the validator to decouple lookup from the literal), or rename this to what it actually asserts \u2014 that each registered docType validates clean and unknown docTypes pass through \u2014 and drop the misleading comments.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:371-397"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`process.exit` spy is installed in one test and never restored",
+      "description": "`vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)` is created inside the third test only, and the file has no `afterEach`/`vi.restoreAllMocks()`. `beforeEach` at lines 52-60 calls `vi.clearAllMocks()`, which clears call history but does not restore implementations, so the stub persists for every later test in this file. Because the mock returns normally despite `handleError` being typed `never`, any unexpected error in a later test would be swallowed and execution would continue past the crash path \u2014 order-dependent, non-independent tests. Other command suites (e.g. `packages/cli/tests/commands/check.test.ts:115`) stub `process.exit` in `beforeEach` for the whole suite, so this file is inconsistent with the established pattern as well.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate.test.ts:83-90"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The machine-readable JSON contract is built as an untyped record",
+      "description": "`jsonOutput: Record<string, unknown>` is the published `--json` contract consumed by squadron's hook (documented in `CHANGELOG.md` and the slice design), yet nothing at compile time pins that `filesChecked` is a number, `findings` is `FrontmatterFinding[]`, or that `fixed`/`fixLog`/`fixErrors` appear together only in fix mode. A dedicated `interface ValidateFrontmatterJsonOutput` (or a discriminated union for fix vs. check mode) would make the contract self-documenting and catch shape drift. Relatedly, `SEVERITY_ICON` at line 15 is `Record<string, string>` even though `FrontmatterFinding['severity']` is the union `'warning' | 'error'`; `Record<FrontmatterFinding['severity'], string>` gives exhaustiveness for free and removes the `?? '?'` fallback.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:137-146"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Human-output formatting duplicates `check.ts` with drift",
+      "description": "`SEVERITY_ICON`, the fix-log lookup, the grouped-printing loop, the pluralized summary, and the `Fix error:` rendering are near-copies of `packages/cli/src/commands/check.ts:25-103` with small differences (an `info` icon, `suggestedFix` lines, and slice-index grouping vs. file grouping). The two `SEVERITY_ICON` maps already disagree on which severities exist. Given the CLAUDE.md DRY rule and that `validate frontmatter` was added in the same change, consider extracting the shared severity-icon map and fix-log attribution helper so a future severity or output-format change needs one edit.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:15-84"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fix loop uses typed error narrowing and a single per-run date stamp",
+      "description": "Verified against the writer and the design: `formatDateProject()` is computed once at line 110 and reused for every `updateFrontmatterField` call, so all touched documents in a run get the same stamp; `updateFrontmatterField` (`packages/core/src/introspection/writers/markdownWriter.ts:119-146`) skips the stamp when `key === 'dateUpdated'`, preserving the `dateCreated` backfill. The catch at lines 126-130 narrows `err` with `instanceof Error` before reading `.message`, collects the failure into `fixErrors` and keeps the finding in `stillBroken` rather than swallowing it, and line 154 turns both remaining findings and fix errors into exit 1 \u2014 matching the documented 0/1/2 contract at `packages/cli/src/utils/errors.ts:71`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:106-134"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Worktree resolution is discarded, so the gate validates the wrong tree (or nothing)",
+      "location": "packages/cli/src/commands/validate.ts:89-102",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`handleError`'s new second parameter is consumed by process-level event listeners",
+      "location": "packages/cli/src/utils/errors.ts:46",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The `--fix` composition test asserts a mock argument, not the file's `dateUpdated`",
+      "location": "packages/cli/tests/commands/validate.test.ts:93-118",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The \"wrong docType literal\" test is vacuous and the `docType` values constraint is unreachable",
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:371-397",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`process.exit` spy is installed in one test and never restored",
+      "location": "packages/cli/tests/commands/validate.test.ts:83-90",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "The machine-readable JSON contract is built as an untyped record",
+      "location": "packages/cli/src/commands/validate.ts:137-146",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Human-output formatting duplicates `check.ts` with drift",
+      "location": "packages/cli/src/commands/validate.ts:15-84",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Fix loop uses typed error narrowing and a single per-run date stamp",
+      "location": "packages/cli/src/commands/validate.ts:106-134",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:10:28.835131",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 67,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 403229,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 1464745,
+  "cached_tokens": 1342848,
+  "cache_write_tokens": null,
+  "completion_tokens": 100948,
+  "reasoning_tokens": 96325,
+  "duration_seconds": 1103.992148749996,
+  "cost_usd": 0.205215857,
+  "cost_basis": "alias_pricing"
+}

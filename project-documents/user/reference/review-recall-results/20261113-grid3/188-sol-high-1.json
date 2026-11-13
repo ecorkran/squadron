@@ -1,0 +1,111 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Explicit midnight timestamps become whole-day bounds",
+      "description": "Pydantic parses `\"2026-06-01T00:00:00Z\"` as a `date` with this date-first union. Consequently, `resolve_window()` expands an explicit midnight `end` to `23:59:59.999999`, returning almost an extra day. Reproduced using the actual window resolver. Both endpoints are affected. Preserve the distinction between date-only and datetime inputs, and add midnight-bound regression tests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Response construction blocks the event loop",
+      "description": "Only database reads run in the executor; model construction and serialization execute synchronously inside the async handler. An isolated benchmark of the actual candle models at 75,000 rows measured approximately **803 ms** for construction and **350 ms** for `model_dump()` alone\u2014far beyond the required 1 ms bound. Other requests cannot progress on that event loop during this work. Move construction and encoding off-loop after releasing the connection. Apply the same fix to trades and test event-loop responsiveness under large concurrent responses.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:123-126"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Concurrent inserts can bypass the row ceiling",
+      "description": "Count and fetch are separate statements without a repeatable-read snapshot. The inspected pool configuration does not establish stronger isolation, so concurrent collection commits can increase the fetched result after admission. `_admit_rows()` checks only the earlier count; neither fetch has a limit or subsequent size check. Both endpoints can therefore return more than the configured ceiling, potentially by an entire inserted batch. Use a consistent snapshot for count/fetch and add a concurrent-insert regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:160-167"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Explicit midnight timestamps become whole-day bounds",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Response construction blocks the event loop",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:123-126",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Concurrent inserts can bypass the row ceiling",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:160-167",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:14:42.777223",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 95462,
+  "cached_tokens": 93696,
+  "cache_write_tokens": null,
+  "completion_tokens": 638,
+  "reasoning_tokens": 123,
+  "duration_seconds": 110.28136741695926,
+  "cost_usd": null,
+  "cost_basis": null
+}

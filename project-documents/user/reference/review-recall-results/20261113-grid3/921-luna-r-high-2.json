@@ -1,0 +1,135 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Cutover can report success when verification exits nonzero",
+      "description": "`_repair` logs a nonzero subprocess return code but returns only the captured text. The acceptance checks in `main` decide success by searching for `FAIL` and `[WAIT]`, without checking that return code. For example, `--verify` can exit 2 with `scan refused: ...` and no such marker, causing the cutover to report `CUTOVER COMPLETE` despite having no verification result. Propagate the status and fail acceptance on any unsuccessful verification.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py#_repair"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Minute firing is not stopped when the trailing phase completes",
+      "description": "`fire_unit_until` calls `run([\"mt-run\", ...], stream=True)` before polling for the journal marker. `run` uses blocking `subprocess.run`, and the inspected `deploy/mt-run` waits for the systemd unit to finish before returning. Consequently, the marker is checked only after the minute unit has ended; the cutover cannot stop it at trailing-phase completion and may wait through the unbounded backfill it was intended to avoid. Start the firing without blocking the marker poll.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py#fire_unit_until"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Sudoers permits root execution of operator-writable code",
+      "description": "`MT_INSTALL` grants root execution of `install-production.sh` from the operator\u2019s checkout. Since the operator can modify that checkout, this grants the `manta` account a path to run arbitrary code as root. `MT_RUN` also allows arbitrary arguments to the root wrapper, whose non-wrapper commands are passed through to the production CLI. Restrict privileged commands to root-owned, non-writable executables and narrowly defined arguments.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:8-9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Freshness probe does not normalize an uninitialized refresh timestamp",
+      "description": "The query returns `stats.last_successful_finish` directly. The existing `cagg_freshness` implementation documents that TimescaleDB can report `-infinity` before a policy has completed and that psycopg raises while decoding it; that implementation normalizes the value with `NULLIF`. Here, a never-successful refresh can instead abort `--verify` with a database decoding error rather than return a stale/WAIT verdict. Normalize this timestamp before fetching it.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py#cagg_freshness_for_session"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cutover can report success when verification exits nonzero",
+      "location": "scripts/cutover_921_minute_sessions.py#_repair",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Minute firing is not stopped when the trailing phase completes",
+      "location": "scripts/cutover_common.py#fire_unit_until",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Sudoers permits root execution of operator-writable code",
+      "location": "deploy/sudoers.d/manta-ops:8-9",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Freshness probe does not normalize an uninitialized refresh timestamp",
+      "location": "src/manta_trading/data/gaps/repair_921.py#cagg_freshness_for_session",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:23:22.964219",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 14,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 13369,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 687046,
+  "cached_tokens": 504299,
+  "cache_write_tokens": null,
+  "completion_tokens": 16012,
+  "reasoning_tokens": 14604,
+  "duration_seconds": 158.37458187504672,
+  "cost_usd": 0.03132369,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews` totals include artifacts that the report excludes, and cost is summed over the wrong denominator",
+      "description": "The exclusion of pipeline reviews happens *after* the slice filter but the rows list is what feeds `usage_totals`, so that part is consistent \u2014 however the excluded artifacts are counted only by `runId`, and `sq stats reviews` then prints \"N pipeline review(s) excluded\" while the totals row's \"priced\" denominator is `len(report.rows)`, i.e. only standalone reviews. A reader comparing \"2 of 5 priced\" against the number of visible rows will see a mismatch whenever pipeline reviews were skipped, because `excluded_run_ids` are not reflected in the totals or in the \"priced\" count (`_total_row(report.totals, len(report.rows), ...)` in `src/squadron/cli/stats_views.py:145`). There is no way for the user to see the excluded spend anywhere in this view, so the two views cannot be reconciled from the output alone.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py:73-92"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews` reads `Path.cwd()` instead of the project root the rest of the codebase uses",
+      "description": "`reviews_dir = Path.cwd() / REVIEWS_DIR` is a process-cwd-relative read. Every other reader of the same directory resolves it from an explicit project cwd \u2014 e.g. `src/squadron/review/resolution_artifact.py:179` (`Path(cwd) / REVIEWS_DIR`), `src/squadron/review/resolution_evidence.py:75`, `src/squadron/pipeline/actions/review.py:613`, and `src/squadron/review/reviews_dir.py:100` which also checks a project-level reviews dir first. `sq stats reviews` therefore silently reports nothing (or the wrong project's reviews) when invoked from a subdirectory of the project, where `sq review` would have found the artifacts. The CLI exposes no `--cwd`/`--project` option to correct it.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:58"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `cost_tier == \"subscription\"` label is duplicated as a string literal instead of reusing the alias metadata vocabulary",
+      "description": "`SUBSCRIPTION_TIER = \"subscription\"` in `stats_views.py` duplicates the tier vocabulary that already exists in `src/squadron/cli/commands/models.py:33` (`\"subscription\": \"sub\"`), in `src/squadron/pipeline/intelligence/pools/strategies.py:39`, and in the documented `cost_tier` value set in `project-documents/user/slices/121-slice.model-alias-metadata.md:73`. Per the project rule \"Never scatter comparison values across code\u2026 Changing a value should require editing exactly one place\", this literal should come from a single shared definition (a `StrEnum` or constant in `squadron/models/aliases.py`, which is already the module that owns `cost_tier`).",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats_views.py:29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A failed review logs an ERROR-level traceback for an ordinary provider failure",
+      "description": "In the `ProviderError` branch of `_run_part`, the code logs `_logger.exception(\"review: unexpected error in step %s\", ...)` \u2014 a traceback at ERROR level \u2014 *after* already logging the provider failure at WARNING. The provider failure is a named, expected outcome (the branch itself says \"the message names what happened\"), not an \"unexpected error\"; the surrounding `except ProviderError` handler above it correctly uses WARNING. The word \"unexpected\" is also now inaccurate: the previous code re-raised and the outer `execute()` catch-all produced the traceback; that re-raise was removed, so this line is the only traceback and it duplicates the failure twice at two severities. It should be a WARNING/ERROR single line without the traceback, consistent with `dispatch.py`'s `_provider_failure`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:483-486"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`require_capture` raises out of the action instead of failing the step, so three of the four LLM actions crash the pipeline rather than failing their step",
+      "description": "`require_capture` raises `UsageCaptureMissingError` (a `RuntimeError`). `DispatchAction.execute` and `ReviewAction.execute` wrap their bodies in a broad `except Exception`, so they convert it into a failed `ActionResult` (the tests assert exactly that: `test_missing_capture_is_a_clear_error` in `tests/pipeline/actions/test_dispatch_usage.py` and `tests/pipeline/actions/test_review_action.py`). `CompactAction._execute_sdk_rotate` and `_execute_summary` do not: `compact.py` calls `require_capture` *outside* its try block, and `summary.py` calls it outside its try block too, so both propagate the exception out of the action and abort the pipeline run. The two behaviours are inconsistent for the same precondition, and the \"clear error\" contract (a failed step, not a crashed run) is met on two paths and not the other two.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py:216-226"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The compact action's usage record attributes the spend to the wrong alias and cannot price it",
+      "description": "`record_from_telemetry(None, reply.telemetry, ..., model=summary_model, ...)` passes `resolved=None`, so the record has `alias=None` and `profile=None`, and `resolve_cost` can only use the provider-reported cost. The comment above it says \"The compact model is the alias the step named; no resolution is needed to attribute spend the SDK already priced\" \u2014 but `model=summary_model` is the raw `params[\"model\"]` string, which may be a bare model id rather than an alias, and `alias=None` means the `api-rate equiv.` label in `sq stats` can never apply to a compact step even when the model is a subscription alias. Elsewhere in the same slice the code resolves the alias properly (`review.py` passes `settings.resolved.alias`, `dispatch.py` passes a `ResolvedModel`). Compact should resolve the model the same way rather than passing `None`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py:88-102"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `dispatch` action's provider-error path loses the `session_usable`/stall distinction for the one-shot path",
+      "description": "`DispatchStalledError` is a `ProviderError` subclass, so the refactor that merged the stall branch into `_provider_failure` is correct for the session path. In the one-shot path (`_dispatch_via_agent`), a `DispatchStalledError` raised by an agent would now be reported as a generic provider failure with the \"dispatch stalled\" text \u2014 but that path never raised one before, so this is not a regression. Flagging it only because `_provider_failure` is now shared by two paths with different telemetry shapes (`UsageRecord | None` built differently in each), which is worth keeping in mind if the stall shape is ever reused there.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py:401-405"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`stats_views.py` and `usage_report.py` place `cost_tier`/basis knowledge in the view layer",
+      "description": "`cost_cell` decides between `prov`, `alias`, and `api-rate equiv.` by reading the alias table directly from the view. The `CostBasis` \u2192 label mapping (`_BASIS_LABELS`) is likewise a view-local dict. This is consistent with the file's stated purpose (\"the tables format those same values\"), but it means the label vocabulary now lives in three places (`stats_views.py`, `run_cost.py`'s `_cost()`, and `models.py`'s `_COST_TIER_LABELS`). Worth consolidating if more cost renderers appear.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats_views.py:164-179"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats reviews` totals include artifacts that the report excludes, and cost is summed over the wrong denominator",
+      "location": "src/squadron/stats/reviews_report.py:73-92",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`sq stats reviews` reads `Path.cwd()` instead of the project root the rest of the codebase uses",
+      "location": "src/squadron/cli/commands/stats.py:58",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The `cost_tier == \"subscription\"` label is duplicated as a string literal instead of reusing the alias metadata vocabulary",
+      "location": "src/squadron/cli/stats_views.py:29",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A failed review logs an ERROR-level traceback for an ordinary provider failure",
+      "location": "src/squadron/pipeline/actions/review.py:483-486",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`require_capture` raises out of the action instead of failing the step, so three of the four LLM actions crash the pipeline rather than failing their step",
+      "location": "src/squadron/pipeline/usage_capture.py:216-226",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The compact action's usage record attributes the spend to the wrong alias and cannot price it",
+      "location": "src/squadron/pipeline/actions/compact.py:88-102",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The `dispatch` action's provider-error path loses the `session_usable`/stall distinction for the one-shot path",
+      "location": "src/squadron/pipeline/actions/dispatch.py:401-405",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`stats_views.py` and `usage_report.py` place `cost_tier`/basis knowledge in the view layer",
+      "location": "src/squadron/cli/stats_views.py:164-179",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:05:41.772946",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 31,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 90874,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2026644,
+  "cached_tokens": 1760768,
+  "cache_write_tokens": null,
+  "completion_tokens": 25495,
+  "reasoning_tokens": 22571,
+  "duration_seconds": 197.12323991698213,
+  "cost_usd": 0.039914576,
+  "cost_basis": "alias_pricing"
+}

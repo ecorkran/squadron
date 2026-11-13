@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Cutover step 6 names the WAL to verify via `pg_walfile_name(pg_switch_wal())`, a novel/unchecked expression with no test coverage",
+      "description": "`step_switch` (TD8 step 6 / success-criterion 6) does:\n```python\nsegment = psql(TICK, \"SELECT pg_walfile_name(pg_switch_wal())\")\ntarget = ctx.tick.backup_root / \"wal\" / f\"{segment}.zst\"\n```\nThe correctness of the whole archiving-verification step hinges on what `pg_switch_wal()` returns. PostgreSQL's `pg_switch_wal()` returns an LSN at/near the segment boundary, and `pg_walfile_name(lsn)` maps an LSN to the segment *containing* it. Whether that is the segment that was just completed (and therefore just archived to `<segment>.zst`) or the newly-opened segment (which is the *current*, not-yet-archived segment) is the crux. If it names the newly-opened segment, then on a freshly provisioned, idle tick cluster that segment's `.zst` will not appear within `WAL_SWITCH_WAIT_S` (120 s), because an open segment is only archived at the *next* switch \u2014 so step 6 would time out and fail the cutover even when archiving works perfectly.\n\nTwo reinforcing facts:\n1. **It is not the method the repo already proves.** Every prior record of this exact operation identifies the archived segment by observation / `pg_stat_archiver.last_archived_wal`, not by `pg_walfile_name(pg_switch_wal())`: runbook 200 (\"`pg_switch_wal()` at 13:23: `\u20261244\u2026F2.zst` landed within 6 s \u2026 `last_archived_wal` advanced\"), runbook 210, and slice 915's task (\"pg_switch_wal() \u2192 `last_archived_wal` 00000001000011A600000058\"). The cutover introduces a new naming path that has not been validated anywhere in the repo.\n2. **No test covers the SQL expression.** `test_wal_wait_gives_up_at_the_bound` and the `step_switch`-adjacent tests stub `psql` to return a fixed name, so an off-by-one in the segment expression is invisible to the suite \u2014 only the wait/bound logic is exercised.\n\nI could not run `psql` in this environment, so I'm flagging the ambiguity rather than asserting the direction of the error. Recommended before the PM runs the cutover: empirically confirm on the (idle) tick cluster which `.zst` actually appears after `SELECT pg_switch_wal();` and whether `pg_walfile_name(pg_switch_wal())` equals it; or switch the target to the proven method (capture `last_archived_wal` before and after, and wait for that segment's `.zst`). If the expression does name the open segment, this is a blocking defect for step 6.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#step_switch"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Redundant `assert` immediately after a `require()` guard",
+      "description": "In `run_health`, `require(flags is not None, ...)` already raises `StepFailed` when the summary is absent, so the following `assert flags is not None` is unreachable as a real guard and the `assert` is disabled under `python -O` anyway. `block_commands` in `cutover_227_helpers.py` similarly uses `assert match is not None` on a condition that the `_job_lines` filter already guarantees. These are harmless invariants, but the project convention is explicit `StepFailed`/`require` for \"saw something unexpected\" paths; the extra `assert`s add noise and no behavior. Consider dropping them or keeping only one.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#run_health"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`conf_sums()` uses `next(...)` with no default; a StopIteration would bypass the report writer",
+      "description": "`conf_sums()` does `next(r.split()[5] for r in rows if r.split()[:2] == MAIN.split(\"/\"))`. If the `17/main` row were ever absent from `pg_lsclusters`, this raises `StopIteration` from `step_guards` (the first step). `run_steps` only catches `StepFailed` and `subprocess.CalledProcessError`, so a `StopIteration` would propagate out of `main()` and skip writing the cutover report \u2014 violating the \"the report is still written on first failure\" contract stated in the module docstring. This is a very unlikely path in practice (production always has `17/main`), and `int(psql(...))` in `tick_locks_held` has an analogous (even less likely) `ValueError` risk on empty output. Consider letting these route through `require`/`StepFailed` so the failure is recorded and the report is always emitted.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_host.py#conf_sums"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cutover step 6 names the WAL to verify via `pg_walfile_name(pg_switch_wal())`, a novel/unchecked expression with no test coverage",
+      "location": "scripts/cutover_227_tick_backup.py#step_switch",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Redundant `assert` immediately after a `require()` guard",
+      "location": "scripts/cutover_227_tick_backup.py#run_health",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`conf_sums()` uses `next(...)` with no default; a StopIteration would bypass the report writer",
+      "location": "scripts/cutover_227_host.py#conf_sums",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:42:19.357840",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 40,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 333331,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 1372794,
+  "cached_tokens": 1209280,
+  "cache_write_tokens": null,
+  "completion_tokens": 97096,
+  "reasoning_tokens": 93870,
+  "duration_seconds": 395.32403774978593,
+  "cost_usd": 0.31331856,
+  "cost_basis": "alias_pricing"
+}

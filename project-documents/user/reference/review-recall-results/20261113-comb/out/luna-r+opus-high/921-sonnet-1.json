@@ -1,0 +1,38 @@
+{
+ "case": "921",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/3",
+  "P1": "sonnet/1/1",
+  "P2": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "deploy/sudoers.d/manta-ops:9` gives passwordless root to a script inside the `manta` user's own checkout. `manta` can edit that script, so this is really full root, not the \"nothing wider\" limit the header promises."
+  ],
+  "F2": [
+   "DROP",
+   "Duplicated test scaffolding and matching on printed text are maintainability points; neither makes the code behave wrongly."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P2": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 26.9,
+ "duration_seconds": 26.927040999988094,
+ "cost_usd": 0.58242,
+ "effort": "high",
+ "tool_calls_made": 1,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=150836, cached=84972, cache_write=65856, completion=1895, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `deploy/sudoers.d/manta-ops:9` gives passwordless root to a script inside the `manta` user's own checkout. `manta` can edit that script, so this is really full root, not the \"nothing wider\" limit the header promises.\nF2: DROP \u2014 Duplicated test scaffolding and matching on printed text are maintainability points; neither makes the code behave wrongly.\nMy previous reply did contain the full combing result. Here it is again in the structure you asked for. I read the sudoers file for F1. I didn't open the test file for F2, because even taken as described it is a maintainability point, not a defect.\n\n**Verdict:** One finding should be fixed before merge (F1). F2 can be dropped.\n\nF1: KEEP \u2014 The sudoers rule gives passwordless root to a script that the operator account can edit, which amounts to full root.\nF2: DROP \u2014 Duplicated test scaffolding and matching on printed text are maintainability points; neither makes the code behave wrongly.\n\n### [FAIL] F1 \u2014 Sudoers rule lets the operator run a script they own as root\ncategory: security\nlocation: deploy/sudoers.d/manta-ops:9\n\nKEEP. Line 9 lets `manta` run `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh --ref *` as root with no password (line 13). That script sits in `manta`'s own checkout, so `manta` can change it and then run whatever it now contains as root. In effect this grants full root, while the file's header (lines 1\u20134) promises \"Exactly the commands those scripts issue, nothing wider.\" Either install the script to a root-owned path and point the rule there, or drop the \"limited\" claim and treat the rule as full root. The open `*` wildcards on `--ref *` and `mt-run *` widen it a little more, but the editable script is what makes this a real hole.\n\n### [NOTE] F2 \u2014 Duplicated mock setup in tests; cutover script matches on printed text\ncategory: maintainability\nlocation: test/unit/data/acquisition/daemon/test_minute.py\n\nDROP. Copying the scaffolding from `_run` into one test is a DRY and style issue in test code. The tests still check the behaviour they target. Matching `[WAIT]`/`FAIL` as substrings of printed output is fragile, but the finding doesn't show any case where it gives a wrong result, and the `FAIL` check predates this change. Neither part causes wrong behaviour, a crash or a silent failure."
+}

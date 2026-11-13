@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Remove the stale duplicate test file",
+      "description": "This file is a duplicate of `CoreServiceFactory.test.ts` with outdated `createContextPipeline` calls that omit the now-required options. Its filename does not match the Vitest test-file pattern, so it is not run; retaining an unexecuted, stale copy can mislead future maintenance. Remove it or rename it and update it to the current API.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Remove the stale duplicate test file",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:26:35.577228",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 63,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 12147,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 1293885,
+  "cached_tokens": 1212383,
+  "cache_write_tokens": null,
+  "completion_tokens": 14954,
+  "reasoning_tokens": 13129,
+  "duration_seconds": 176.8577379169874,
+  "cost_usd": 0.027751030000000003,
+  "cost_basis": "alias_pricing"
+}

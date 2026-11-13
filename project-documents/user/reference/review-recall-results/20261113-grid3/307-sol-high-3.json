@@ -1,0 +1,111 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Estimate-only evaluates the installed release, not the requested release",
+      "description": "`preflight(ref)` verifies the ref but does not install it. `fetch_estimate()` invokes `mt-run`, which executes `/opt/manta-trading/.venv/bin/mt`. When production still has 304\u2019s universe, `--estimate` therefore prices the old wants, potentially reporting nothing to buy instead of 307\u2019s purchase. Run the free estimate against the requested release\u2019s universe and add a test where installed and requested releases differ.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:261-268"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Pre-install baseline omits the newly wanted GC bar family",
+      "description": "The baseline is collected before `install_release()`, through production\u2019s accounting command. Accounting emits only wanted families; the previous universe has no GC bar want. After installing 307, accounting includes `GC/bar_1m`, and `purchase_accounting.totals_delta()` rejects its missing baseline. This stops evidence collection after spending, and reruns retain the incompatible baseline. Capture explicit pre-purchase totals for every target family, independently of the installed universe\u2019s wants.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:112-115"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Cached dataset edge prevents the cutover from refreshing itself",
+      "description": "`status` reads `tick_dataset_edge`; it does not query the provider. Both execution modes run this gate before reaching the estimate that could refresh availability. With an edge recorded during November\u2019s earlier purchase, December reruns continue refusing even after the provider publishes the required data. There is no tick timer to refresh it automatically. Refresh through a free metadata operation before checking the edge, and test an initially stale cached edge.\n\nTests could not run: the checkout has no virtual environment, and the available interpreter lacks `psycopg`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:135-137"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Estimate-only evaluates the installed release, not the requested release",
+      "location": "scripts/cutover_304_first_purchase.py:261-268",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Pre-install baseline omits the newly wanted GC bar family",
+      "location": "scripts/cutover_304_first_purchase.py:112-115",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cached dataset edge prevents the cutover from refreshing itself",
+      "location": "scripts/cutover_304_first_purchase.py:135-137",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:36:01.807328",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 124078,
+  "cached_tokens": 122240,
+  "cache_write_tokens": null,
+  "completion_tokens": 508,
+  "reasoning_tokens": 95,
+  "duration_seconds": 87.51097858394496,
+  "cost_usd": null,
+  "cost_basis": null
+}

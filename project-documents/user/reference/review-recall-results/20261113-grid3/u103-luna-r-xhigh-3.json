@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Reapply the current range when the first series is added",
+      "description": "The visible-range effect reads `seriesCountRef.current`, but changing that ref in the facade\u2019s `addSeries`/`removeSeries` callbacks does not trigger a render. If a series is added after the chart is ready, the current range is therefore not applied until the range changes for some other reason. The translation test only changes the range *after* adding a series, so it does not cover this case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:341"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Preserve the first operation error",
+      "description": "`setOperationError` unconditionally replaces `current.error`, so a later provider failure overwrites the earlier one. This conflicts with `UseChartProviderResult.error`\u2019s documented contract of retaining the first operation error and can replace the original failure shown to the user.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:97"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Reapply the current range when the first series is added",
+      "location": "src/chart/use-chart-provider.ts:341",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Preserve the first operation error",
+      "location": "src/chart/use-chart-provider.ts:97",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:28:50.065077",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 19463,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "xhigh",
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 407633,
+  "cached_tokens": 351532,
+  "cache_write_tokens": null,
+  "completion_tokens": 22833,
+  "reasoning_tokens": 21639,
+  "duration_seconds": 233.39576754206792,
+  "cost_usd": 0.020541919999999998,
+  "cost_basis": "alias_pricing"
+}

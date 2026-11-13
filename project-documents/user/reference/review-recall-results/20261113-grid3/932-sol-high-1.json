@@ -1,0 +1,111 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Disable the idle timer once background work completes",
+      "description": "The timeout remains fixed throughout `_read_turn()`, even after a task notification clears the last active background agent. A slow foreground continuation can therefore time out, returning partial text as success without consuming its result.\n\nReproduced with a completion notification followed by a delayed parent answer: dispatch returned `\"Waiting\\nWorking\"` instead of including `\"DONE\"`, and stopped zero tasks. Reevaluate `turns.waiting` before each read and disable the timeout when background work finishes. Add a regression test covering this transition.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:297-301"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Guard model switching on unusable sessions",
+      "description": "The new unusable-session guard does not cover `set_model()`. However, `_dispatch_via_session()` calls `set_model()` before `dispatch()`, and reconnect resets `current_model` to `None`. After a failed reconnect, subsequent batch items therefore contact the dead client before reaching the guard.\n\nVerified with a real disconnected SDK client: this produces `CLIConnectionError: Not connected. Call connect() first.`, losing the recorded reconnect cause. Guard `set_model()` too, and test with a client that rejects calls while disconnected rather than an unconditional `AsyncMock`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:418-435"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Add load coverage for persistent-session dispatch",
+      "description": "The added tests exercise short scripted sequences, but no load test covers the new stream-consumption and background-task lifecycle. Existing `tests/load/` coverage concerns grep and worktrees, not SDK sessions.\n\nThe Python rules require realistic load coverage for concurrency/network paths. Add a CI-gated test exercising repeated dispatches and concurrent task notifications, with latency or resource-bound assertions.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/test_sdk_session.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Disable the idle timer once background work completes",
+      "location": "src/squadron/pipeline/sdk_session.py:297-301",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Guard model switching on unusable sessions",
+      "location": "src/squadron/pipeline/sdk_session.py:418-435",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Add load coverage for persistent-session dispatch",
+      "location": "tests/pipeline/test_sdk_session.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:15:59.114560",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 101624,
+  "cached_tokens": 98688,
+  "cache_write_tokens": null,
+  "completion_tokens": 566,
+  "reasoning_tokens": 158,
+  "duration_seconds": 100.69555624993518,
+  "cost_usd": null,
+  "cost_basis": null
+}

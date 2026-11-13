@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Reject non-string settings sources instead of coercing them",
+      "description": "The template loader accepts any list and converts each element with `str()`. For example, `setting_sources: [123]` silently becomes `[\"123\"]` and is passed to the SDK as configuration. Validate the element types and report malformed template input rather than turning it into a plausible-looking value.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/review/templates/__init__.py#_resolve_setting_sources"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Check session usability before switching models",
+      "description": "A failed reconnect records `unusable_reason`, but `set_model()` does not check it. Dispatch paths switch models before calling `dispatch()`, so a later step may operate on the disconnected client and surface a new SDK error instead of the recorded reconnect failure. Call `_require_usable()` before using the client in `set_model()`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession.set_model"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Reject non-string settings sources instead of coercing them",
+      "location": "src/squadron/review/templates/__init__.py#_resolve_setting_sources",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Check session usability before switching models",
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession.set_model",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:11:36.534096",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 4684,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 716549,
+  "cached_tokens": 599670,
+  "cache_write_tokens": null,
+  "completion_tokens": 14453,
+  "reasoning_tokens": 13685,
+  "duration_seconds": 157.49665179196745,
+  "cost_usd": 0.024911100000000002,
+  "cost_basis": "alias_pricing"
+}

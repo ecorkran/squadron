@@ -1,0 +1,75 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Background-task cleanup can delay dispatch return",
+      "description": "After the configured idle timeout, each `stop_task` call is awaited sequentially. The SDK\u2019s control request has a 60-second timeout, so if multiple stop requests stall, dispatch can take up to roughly 60 seconds per task before returning its partial response. Consider bounding cleanup with a shared deadline or otherwise limiting its total wait.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:333-336"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Background-task cleanup can delay dispatch return",
+      "location": "src/squadron/pipeline/sdk_session.py:333-336",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:16:13.877721",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": "xhigh",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 94208,
+  "cached_tokens": 93696,
+  "cache_write_tokens": null,
+  "completion_tokens": 428,
+  "reasoning_tokens": 310,
+  "duration_seconds": 117.54692779108882,
+  "cost_usd": null,
+  "cost_basis": null
+}

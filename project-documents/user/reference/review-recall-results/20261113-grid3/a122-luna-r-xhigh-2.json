@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Reject non-finite tick bounds",
+      "description": "`validate_settings` checks whether each bound is `<= 0`, but `float(\"nan\")` passes that check. The CLI accepts floats for these settings, so `--tick-deadline nan` can start successfully while `TickBudget.allows_call()` always refuses work; `--run-poll-interval nan` can also prevent subsequent polls. Reject non-finite bounds explicitly and cover them with tests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/factory.py#validate_settings"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Propagate store integrity failures instead of isolating them",
+      "description": "`StoreIntegrityError` is a store-level error, but it is absent from `STORE_FAILURES`. Consequently, `RunnerTenant._tick_project` handles it in the broad per-project catch and attempts to escalate through the same store instead of stopping the process as the tenant\u2019s error policy describes. Include this error in the failures that propagate, and test that behavior.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py#STORE_FAILURES"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Add a Runner load test",
+      "description": "The Runner introduces a process-orchestration path that launches and polls subprocesses across projects and runs. The new tests cover functional and crash-recovery scenarios, but `tests/load/` has no Runner workload asserting latency, throughput, or resource bounds. The Python testing rules require a realistic load test for environment-layer paths.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py#RunnerTenant.tick"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Reject non-finite tick bounds",
+      "location": "src/amoeba/runner/factory.py#validate_settings",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Propagate store integrity failures instead of isolating them",
+      "location": "src/amoeba/runner/faults.py#STORE_FAILURES",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Add a Runner load test",
+      "location": "src/amoeba/runner/tenant.py#RunnerTenant.tick",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:44:50.678282",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 26,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 22441,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "xhigh",
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 1503769,
+  "cached_tokens": 1346610,
+  "cache_write_tokens": null,
+  "completion_tokens": 37152,
+  "reasoning_tokens": 35382,
+  "duration_seconds": 375.0355160830077,
+  "cost_usd": 0.047758,
+  "cost_basis": "alias_pricing"
+}

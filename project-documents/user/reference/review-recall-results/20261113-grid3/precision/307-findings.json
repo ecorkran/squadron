@@ -1,0 +1,79 @@
+[
+ {
+  "ref": "luna-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Over-session names are not matched to the family being reported",
+  "location": "scripts/purchase_accounting.py:105-113",
+  "description": "`over_sessions` discards each volume check\u2019s family, and `_family_evidence` aggregates names by product across coverage results. `over_failures` then uses that combined list for each family with an `over` count. The failure can therefore name sessions from a different family\u2014or include duplicates\u2014rather than identifying the sessions behind that family\u2019s count. Keep the family with each name and filter names when constructing each failure."
+ },
+ {
+  "ref": "luna-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Record totals silently omit families missing from the after snapshot",
+  "location": "scripts/purchase_accounting.py:141-144",
+  "description": "`totals_delta` detects families present after but absent before, but not families present before and missing after. Because it iterates only `after`, a family omitted from the accounting output disappears from the reported delta instead of stopping the cutover. Validate that the before and after family-key sets match before calculating deltas."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "FAIL",
+  "title": "Estimate mode prices the installed release instead of the requested release",
+  "location": "scripts/cutover_304_first_purchase.py:261-268",
+  "description": "`preflight(ref)` checks that the ref exists but does not install it. `fetch_estimate()` invokes `mt-run`, which executes `/opt/manta-trading/.venv/bin/mt`. When production still runs the previous release, `--estimate` prices the old universe, potentially reporting nothing to buy instead of the expanded history purchase. Run the estimate using the requested release\u2019s configuration and add a regression test with different installed and requested universes."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "FAIL",
+  "title": "Pre-install baseline lacks the newly added GC bar family",
+  "location": "scripts/cutover_304_first_purchase.py:112-115",
+  "description": "The baseline is captured before `install_release()`, using installed production accounting. The previous universe has no GC bar want, so its accounting omits `GC/bar_1m`. After installation and purchase, `purchase_accounting.totals_delta()` rejects that new family because its baseline is absent. Reruns retain the incomplete baseline and fail again. Capture verified pre-purchase totals for every target-release family and test this upgrade transition."
+ },
+ {
+  "ref": "sol-high/1/2",
+  "severity": "CONCERN",
+  "title": "Per-session verification excludes the tick-tier families",
+  "location": "scripts/cutover_304_evidence.py:72-91",
+  "description": "`coverage_reads()` traverses only history wants, excluding ES and GC `tbbo`. Although accounting narrates those families, `_family_evidence()` never checks their sessions for unaccounted statuses or ledger mismatches. Consequently, an unchanged health exit code can allow success without satisfying D6\u2019s every-family evidence requirement. Include each configured tier over its wanted range and test an unaccounted `tbbo` session."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "FAIL",
+  "title": "Do not treat every provider hole as an accounted-for session",
+  "location": "scripts/purchase_verdicts.py#not_caught_up_report",
+  "description": "`not_caught_up_report` skips every `provider_hole` via `_LISTED_NEVER`, without checking the session\u2019s `condition`. The exit criterion excludes only a provider hole on a missing day. A hole on another condition can therefore be omitted from the report and avoid an exit failure, allowing the cutover to pass with an unaccounted-for session. Only skip a provider hole when the coverage row confirms the missing-day condition; otherwise report and judge it."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Include unheld jobs when deriving the 30-day ceiling",
+  "location": "scripts/cutover_304_checks.py:91",
+  "description": "`ceiling_values` derives the 30-day ceiling from `planned + trailing`, but the spend guard also counts unheld provider jobs toward that cap. The estimate summary exposes those jobs in `unheld_jobs`; when any are present, the printed command can still leave the guard refusing the purchase. Include their costs when deriving the suggested cap."
+ },
+ {
+  "ref": "luna-r-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "Collect the health rows required by the evidence step",
+  "location": "scripts/cutover_304_evidence.py#collect",
+  "description": "The evidence collection reads and narrates accounting rows, but it does not collect the current health rows. `health_exit_code()` runs `mt data health` and returns only its exit code; that result is used for the baseline comparison, not included in the evidence. This leaves the required per-product health evidence absent from the narration."
+ },
+ {
+  "ref": "luna-r-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "Attribute over-session names to the matching family",
+  "location": "scripts/purchase_accounting.py#over_sessions",
+  "description": "`over_sessions` drops the volume check\u2019s `family`, and `_family_evidence` groups the resulting names only by product. `over_failures` then uses that combined list for each family row with an `over` count. When multiple volume families have over sessions, a row can name sessions belonging to another family, making the evidence attribution incorrect. Preserve and filter by family when collecting and reporting those names."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "CONCERN",
+  "title": "The derived 30-day ceiling omits unheld provider spend and double-counts re-submits",
+  "location": "scripts/cutover_304_checks.py:88",
+  "description": "`ceiling_values` (scripts/cutover_304_checks.py:88-91), `ceiling_command` (94-97) and the cap check in `judge_estimate` (line 244, `planned + trailing > cap_30d`) all work from `planned + trailing`. The guard that will actually authorise the purchase computes the breach differently: `evaluate_spend` in src/manta_trading/data/tick/spend_guard.py sums `trailing_total + unheld_total + planned_new`, where `unheld_total` is the cost of provider jobs no manifest row holds (the estimate itself reports these as `unheld_jobs`) and `planned_new` deliberately excludes re-submits whose cost is already inside `trailing`. Two consequences: (a) the command the PM is told to run can set a `--cap-30d` below what the guard demands, so the purchase it enables is still refused by `mt data tick pass`; (b) the cutover's own check is looser than the guard when unheld jobs exist and stricter than the guard for a re-submit (that cost is counted once in `planned` and again in `trailing`, while the guard counts it once). No test covers unheld jobs in the ceiling derivation (`test_ceiling_command_rounds_the_estimate_up_to_the_next_five` and `test_an_over_ceiling_estimate_carries_the_command_for_its_figures` only use `planned`/`trailing`)."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "CONCERN",
+  "title": "The --estimate run never narrates the estimate's refusal reasons",
+  "location": "scripts/cutover_304_first_purchase.py:271",
+  "description": "`_estimate_only` prints `verdict {summary['verdict']}: {outcome}` (line 271) and then, whenever the outcome is `BUY`, the ceiling command (line 274) \u2014 but it never narrates `summary[\"reasons\"]`, the list the planner fills with why the estimate was refused (absent or short ceilings, archive space short, provider costs). The full path does surface them: `judge_estimate` raises with `summary[\"reasons\"]` (scripts/cutover_304_checks.py:249-252), so the estimate path loses exactly the information the operator needs to choose the ceilings. The output is also self-contradictory: with `check_ceilings=False`, `judge_estimate` returns `BUY` for every verdict other than `nothing_to_buy` (scripts/cutover_304_checks.py:232-233), so a plan refused for a non-ceiling reason still yields \"verdict refused: buy\", a ceiling command and exit code 0. No test asserts on the estimate's reasons."
+ }
+]

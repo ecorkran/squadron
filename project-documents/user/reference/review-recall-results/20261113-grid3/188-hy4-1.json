@@ -1,0 +1,171 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Ceiling-sized Kalshi responses are built and serialized on the event loop",
+      "description": "The DB work is correctly offloaded with `run_in_executor`, but immediately after it returns, `get_candlesticks` calls `CandlesResponse.build(...)` and `timeseries_response(...)` directly inside the coroutine. The trades route repeats the same pattern at `src/manta_trading/api_server/routes/kalshi_timeseries.py:166-174`. `CandlesResponse.build` / `TradesResponse.build` construct up to 75,000 Pydantic row models, and `src/manta_trading/api_server/serialization.py:37-43` then performs `model_dump(mode=\"json\")` plus `orjson.dumps` or `msgpack.packb`. The new load tier itself records a 34.80 MB candle response and a ~1.034 s ceiling-sized trades request in `test/load/test_188_kalshi_api_nfr.py:120-129`, so this is not sub-millisecond work. This violates the async rule that CPU-bound work in `async def` must use an executor and will block all other I/O while large responses are built. Move model construction and serialization into `run_in_executor`/`asyncio.to_thread`, or produce the bytes on a worker before returning the `Response`; add a concurrent ceiling-sized time-series load assertion.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:123-126"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The statement-recording load cursor stores bytes and then filters them as strings",
+      "description": "`_RecordingCursor.statements` is annotated `list[str]`, but on the locked psycopg 3.3.3, `ClientCursor.mogrify(...)` returns `bytes`; `type(self).statements.append(rendered)` at `test/load/test_188_kalshi_api_nfr.py:142` therefore records byte strings for every parameterized query. The critical no-fetch assertion in `test_over_ceiling_is_refused_without_fetching_rows` then performs `\"kalshi.trades\" in s` and `\"count(*)\" in s` against those entries (around `test/load/test_188_kalshi_api_nfr.py:286-291`), which raises `TypeError: a bytes-like object is required, not 'str'`. Decode `mogrify` results, or make the filters byte-aware; add a small unit test for the recorder with a parameterized `sql.Composed` query so this regression is caught without needing the full load tier.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:132-145"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The shared row-ceiling admission check is duplicated across two route modules",
+      "description": "`_admit_rows` here is a near-copy of `src/manta_trading/api_server/routes/kalshi_catalog.py:81-94`; only the advice text differs (`\"narrow start/end\"` vs `\"narrow the filter\"`). Both enforce the same `API_MAX_BARS_PER_REQUEST` policy and the same `{\"error\": ...}` contract via the app handler, so the status code, numeric formatting, and ceiling comparison now have two definition sites that can drift. This conflicts with the project\u2019s DRY / \u201cone value, one source\u201d rules. Extract one helper, e.g. `admit_rows(count, max_rows, *, advice: str)`, and have both routers call it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:66-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The candle mapping abstraction does not provide the automatic extension its docs claim",
+      "description": "The module docstring at `src/manta_trading/api_server/models/kalshi_timeseries.py:1-9` says \u201cNeither direction restates the other, so a column added there is served here without an edit.\u201d The implementation does not do that: `_CANDLE_OBJECTS` maps object names to model classes at `:58-62`, but its values are never used; only the keys initialize `nested`. `CandleRecord.from_row` at `:92-99` hardcodes `CandleBidAsk`, `CandlePrice`, `volume_fp`, and `open_interest_fp`, while the Pydantic models have fixed field sets. A new nested column in `CANDLE_COLUMNS` is ignored or raises, a new flat column is placed in `flat` but never served, and a new nested object causes a `KeyError`. The added `TestCandleRecord` coverage in `test/unit/api_server/test_kalshi_models.py:168-220` actually fails on such a change rather than proving \u201cserved without an edit.\u201d Either correct the comment and remove the dead class values, or implement the mapping-driven construction the docstring promises.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:58-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The load tier\u2019s prod-URL guard is still line-only and does not cover the new shared helper",
+      "description": "The new `test/load/test_188_kalshi_api_nfr.py` docstring claims `test_load_tier_never_references_prod_db_url` \u201cenforces it mechanically,\u201d but the guard at `test/load/test_167_data_status_nfr.py:214-230` scans line by line and only flags lines containing both the prod URL name and an environment-read marker. The Additional Review Rules require a multiline-aware scan because `os.environ.get(\\n \"VAR\")` defeats a per-line grep; `test/_prod_url_guard.py:27-33` already implements the required regex predicate, but the load tier does not use it. The guard also only globs `test/load/*.py`, while `test/load/conftest.py` now imports `apply_kalshi_track` from the new `test/kalshi_support/schema.py`, which performs DDL against a supplied URL and is outside that scan. Use the shared multiline-aware `prod_url_readers`/`assert_ratchet` helper over the load tier and its support package, or explicitly extend the guard to cover `test/kalshi_support/`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_167_data_status_nfr.py:214-230"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New load tests are documented as manual-only despite the CI gating rule",
+      "description": "The module docstring at `test/load/test_188_kalshi_api_nfr.py:34-43` explicitly says CI wiring is deferred to slice 907 and \u201cNothing here is enforced by CI today\u201d; `pytestmark` at `:77-86` also skips the whole module unless `MT_RUN_LOAD_TESTS=1`. The Additional Review Rules state that load tests for network/concurrency/environment-layer paths must be gated by CI. This slice adds API network and pool-contention paths, so manual-only NFR tests cannot prevent regressions in normal CI runs. Wire the load tier into CI with the required environment and dedicated test database, or update the project rule explicitly if the deferral is accepted.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:34-86"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Ceiling-sized Kalshi responses are built and serialized on the event loop",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:123-126",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The statement-recording load cursor stores bytes and then filters them as strings",
+      "location": "test/load/test_188_kalshi_api_nfr.py:132-145",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The shared row-ceiling admission check is duplicated across two route modules",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:66-79",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The candle mapping abstraction does not provide the automatic extension its docs claim",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:58-99",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The load tier\u2019s prod-URL guard is still line-only and does not cover the new shared helper",
+      "location": "test/load/test_167_data_status_nfr.py:214-230",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New load tests are documented as manual-only despite the CI gating rule",
+      "location": "test/load/test_188_kalshi_api_nfr.py:34-86",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:20:43.151269",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 460554,
+  "failed_tool_calls": 4,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2116685,
+  "cached_tokens": 1717568,
+  "cache_write_tokens": null,
+  "completion_tokens": 118778,
+  "reasoning_tokens": 115392,
+  "duration_seconds": 1320.857576499926,
+  "cost_usd": 0.350973217,
+  "cost_basis": "alias_pricing"
+}

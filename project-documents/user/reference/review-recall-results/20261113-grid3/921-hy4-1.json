@@ -1,0 +1,207 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`fire_unit_until` still blocks until the whole minute pass ends",
+      "description": "`fire_unit_until()` calls `run([\"mt-run\", *mt_run_args], sudo=True, check=False, stream=True)` at `scripts/cutover_common.py:356`. That launches `deploy/mt-run`, whose `start_and_stream()` starts the unit with `--no-block` and then waits in `while is_running \"${unit}\"; do sleep 2; done` at `deploy/mt-run:127-129`; `subprocess.run()` therefore does not return until the oneshot finishes. As a result, `wait_for_unit_or_line()` at `scripts/cutover_common.py:318-331` and `stop_unit()` at `scripts/cutover_common.py:337-339` are unreachable while the unbounded backfill is running, defeating the new \"stop once the trailing phase line lands\" behavior described in `scripts/cutover_921_minute_sessions.py:174-182`. The interactive `Ctrl-C detaches` trap at `deploy/mt-run:125` does not make Python's `subprocess.run()` keep waiting; it propagates `KeyboardInterrupt`. The new tests at `test/unit/test_cutover_921.py:441-490` patch `cutover_common.run` to return immediately, so they assert the intended control flow but not the real wrapper contract.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:341-363"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Firing-time selection uses `.replace()` on a non-UTC database timestamp",
+      "description": "`MINUTE_PASS_FIRING_TIMES_UTC` and `deploy/systemd/mt-minute-pass.timer:7-8` define `04:05`/`13:05` UTC, but `collecting_firing_finished_at()` calls `close.replace(hour=firing.hour, minute=firing.minute, ...)` on `session.session_close_utc` without first converting it to UTC. The same file acknowledges at `src/manta_trading/cli/commands/minute_session_mass.py:260-265` that psycopg returns `timestamptz` in the connection zone (`America/Denver` in production) and fixes only the display label with `.astimezone(UTC)`. With a Denver-zone close, `04:05` is built as 04:05 MDT/MST (10:05/11:05 UTC), so the +3h verdict becomes 13:05/14:05 UTC instead of 07:05 UTC. The changed boundary tests at `test/unit/cli/commands/test_data_health.py:192-260` use UTC-aware datetimes and do not exercise the production timezone path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/minute_session_mass.py#collecting_firing_finished_at"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Repair/verify command failures can be reported as a complete cutover",
+      "description": "`_repair()` runs the production Python with `check=False`, prints a non-zero exit message, and returns only `stdout + stderr`. `_verify_when_fresh()` at `scripts/cutover_921_minute_sessions.py:200-213` and `main()` at `scripts/cutover_921_minute_sessions.py:264-273` decide acceptance solely from the absence of `\"FAIL\"` and `\"[WAIT]\"` in that text. A crashed `--verify` (traceback, DB/connection error, or the `RepairScanTimeout` branch in `scripts/repair_921_minute_sessions.py#main`, which prints `\"scan refused\"` and returns `EXIT_REFUSED`) contains neither marker, so the script can print `CUTOVER COMPLETE` and return 0. Non-zero `--apply`/`--check` failures are also logged but ignored before the script continues firing passes. Propagate the child return code or use a structured status instead of inferring success from free-form output.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:93-105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The sudoers policy is inconsistent with the cutover commands and is not least-privilege",
+      "description": "The file claims at `deploy/sudoers.d/manta-ops:1-4` to allow \"exactly the commands those scripts issue, nothing wider\", but `scripts/cutover_921_minute_sessions.py:97-99` issues `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py ...` and no alias permits that command. Conversely, `MT_RUN *` at `deploy/sudoers.d/manta-ops:8` permits arbitrary arguments to the root-executed wrapper; `deploy/mt-run:148-166` passes those arguments through to `/opt/manta-trading/.venv/bin/mt` after sourcing the production env file. `MT_INSTALL` at `deploy/sudoers.d/manta-ops:9` also grants NOPASSWD root to a script under the operator's home checkout; if that path is writable by `manta`, it is an arbitrary-root grant. Install the privileged installer to a root-owned path, enumerate exact repair commands, and avoid the broad `mt-run *` rule.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:7-14"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new cutover log does not contain the actual cutover report",
+      "description": "`start_log()`/`say()` tee only `say(...)` lines. The repair script's acceptance output is emitted with `print(output)` at `scripts/cutover_921_minute_sessions.py:102`; pass streaming output and the polling lines in `scripts/cutover_common.py:318-331` are also plain `print` or inherited stdout. That contradicts the script docstring at `scripts/cutover_921_minute_sessions.py:21` (\"every action is logged\") and the `full narration` label at `scripts/cutover_921_minute_sessions.py:278`: the file misses the PASS/FAIL/WAIT numbers and journal output that motivated the log. `test/unit/test_cutover_921.py:501-508` only proves two `say()` lines are written, not that the report is auditable.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:44-62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Session judgement counts bars that ingestion will discard",
+      "description": "`bar_timestamp()` at `src/manta_trading/data/acquisition/daemon/minute_sessions.py:27-40` validates only the timestamp, and `sessions_without_bars()` at `:43-61` treats any parsed in-session timestamp as collected. But `src/manta_trading/data/acquisition/daemon/minute.py#_bar_to_row` skips bars with missing, null, non-finite, or non-positive OHLC values before `_insert_minute_bars()` writes anything. `judge_chunk_by_sessions()` is called at `src/manta_trading/data/acquisition/daemon/minute.py:902-909` using the raw response bars; a single in-session bar with a valid timestamp but invalid prices can therefore produce `SUCCESS`, delete/shrink the gap row, and insert zero rows. The new fixtures in `test/unit/data/acquisition/daemon/test_minute_sessions.py:22-36` only build valid price bars. Judge the validated insertable rows (or the insert result), and add a malformed-price regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py#sessions_without_bars"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Changed import blocks violate the required Ruff import-order rule",
+      "description": "`pyproject.toml`'s `[tool.ruff.lint]` block selects `I`, so Ruff enforces import grouping/sorting. The changed `from cutover_common import ...` block at `scripts/cutover_921_minute_sessions.py:45-58` is not sorted; neither is `scripts/repair_921_minute_sessions.py:59-66` (`cagg_freshness_for_session, CheckReport, RepairScanTimeout, build...`), `src/manta_trading/data/acquisition/daemon/minute.py:16-64` (local application imports interleaved out of order), or `test/unit/test_repair_921.py:27-33`. These will be flagged by the mechanically enforced Ruff baseline. Run `ruff check --fix` and `ruff format` on the touched files.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:45-58"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new cagg freshness probe bypasses the guarded shared helper",
+      "description": "`cagg_freshness_for_session()` reimplements the refresh-job lookup with a plain `SELECT stats.last_successful_finish`, an inner `JOIN`, no `nullif(..., '-infinity'::timestamptz)`, no `scheduled`/`last_run_status` signals, and no statement timeout. The established helper at `src/manta_trading/market/maintenance/cagg_freshness.py:70-82` already normalizes `-infinity`, uses a `LEFT JOIN`, and `src/manta_trading/market/maintenance/cagg_freshness.py#_set_probe_timeout` bounds every probe with `CAGG_FRESHNESS_PROBE_STATEMENT_TIMEOUT`. `scripts/repair_921_minute_sessions.py#run_verify` calls this partial probe and then `fetch_session_mass()` directly without `assert_cagg_fresh`, so acceptance has a second, weaker freshness implementation. Reuse the shared verdict/augment seam or extract one bounded helper; also add a never-refreshed-policy test.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py:182-223"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`fire_unit_until` still blocks until the whole minute pass ends",
+      "location": "scripts/cutover_common.py:341-363",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Firing-time selection uses `.replace()` on a non-UTC database timestamp",
+      "location": "src/manta_trading/cli/commands/minute_session_mass.py#collecting_firing_finished_at",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Repair/verify command failures can be reported as a complete cutover",
+      "location": "scripts/cutover_921_minute_sessions.py:93-105",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The sudoers policy is inconsistent with the cutover commands and is not least-privilege",
+      "location": "deploy/sudoers.d/manta-ops:7-14",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The new cutover log does not contain the actual cutover report",
+      "location": "scripts/cutover_common.py:44-62",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Session judgement counts bars that ingestion will discard",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py#sessions_without_bars",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Changed import blocks violate the required Ruff import-order rule",
+      "location": "scripts/cutover_921_minute_sessions.py:45-58",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The new cagg freshness probe bypasses the guarded shared helper",
+      "location": "src/manta_trading/data/gaps/repair_921.py:182-223",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:20:55.679533",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 58,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 523232,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 2978185,
+  "cached_tokens": 2219968,
+  "cache_write_tokens": null,
+  "completion_tokens": 138934,
+  "reasoning_tokens": 134728,
+  "duration_seconds": 1557.3065190829802,
+  "cost_usd": 0.536463317,
+  "cost_basis": "alias_pricing"
+}

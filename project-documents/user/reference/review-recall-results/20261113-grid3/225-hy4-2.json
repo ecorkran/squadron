@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Coverage raw counts are not scoped to the selected shape",
+      "description": "Description: `raw_counts()` at `src/manta_trading/data/tick/status_reads.py:154-174` counts every `tick_trade` row in the timestamp window and groups only by `(instrument_id, session_date)`. It does not join `tick_trade.unit_id` \u2014 defined at `src/manta_trading/market/schema/migrations/tick.py:222-245` \u2014 to current units/requests, while `ledger_totals()` in the same module filters through the shape/current-unit predicate. `_session_row()` at `src/manta_trading/data/tick/tick_coverage.py:75-91` then takes the union of ledger and raw instrument keys, so any raw row from another product/shape in the same time range becomes `Mismatch(ledger=0, raw=N)`, marks coverage mismatched, and makes the CLI exit 3. As soon as more than one product/shape has raw rows in the same window, coverage can report false positives. Scope the raw scan by the same current-unit shape/predicate as the ledger, or by the ledger\u2019s current unit ids.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Coverage's tick_trade scan has no resource budget",
+      "description": "Description: `raw_counts()` at `src/manta_trading/data/tick/status_reads.py:154-174` joins every `tick_trade` row between `min(opens)` and `max(closes)` against an `unnest` array containing every requested session. The CLI accepts arbitrary `--start/--end` at `src/manta_trading/cli/commands/tick_store_cmds.py:205-236`, and `_read()` at `src/manta_trading/cli/commands/tick_store_cmds.py:156-166` opens the connection through `connect_migrated()` without setting a statement timeout; `_connect()` in `src/manta_trading/data/tick/store_context.py:159-167` sets only the connect timeout. The SQL rules require `statement_timeout` for long-running queries and server-side cancellation after client-side timeout. A wide coverage range can hold a large hypertable scan and large session arrays with no server-side cancellation bound. Add a bounded statement timeout or maximum coverage range, and ensure the backend is cancelled after a client-side timeout.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New status/coverage paths lack the required load test",
+      "description": "Description: `build_coverage()` at `src/manta_trading/data/tick/tick_coverage.py:94-115` and `build_status()` at `src/manta_trading/data/tick/tick_status_build.py:230-245` add new DB/calendar/event-loop paths: `asyncio.run`, `asyncio.to_thread`, blocking `TradingCalendar` pools, and the full raw-count scan. The Python rules require a load-tier test for concurrency/network/environment-layer paths that asserts latency, throughput, or resource bounds. `test/load/test_225_tick_ingest_nfr.py:1` covers ingest throughput and event-loop gaps only; the `test/load/` directory contains no status/coverage load test. The new integration tests at `test/integration/data/test_tick_status_cli.py:1-153` and `test/integration/data/test_tick_status_build.py:1-127` seed one or two days, not a realistic range/row count. Add a gated load test that exercises `status` and `coverage` against a realistic tick_trade size and date range and asserts a latency or resource bound.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py:94"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Coverage raw counts are not scoped to the selected shape",
+      "location": "src/manta_trading/data/tick/status_reads.py:154",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Coverage's tick_trade scan has no resource budget",
+      "location": "src/manta_trading/data/tick/status_reads.py:154",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New status/coverage paths lack the required load test",
+      "location": "src/manta_trading/data/tick/tick_coverage.py:94",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:44:45.630315",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 477778,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2216066,
+  "cached_tokens": 1934208,
+  "cache_write_tokens": null,
+  "completion_tokens": 124810,
+  "reasoning_tokens": 122213,
+  "duration_seconds": 1237.9543320001103,
+  "cost_usd": 0.31416565399999996,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Stream-end before the dispatch's own result still returns partial text as success",
+      "description": "`_read_turn()` maps `StopAsyncIteration` to `None` at `src/squadron/pipeline/sdk_session.py:302-303`, but `_collect_turns()` only raises when `turns.ledger.active` is true (`src/squadron/pipeline/sdk_session.py:234-239`). If the SDK stream ends before any `ResultMessage` \u2014 or after only an injected result \u2014 and no background task is active, line `src/squadron/pipeline/sdk_session.py:240` returns `turns.text()` as a successful dispatch even though `turns.own_result_seen` is still false. That produces a silent partial/empty success with no WARNING/ERROR log or `ProviderError`, contradicting the dispatch contract at `src/squadron/pipeline/sdk_session.py:184-187` and the required observable signal for a new stream failure mode.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:230-240"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Discarded leftover turns leak background ledger state into the next dispatch",
+      "description": "When an injected result arrives before the current dispatch's own result, `src/squadron/pipeline/sdk_session.py:243-251` calls `turns.discard()` and continues. `DispatchTurns.discard()` only clears `parts` (`src/squadron/pipeline/sdk_turns.py:130-134`); it leaves `BackgroundLedger._active` and `_seen` populated from `observe()` (`src/squadron/pipeline/sdk_turns.py:55-65`, `src/squadron/pipeline/sdk_turns.py:71-83`). A leftover follow-up turn carrying `TaskStartedMessage`/`TaskUpdatedMessage` therefore leaks active tasks and `seen_count` into the current dispatch, which can inflate `background_tasks_waited` at `src/squadron/pipeline/sdk_session.py:212-213`, trigger waiting/idle-timeout logic at `src/squadron/pipeline/sdk_session.py:219-229`, or stop the wrong tasks. The added leftover-turn test only uses text and a result message, so it does not cover this lifecycle-message leak.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:243-251"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config file boundary accepts wrong types and bools as ints",
+      "description": "`load_config()` merges raw TOML values directly into the config dictionary without per-key schema validation (`src/squadron/config/manager.py:82-102`). The new typed accessor fixes `bool` reads with `isinstance(value, bool)` (`src/squadron/config/manager.py:130-133`), but the `int` branch still uses `if not isinstance(value, int)` (`src/squadron/config/manager.py:134-137`), so Python's `bool`-is-an-`int` subclassing lets `True` pass as an integer; the float branch at `src/squadron/config/manager.py:138-140` has the same problem. A hand-edited `\"pipeline.background_idle_timeout_s\" = true` therefore reaches `asyncio.timeout()` through `src/squadron/pipeline/sdk_session.py:323-327` and `src/squadron/pipeline/sdk_session.py:300-301` as a one-second timeout, and negative/zero values are not rejected at the boundary. The Python rules require Pydantic validation for file-parsing boundaries and fail-fast validation, not runtime trust in untyped TOML values.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/config/manager.py:128-140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Async session paths perform blocking config I/O on the event loop",
+      "description": "`_collect_turns()` is an `async def` and calls `_background_idle_timeout_s()` at `src/squadron/pipeline/sdk_session.py:224`. That helper calls `get_typed_config()`, which reads both user and project TOML files through `open()`/`tomllib.load()` (`src/squadron/config/manager.py:47-52`, `src/squadron/config/manager.py:82-102`) and can trigger legacy config migration via `shutil.copytree()` (`src/squadron/config/manager.py:19-34`). `open_pipeline_session()` also calls `get_typed_config()` twice, each call reloading the config files. This is synchronous disk I/O inside await-able code and can exceed the required <1ms worst case, blocking all loop I/O while a dispatch is waiting on background agents. Resolve these settings once at session construction or move the file read off the event loop with an explicit async boundary.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:323-327"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New background-task timeout path has no load-tier test",
+      "description": "`SDKExecutionSession.dispatch` now adds persistent-client stream waiting, repeated `receive_response()` passes, `asyncio.timeout()`, `stop_task()`, and background-task accounting. The added tests are scripted unit tests; `TestBackgroundIdleTimeout` uses a fake `ScriptedClient` with short `0.15`/`0.05` sleeps and asserts functional logs/counts. `tests/load` still contains only unrelated cases such as `tests/load/test_worktree_concurrency.py:1-50` and `tests/load/test_grep_timeout.py`, with no realistic-configuration test asserting latency, throughput, or resource bounds for SDK dispatch waiting. `.github/workflows/ci.yml:38` runs `uv run pytest`, so a `tests/load/` case would be gated; the Python rules require at least one load test for this concurrency/network/environment-layer path.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession.dispatch"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Blanket exception suppression bypasses the project's exception-handling rule",
+      "description": "`_stop_background()` uses `except Exception:  # noqa: BLE001`, logs with `_logger.exception()`, and then continues without re-raising (`src/squadron/pipeline/sdk_session.py:333-341`). This is not a specific exception type, not a re-raise after logging, and not a documented top-level process-boundary handler, while the `noqa` disables the mechanical BLE enforcement. The handler is observable at ERROR level, but it can also swallow programming errors from `stop_task()` (e.g. `TypeError`/`AttributeError`) as if they were cleanup failures. If the SDK truly exposes no narrower type, wrap `stop_task()` in a small adapter that raises a typed domain error and catch only that, or re-raise after logging.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:333-341"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Stream-end before the dispatch's own result still returns partial text as success",
+      "location": "src/squadron/pipeline/sdk_session.py:230-240",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Discarded leftover turns leak background ledger state into the next dispatch",
+      "location": "src/squadron/pipeline/sdk_session.py:243-251",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Config file boundary accepts wrong types and bools as ints",
+      "location": "src/squadron/config/manager.py:128-140",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Async session paths perform blocking config I/O on the event loop",
+      "location": "src/squadron/pipeline/sdk_session.py:323-327",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New background-task timeout path has no load-tier test",
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession.dispatch",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Blanket exception suppression bypasses the project's exception-handling rule",
+      "location": "src/squadron/pipeline/sdk_session.py:333-341",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:45:34.440614",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 52,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 406156,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 3029732,
+  "cached_tokens": 2698368,
+  "cache_write_tokens": null,
+  "completion_tokens": 99709,
+  "reasoning_tokens": 96420,
+  "duration_seconds": 1025.350165416021,
+  "cost_usd": 0.31948076599999997,
+  "cost_basis": "alias_pricing"
+}

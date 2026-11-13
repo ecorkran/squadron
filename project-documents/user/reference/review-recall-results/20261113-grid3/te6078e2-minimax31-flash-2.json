@@ -1,0 +1,351 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`InvalidParametersError` cannot be copied or pickled",
+      "description": "`InvalidParametersError.__init__` stores `issues` but passes only the tuple to `super().__init__(issues)`, so `self.args == (issues_tuple,)`. `BaseException.__reduce__`/`copy` rebuild an exception by calling `cls(*self.args)`, i.e. `InvalidParametersError(issues_tuple)` \u2014 that path is fine \u2014 but `copy.copy`/`copy.deepcopy` of an exception copies `self.args` and then re-runs `__init__` with the *single* tuple argument, which is also fine, while `pickle` round-trips `args` and calls `cls(*args)`. The real break is different: `str(error)` is overridden but `args[0]` is a tuple of `ParameterIssue`, so `repr()` of the error shows the raw tuple, and any consumer that formats `error.args[0]` gets a tuple rather than the message. More importantly, the class stores mutable state in `self.issues` *and* in `self.args`, and `super().__init__(issues)` makes the tuple the exception's single argument, so `error.args[0]` is the issue tuple \u2014 not a message. The design (D12) says \"Its message lists every issue\", which only holds through the overridden `__str__`; `args` holds a non-message value, so `logging.exception` / `repr` of the error does not show the issues. `test_parameters_error_survives_copy_and_pickle` in `tests/core_model/test_declarations.py:301-311` asserts the round trip works, but it only checks `issues` and `str()`, so it does not cover the `args`/`repr` mismatch. Fix by calling `super().__init__(message)` with the joined message and keeping `issues` as a separate attribute, or by defining `__reduce__` so the issue tuple is the only constructor argument.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/errors.py:97-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`require_iterable_of(raw, object, ...)` weakens the type check and relies on a `cast`",
+      "description": "`_output_tuple` calls `require_iterable_of(raw, object, \"outputs\", InvalidDeclarationError)`, so the helper's per-element check is a no-op, and the real membership check is then done by hand with `isinstance(item, OutputDeclaration.__value__)`. `OutputDeclaration` is a PEP 695 `type` alias, so `OutputDeclaration.__value__` is the union object \u2014 this works at runtime, but it is an obscure way to reach the union and the result is papered over with `cast(tuple[OutputDeclaration, ...], items)`. `require_iterable_of` already accepts a `type[T]` and produces a `tuple[T, ...]`; calling it with `object` throws away its static typing for no benefit. Note also that `require_iterable_of` raises the *indexed* message (`outputs[1]: expected object, got ...`) before `_output_tuple` can raise its own `outputs[1]: expected an output declaration, got ...`, so the more specific message in `_output_tuple` is unreachable for a non-declaration element. The test at `tests/core_model/test_declarations.py:243` asserts `r\"outputs\\[1\\]\"`, which passes for the wrong reason.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py:231-241"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`as_integer` accepts `np.float32` but `as_real`/`as_integer` disagree on the coercion path",
+      "description": "`as_integer` routes non-`Integral` values through `as_real`, which accepts any `numbers.Real`, so `np.float32(5.0)` yields `5` \u2014 correct and covered by `tests/core_model/test_value_checks.py:96`. The remaining inconsistency is the `Integral` branch: an `Integral` is accepted directly and range-checked against int64, while a `Real` is first converted to `float` and then `.is_integer()`-tested. A huge `float` such as `2.0**63` converts to `9.223372036854776e+18`, whose `.is_integer()` is `True`, and `int(real)` is `9223372036854775808`, which the int64 range check then rejects \u2014 correct, but only by accident of the range check following the coercion. `as_integer(2**63 - 1)` is accepted via the `Integral` branch, while `as_integer(float(2**63 - 1))` is rejected because the float rounds to `2**63`. Two spellings of the same integer therefore differ. This is a real hazard for parameter binding: `{\"window\": 9223372036854775807}` binds, `{\"window\": 9223372036854775807.0}` reports `wrong_type`. Worth documenting explicitly or normalising both paths through `int64`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py:52-73"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`Timestamp.ns` is not type-checked, so `SignalEvent`'s guard is on the wrong layer",
+      "description": "`Timestamp.__post_init__` (`src/manta_trading_engine/core_model/timestamps.py:60-63`) calls `require_int64_ns`, which only range-checks with `INT64_MIN <= ns <= INT64_MAX`; a float `ns` passes. `SignalEvent` therefore adds its own `type(self.time.ns) is not int` check to compensate. This works, but it leaves `Timestamp` itself able to hold a float, and any other consumer of `Timestamp.ns` (e.g. `continuous.py:140`, `period_end.py:87`) has no such guard. The correct fix is one check in `Timestamp` (`type(ns) is int`), after which the `SignalEvent` check becomes redundant. The current split means a `Timestamp` that is valid on its own can be rejected only by `SignalEvent`, which is an inconsistency in where the invariant lives.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/signals.py:69-76"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`LabelSeries` does not check that the confidence series has the same length as the labels",
+      "description": "`_require_confidence` checks `confidence.index is labels.index`, which guarantees equal length, because `Series` derives its length from its index and `Series.__post_init__` requires `values` and `valid` to match the index length. So the length check is implicit and correct \u2014 but note that the identity check on `index` is what makes it safe, and the error message (\"index must be the same object as labels.index\") is the only thing that tells a caller the two series must share an index. This is adequate; flagged only because the message does not mention length, and a caller who constructs two equal-but-distinct index objects gets a \"same object\" error rather than a length error. Low risk, but the message could be more diagnostic.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/labels.py:126-155"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"no element loops\" test guards less than its name claims",
+      "description": "`ELEMENT_LOOP_NODES` in `tests/core_model/test_labels.py` and `tests/core_model/test_confidence.py` omits `ast.GeneratorExp`, while `tests/core_model/test_import_boundary.py:172-180` already defines a stricter `ELEMENT_LOOP_NODES` that includes it. `labels.py:64-67` contains a generator expression (`all(... for category in ...)`) which the guard does not see. The same constant is duplicated in three test files with two different definitions \u2014 a direct violation of the project's \"never scatter comparison values across code\" rule and of DRY. Extract one shared helper (e.g. in `tests/core_model/conftest.py`) and use it in all three places.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_labels.py:27-33"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`LabelVocabulary.category_ids` needs a `pyright: ignore` that hides a real annotation mismatch",
+      "description": "The field is annotated `frozenset[int]`, but the runtime check accepts a plain `set`, which is what `tests/core_model/test_labels.py:66` passes. The `# pyright: ignore[reportUnnecessaryIsInstance]` suppresses the type checker's objection to accepting a `set` for a `frozenset`-annotated field. The runtime behaviour (accept and normalise) is good, but the annotation should be widened to `set[int] | frozenset[int]` so the guard is honest and the suppression can go.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/labels.py:56"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`LabelVocabulary` uses `all(...)` over a generator, which is a Python-level loop over category ids",
+      "description": "`all(type(category) is int and ... for category in self.category_ids)` iterates the set in Python. Category sets are small and this runs once per vocabulary construction, so it is not a performance problem, but the module docstring says \"Every array check here is one vectorized NumPy expression; there are no element loops\", which is not accurate for this set check. Narrow the claim to array checks.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/labels.py:64-71"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`Declarations.bind_parameters` mixes a value and an issue in one return type",
+      "description": "`_bind_one` returns `int | float | ParameterIssue`, and the caller discriminates with `isinstance(result, ParameterIssue)`. Because `ParameterIssue` is a frozen dataclass with `eq=True`, an `int` value could never be confused with it, so the discrimination is safe. A small result type (a `tuple[bool, int | float | ParameterIssue]`, or raising a private exception) would remove the union and the `isinstance` branch. The current form is readable and the function stays well under the 50-line limit.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py:196-222"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`check_confidence` does not verify that `values` and `valid` have the same length",
+      "description": "`check_confidence` computes `valid & ~inside`, which requires `values` and `valid` to be the same shape. Every current caller satisfies this (`Series` guarantees it; `signals.py` builds both arrays from the same event tuple). A mismatched pair would raise a NumPy broadcast error rather than a typed `CoreModelError`. A one-line length check at the top would make the helper safe for future callers.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/confidence.py:53-76"
+    },
+    {
+      "severity": "PASS",
+      "title": "The vectorized confidence check correctly rejects NaN and infinity",
+      "description": "`(values >= low) & (values <= high)` is `False` for NaN on both sides, and `inf` compares outside any finite range, so a valid NaN or infinity is reported as outside the range. Invalid slots are masked out by `valid & ~inside` before the offending test, so garbage in invalid slots is ignored exactly as the docstring claims. This matches the \"NaN and infinity are rejected\" finding from the previous review and the cases in `tests/core_model/test_confidence.py:96-110`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/confidence.py:66-76"
+    },
+    {
+      "severity": "PASS",
+      "title": "The range check reports the first offending position and names the value",
+      "description": "`np.flatnonzero(offending)[0]` gives the lowest offending index, and the message includes `what`, the position and the value. `tests/core_model/test_confidence.py:112-121` covers the two-offender case and confirms the lower position is named, and `tests/core_model/test_labels.py:245-256` confirms the same for a label series.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/confidence.py:68-75"
+    },
+    {
+      "severity": "PASS",
+      "title": "`OutputDisplay` is correctly excluded from the canonical form",
+      "description": "`OutputDisplay` declares no `CANONICAL_TYPE`, so `canonicalize` routes it through `_canonical_header` (`src/manta_trading_engine/core_model/canonical.py:120-141`) and raises `CanonicalFormError`. `tests/core_model/test_display.py:66-70` asserts exactly that, and `tests/core_model/test_import_boundary.py:160-166` additionally proves no Core Model type holds an `OutputDisplay`, so a hint cannot reach a key even by mistake.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/display.py:43-61"
+    },
+    {
+      "severity": "PASS",
+      "title": "`SignalSequence` gathers confidences once and range-checks them in a single vectorized call",
+      "description": "`_require_confidence_in_range` builds the `valid` mask and the `values` array with `np.fromiter` and delegates to `check_confidence`, so there is no Python loop over confidence values. When `confidence_range` is `None` it short-circuits to a single `valid.any()` check, which is exactly the D5 rule that no event may carry a confidence without a published range.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/signals.py:126-140"
+    },
+    {
+      "severity": "PASS",
+      "title": "The import boundary and the no-canonical-type rule are enforced mechanically",
+      "description": "The six new modules are added to `EXPECTED_MODULES` and to a shared parametrized boundary test that forbids importing `canonical` or any `fixtures` module, and a second test walks the AST of each module asserting the name `CANONICAL_TYPE` appears nowhere. This is a real mechanical guarantee, not a convention, and it matches the D10 decision that none of these types is canonical. The `errors.py` \u2192 `declarations.py` cycle is avoided by the `TYPE_CHECKING`-only import (`src/manta_trading_engine/core_model/errors.py:8-12`), which the boundary test does not flag.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "tests/core_model/test_import_boundary.py:139-166"
+    },
+    {
+      "severity": "PASS",
+      "title": "`require_name` and `require_dotted_id` are the single place a name is checked",
+      "description": "Both patterns are compiled once and used only through `_require_pattern`, which uses `fullmatch` so a trailing newline cannot pass, and which requires an exact `str` so a `str` subclass is refused. `tests/core_model/test_value_checks.py:19-40` covers the trailing-newline, leading-space, wrong-case and subclass cases explicitly. The one-value-one-source rule is respected.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py:24-47"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`InvalidParametersError` cannot be copied or pickled",
+      "location": "src/manta_trading_engine/core_model/errors.py:97-111",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`require_iterable_of(raw, object, ...)` weakens the type check and relies on a `cast`",
+      "location": "src/manta_trading_engine/core_model/declarations.py:231-241",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`as_integer` accepts `np.float32` but `as_real`/`as_integer` disagree on the coercion path",
+      "location": "src/manta_trading_engine/core_model/value_checks.py:52-73",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`Timestamp.ns` is not type-checked, so `SignalEvent`'s guard is on the wrong layer",
+      "location": "src/manta_trading_engine/core_model/signals.py:69-76",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`LabelSeries` does not check that the confidence series has the same length as the labels",
+      "location": "src/manta_trading_engine/core_model/labels.py:126-155",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The \"no element loops\" test guards less than its name claims",
+      "location": "tests/core_model/test_labels.py:27-33",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`LabelVocabulary.category_ids` needs a `pyright: ignore` that hides a real annotation mismatch",
+      "location": "src/manta_trading_engine/core_model/labels.py:56",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`LabelVocabulary` uses `all(...)` over a generator, which is a Python-level loop over category ids",
+      "location": "src/manta_trading_engine/core_model/labels.py:64-71",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`Declarations.bind_parameters` mixes a value and an issue in one return type",
+      "location": "src/manta_trading_engine/core_model/declarations.py:196-222",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`check_confidence` does not verify that `values` and `valid` have the same length",
+      "location": "src/manta_trading_engine/core_model/confidence.py:53-76",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The vectorized confidence check correctly rejects NaN and infinity",
+      "location": "src/manta_trading_engine/core_model/confidence.py:66-76",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The range check reports the first offending position and names the value",
+      "location": "src/manta_trading_engine/core_model/confidence.py:68-75",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`OutputDisplay` is correctly excluded from the canonical form",
+      "location": "src/manta_trading_engine/core_model/display.py:43-61",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`SignalSequence` gathers confidences once and range-checks them in a single vectorized call",
+      "location": "src/manta_trading_engine/core_model/signals.py:126-140",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The import boundary and the no-canonical-type rule are enforced mechanically",
+      "location": "tests/core_model/test_import_boundary.py:139-166",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`require_name` and `require_dotted_id` are the single place a name is checked",
+      "location": "src/manta_trading_engine/core_model/value_checks.py:24-47",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:15:25.072158",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 651834,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1215764,
+  "cached_tokens": 1058688,
+  "cache_write_tokens": null,
+  "completion_tokens": 169026,
+  "reasoning_tokens": 164211,
+  "duration_seconds": 1119.3737368751317,
+  "cost_usd": 0.069899316,
+  "cost_basis": "alias_pricing"
+}

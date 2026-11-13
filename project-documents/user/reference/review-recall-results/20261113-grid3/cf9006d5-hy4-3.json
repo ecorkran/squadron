@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Validate manifest paths before destructive pruning",
+      "description": "`InstallManifest.finish()` derives stale paths from the previous manifest, builds `file = path.join(this.targetRoot, rel)` at `packages/cli/src/ideInstall/manifest.ts:177-189`, and deletes it at `packages/cli/src/ideInstall/manifest.ts:190-193` when the checksum matches. It does not reject `..` segments or verify that `fs.realpathSync(path.dirname(file))` stays under `targetRoot`; `isFile()` follows symlinked parent directories. A user-editable or compromised `.context-forge/<target>.manifest`, or a symlinked install directory, can therefore redirect deletion outside the checkout. The removed `packages/cli/src/commands/worktreePropagation.ts` had lexical/realpath guards and `packages/cli/tests/commands/worktreePrune.test.ts` covered traversal/symlink cases; current `packages/cli/tests/ideInstall/manifest.test.ts:102-131` covers only normal stale-file and edited-file cases. Restore containment checks and add equivalent native-prune regression tests.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/manifest.ts:177-194"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dry-run can write through copied symlinks",
+      "description": "`dryRunInstall` promises that \u201cThe project is never touched\u201d at `packages/cli/src/ideInstall/dryRun.ts:1-4`, but `copyInstallPaths()` uses `fs.cpSync(..., { verbatimSymlinks: true })` at `packages/cli/src/ideInstall/dryRun.ts:37-46`. When an install path is a symlinked directory, `dryRunInstall` still passes `targetRoot: sandbox` at `packages/cli/src/ideInstall/dryRun.ts:112-114`; target setup functions then call `mkdirSync`, `writeFileSync`, and `renameSync` (for example `packages/cli/src/ideInstall/targets/claude.ts:20-27` and `packages/cli/src/ideInstall/managedSection.ts#writeManagedSection`), which can follow that symlink and mutate the real project. `regularFilesUnder()` uses `lstatSync()` at `packages/cli/src/ideInstall/dryRun.ts:51-67`, so symlinked paths are also under-reported in the diff. `packages/cli/tests/ideInstall/flags.test.ts:28-76` has no symlink case. Copy dereferenced content, materialize safe placeholders, or fail explicitly on symlinks, and add a dry-run symlink regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:37-46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Agents dry-run previews absolute guide paths",
+      "description": "`dryRunInstall` swaps `targetRoot` to the sandbox at `packages/cli/src/ideInstall/dryRun.ts:112-114`, but `installIde()` keeps the real absolute `guidePaths(options.guideDir)` at `packages/cli/src/ideInstall/installer.ts:68-79`. `scopedRuleIndex()` computes `relativeToRoot(ctx.targetRoot, ctx.guide.rules)` at `packages/cli/src/ideInstall/targets/agents.ts:22-25`, and `relativeToRoot()` returns the unchanged absolute path when the file is not under the supplied root at `packages/cli/src/ideInstall/paths.ts:38-41`. For `agents`, `codex`, or `openai --dry-run`, the generated sandbox `AGENTS.md` therefore contains the real absolute guide rules path; a no-change dry run can report `~ AGENTS.md` and leak temp paths into output. `packages/cli/tests/ideInstall/flags.test.ts:29-58` dry-run cases are Claude-only, and `packages/cli/tests/ideInstall/realGuide.test.ts:26-34` is non-dry-run. Compute the displayed rules path against `projectRoot` or a guide-relative path, and add an agents dry-run no-change test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:112-114"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dry-run failures lose buffered diagnostics",
+      "description": "`StdoutBuffer` buffers all stdout and only forwards stderr at `packages/cli/src/ideInstall/output.ts:67-82`. `dryRunInstall` creates it at `packages/cli/src/ideInstall/dryRun.ts:113-114`, replays warning lines only after a successful install at `packages/cli/src/ideInstall/dryRun.ts:116-119`, and on abort the `finally` block at `packages/cli/src/ideInstall/dryRun.ts:121-122` removes the sandbox and rethrows before replay. `requireRulesDir()` prints red/yellow diagnostics to that buffered stdout and throws at `packages/cli/src/ideInstall/context.ts:36-40`; `installIde()` catches `InstallAbort` and returns exit 1 without logging at `packages/cli/src/ideInstall/installer.ts:90-95`; `setupIdeAction()` then emits only the generic \u201cCheck the output above\u201d failure at `packages/cli/src/commands/setup-ide.ts:160-163`. `packages/cli/tests/ideInstall/flags.test.ts:69-76` asserts only the exit code and sandbox cleanup, not diagnostics. Flush/replay buffered stdout on failure or route expected abort messages to stderr, and assert those diagnostics in the abort test.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:113-122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Validate `rules.exclude` at the read boundary",
+      "description": "`readRulesExclude()` only checks `typeof value === 'string'` and then calls `parseRulesExclude()` at `packages/cli/src/commands/setup-ide.ts:75-81`. `ConfigManager.get()` returns raw parsed TOML values (`packages/core/src/config/ConfigManager.ts#get`); `validateValue()` is invoked only by `set()` (`packages/core/src/config/ConfigManager.ts#set`). The validator at `packages/core/src/config/ConfigKeys.ts:165-185` rejects empty entries and surrounding whitespace, but `parseRulesExclude()` at `packages/core/src/config/ConfigKeys.ts:187-196` assumes that validation already happened. A hand-edited or legacy config such as `\"dart.md, swift*.md\"` or `\"dart.md,\"` therefore becomes patterns that silently never match or empty patterns, contrary to the project\u2019s explicit-failure convention. `packages/core/tests/config/ConfigKeys.test.ts:21-66` tests the validator and parser separately but not a `setupIdeAction` read of an invalid config value. Validate the read value with `CONFIG_KEYS['rules.exclude'].validate` before passing it into `installIde()`, and add a read-boundary test.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:75-81"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New TypeScript tests are outside typecheck and lint configuration",
+      "description": "`packages/cli/tsconfig.json:20-21` includes only `src/**/*`; `packages/cli/package.json:15-21` runs `tsc --noEmit` for `typecheck` and has no package-level `lint` script. Root `eslint.config.mjs:9` also ignores `**/tests/**`. New or heavily changed tests such as `packages/cli/tests/ideInstall/flags.test.ts:1-77`, `packages/cli/tests/ideInstall/lint.test.ts:1-115`, and `packages/cli/tests/commands/setup-ide.test.ts:277-335` are therefore not type-checked by package typecheck and not covered by typed ESLint, despite the TypeScript/testing rules requiring tests to be type-checked while excluded from build output. Add a test-specific tsconfig or adjusted include/exclude arrangement, a package lint script that covers tests, and wire both into CI/pre-commit.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "packages/cli/tsconfig.json:20-21"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Validate manifest paths before destructive pruning",
+      "location": "packages/cli/src/ideInstall/manifest.ts:177-194",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Dry-run can write through copied symlinks",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:37-46",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Agents dry-run previews absolute guide paths",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:112-114",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Dry-run failures lose buffered diagnostics",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:113-122",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Validate `rules.exclude` at the read boundary",
+      "location": "packages/cli/src/commands/setup-ide.ts:75-81",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "New TypeScript tests are outside typecheck and lint configuration",
+      "location": "packages/cli/tsconfig.json:20-21",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:49:45.300455",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 42,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 420190,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2568348,
+  "cached_tokens": 2349440,
+  "cache_write_tokens": null,
+  "completion_tokens": 108826,
+  "reasoning_tokens": 104760,
+  "duration_seconds": 1254.3047078331,
+  "cost_usd": 0.276655376,
+  "cost_basis": "alias_pricing"
+}

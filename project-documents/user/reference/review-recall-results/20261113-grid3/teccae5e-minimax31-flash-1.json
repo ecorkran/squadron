@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`Market.source_bar_stamping` accepts a plain `str`, unlike every other enum field in the module",
+      "description": "`__post_init__` validates this field with `if self.source_bar_stamping not in SOURCE_BAR_STAMPINGS:`. Because `TimeMeaning` is a `StrEnum`, its members hash and compare equal to their string values (`str.__hash__`/`str.__eq__` precede `Enum`'s in the MRO), so `SOURCE_BAR_STAMPINGS` accepts the plain string `\"period_start\"`. The check therefore admits a value that is not a `TimeMeaning` and stores it verbatim on a canonical type.\n\nThis is inconsistent with the rest of the module: `continuity_kind` (`markets.py:102`), `SessionCalendarRef.session_mode` (`markets.py:64`), and every `adjustment_bases` element (`markets.py:165`) all go through `_require_instance`, which rejects a plain `str`. `source_bar_stamping` is the only enum field that does not.\n\nThe concrete risk is identity-based checks. `period_end.py:82` uses exactly this pattern (`if start.meaning is not TimeMeaning.PERIOD_START:`). A market built from untyped external metadata (the 140 adapter that populates `Market` from trading-data) can hold `\"period_start\"` instead of `TimeMeaning.PERIOD_START`; the canonical bytes are identical (both encode to `\"period_start\"`), so no golden vector catches it, but `market.source_bar_stamping is TimeMeaning.PERIOD_START` is `False` and an `is`-based consumer silently takes the wrong branch. The same looseness affects the lookups: `calendar_id_for(\"extended\")` (`markets.py:106`) and `require_adjustment_basis(\"raw\")` (`markets.py:115`) both succeed on a plain string.\n\nSuggested fix: validate with `_require_instance(self.source_bar_stamping, TimeMeaning, \"market.source_bar_stamping\")` before the membership test, matching the other fields.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:94"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Market normalization leaks raw `TypeError` instead of the documented `InvalidMarketError`",
+      "description": "The slice design's data-flow contract states that invalid input \"raises `InvalidMarketError` or `InvalidInstrumentError` naming the field\", and the error hierarchy exists precisely so callers can catch `CoreModelError` at a boundary. Two paths in `Market.__post_init__` break that contract:\n\n- `_normalize_calendars` calls `items = tuple(refs)` (`markets.py:144`) before any type check, so `Market(session_calendars=None)` or `Market(session_calendars=5)` raises `TypeError: 'NoneType' object is not iterable` instead of `InvalidMarketError` naming the field.\n- `_normalize_bases` calls `items = frozenset(bases)` (`markets.py:161`) before validating element types, so an unhashable element such as `Market(adjustment_bases=[AdjustmentBasis.RAW, [\"x\"]])` raises `TypeError: unhashable type: 'list'`. The existing test (`test_markets.py`, \"non-basis element\") only covers a hashable `\"raw2\"`, which is why this path is not exercised.\n\nThe element-type check that does exist (`markets.py:165`) runs only after the set has been built, so it cannot catch this class of input. Concretely: validate the container type first (or wrap the iteration in a narrow `try`/`except TypeError` that re-raises `InvalidMarketError` naming the field), and validate each element's type before it is hashed.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:144"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dead constant `SIXTY_SECONDS_NS` in the uniformity test",
+      "description": "`SIXTY_SECONDS_NS = 60_000_000_000` is defined but never referenced; a grep across `tests/` finds only the definition line. The bar width is passed as `BarSpec.time(60)` at line 56 and the expected ends are written as full literals in `UNIFORM_ROWS`, so the constant is a leftover. Ruff does not flag unused module-level constants (only `F401` for imports and `F841` for locals), so it will silently persist. Removing it is the simplest fix.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "tests/core_model/test_market_uniformity.py:34"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The uniformity test duplicates the fixture-instrument list instead of deriving from `ALL_INSTRUMENT_FIXTURES`",
+      "description": "`fixtures/instruments.py` defines `ALL_INSTRUMENT_FIXTURES` as the single list of fixture instruments, but `test_market_uniformity.py` builds a second, parallel list, `UNIFORM_ROWS`, repeating all five instruments. The slice design states the uniformity test is \"parametrized over `ALL_INSTRUMENT_FIXTURES`\". Because the two lists are independent, adding a sixth fixture instrument to `ALL_INSTRUMENT_FIXTURES` will not extend the uniformity coverage \u2014 and the uniformity test is precisely the guard that proves \"one code path serves every market\". Adding an assertion that the instruments in `UNIFORM_ROWS` are exactly `ALL_INSTRUMENT_FIXTURES` would make the drift impossible.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/core_model/test_market_uniformity.py:36"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`Market`'s declared field types contradict the documented \"accepts any iterable\" contract",
+      "description": "The fields are declared `session_calendars: tuple[SessionCalendarRef, ...]` and `adjustment_bases: frozenset[AdjustmentBasis]`, but the class docstring and the slice design both promise that these \"accept any iterable\", and `test_markets.py::test_generator_and_set_are_accepted` exercises a generator and a `set`. A caller following the documented contract and passing a list or generator is rejected by strict pyright, because the dataclass field annotation doubles as the constructor parameter type. Since `pyproject.toml` sets `typeCheckingMode = \"strict\"` and CI runs `uv run pyright`, real callers will hit this. Either narrow the documented promise to the declared types, or accept `Iterable[...]` at the boundary and convert it before construction.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:83"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`test_canonical_golden.py` now exceeds the project's ~300-line file-size convention",
+      "description": "The file grew from roughly 275 to 360 lines with this change's nine market and instrument golden rows, crossing the AGENTS.md guideline of \"Keep source files to ~300 lines\". The slice's own task breakdown already identified this and named the remedy: \"The natural split is the 102 rows into `test_canonical_golden_markets.py`.\" The split was not performed. Moving the new market and instrument rows into a dedicated golden module would restore the convention and keep the hand-derived-oracle rationale documented per file.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "tests/core_model/test_canonical_golden.py:1"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`Market.source_bar_stamping` accepts a plain `str`, unlike every other enum field in the module",
+      "location": "src/manta_trading_engine/core_model/markets.py:94",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Market normalization leaks raw `TypeError` instead of the documented `InvalidMarketError`",
+      "location": "src/manta_trading_engine/core_model/markets.py:144",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Dead constant `SIXTY_SECONDS_NS` in the uniformity test",
+      "location": "tests/core_model/test_market_uniformity.py:34",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The uniformity test duplicates the fixture-instrument list instead of deriving from `ALL_INSTRUMENT_FIXTURES`",
+      "location": "tests/core_model/test_market_uniformity.py:36",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`Market`'s declared field types contradict the documented \"accepts any iterable\" contract",
+      "location": "src/manta_trading_engine/core_model/markets.py:83",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`test_canonical_golden.py` now exceeds the project's ~300-line file-size convention",
+      "location": "tests/core_model/test_canonical_golden.py:1",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:41:45.387180",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 724508,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 16,
+  "prompt_tokens": 1207518,
+  "cached_tokens": 972288,
+  "cache_write_tokens": null,
+  "completion_tokens": 198754,
+  "reasoning_tokens": 195176,
+  "duration_seconds": 964.6373070420232,
+  "cost_usd": 0.08407446599999999,
+  "cost_basis": "alias_pricing"
+}

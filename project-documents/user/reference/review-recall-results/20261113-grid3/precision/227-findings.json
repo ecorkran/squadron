@@ -1,0 +1,107 @@
+[
+ {
+  "ref": "luna-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Health check can pass using a stale log entry",
+  "location": "scripts/cutover_227_tick_backup.py:157-163",
+  "description": "`run_health` ignores the health command\u2019s return code and accepts the last line in the existing log if it contains `FLAGS`. If the command fails before appending a new entry, a previous clean result can satisfy the cutover\u2019s health checks. Check the command result and verify the log entry was produced by this invocation."
+ },
+ {
+  "ref": "luna-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Offsite verification ignores whether the push succeeded",
+  "location": "scripts/cutover_227_tick_backup.py:207-217",
+  "description": "`step_offsite` discards the result of the push command, then relies on `rclone check`. If the push fails but the remote already matches the local files, the step can pass despite the failed push. Require a successful push before proceeding to the comparisons."
+ },
+ {
+  "ref": "luna-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "Rehearsal check mode creates a directory",
+  "location": "deploy/setup-backup.sh:133-136",
+  "description": "The script creates `REHEARSE` unconditionally, including with `--check`, despite documenting that check mode changes nothing. Avoid creating the rehearsal directory during check mode, or otherwise reconcile the behavior with that contract."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "FAIL",
+  "title": "Production cron comparison prevents cutover recovery",
+  "location": "scripts/cutover_227_helpers.py:95-99",
+  "description": "Only the new cron lines have arguments stripped before comparison. After setup installs the new cron file, every subsequent cutover run compares an unstripped baseline against stripped output and fails step 4\u2014even when both files are identical. This blocks recovery from failures in later steps. Normalize both sides and add a regression test comparing the rendered cron file with itself."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "CONCERN",
+  "title": "Health verification can accept an old successful result",
+  "location": "scripts/cutover_227_tick_backup.py:157-165",
+  "description": "`run_health()` ignores the command result and reads the existing log\u2019s last line without checking that this invocation appended it. If the command fails before logging, an earlier `FLAGS archive=0 stale=0` can incorrectly pass verification. Require a fresh summary; account for the initial health run legitimately reporting stale backups."
+ },
+ {
+  "ref": "sol-high/1/2",
+  "severity": "CONCERN",
+  "title": "File errors bypass the promised failure report",
+  "location": "scripts/cutover_227_tick_backup.py:269-281",
+  "description": "The runner catches only `StepFailed` and `CalledProcessError`. File operations inside steps can raise `OSError`, and indexing an empty health log raises `IndexError`. These escape `run_steps()`, so execution never reaches report writing in `main()`. Handle these failures at the process boundary and ensure the report is attempted after a failed step."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "FAIL",
+  "title": "Provisioning can restart the tick cluster without rechecking its lock",
+  "location": "scripts/cutover_227_tick_backup.py:98-105",
+  "description": "The cutover checks for tick advisory locks earlier, then calls `provision_tick_cluster.sh`. That script\u2019s settings path can restart the cluster when settings require it (`scripts/provision_tick_cluster.sh:204-210`), without checking those locks. A tick job can acquire a lock between the cutover\u2019s initial check and this restart, so the later lock check in `step_restart` cannot prevent an interruption that has already happened. Recheck immediately before every restart, including the one reached through provisioning."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Health verification can accept a stale successful log entry",
+  "location": "scripts/cutover_227_tick_backup.py:157-163",
+  "description": "`run_health` ignores the `CompletedProcess` returned by `shell()` and reads the last line already present in the health log. If the command fails before appending a new line, the cutover can parse an older `FLAGS archive=0 stale=0` entry and pass verification. Check the command\u2019s return code and ensure the log entry was produced by this invocation before accepting its flags."
+ },
+ {
+  "ref": "luna-r-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "A rerun after cron installation fails the production comparison",
+  "location": "scripts/cutover_227_helpers.py#production_changes",
+  "description": "`production_changes` compares the old production lines unchanged against new lines after stripping the 227 arguments. On a rerun, `step_check` captures the already-updated cron file as `old_cron`, so the old lines still contain those arguments and the comparison reports them as unexpected changes. This prevents the documented fix-and-rerun recovery path after a failure later in the cutover. Normalize both sides or explicitly handle an already-rendered cron file, and test that rerunning after installation succeeds."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "CONCERN",
+  "title": "`run_lib` reports the wrong library name when a per-cluster lib fails",
+  "location": "deploy/setup-backup.sh#run_lib",
+  "description": "`run_lib` does `local prefix=$1 out rc=0; shift` and then names the library with `$(basename \"$1\")`. The per-cluster call site is `run_lib \"$C\" env PGCLUSTER=\"$C\" \"$LIB_DIR/pg_settings.sh\" \u2026`, so after the shift `$1` is `env`, not the library. A failure that prints no `DRIFT`/`MISSING`/`PENDING RESTART` line therefore reports `MISSING 17/main env exited 1` instead of naming `pg_settings.sh`. The cutover's step 4 (`setup_not_ok(..., APPLY_ALLOWED)`) matches on the leading token, so the mislabelled line is still caught \u2014 but the operator-facing item name is wrong and the doc comment (`run_lib <prefix> <lib> [args...]`) no longer describes the call. Either pass the library path separately or export `PGCLUSTER` instead of wrapping in `env`."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "CONCERN",
+  "title": "The tick health verification can pass on a stale log line",
+  "location": "scripts/cutover_227_tick_backup.py#run_health",
+  "description": "`run_health` runs the health command but discards its `CompletedProcess` (return code ignored) and then reads `backup-health.log`'s last line. If the health job fails before it writes its log line (argument validation, an unset variable, a crash), the log still holds the *previous* run's line, and a previous `FLAGS archive=0 stale=0` satisfies steps 7 and 10. `step_weekly` avoids this by requiring `result.returncode == 0`; `run_health` should require the same, and/or check that the log grew during the run. As written, the cutover can report \"tick health is archive=0 stale=0\" for a health job that never ran."
+ },
+ {
+  "ref": "minimax31-flash/1/2",
+  "severity": "CONCERN",
+  "title": "A failing step that raises anything else loses the report entirely",
+  "location": "scripts/cutover_227_tick_backup.py#run_steps",
+  "description": "`run_steps` catches only `StepFailed` and `subprocess.CalledProcessError`. Every other exception escapes `main()` before `report.write_text(...)`: `KeyError` from `cluster(TABLE_PATH, MAIN/TICK)` when the table lacks a row, `StopIteration` from `conf_sums()`'s `next(...)` when `17/main` is absent from `pg_lsclusters`, `FileNotFoundError` from `CRON_FILE.read_text()` or production's `backup-health.log`. The module docstring and the slice both promise \"the first failure stops the run and the report is still written\"; today only the two handled exception types honour that. A top-level `except Exception` in `main()` that still writes the report (with the traceback in `Seen:`) would satisfy the documented contract."
+ },
+ {
+  "ref": "minimax31-flash/1/3",
+  "severity": "CONCERN",
+  "title": "The report names the B2 console rules only when step 12 runs",
+  "location": "scripts/cutover_227_tick_backup.py#step_production",
+  "description": "`ctx.lifecycle` is populated only in `step_production` (step 12), from `lifecycle_missing(result.stdout)`. The lifecycle MISSING lines are already present in step 2's `setup-backup.sh --check` output, so if any earlier step fails, the report has no \"B2 console rules to add (TD10)\" section and the PM never learns which two rules to create. TD10 makes the report the mechanism for the slice's only non-script PM step; collecting the lines in the step that first sees them (step 2) and re-reading them in step 12 would keep that promise on a failed run."
+ },
+ {
+  "ref": "minimax31-flash/1/4",
+  "severity": "CONCERN",
+  "title": "Values duplicated across bash and Python instead of defined once",
+  "location": "scripts/cutover_227_tick_backup.py:66",
+  "description": "`PUSH_MIN_AGE_S = 120` restates `sync_wal_offsite.sh`'s `MIN_AGE=2m` and `cron_weekly_backup.sh`'s `PUSH_MIN_AGE_SEC=120`; `WEEKLY_DONE = \"=== weekly backup done\"` restates the literal in `cron_weekly_backup.sh`; `ARM_FILE = \"RECONCILE-ARMED\"` restates `setup-backup.sh`'s `ARM_FILE`; `TICK_UNIT = \"postgresql@17-tick\"` restates `provision_tick_cluster.sh`'s `UNIT`. AGENTS.md requires a value used in a comparison to be defined in exactly one place. A drift in `PUSH_MIN_AGE_S` is the dangerous one: the offsite check in step 11 would report a spurious \"offsite wal/ differs\" (or, in the other direction, miss a real difference) with no test tying the two constants together."
+ },
+ {
+  "ref": "minimax31-flash/1/5",
+  "severity": "CONCERN",
+  "title": "Production's live backup directories are re-owned and re-moded, outside TD3's guarantee",
+  "location": "deploy/setup-backup.sh#ensure_dir",
+  "description": "The new per-cluster loop calls `ensure_dir \"$C dir-root\" \"$ROOT\" \"$CRON_OWNER\" \"$CRON_DIR_MODE\"` and the same for `base/` and `metadata/`. For `17/main` that means `/data/backup`, `/data/backup/base` and `/data/backup/metadata` are chowned to `manta:manta` and chmod'ed `775` \u2014 the old code created those directories as root and only ever fixed the WAL directory's shape. So production's live backup tree changes ownership and gains group-write, and the slice's TD3 (\"production's backup paths and prefixes unchanged\") and the cutover's verification (cron lines, config hashes) do not cover directory ownership or mode. Either state the intended production shape explicitly in the design, or exclude the host root and production's existing directories from the shape enforcement and report them read-only."
+ }
+]

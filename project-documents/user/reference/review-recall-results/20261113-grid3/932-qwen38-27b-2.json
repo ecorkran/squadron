@@ -1,0 +1,297 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Settings policy module cleanly centralizes the auto-memory and setting-sources decision",
+      "description": "The new `providers/sdk/settings.py` module is a well-scoped single source of truth for the settings policy that previously lived inline in `provider.py` and was absent from the session builder. The `SdkSettings` TypedDict, `sdk_settings_options`, `pipeline_setting_sources`, and the two `*_SETTING_SOURCES` constants give every automated SDK path one entry point. The provider and the session builder both call into it, and the per-path test in `tests/providers/sdk/test_settings_policy.py` drives each real builder and asserts the resulting sources and auto-memory flag \u2014 this is the right shape for a policy that must not drift across call sites.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/settings.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Background-task ledger and dispatch-turn bookkeeping are properly separated from I/O",
+      "description": "`sdk_turns.py` is pure bookkeeping: `BackgroundLedger` tracks task lifecycle, `DispatchTurns` accumulates response text and turn state, and `is_own_result` classifies `ResultMessage.origin`. No client, no I/O, no async. The `SDKExecutionSession` in `sdk_session.py` feeds messages in and reads state out. This separation makes the ledger logic directly unit-testable (as `TestBackgroundLedger` and `test_is_own_result` demonstrate) without a fake SDK client, and keeps `sdk_session.py` focused on the transport concern. The `WAITED_TASK_TYPES` constant mirrors the SDK's private `DEFERRING_TASK_TYPES` with a comment explaining the redeclaration, which is the right call for an internal SDK symbol.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": "architectural-decody",
+      "location": "src/squadron/pipeline/sdk_turns.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Session rotation failure leaves a visible unusable state rather than a half-alive client",
+      "description": "The `_reconnect` method wraps `connect()` in a try/except that records `unusable_reason` on failure and re-raises. Every subsequent `dispatch`, `compact`, and `seed_context` call hits `_require_usable()` first, which raises `ProviderError` with the stored reason. This prevents the dangerous \"old client disconnected, new client failed to connect, but the session object still looks usable\" state. The `TestUnusableSessionInBatch` test in `test_executor_each.py` exercises the full path: a failed rotate reconnect inside an `each` loop causes subsequent items to be flagged with \"SDK session unusable\" in the batch report and logged at WARNING, and the fresh client's `query` is never called.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#_reconnect"
+    },
+    {
+      "severity": "PASS",
+      "title": "Idle-timeout stop path is observable and best-effort with correct failure semantics",
+      "description": "When the background idle timeout fires, `_stop_background` iterates every tracked agent ID, calls `stop_task`, and logs at ERROR (via `logger.exception`) on individual failures while continuing to the next ID. It then clears the ledger locally (since a lost terminal signal is exactly the case where the SDK may not have delivered one) and logs a WARNING with the idle duration and agent descriptions. The `except Exception` with `# noqa: BLE001` is justified by the inline comment: the SDK raises a bare `Exception` both for stop-control timeouts and CLI errors, so no narrower type exists, and stopping is cleanup where log-and-continue is the correct semantics. The test `test_stop_task_failure_is_logged_and_next_id_still_stopped` verifies that a failed stop on the first ID still stops the second and produces exactly one ERROR log with the task ID and traceback.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#_stop_background"
+    },
+    {
+      "severity": "PASS",
+      "title": "Resume seeding refactor preserves behavior while enabling lazy-session seeding",
+      "description": "The old inline resume-seeding block in `execute_pipeline` is extracted to `_load_resume_seed`, which returns the seed text or `None` and logs at INFO when it finds one. The seeding then happens either immediately (connected session \u2192 `seed_context`) or deferred to the lazy connect (`_connect_lazy_session(seed=resume_seed)`). The `resume_seed = None` after either path ensures a second lazy connect never re-seeds. The `test_resume_seeds_lazy_session_at_connect` and `test_resume_without_summary_passes_no_seed_to_lazy_session` tests verify both the seed-is-passed and seed-is-None cases through the real executor with a mocked `_connect_lazy_session`. The pre-existing `test_resume_seeds_from_compact_summary` confirms the connected-session path still calls `seed_context` with the correct text and `SeedSource.RESUME`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py#_load_resume_seed"
+    },
+    {
+      "severity": "PASS",
+      "title": "Bool config coercion and typed-read overload are correct and well-tested",
+      "description": "The `_coerce_bool` function accepts a reasonable set of true/false spellings (case-insensitive, whitespace-trimmed) and raises `ValueError` with the key name and accepted values on failure. The `get_typed_config` overloads add a `bool` signature with the implementation correctly checking `type_ is bool` before `type_ is int` (with the comment \"bool is a subclass of int\"). The test matrix in `TestBoolConfigValues` covers all accepted spellings, the invalid-spelling error, the typed read returning a native `bool`, and the typed read rejecting a TOML `1` (which `tomllib` parses as `int`, not `bool`) with the expected `ValueError`. The CLI test `test_invalid_value_exits_with_error` confirms `sq config set pipeline.auto_memory maybe` exits 1 with \"must be a boolean\".",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/config/manager.py#_coerce_bool"
+    },
+    {
+      "severity": "PASS",
+      "title": "Review result `system_prompt_mode` and `setting_sources` replace the old bool with a proper enum and always render",
+      "description": "The old `default_system_prompt_preset_used: bool` is replaced by `system_prompt_mode: SystemPromptMode | None` and `setting_sources: str | None`. The `to_dict` method includes both keys unconditionally (null when not reported, matching the `stop_reason` convention). The Run Digest in `persistence.py` always renders both lines (`_render_optional` gives \"not computed\" for `None`). The `-vv` appendix's preset annotation now keys on `result.system_prompt_mode in _PRESET_MODES` (a frozenset of `PRESET` and `PRESET_APPEND`) rather than the old bool. The `TestPromptAndSettingsDigestLines` tests parametrize over all four `SystemPromptMode` values and verify each renders in the correct position, and the JSON test confirms both keys are present with correct values. The old `default_system_prompt_preset_used` field is fully removed \u2014 `grep` confirms no remaining readers in `src/` or `tests/`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/review/models.py#ReviewResult"
+    },
+    {
+      "severity": "PASS",
+      "title": "Template `setting_sources` is now never-None, closing the accidental CLI-default-settings hole",
+      "description": "The `ReviewTemplate.setting_sources` field changed from `list[str] | None` to `list[str]`, and `_resolve_setting_sources` maps absent/null YAML to `list(REVIEW_SETTING_SOURCES)` (`[\"project\"]`) while preserving an explicit `[]` as `[]`. This closes the D9 hole where a template without a `setting_sources` key left the field `None`, which the SDK provider interpreted as \"no `--setting-sources` flag\", which the CLI interpreted as \"load user + project settings\". The `test_every_builtin_template_uses_project` test parametrizes over the actual template directory and asserts `[\"project\"]` for each. The `test_custom_template_resolution` test covers missing, null, empty-list, and explicit-list cases. The `test_non_list_value_is_rejected` test confirms a non-list value raises `TemplateValidationError`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/review/templates/__init__.py#_resolve_setting_sources"
+    },
+    {
+      "severity": "PASS",
+      "title": "One-shot dispatch telemetry now includes prompt and settings keys derived from the actual config",
+      "description": "The `telemetry` dict is initialized from `describe_run_settings(config, is_sdk=is_sdk)` rather than an empty dict, so `system_prompt_mode`, `setting_sources`, and `auto_memory` are always present. Tool keys are still only added when tools were given (the `tools_given` metadata check in the response loop). The docstring was updated to reflect this: \"The tool keys are absent when the run had no tools\u2026 The prompt and settings keys (slice 932 D12) are always present, derived from the config actually spawned.\" The `test_sdk_one_shot_records_prompt_and_settings` test verifies the three keys are present with correct values for an SDK dispatch with an explicit system prompt, and `test_non_sdk_one_shot_system_prompt_is_the_whole_prompt` confirms the non-SDK path records `custom` mode. The `test_summary_one_shot_records_empty_prompt_and_settings` test confirms the summary path records `empty`/`none`/`False` for its config.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py#one_shot_dispatch_with_telemetry"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dispatch session path correctly rejects per-step `system_prompt` with an actionable error",
+      "description": "The guard `if context.params.get(\"system_prompt\")` returns a failed `ActionResult` with a clear error message explaining that the session's system prompt is fixed at connect time and cannot be changed per step, and suggesting either a non-SDK model or removing the `system_prompt`. This is the same pattern as the existing `allowed_tools` guard just above it. The `test_session_path_rejects_step_system_prompt` test verifies the error message contains both \"declares 'system_prompt'\" and \"fixed at connect time\", and that `session.dispatch` is never called.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py#_dispatch_via_session"
+    },
+    {
+      "severity": "PASS",
+      "title": "`tail_text` utility is correct, tested, and used consistently at both D6 and D7 call sites",
+      "description": "`tail_text` collapses whitespace, returns `(empty response)` for empty/whitespace-only input, keeps short text as-is, and returns the last `FINAL_TEXT_TAIL_CHARS` (400) with a `\u2026` prefix for longer text. The four tests in `test_text_tail.py` cover all branches. It is used in two production call sites: `dispatch_artifact.py` (appending the agent's final text to the missing-artifact error, D7) and `sdk_session.py` (logging a discarded leftover follow-up turn, D6). Both use sites call `tail_text(response)` where `response` is the dispatch's `outputs[\"response\"]` string, which is the correct input.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/text_tail.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "New tests use real SDK message types rather than MagicMocks for the session fakes",
+      "description": "The `ScriptedClient` and its helper functions (`sdk_text`, `sdk_result`, `sdk_task_started`, etc.) construct real `AssistantMessage`, `ResultMessage`, `TaskStartedMessage`, `TaskNotificationMessage`, and `TaskUpdatedMessage` instances from the `claude_agent_sdk` package. This is important because the production code (`sdk_turns.py`) uses `isinstance` checks against these real types \u2014 a `MagicMock(spec=...)` would not survive `isinstance(msg, TaskStartedMessage)` unless the spec was set correctly, and even then the `.task_id`, `.task_type`, `.description` attributes would need to be individually configured. Using real dataclass instances with the correct field values is more faithful and less brittle. The `scripted_session` helper wraps a `ScriptedClient` in a real `SDKExecutionSession`, so the dispatch code under test is the real `dispatch` \u2192 `_collect_turns` \u2192 `_read_turn` chain, not a mock.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/conftest.py#sdk_text"
+    },
+    {
+      "severity": "PASS",
+      "title": "The `sq serve` and audit paths are correctly unaffected by the auto-memory change",
+      "description": "In `provider.py`, `sdk_settings_options` is called with `config.setting_sources or []` and `auto_memory=config.auto_memory`. For `sq serve` callers (`server/routes/agents.py`), `AgentConfig` is created without `setting_sources` or `auto_memory`, so they default to `None` and `False`. The provider then sets `kwargs[\"env\"]` with the auto-memory disable var (because `auto_memory=False`) but does NOT set `kwargs[\"setting_sources\"]` (because `config.setting_sources is None`). This preserves the existing `sq serve` behavior where the API caller supplies their own config and the CLI uses its default setting sources. The audit path (`metrology/audit.py`) explicitly sets `setting_sources=[\"project\"]` and does not set `auto_memory` (defaults to `False`), so it gets auto-memory off as designed. The `test_settings_policy.py` test matrix covers both paths and asserts the expected sources and auto-memory flag.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/provider.py#create_agent"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Settings policy module cleanly centralizes the auto-memory and setting-sources decision",
+      "location": "src/squadron/providers/sdk/settings.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": "architectural-decody",
+      "summary": "Background-task ledger and dispatch-turn bookkeeping are properly separated from I/O",
+      "location": "src/squadron/pipeline/sdk_turns.py",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Session rotation failure leaves a visible unusable state rather than a half-alive client",
+      "location": "src/squadron/pipeline/sdk_session.py#_reconnect",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Idle-timeout stop path is observable and best-effort with correct failure semantics",
+      "location": "src/squadron/pipeline/sdk_session.py#_stop_background",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Resume seeding refactor preserves behavior while enabling lazy-session seeding",
+      "location": "src/squadron/pipeline/executor.py#_load_resume_seed",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Bool config coercion and typed-read overload are correct and well-tested",
+      "location": "src/squadron/config/manager.py#_coerce_bool",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Review result `system_prompt_mode` and `setting_sources` replace the old bool with a proper enum and always render",
+      "location": "src/squadron/review/models.py#ReviewResult",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Template `setting_sources` is now never-None, closing the accidental CLI-default-settings hole",
+      "location": "src/squadron/review/templates/__init__.py#_resolve_setting_sources",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "One-shot dispatch telemetry now includes prompt and settings keys derived from the actual config",
+      "location": "src/squadron/pipeline/actions/dispatch.py#one_shot_dispatch_with_telemetry",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Dispatch session path correctly rejects per-step `system_prompt` with an actionable error",
+      "location": "src/squadron/pipeline/actions/dispatch.py#_dispatch_via_session",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`tail_text` utility is correct, tested, and used consistently at both D6 and D7 call sites",
+      "location": "src/squadron/pipeline/text_tail.py",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New tests use real SDK message types rather than MagicMocks for the session fakes",
+      "location": "tests/pipeline/conftest.py#sdk_text",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `sq serve` and audit paths are correctly unaffected by the auto-memory change",
+      "location": "src/squadron/providers/sdk/provider.py#create_agent",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:50:39.294511",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 41,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 338841,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2367866,
+  "cached_tokens": 1968960,
+  "cache_write_tokens": null,
+  "completion_tokens": 86036,
+  "reasoning_tokens": 81424,
+  "duration_seconds": 352.29550174996257,
+  "cost_usd": 0.38346464,
+  "cost_basis": "alias_pricing"
+}

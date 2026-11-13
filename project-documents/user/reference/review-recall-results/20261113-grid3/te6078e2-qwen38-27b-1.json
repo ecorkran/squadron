@@ -1,0 +1,117 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Three test lines exceed the 88-character limit and will fail CI (`ruff check` E501 and `ruff format --check`)",
+      "description": "`pyproject.toml` sets `line-length = 88` with `select = [\"E\", ...]` and no per-file ignore, and CI runs `uv run ruff check` and `uv run ruff format --check`. Three lines in the new test files exceed 88 characters because a trailing `# pyright: ignore[reportArgumentType]` comment was appended instead of wrapping the call:\n\n- `tests/core_model/test_signals.py:140` (~138 chars): `sequence = SignalSequence(UNIT_RANGE, (_event(100, confidence=0.0), _event(200, confidence=1)))  # pyright: ignore[reportArgumentType]`\n- `tests/core_model/test_signals.py:85` (~113 chars): `({\"time\": Timestamp(1.5, TimeMeaning.AVAILABLE_AT)}, r\"time\\.ns\"),  # pyright: ignore[reportArgumentType]`\n- `tests/core_model/test_labels.py:66` (~109 chars): `vocabulary = LabelVocabulary(\"regime.trend\", {0, 1, 2}, UNIT_RANGE)  # pyright: ignore[reportArgumentType]`\n\nEach will be flagged by E501 and is not in canonical `ruff format` shape, so both CI lint steps fail on this commit. Fix: wrap the argument lists (the `pyright: ignore` comment then lands on the closing line, where the suppressed call expression still spans). All `pyright: ignore` comments I verified against the code are genuinely needed in strict mode (e.g. `test_labels.py:107` for a `set[int]` literal, `test_signals.py:74` for `confidence: 1`), so only the three long lines need reformatting, not the suppressions.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/core_model/test_signals.py:140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Element loop\" guard is now defined twice with different semantics, and the comment in test_confidence.py doesn't match its file",
+      "description": "The established project guard in `tests/core_model/test_import_boundary.py` counts `ast.GeneratorExp` as an element loop and even self-tests that (`test_loop_guard_detects_every_loop_form` includes `\"z = sum(x for x in y)\\n\"`). The new `test_confidence.py` and `test_labels.py` each redefine a local `ELEMENT_LOOP_NODES` tuple that excludes `ast.GeneratorExp`, with the comment \"A generator expression is allowed: `all(...)` over one is not an array pass.\" Consequences:\n\n1. The new modules do rely on that exemption \u2014 `labels.py` uses `all(... for category in self.category_ids)` and `np.fromiter((event.time.ns for event in events))`-style generators \u2014 so a guard that silently permits element-wide generator loops is a weaker check than the project's own standard for the same invariant (\"every check is one NumPy expression\").\n2. The exemption comment was copied verbatim into `test_confidence.py`, where `confidence.py` contains no `all(...)` and no generator expression at all, so the justification describes code that isn't there.\n3. The AST-scan logic is now triplicated (`test_import_boundary.py`, `test_confidence.py`, `test_labels.py`).\n\nSuggested resolution: centralize one loop-detection helper (and one decision about whether generator expressions count) \u2014 e.g. in `tests/core_model/conftest.py` \u2014 and reuse it from all three test files, fixing the stale comment while at it. Not blocking: the for/while/comprehension forms are still caught everywhere.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/core_model/test_confidence.py:24-33"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`require_optional_range` parameter order is inconsistent with the sibling validators",
+      "description": "Every other validator in `validation.py`/`value_checks.py` takes `(value, field, error)` \u2014 `require_instance(value, expected, field, error)`, `require_name(value, field, error)`, `require_real(value, field, error)`, `require_dotted_id(value, field, error)` \u2014 but `require_optional_range(value, error, field=\"confidence_range\")` puts `error` second. All four call sites (`confidence.py`, `labels.py`, `signals.py`, `declarations.py`) pass `error` positionally, so a caller coming from the other helpers could plausibly pass a field name where the error class is expected. Consider `(value, field, error)` matching the house style, or making `field` keyword-only with a clear name.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/confidence.py#require_optional_range"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Three test lines exceed the 88-character limit and will fail CI (`ruff check` E501 and `ruff format --check`)",
+      "location": "tests/core_model/test_signals.py:140",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "\"Element loop\" guard is now defined twice with different semantics, and the comment in test_confidence.py doesn't match its file",
+      "location": "tests/core_model/test_confidence.py:24-33",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`require_optional_range` parameter order is inconsistent with the sibling validators",
+      "location": "src/manta_trading_engine/core_model/confidence.py#require_optional_range",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:34:30.046837",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 297814,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 350988,
+  "cached_tokens": 260160,
+  "cache_write_tokens": null,
+  "completion_tokens": 82820,
+  "reasoning_tokens": 80049,
+  "duration_seconds": 552.2529116249643,
+  "cost_usd": 0.21701072000000005,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Resubmit\u2011to\u2011origin match is keyed only by (schema, start, end), not product",
+      "description": "`resubmit_origins` and `_check_resubmit` match an estimate resubmit to its original by `(schema, start, end)` because the estimate's request rows carry no product (`plan_summary` in `src/manta_trading/data/tick/purchase_plan.py` emits only `schema/start/end/days/cost_usd/resubmit`). The current universe gives ES and GC *identical* ranges for `statistics` and `ohlcv-1m`, so a single key maps to both products' jobless rows, and `origins[key] = min(...)` takes the earliest. Consequence: if the cutover started at T0 and product A's original for that range was made before T0 while product B's was made after T0, a legitimate resubmit of B's request is refused (\"before this cutover started\"). This is the documented \"earliest wins, so a match never looks newer than it is\" behavior, and it fails safe (it over\u2011refuses, it never over\u2011approves spend), so it is not a spend risk. But it can block a cutover that should proceed, forcing manual intervention, in a narrow re\u2011run\u2011with\u2011stale\u2011original scenario. Because the estimate payload lacks a product field, the match is inherently ambiguous today; consider adding `product` to each `plan_summary` request so the origin lookup can be exact.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py#resubmit_origins"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dead constant `EXIT_USAGE`",
+      "description": "`EXIT_USAGE = 2` is defined in the constants block but never referenced; `main` derives the argparse exit code directly via `int(exc.code or 0)`. It's harmless but dead, and the project standard is not to carry unused definitions. Remove it (or, if a usage was intended, wire it in).",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#EXIT_USAGE"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`--estimate` narrates a BUY verdict and a ceiling command even when the CLI verdict is \"refused\"",
+      "description": "`_estimate_only` calls `judge(summary, None, check_ceilings=False)`, which returns `Estimate.BUY` whenever scope passes, regardless of the raw `summary[\"verdict\"]`. It then prints `verdict {summary[\"verdict\"]}: {outcome}` followed by `the PM runs: sudo ... --per-pass ... --cap-30d ...`. This is by design (the estimate's job is to compute the ceiling figures, and it always returns 0), and the test `test_estimate_prints_the_command_and_buys_nothing` pins it. The only wrinkle is operator clarity: when the CLI verdict is `refused` for a non\u2011ceiling reason (e.g. space), the narration reads `verdict refused: buy` and still offers a ceiling command, which a human could misread as \"safe to buy.\" Since the outcome and the raw verdict are intentionally both shown, this is a minor wording/UX point rather than a defect \u2014 worth a clarifying phrase (e.g. \"ceilings to set for a buyable scope: \u2026\") if the ambiguity ever causes confusion.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#_estimate_only"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Resubmit\u2011to\u2011origin match is keyed only by (schema, start, end), not product",
+      "location": "scripts/cutover_304_checks.py#resubmit_origins",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Dead constant `EXIT_USAGE`",
+      "location": "scripts/cutover_304_first_purchase.py#EXIT_USAGE",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`--estimate` narrates a BUY verdict and a ceiling command even when the CLI verdict is \"refused\"",
+      "location": "scripts/cutover_304_first_purchase.py#_estimate_only",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:47:16.776963",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 208391,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 15,
+  "prompt_tokens": 1221116,
+  "cached_tokens": 1113687,
+  "cache_write_tokens": null,
+  "completion_tokens": 58237,
+  "reasoning_tokens": 53006,
+  "duration_seconds": 463.31960170785896,
+  "cost_usd": 0.20958871,
+  "cost_basis": "alias_pricing"
+}

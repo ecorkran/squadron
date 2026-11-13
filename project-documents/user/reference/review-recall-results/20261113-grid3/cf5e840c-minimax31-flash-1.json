@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Remove the committed editor-backup test file",
+      "description": "This is an editor backup rather than a runnable `*.test.ts` file, so Vitest and TypeScript do not include it. It duplicates the maintained factory test and retains obsolete one-argument `createContextPipeline` calls that no longer match the required options API. Keeping the backup in source control adds dead, stale code and should be removed.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Operational adoption failures still become successful error-stub builds",
+      "description": "Only `AdoptionError` instances take the new rethrow path. However, the real resolver can throw ordinary errors: malformed `.context-forge.toml` parsing from `readAdoptionState` propagates a plain parser error, and guide reads/parsing in `assertGuideSupportsAdoption` can also fail with ordinary errors. Those failures fall through to the generic catch, producing an \u201cError generating context\u201d string while the CLI/MCP call still succeeds. Expected adoption boundary failures should be normalized to `AdoptionError` with their cause, and a pipeline-level test should verify that malformed project configuration or an unreadable guide rejects the build.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:119-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Centralize the adoption write-mode values",
+      "description": "`AdoptionStateWrites` defines `'persist'` and `'read-only'`, but the resolver comparison and the CLI/MCP call sites repeat the literals directly. Renaming either mode therefore requires changing several files, contrary to the project rule that comparison values have one source of truth. Export a constant map and derive the type from it, then use the constants at every call site.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:25"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Remove the committed editor-backup test file",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Operational adoption failures still become successful error-stub builds",
+      "location": "packages/core/src/services/ContextIntegrator.ts:119-123",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Centralize the adoption write-mode values",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:25",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:52:01.890995",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 29,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 326905,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1006276,
+  "cached_tokens": 859520,
+  "cache_write_tokens": null,
+  "completion_tokens": 72665,
+  "reasoning_tokens": 70834,
+  "duration_seconds": 1388.366722082952,
+  "cost_usd": 0.03882284,
+  "cost_basis": "alias_pricing"
+}

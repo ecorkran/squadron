@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "P1": "haiku-xhigh/1/1",
+  "P2": "haiku-xhigh/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "run_steps` only catches `StepFailed`/`CalledProcessError`, so an unguarded read like `step_production`'s `read_text().splitlines()[-1]` (line 224) crashes with a traceback before `main()` writes the report, breaking the docstring's promise right after the cron file has been installed."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P2": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 19.6,
+ "duration_seconds": 19.572254166938365,
+ "cost_usd": 0.6717554,
+ "effort": "high",
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=181768, cached=103864, cache_write=77896, completion=1352, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `run_steps` only catches `StepFailed`/`CalledProcessError`, so an unguarded read like `step_production`'s `read_text().splitlines()[-1]` (line 224) crashes with a traceback before `main()` writes the report, breaking the docstring's promise right after the cron file has been installed.\nF1: KEEP \u2014 `run_steps` only catches `StepFailed` and `CalledProcessError`, so an unguarded read like `step_production`'s `read_text().splitlines()[-1]` (line 224) crashes before `main()` writes the report, breaking the docstring's promise after the cron file is already installed."
+}

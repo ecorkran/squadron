@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`_require_instance` is duplicated in `markets.py` and `instruments.py`",
+      "description": "The identical helper `_require_instance(value: object, expected: type, field: str) -> None` is defined in `src/manta_trading_engine/core_model/markets.py:132-140` and again in `src/manta_trading_engine/core_model/instruments.py:86-94`, differing only in which error class they raise (`InvalidMarketError` vs `InvalidInstrumentError`). The project rules explicitly require \"Do not duplicate logic. Respect DRY (don't repeat yourself)\", and the slice's own task conventions required \"one shared helper used for all three numeric fields, not three copies\" for a comparable case. Two copies of the same guard means a future change to the message format or the `isinstance` semantics must be made in two places, and a drift between them would be silent. Extracting one helper that takes the error class as a parameter (for example into `errors.py` or a small shared validation module that does not violate the `errors \u2190 unknown \u2190 timestamps \u2190 markets \u2190 instruments` dependency order) keeps the single implementation.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/instruments.py:86-94"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Immutability test asserts a container-specific exception rather than behaviour",
+      "description": "`test_fixture_calendars_mapping_is_immutable` asserts that `FIXTURE_CALENDARS[\"x\"] = ...` raises `TypeError`, which is a property of `types.MappingProxyType` rather than of the fixture registry's contract. The more meaningful contract \u2014 that the mapping cannot be mutated, and that no caller can mutate the calendars it exposes \u2014 is only partly covered: the test does confirm the type is a read-only view, but it pins an implementation detail (the specific exception type) that would change if the registry were later built from an immutable dict or a frozen mapping type. Asserting that the mapping rejects assignment (for example via `pytest.raises(TypeError)` on `del`/assignment through a generic \"not writable\" assertion) is acceptable today, but the test's value would be higher if it also asserted the public behaviour consumers rely on: that lookups by `calendar_id` return the same object as the named fixture constant. Note also that the test needs `# type: ignore[index]` to compile under strict pyright, which is a sign the assertion is fighting the declared `Mapping` type rather than expressing an intent.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_calendars.py:327-329"
+    },
+    {
+      "severity": "PASS",
+      "title": "Validation, error taxonomy and layering follow the project conventions",
+      "description": "`Market.__post_init__` rejects an empty/non-`str` `market_id` and `timezone_name`, duplicate session modes, a missing `REGULAR` ref, a non-`SessionCalendarRef` element, an empty basis set, a non-`AdjustmentBasis` element, and a `source_bar_stamping` outside `PERIOD_START`/`PERIOD_END`, raising `InvalidMarketError` with messages that name the field and the offending value \u2014 matching the design's \"Error messages name the field and the offending value\" rule and the project's \"fail explicitly, never use silent fallback values\" principle. Normalization via `object.__setattr__` to a mode-sorted tuple and a `frozenset` is the documented idiom, and the ordering-independence is covered by `tests/core_model/test_markets.py:140-158` and `:257-259`. The four new errors in `src/manta_trading_engine/core_model/errors.py:43-58` subclass `CoreModelError`, and the `SessionMode`/`AdjustmentBasis`/`ContinuityKind` `StrEnum`s keep their string values permanent as required.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:76-104"
+    },
+    {
+      "severity": "PASS",
+      "title": "Contract-term and instrument validation is exact-type and explicit",
+      "description": "`ContractTerms.__post_init__` accepts `UNKNOWN` per field and otherwise requires an exact `Decimal` that is finite and above zero, and a `currency` matching one compiled `fullmatch` regex of exactly three ASCII uppercase letters; `Instrument.__post_init__` rejects a non-`str` id (including a `str` subclass, per the test at `tests/core_model/test_instruments.py:134`), an empty id, and a non-`Market`/`ContractTerms` value. Every rejection path raises `InvalidInstrumentError` with a field-qualified message, so the failure is never silent. `InstrumentId` remains a `NewType` over `str` with no trimming, case folding or pattern check, so ids stay opaque as the design requires, and the tests at `tests/core_model/test_instruments.py:150-153` and `:267-269` pin that behaviour.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/instruments.py:44-58"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fixture data is self-consistent and independently derived",
+      "description": "`EQUITY_EXTENDED_FIXTURE` uses the same session dates and coverage bounds as `EQUITY_RTH_FIXTURE` with 04:00\u201320:00 local windows, an unknown close on Oct 30, no session on the Nov 4 holiday and a 17:00 early close on Nov 5. The fixture literals are not trusted: `tests/core_model/test_calendars.py:262-282` rebuilds every open and close from the local wall time through the `local_ns` fixture, so a wrong literal cannot become the oracle. `FIXTURE_CALENDARS` is built from each calendar's own `calendar_id` (`src/manta_trading_engine/core_model/fixtures/calendars.py:170-181`), so a key cannot diverge from its calendar, and the fixture markets reference calendar ids from the calendar objects rather than repeated string literals (`src/manta_trading_engine/core_model/fixtures/markets.py:29-32`), which the design required.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/fixtures/calendars.py:65-111"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test coverage follows the test-with-implementation pattern and pins identity",
+      "description": "The new golden rows pin the exact canonical bytes for a `SessionCalendarRef` and a `ContractTerms` with an `UNKNOWN` term, and a hash for each fixture market and instrument, with the file's stated rule that expected values are hand-derived and never copied from `canonical_hash` output \u2014 the same discipline used by the pre-existing 101 rows. Property tests at `tests/core_model/test_instruments.py:228-259` change exactly one market attribute or contract term at a time and assert the instrument hash changes, while `tests/core_model/test_instruments.py:262-264` asserts the calendar session dates are absent from the instrument's canonical bytes, pinning that calendars are referenced by id only. The `test_import_boundary.py` extension at `:102-110` mechanically enforces that `markets.py` and `instruments.py` do not import `calendars`, `canonical` or the fixtures, which is the layering rule the design depends on.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "tests/core_model/test_canonical_golden.py:277-347"
+    },
+    {
+      "severity": "PASS",
+      "title": "The uniformity test really is one unconditional code path",
+      "description": "`test_one_code_path_serves_every_market` is parametrized over all five fixture instruments and contains no branch on market, id or kind: it resolves the calendar through `calendar_id_for(SessionMode.REGULAR)` and `FIXTURE_CALENDARS`, derives the 60-second bar end through `period_end`, and reads `instrument.terms.multiplier`. The per-instrument start instants and expected ends are data rows, not conditionals, so the test would genuinely fail if a market needed its own code path \u2014 which is the property the slice set out to enforce. The Kalshi row exercises the always-open calendar through the same `period_end` call, confirming that branch lives in `period_end` and not in market-specific code.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "tests/core_model/test_market_uniformity.py:36-63"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_require_instance` is duplicated in `markets.py` and `instruments.py`",
+      "location": "src/manta_trading_engine/core_model/instruments.py:86-94",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Immutability test asserts a container-specific exception rather than behaviour",
+      "location": "tests/core_model/test_calendars.py:327-329",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Validation, error taxonomy and layering follow the project conventions",
+      "location": "src/manta_trading_engine/core_model/markets.py:76-104",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Contract-term and instrument validation is exact-type and explicit",
+      "location": "src/manta_trading_engine/core_model/instruments.py:44-58",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Fixture data is self-consistent and independently derived",
+      "location": "src/manta_trading_engine/core_model/fixtures/calendars.py:65-111",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Test coverage follows the test-with-implementation pattern and pins identity",
+      "location": "tests/core_model/test_canonical_golden.py:277-347",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The uniformity test really is one unconditional code path",
+      "location": "tests/core_model/test_market_uniformity.py:36-63",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:41:51.556888",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 599413,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1328093,
+  "cached_tokens": 1064960,
+  "cache_write_tokens": null,
+  "completion_tokens": 169048,
+  "reasoning_tokens": 164999,
+  "duration_seconds": 856.8519457089715,
+  "cost_usd": 0.077904095,
+  "cost_basis": "alias_pricing"
+}

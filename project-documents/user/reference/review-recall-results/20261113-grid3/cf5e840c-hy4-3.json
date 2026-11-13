@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Remove stale backup test artifact",
+      "description": "The diff adds `packages/core/tests/services/CoreServiceFactory.test.ts-E`, a stale duplicate of the real test file. It still calls the old one-argument `createContextPipeline` API at `packages/core/tests/services/CoreServiceFactory.test.ts-E:29`, `:35`, `:59`, `:99`, `:119`, and `:141`, while `packages/core/src/services/CoreServiceFactory.ts:29-33` now requires `{ adoptionStateWrites }`. The `.ts-E` suffix is not matched by the Vitest include glob in `packages/core/vitest.config.ts:5`, `packages/core/tsconfig.json` only includes `src/**/*`, and `eslint.config.mjs:9` ignores `**/tests/**`, so this file is dead duplicated code that can drift or mislead maintainers. Delete it or merge any intended changes into the real test file.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": "architectural-dead-code",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Avoid more positional plumbing at changed API boundaries",
+      "description": "`ContextIntegrator` now has seven positional constructor parameters; `packages/core/src/services/CoreServiceFactory.ts:44-52` passes all seven, and tests use `null, null, null` chains such as `packages/core/tests/services/ContextIntegrator.test.ts:384`. `generateContext` also grew to five positional parameters in `packages/mcp-server/src/tools/contextTools.ts:58-63`, with call sites at `:202` and `:267`. The TypeScript rules require named parameters via object destructuring for functions with 3+ parameters. These signatures are fragile, hard to read, and make it easy for a JS caller to shift an overrides object into `adoptionStateWrites`; use a named options/dependency object instead.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:90-101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Adoption state is persisted before the build is known to succeed",
+      "description": "`createAdoptionResolver` writes `in_progress` at `packages/core/src/adoption/adoptionResolver.ts:129`, then returns facts for rendering. Context generation happens afterward, but `packages/core/src/services/ContextTemplateEngine.ts:47-66` catches generation failures and returns `ERROR: Context generation failed`, while `packages/core/src/services/ContextIntegrator.ts:119-125` returns `\u26a0\ufe0f Error generating context` for non-`AdoptionError` failures. Those paths do not rethrow, so a first Phase 0 build can mutate `.context-forge.toml` and still return an error prompt/exit normally. This conflicts with the project rule to fail explicitly. Gate the write on successful generation, or rethrow/roll back the state when generation fails.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:128-134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "template_preview's read-only contract still permits guide-checkout writes",
+      "description": "`template_preview` is registered with `readOnlyHint: true` and a no-side-effects description, and the new call at `packages/mcp-server/src/tools/contextTools.ts:267` only passes `adoptionStateWrites: 'read-only'`. However `generateContext` still calls `ensureGuideForProject()` at `packages/mcp-server/src/tools/contextTools.ts:89-94`; that helper calls `GuideManager.ensureCheckout()` (`packages/core/src/guides/GuideManager.ts#ensureCheckout`), which explicitly initializes an uninitialized submodule checkout. Therefore a \u201cread-only\u201d preview can still mutate the guide checkout on fresh clone/submodule projects. Either make guide readiness read-only for `template_preview`, or update the annotation/description and tests to state this side effect.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:267"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New tests leak a console.error spy across later tests",
+      "description": "The new adoption error-stub test at `packages/core/tests/services/ContextIntegrator.test.ts:433` calls `vi.spyOn(console, 'error').mockImplementation(() => {})` but never restores it. The earlier permissiveness test at `packages/core/tests/services/ContextIntegrator.test.ts:354` has the same pattern, the file has no `afterEach(() => vi.restoreAllMocks())`, and `packages/core/vitest.config.ts:3-8` does not enable `restoreMocks`. Later tests in the same file run with `console.error` suppressed, hiding diagnostics and making test order matter, which violates the testing rule that tests run independently. Restore the spy in `finally`/`afterEach` or add a file-level cleanup.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/services/ContextIntegrator.test.ts:433"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": "architectural-dead-code",
+      "summary": "Remove stale backup test artifact",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:29",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Avoid more positional plumbing at changed API boundaries",
+      "location": "packages/core/src/services/ContextIntegrator.ts:90-101",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Adoption state is persisted before the build is known to succeed",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:128-134",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "template_preview's read-only contract still permits guide-checkout writes",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:267",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New tests leak a console.error spy across later tests",
+      "location": "packages/core/tests/services/ContextIntegrator.test.ts:433",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:54:24.235038",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 47,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 627347,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2578426,
+  "cached_tokens": 2239872,
+  "cache_write_tokens": null,
+  "completion_tokens": 153214,
+  "reasoning_tokens": 149771,
+  "duration_seconds": 1667.3728798751254,
+  "cost_usd": 0.37973183,
+  "cost_basis": "alias_pricing"
+}

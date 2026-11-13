@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Post-preflight read failures are misreported as docType failures",
+      "description": "`validateFile()` calls `parseFrontmatter(file)` at `packages/core/src/schema/sliceDesignFiles.ts:95`, but that helper silently catches all read failures and returns `{ found: false, data: {} }` (`packages/core/src/introspection/parsers/frontmatterParser.ts:63-65`). If a file becomes unreadable after preflight (`packages/core/src/schema/sliceDesignFiles.ts:73-87`), line 96 treats it as a missing `docType` and returns a normal failed result; the explicit `readFile` catch at lines 101-105 is never reached. The CLI then prints results and sets exit code 1 (`packages/cli/src/commands/validateDesign.ts:72-85`) instead of routing a typed usage/template error through `handleError(err, 2)` at lines 100-105. This also conflicts with the project rule against silent fallback values. Read the document once with explicit error handling and use that text for both frontmatter parsing and heading checks; add a post-preflight read-failure test. `packages/core/tests/schema/sliceDesignFiles.test.ts:117-124` only covers preflight `access()` failures.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:91-105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Guide template is read without initializing the guide checkout",
+      "description": "`resolveTemplatePath()` builds a template path under the resolved checkout root at `packages/cli/src/commands/validateDesign.ts:34-45`, and `validateDesignAction()` immediately reads it at line 68. For submodule guide installs, `GuideDetector.detectLocal()` checks the guide directory at `packages/core/src/guides/GuideDetector.ts:57-62`, and `GuideManager.ensureCheckout()` exists specifically to initialize uninitialized submodule checkouts before read commands (`packages/core/src/guides/GuideManager.ts:186-217`). Other commands that consume guide content call `ensureGuideReady()` (`packages/cli/src/commands/build.ts:81-82`, `packages/cli/src/commands/prompt.ts:63`, `packages/cli/src/commands/setup-ide.ts:105`; helper at `packages/cli/src/utils/guideReady.ts:17-31`), but this new command does not. A fresh clone with an uninitialized guide submodule can therefore reach `loadRequiredHeadings()` (`packages/core/src/schema/sliceDesignFiles.ts:52-61`) with no template and receive a `cf guides update` message instead of using the repository\u2019s standard auto-init path. Call `ensureGuideReady(project.projectPath, checkoutRoot)` before resolving/reading the template and add coverage for that guide state.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:34-45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Indented fenced code blocks can be treated as real headings",
+      "description": "`documentHeadingKeys()` only toggles fenced-code state when `line.startsWith('```')` at `packages/core/src/schema/sliceDesignValidator.ts:63`. Markdown fenced blocks may be indented by up to three spaces, so a valid indented fence such as `  ```markdown` is not recognized; example headings inside the block are then counted as document headings and can satisfy required headings in `missingHeadings()` at line 81, producing false PASS results. This conflicts with the project\u2019s parsing rule to prefer lenient parsing over strict formatting matching. The current fence test only covers column-zero fences (`packages/core/tests/schema/sliceDesignValidator.test.ts:84-87`). Use a fence detector such as `/^\\s{0,3}```/` and add a test for indented fences.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:57-72"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--json` error-path tests bypass structured error mode",
+      "description": "The `--json` error cases at `packages/cli/tests/commands/validate-design.test.ts:205-212` only assert empty stdout, no console output, and exit code 2. `run()` at lines 127-131 creates a bare Commander program and registers the command directly, so the real CLI bootstrap that detects `--json` and calls `setJsonMode()` (`packages/cli/src/index.ts:178-180`) never runs. As a result, `handleError()` takes its human-output branch in these tests (`packages/cli/src/utils/errors.ts:50-65`), and the structured `{ error: true, ... }` stderr contract is not exercised for no-arguments, missing-file, or missing-template errors. Enable JSON error mode in these tests via `setJsonMode()`/`CF_JSON=1` and parse stderr as JSON so the machine-readable failure contract is actually pinned.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:198-212"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Post-preflight read failures are misreported as docType failures",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:91-105",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Guide template is read without initializing the guide checkout",
+      "location": "packages/cli/src/commands/validateDesign.ts:34-45",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Indented fenced code blocks can be treated as real headings",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:57-72",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`--json` error-path tests bypass structured error mode",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:198-212",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:58:46.755389",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 46,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 453411,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1510804,
+  "cached_tokens": 1306816,
+  "cache_write_tokens": null,
+  "completion_tokens": 112570,
+  "reasoning_tokens": 109699,
+  "duration_seconds": 1192.1108739171177,
+  "cost_usd": 0.25321863200000005,
+  "cost_basis": "alias_pricing"
+}

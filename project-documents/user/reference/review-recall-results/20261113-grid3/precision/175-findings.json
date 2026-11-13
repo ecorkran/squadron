@@ -1,0 +1,114 @@
+[
+ {
+  "ref": "luna-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "`--json` emits plain text when the review directory is missing",
+  "location": "src/squadron/cli/commands/stats.py:60-62",
+  "description": "Description: The missing-directory check runs before the `as_json` branch, so `sq stats reviews --json` prints a plain-text message instead of JSON when the directory is absent. This breaks the documented JSON output contract for that case."
+ },
+ {
+  "ref": "luna-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Boolean metadata can be recorded as usage or cost",
+  "location": "src/squadron/pipeline/usage_capture.py:99-102",
+  "description": "Description: `bool` is a subclass of `int`, so malformed provider metadata such as `turns=True` or `cost_usd=True` passes these checks and can be persisted as one turn or one dollar. Reject booleans explicitly, as the SDK usage reader and the review-artifact parser already do."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "FAIL",
+  "title": "Split reviews retain only the first part\u2019s spend",
+  "location": "src/squadron/pipeline/actions/review.py:505-506",
+  "description": "Each part receives usage metadata, but `fold_review_parts()` copies only the first part\u2019s metadata. Subsequent parts\u2019 tokens, turns, duration, and cost disappear from run statistics. A direct reproduction confirmed this. Aggregate every part\u2019s usage before returning the folded result."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "FAIL",
+  "title": "Failed split-review parts violate the folding contract",
+  "location": "src/squadron/pipeline/actions/review.py:493",
+  "description": "The new failure return has empty outputs, while `fold_review_parts()` requires every part to identify its input file. With multiple parts, a provider failure therefore triggers a secondary `TypeError`; the outer handler discards the captured usage. This was reproduced directly. Preserve the part identity and failure status through folding."
+ },
+ {
+  "ref": "sol-high/1/2",
+  "severity": "FAIL",
+  "title": "Loop and fan-out spend never reaches run statistics",
+  "location": "src/squadron/stats/usage_report.py:112-116",
+  "description": "The report sums only persisted top-level action results. However, loop execution keeps earlier iterations in `StepResult.prior_rounds`, which `StateManager._append_step()` does not serialize. Fan-out reducers likewise discard branch usage metadata. Consequently, loops report only their final iteration and fan-outs omit their branch spend. Persist these records and include them exactly once in totals; add end-to-end coverage for both structures."
+ },
+ {
+  "ref": "sol-high/1/3",
+  "severity": "CONCERN",
+  "title": "Failed compaction drops available usage telemetry",
+  "location": "src/squadron/pipeline/actions/compact.py:82-89",
+  "description": "The exception branch returns without stamping usage, even when the SDK raises a `ProviderError` carrying completed-turn telemetry. Failed compactions therefore lose known spend, unlike dispatch and summary failures. Capture the exception\u2019s telemetry and test that it survives the returned failure result."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Split reviews discard usage from all but the first part",
+  "location": "src/squadron/pipeline/actions/review_fold.py#_metadata",
+  "description": "Each split review part is stamped with its own usage record in `review.py`, but `_metadata` copies only the first part\u2019s metadata. Since pipeline review artifacts are excluded from `sq stats reviews`, the run report then omits the spend from every later part. Preserve or aggregate the per-part records so the run total reflects all calls."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Compact paths do not consistently record usage",
+  "location": "src/squadron/pipeline/actions/compact.py#_execute_prompt_only",
+  "description": "The prompt-only path sends an SDK query but does not capture or stamp its usage, even though `COMPACT` is counted as an LLM action by `sq stats run`. The SDK-rotate path also returns a failed result without usage metadata when an exception carries telemetry. These compact calls can therefore spend tokens while appearing unrecorded."
+ },
+ {
+  "ref": "luna-r-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "Standalone review stats cannot identify the selected alias",
+  "location": "src/squadron/stats/reviews_report.py:111-115",
+  "description": "The reviews report derives an alias only from `requestedModel`, but review artifacts include that field only for substituted models\u2014and it records the resolved model ID, not the alias. Consequently, standalone reviews normally lose the alias\u2019s `cost_tier`; `stats reviews` can label a subscription provider cost as ordinary `prov` instead of `api-rate equiv.`. Persist the alias separately or otherwise retain it in the artifact."
+ },
+ {
+  "ref": "luna-r-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "Malformed cost-basis YAML can crash the reviews report",
+  "location": "src/squadron/stats/reviews_report.py:151-156",
+  "description": "`_basis` tests the parsed frontmatter value for membership in a set. If malformed YAML supplies a list or mapping for `costBasis`, this raises `TypeError` because those values are unhashable, aborting the report instead of warning and treating the field as unknown. Validate that the value is a string before the membership check."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "CONCERN",
+  "title": "`sq stats reviews` resolves the reviews directory from the process CWD, ignoring the review CLI's git-root anchoring",
+  "location": "src/squadron/cli/commands/stats.py:55",
+  "description": "`stats_reviews` builds `reviews_dir = Path.cwd() / REVIEWS_DIR`. Every other review-facing CLI path (`src/squadron/cli/commands/review.py:_resolve_review_cwd`, via `resolve_repo_cwd` in `src/squadron/cli/commands/cwd_resolution.py`) anchors at the containing git root, precisely because an agent's `cwd` is a tool-jail root and repo-relative paths must resolve from the repo root. `sq stats reviews` instead uses the raw process CWD, so running it from a subdirectory of a repo (or with the `cwd` config key pointing at a subdirectory) reports \"No review directory at \u2026\" and silently shows nothing even though artifacts exist. The review save path (`save_review_result` \u2192 `REVIEWS_DIR` relative to the target's `cwd`) writes to the repo root, so the read and write sides disagree about where the directory is. This is the exact class of defect `cwd_resolution.py` was introduced to fix."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "CONCERN",
+  "title": "`stats reviews` counts pipeline reviews as excluded only when `runId` is present, but the JSON output loses which rows were excluded",
+  "location": "src/squadron/stats/reviews_report.py:81-87",
+  "description": "`reviews_usage_report` collects every `runId` into `excluded_run_ids` and drops the artifact from the rows. `reviews_report_json` emits that list verbatim, and `render_reviews_report` prints only `excluded[0]` \u2014 \"1 pipeline review(s) excluded; see sq stats run <first-id>\". With more than one excluded review the operator is told to inspect one run and is given no indication of the others; the count and the single id disagree about what is actionable. The JSON does carry the full list, so this is a presentation gap in the table rather than data loss, but the table is the primary surface."
+ },
+ {
+  "ref": "minimax31-flash/1/2",
+  "severity": "CONCERN",
+  "title": "`format_usd` renders a negative cost with two decimals while positive sub-cent costs get four",
+  "location": "src/squadron/core/usage.py:33-37",
+  "description": "The guard is `if 0 < abs(amount) < 0.01`, so a negative amount (a refund or a sign convention slip) falls through to `${amount:.2f}` and reads as `$-0.00` or `$-0.50`. The `abs()` in the condition shows the intent was to treat magnitude symmetrically, but the format branch then keys on the signed value's absolute magnitude inconsistently. Costs in this codebase are never negative in normal operation, so this is low impact \u2014 but the function's docstring promises \"four places under a cent so a small real cost never reads as `$0.00`\", which is not true for a negative sub-cent cost."
+ },
+ {
+  "ref": "minimax31-flash/1/3",
+  "severity": "CONCERN",
+  "title": "The `partial` warning is logged twice for a stalled dispatch: once by `record_from_telemetry` and once per-record, and it is a WARNING for a recoverable condition",
+  "location": "src/squadron/pipeline/usage_capture.py:120-128",
+  "description": "`record_from_telemetry` logs \"SDK session interrupt drained no result; spend for the interrupted turn is not recorded\" whenever `partial=True`. The dispatch action only sets `partial=True` for `DispatchStalledError` with `session_usable=False` (`src/squadron/pipeline/actions/dispatch.py:585-596`), and the session-level path already logs the interrupt at WARNING (`src/squadron/pipeline/sdk_session.py:_interrupt_stalled_turn`). The result is two WARNING lines describing the same event at two layers. The more notable half is the polarity: an unusable session *is* a real problem, but the message text describes a measurement gap (\"spend \u2026 is not recorded\"), which reads like a data-quality issue rather than the lost-session condition it accompanies. The test at `tests/pipeline/actions/test_dispatch_usage.py` asserts the message text, so the wording is pinned."
+ },
+ {
+  "ref": "minimax31-flash/1/4",
+  "severity": "CONCERN",
+  "title": "`UsageCapture.effort_for_session` returns `None` but is typed `-> None`, so a caller cannot distinguish \"effort not sent\" from \"no resolved model\"",
+  "location": "src/squadron/pipeline/usage_capture.py:174-184",
+  "description": "The method's declared return type is `None` and it is used purely for its side effect (the once-per-run DEBUG log). Both call sites (`dispatch.py:571`, `summary.py:273`) bind `effort_sent = capture.effort_for_session(resolved)` and then pass that `None` as the `effort_sent` argument to `record_from_telemetry`. That is correct today \u2014 the SDK session path never applies alias effort \u2014 but the binding reads as though the method produced a value. A reader cannot tell from the signature that the `None` is the answer rather than an accident of the method's shape; naming it for what it does (e.g. `note_session_effort_not_applied`) would remove the ambiguity."
+ },
+ {
+  "ref": "minimax31-flash/1/5",
+  "severity": "CONCERN",
+  "title": "`dispatch.py` grew past the project's ~300-line source-file guideline",
+  "location": "src/squadron/pipeline/actions/dispatch.py",
+  "description": "`src/squadron/pipeline/actions/dispatch.py` is now roughly 930 lines. AGENTS.md asks for source files at ~300 lines \"where practical\". The new usage-capture work added `_provider_failure` and `_one_shot` methods to an already-large class. The extraction of `_one_shot` is a good step in that direction (it isolates the agent call), but the class still carries model resolution, prompt resolution, pre-emption fragment handling, tool gating, feedback resolution, and now usage attribution. A `dispatch_usage.py` sibling (mirroring the existing `dispatch_outcome.py` / `dispatch_rules.py` / `dispatch_helpers` decomposition) would keep the usage concern separate."
+ }
+]

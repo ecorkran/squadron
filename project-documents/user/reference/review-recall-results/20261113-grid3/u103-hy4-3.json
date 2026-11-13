@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Adding the first series never activates the visible-range translation",
+      "description": "The effect reads `seriesCountRef.current === 0` as a guard but its dependency array is `[mount.ready, chart, range]`. Refs do not trigger renders, and `chart.addSeries` only calls `series.onAdded()` (`src/chart/chart-facade.ts:44-50`), which mutates the ref without any state update. So when a consumer adds the first series, this effect does not re-run and the range is never applied until some unrelated dependency (e.g. `range`) changes. That contradicts the comment at `src/chart/use-chart-provider.ts:338` (\"activates the moment it adds the first series\") and the promise that initiative 120 needs \"no other change to this integration\". `src/test/use-chart-provider.translation.test.tsx:135-145` masks this: it calls `setRange(NEXT_RANGE)` after `addSeries`, so the passing assertion is really about a range change, not about series-driven activation. Either make the count reactive state (or expose it through the facade) and include it in the deps, or correct the documented seam.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:327-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A failed `create()` produces a spurious teardown error against the real provider",
+      "description": "On a mount failure the catch at `src/chart/use-chart-provider.ts:303-309` calls `teardown()`, which unconditionally calls `provider.destroy()`. The real `LightweightChartsProvider.destroy()` calls `assertReady()` (`src/chart/providers/lightweight-charts-provider.ts:67-71`), and `assertReady()` throws when `this.chart === null` (`:79-84`). `create()` assigns `this.chart` only after `createChart(...)` returns (`:53-62`), so a throw inside `createChart` leaves it null. Result: two console errors for one failure \u2014 the real \"provider create failed\" plus a misleading \"provider teardown failed\". The spy's `destroy` never throws (`src/test/support/chart-provider-spy.ts:98-100`), and tests even assert `destroy` is called once after a failed create (`src/test/use-chart-provider.lifecycle.test.tsx:104-116`), so this path is never exercised with the real provider. Guard `destroy()` on whether `create()` succeeded, or make teardown tolerant of a never-created provider.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:213-222"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`error` is documented as the first error but holds the most recent one",
+      "description": "The public `UseChartProviderResult.error` doc says \"The first error from any provider operation, or null.\" `setOperationError` (`src/chart/use-chart-provider.ts:96-99`) unconditionally replaces `error` with the latest failure via `setMount((current) => ({ ...current, error: failure }))`, called from every `runGuarded` catch (`:121`). So a cascade of failures shows only the last one, losing the root cause the doc promises. `src/test/use-chart-provider.errors.test.tsx:234-248` is named \"keeps the first error rather than being reset by a later success\" but only checks that a later *success* does not clear the error \u2014 a second distinct throw is never tested, so the \"first error\" contract is both unimplemented and unverified. Fix the code to keep the first error (and add a two-failure test) or correct the docstring and test name.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/chart-operations.ts:77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "E2E comments point at the wrong spec and contradict the new build mode",
+      "description": "The newly rewritten header says \"The chart itself is asserted in `chart-render.spec.ts`\". That spec (`e2e/chart-render.spec.ts:13`) navigates to `/__chart-harness` and asserts the slice-102 harness with candles; the live product chart at `/` is asserted in `e2e/chart-live.spec.ts`, which this same change adds. Similarly, `playwright.config.ts:4-11` still claims \"Specs run against the PRODUCTION build ... the same artifact `pnpm build` ships\" and \"Slice 102 extends this harness\", which the new `command` at `playwright.config.ts:44` (`pnpm build --mode e2e`) and the comment at `:37-43` directly contradict \u2014 the e2e artifact deliberately differs from the production artifact. These are user-facing guide comments in files this diff touched; update them so a maintainer debugging the harness gate is not sent to the wrong spec or build.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "e2e/smoke.spec.ts:9-10"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The mandated `setVisibleRange` failure test does not exist",
+      "description": "The \"post-mount error funneling\" block forces only `resize` to throw (`:220`, `:238`). No test anywhere forces `chart.setVisibleRange` to throw from the Context observer or through the facade: `src/test/use-chart-provider.facade.test.tsx:156-157` only checks forwarding, and `src/test/use-chart-provider.translation.test.tsx` has no throwing spy. The slice design (`project-documents/user/slices/103-slice.provider-react-integration.md`, \"Operation-level failure handling\" and Verification step 2) explicitly requires forcing `setVisibleRange` to throw and asserting `error` is set without escaping React. That is one of only three post-mount imperative paths, so its error behavior is unverified. Add an armed throw on `chartSpy.setVisibleRange` after a series exists, asserting `ready` stays true and `error` surfaces.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.errors.test.tsx:211-249"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stale task-number and \"built up across tasks\" comments shipped in the new hook",
+      "description": "The file header describes work-in-progress state that no longer exists: \"the forwarding facade (task 14)\" (`:10`), \"This file is built up across tasks 8/10/12/14 ... seams below exist from the start so later tasks extend one path\" (`:16-19`), and \"subscriptions join here in task 12\" (`:185`) \u2014 even though subscriptions are already registered in the same effect at `:288-301`. A related inaccuracy: `src/routes/chart-route.tsx:31` says `readChartStyle` returns `undefined` \"when a token resolves empty\", but `:46-48` requires all three tokens to be empty; a single missing token yields a partial style object. These comments describe a construction sequence rather than the finished behavior and will mislead the next reader.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:10-19"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hook exceeds project size budgets and required a file-wide lint suppression",
+      "description": "The mount effect spans ~146 lines (three times CLAUDE.md's ~50-line function guide) and the file is 366 lines against the ~300-line file guide. The extraction into `chart-facade.ts` / `chart-operations.ts` reduced it but required turning `react-hooks/refs` off for the entire file (`eslint.config.js:75-78`), so future genuine ref-during-render violations in those 366 lines will go unflagged. The slice design records this as a PM-approved, documented overrun, so this is informational rather than blocking; a narrower suppression (or moving the counter callbacks behind a hook-shaped indirection) would restore the safety net.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:177-323"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Adding the first series never activates the visible-range translation",
+      "location": "src/chart/use-chart-provider.ts:327-345",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A failed `create()` produces a spurious teardown error against the real provider",
+      "location": "src/chart/use-chart-provider.ts:213-222",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`error` is documented as the first error but holds the most recent one",
+      "location": "src/chart/chart-operations.ts:77",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "E2E comments point at the wrong spec and contradict the new build mode",
+      "location": "e2e/smoke.spec.ts:9-10",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The mandated `setVisibleRange` failure test does not exist",
+      "location": "src/test/use-chart-provider.errors.test.tsx:211-249",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Stale task-number and \"built up across tasks\" comments shipped in the new hook",
+      "location": "src/chart/use-chart-provider.ts:10-19",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Hook exceeds project size budgets and required a file-wide lint suppression",
+      "location": "src/chart/use-chart-provider.ts:177-323",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:50:07.760531",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 47,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 625953,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 1318644,
+  "cached_tokens": 1253696,
+  "cache_write_tokens": null,
+  "completion_tokens": 155456,
+  "reasoning_tokens": 151276,
+  "duration_seconds": 1511.1181369591504,
+  "cost_usd": 0.24773093200000001,
+  "cost_basis": "alias_pricing"
+}

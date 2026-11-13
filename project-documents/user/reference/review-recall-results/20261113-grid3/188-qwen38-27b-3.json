@@ -1,0 +1,207 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Count-then-fetch admission and connection scoping are correct and verified",
+      "description": "Both routes run seek \u2192 count \u2192 (fetch only if admitted) inside a single `pool.connection()` scope in the executor, then raise the 422 *after* the checkout is returned to the pool. I confirmed against `serve_timeseries.py` that `count_*` and `fetch_*` use the identical predicate via the shared `_window` (inclusive bounds, no `LIMIT`, omitted bound emits no clause), so a count/fetch mismatch is impossible by construction \u2014 and `test/unit/api_server/test_kalshi_timeseries.py` asserts the 422 message carries both numbers, that no fetch was called, and that `pool.open_now == 0` after the refusal. The `strict=True` zip in `CandleRecord.from_row` and the column sets derived from the repositories' own maps (`CANDLE_VALUE_COLUMNS`, `TRADE_VALUE_COLUMNS`) keep the wire shape anchored to storage; the load-tier seed rows conform to the real migration schema (I checked every `NOT NULL` column and both state-row shapes against `kalshi_005`/`kalshi_006`).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:90-174"
+    },
+    {
+      "severity": "PASS",
+      "title": "DB-safety rules are respected by the new load fixture and helpers",
+      "description": "`kalshi_dense_db` derives entirely from `ephemeral_db` (a UUID-named throwaway database created and dropped by `test/conftest.py`), the moved `ensure_timescaledb`/`apply_kalshi_track` helpers carry their \"only ever runs on a fixture-minted database\" contract into `test/kalshi_support/schema.py`, and the load tier's ratchet guard (`test_load_tier_never_references_prod_db_url`) still covers the directory. I confirmed no new `MT_TIMESCALE_DB_URL` readers were introduced and the prod-URL scrub in `test/conftest.py` remains in force.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "test/load/conftest.py:511-556"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Day-boundary convention now exists in three places, one of which predates the stated reason",
+      "description": "`windows.py` was extracted because \"two derivations of 'the last instant of a day' is exactly how one of them ends up exclusive by accident\" \u2014 yet `gaps.py` still keeps its private `_window_start_utc` (an identical copy of `windows.window_start_utc`) and its own `_window_end_utc`. The gaps *end* bound is deliberately different (half-open `gap_start < %s` predicate, next-midnight) and well documented, so it must stay local; the *start* bound, however, is the same `time.min` derivation as `window_start_utc` and could import it. Low urgency: the two end variants are documented cross-references, and unifying the start side is the only real residual duplication.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/gaps.py:54-69"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`volume_fp` is modeled as optional even though the stored column is NOT NULL",
+      "description": "`CandleRecord.volume_fp: Decimal | None` while `kalshi_005` declares `volume_fp NUMERIC NOT NULL`. The unit test `test_values_preserve_nulls` (integration) and `test_a_sparse_row_keeps_its_nulls` (unit) assert that null *can* appear in a candle row, so this is a deliberate, test-backed choice \u2014 the wire model describes what the storage can hold, not the constraint \u2014 but a reader of just the model can't tell. A one-line comment (\"typed optional although the column is NOT NULL \u2014 the wire carries whatever is stored\") would make the intent explicit. No behavior impact.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:78"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Load-tier recording cursor keeps shared state in a class attribute",
+      "description": "`_RecordingCursor.statements` is a class-level list shared across every connection in the pool (with an explicit `noqa: RUF012`). This is safe in practice \u2014 the load tier is single-process, tests run sequentially, and each test resets it before use \u2014 but a future parallel pytest invocation (`-n`) would interleave appends silently. The docstring and the `type(self)` access make the intent clear; flagging only as a known sharp edge, consistent with the \"deliberately class-level\" comment.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:134-143"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tape_filtered` reads the filter's parameter out of the rendered SQL",
+      "description": "`tape_filtered` calls `trades_filter_sql(excluded)` and then reads `selection.params[\"trades_excluded_categories\"]` to evaluate the same membership test in Python \u2014 a roundabout way to express \"the one spelling of the comparison.\" It is guarded (empty-set \u2192 `False`, shape check on the bound, `COALESCE` semantics documented) and the rationale (never re-spell the test) is sound, but the code could call a small shared helper (`sorted(excluded)`) and let both the SQL renderer and this function consume it. Informational only.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:142-165"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Load NFRs are correctly gated but not yet CI-enforced",
+      "description": "The module docstring honestly states CI wiring is slice 907's deliverable and \"nothing here is enforced by CI today.\" The tests themselves are excellent (measured bounds with recorded medians, a statement-recording cursor that proves the refusal issues no row fetch, fixture widths above production's measured maximums, correctness checks so a \"fast read of the wrong thing\" can't pass). The residual risk \u2014 that the tier goes stale without a run \u2014 is acknowledged and scheduled, not a defect in this slice.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:36-47"
+    },
+    {
+      "severity": "PASS",
+      "title": "Project conventions followed for Python style, SQL, and testing rules",
+      "description": "Built-in generics, `X | None` unions, `from __future__ import annotations` with correct `TYPE_CHECKING`/`noqa: TC003` discipline, `psycopg.sql` composition for all dynamic SQL (table names are module-local constants with justified `S608` suppressions, everything else parameterized), `@dataclass(frozen=True)` for DTOs, Pydantic at the API boundary, small single-purpose functions, Google-style docstrings on public functions, and tests written alongside the implementation across all three tiers (unit mocks at the reader seam, integration tests on real throwaway databases, load tests for the concurrency/env paths as the rules require). The project's documented mypy-instead-of-pyright configuration and the `S608` suppressions follow existing project precedent rather than the letter of the generic Python rulebook, and both are consistent with how sibling modules (`kalshi_catalog.py`, `bars.py`) already work.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Count-then-fetch admission and connection scoping are correct and verified",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:90-174",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "DB-safety rules are respected by the new load fixture and helpers",
+      "location": "test/load/conftest.py:511-556",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Day-boundary convention now exists in three places, one of which predates the stated reason",
+      "location": "src/manta_trading/api_server/routes/gaps.py:54-69",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`volume_fp` is modeled as optional even though the stored column is NOT NULL",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:78",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Load-tier recording cursor keeps shared state in a class attribute",
+      "location": "test/load/test_188_kalshi_api_nfr.py:134-143",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`tape_filtered` reads the filter's parameter out of the rendered SQL",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:142-165",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Load NFRs are correctly gated but not yet CI-enforced",
+      "location": "test/load/test_188_kalshi_api_nfr.py:36-47",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Project conventions followed for Python style, SQL, and testing rules",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:10:59.715342",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 156000,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 15,
+  "prompt_tokens": 1035817,
+  "cached_tokens": 928768,
+  "cache_write_tokens": null,
+  "completion_tokens": 43627,
+  "reasoning_tokens": 40395,
+  "duration_seconds": 363.1049219169654,
+  "cost_usd": 0.16810956,
+  "cost_basis": "alias_pricing"
+}

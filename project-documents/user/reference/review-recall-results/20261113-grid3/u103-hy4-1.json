@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Teardown calls `destroy()` after a failed `create()`, which the real provider rejects",
+      "description": "`teardown()` is shared by unmount and the mount-failure `catch` (line 308), and unconditionally calls `provider.destroy()` (line 217). The concrete `LightweightChartsProvider.destroy()` begins with `const chart = this.assertReady()` (src/chart/providers/lightweight-charts-provider.ts:67-68), which throws when `this.chart === null`. That is exactly the state after `createChart(...)` throws, since `create()` assigns `this.chart` only after `createChart` returns (lines 53-61). So every real create failure produces a second, misleading `console.error('[useChartProvider] provider teardown failed', ...)` for a teardown failure that never happened. The destroy throw is caught (line 218), so nothing escapes, but the \"one disposal path\" comment is wrong for an uninitialized provider. The tests cannot catch this: `chartProviderMockFactory` implements `destroy()` as a no-op spy (src/test/support/chart-provider-spy.ts:110-112), so `surfaces a create() failure` and `tears down after a failed create` (src/test/use-chart-provider.lifecycle.test.tsx:88-117) pass against a double that is more permissive than the contract. Guard `destroy()` on create having succeeded, or make the spy honor `assertReady()`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:192-225"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Adding the first series never activates the visible-range effect, contrary to comments and the test name",
+      "description": "The effect is keyed on `[mount.ready, chart, range]` and gated on `seriesCountRef.current === 0`. `seriesCountRef` is a **ref**, and `buildChartOperations`' `addSeries` only calls `series.onAdded()` \u2192 `seriesCountRef.current += 1` (src/chart/chart-facade.ts:49-55, src/chart/use-chart-provider.ts:145-152). Mutating a ref causes no render and no effect re-run, so adding a series alone never applies the current range. Yet the comment claims \"initiative 120 activates the moment it adds the first series\" (lines 337-338) and the slice design says \"activating on the first `addSeries`\". The test `applies the range once a series exists` (src/test/use-chart-provider.translation.test.tsx:135-144) passes only because it *also* calls `setRange(NEXT_RANGE)` on line 141, which changes a real dependency \u2014 it does not test that the first `addSeries` applies `DEFAULT_RANGE`. Initiative 120 adding series without changing range will silently skip the viewport. Either make series count state (or expose it through the effect deps) or correct the comments and add a test that only adds a series.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:340-344"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`error` is documented as the \"first error\" but the code keeps the latest",
+      "description": "`UseChartProviderResult.error` says \"The first error from any provider operation, or null\" (src/chart/chart-operations.ts:77), and `keeps the first error rather than being reset by a later success` (src/test/use-chart-provider.errors.test.tsx:234) names the same contract. `setOperationError` unconditionally replaces it: `setMount((current) => ({ ...current, error: failure }))`, so a second failing operation overwrites the first. The test only fires a throwing resize followed by a *successful* resize (lines 238-245); a success never calls `setOperationError`, so it passes trivially and never exercises two failures. Similarly the `MountState` comment \"ready xor failed\" (chart-operations.ts:84-85) is false after a post-mount error, where `ready` stays true and `error` is set. Pick one semantic (first-wins or last-wins), make doc and code agree, and add a two-failure test.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:97-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "E2E comments contradict the new `--mode e2e` wiring and point at the wrong spec",
+      "description": "The header still says \"Specs run against the PRODUCTION build ... so e2e exercises the same artifact `pnpm build` ships\", but `webServer.command` now runs `pnpm build --mode e2e` (line 44), which deliberately includes `/__chart-harness` \u2014 an artifact that differs from default `pnpm build`. The slice design explicitly relies on that difference. Also, the newly edited comment in e2e/smoke.spec.ts:9-10 says \"The chart itself is asserted in chart-render.spec.ts\", but that spec navigates to `/__chart-harness` (e2e/chart-render.spec.ts:14); the product chart at `/` is asserted in the new `e2e/chart-live.spec.ts`. Update both comments. Related: `reuseExistingServer: !process.env.CI` (line 46) can reuse a server built in a different mode, in which case the harness route is absent and `chart-render.spec.ts` fails for a reason unrelated to the code under test.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "playwright.config.ts:6-9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New test files violate the external \u2192 internal \u2192 sibling import ordering rule",
+      "description": "The React rule requires sorted imports (external \u2192 internal \u2192 sibling \u2192 styles). Here two sibling imports (`./support/chart-provider-spy.ts`, `./support/render-with-contexts.tsx`) appear at lines 22-23 **after** the `LINE_SERIES` const (lines 15-21), so imports aren't even contiguous. The same drift appears in `use-chart-provider.errors.test.tsx:1-8`, `use-chart-provider.facade.test.tsx:1-4`, `use-chart-provider.lifecycle.test.tsx:1-5`, and `use-chart-provider.resize.test.tsx:1-5`, where `react` (external) is imported after a `./support/` sibling import and sibling imports are split into two groups. Production files (e.g. src/chart/use-chart-provider.ts, src/routes/chart-route.tsx) are ordered correctly, so this is inconsistent within the same change.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.translation.test.tsx:15-23"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`readChartStyle` doc claims undefined on an empty token, but a partial miss silently yields a white-background chart",
+      "description": "The docstring says \"Returns undefined when a token resolves empty ... so the provider keeps its library defaults rather than being handed an empty color string\" (lines 31-33), but line 46 returns `undefined` only when **all three** tokens are empty. If `--color-surface` is missing while `--color-grid` resolves, the function returns `{ background: undefined, textColor: ..., grid: ... }`, so the provider applies dark grid/text over its library-default **white** background. That is a silent partial fallback \u2014 the opposite of the project's \"Never use silent fallback values. Fail explicitly\" principle \u2014 and would leave a visually broken dark theme with no error. Either fail loudly on any missing token, or document and test the partial-style behavior. The same file's `hexToRgba` consumer in e2e/chart-live.spec.ts:141 would then fail at `not.toBe('')` (line 140), which is a late, non-diagnostic signal.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/routes/chart-route.tsx:29-55"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Initial size uses border-box measurements while resize uses content-box",
+      "description": "The mount path measures `container.getBoundingClientRect()` (line 249), which **includes** the 1px `border border-grid` on each side of the container (src/routes/chart-route.tsx:92, Tailwind preflight sets `box-sizing: border-box`). The observer path uses `entry.contentRect.width/height` (line 265), which excludes borders. So the chart is first painted 2px wider/taller than its content box, then corrected by the observer's initial callback \u2014 the comment \"matches its container on the very first paint\" (lines 243-247) is not true. Use one measurement source (e.g. `clientWidth`/`clientHeight` plus `getBoundingClientRect` only for fractional precision, or derive from `contentRect`) for both paths.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:246-266"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`hexToRgba` silently mis-parses any non-6-digit-hex token",
+      "description": "The helper assumes exactly `#rrggbb` via fixed slices. `--color-surface` is `#161a1e` today (src/styles/theme.css:19), so it works, but a 3-digit hex, `rgb(...)`, or `oklch(...)` token would produce `NaN` components and a confusing `expect(...).toBe('...NaN...')` failure rather than a clear message. The project guideline prefers lenient parsing over strict matching; either parse any CSS color via a canvas/DOM resolution or assert the token's format explicitly before slicing.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "e2e/chart-live.spec.ts:96-102"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Teardown calls `destroy()` after a failed `create()`, which the real provider rejects",
+      "location": "src/chart/use-chart-provider.ts:192-225",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Adding the first series never activates the visible-range effect, contrary to comments and the test name",
+      "location": "src/chart/use-chart-provider.ts:340-344",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`error` is documented as the \"first error\" but the code keeps the latest",
+      "location": "src/chart/use-chart-provider.ts:97-99",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "E2E comments contradict the new `--mode e2e` wiring and point at the wrong spec",
+      "location": "playwright.config.ts:6-9",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "New test files violate the external \u2192 internal \u2192 sibling import ordering rule",
+      "location": "src/test/use-chart-provider.translation.test.tsx:15-23",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`readChartStyle` doc claims undefined on an empty token, but a partial miss silently yields a white-background chart",
+      "location": "src/routes/chart-route.tsx:29-55",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Initial size uses border-box measurements while resize uses content-box",
+      "location": "src/chart/use-chart-provider.ts:246-266",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`hexToRgba` silently mis-parses any non-6-digit-hex token",
+      "location": "e2e/chart-live.spec.ts:96-102",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:32:47.303386",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 52,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 609045,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 1329861,
+  "cached_tokens": 1241536,
+  "cache_write_tokens": null,
+  "completion_tokens": 152534,
+  "reasoning_tokens": 147463,
+  "duration_seconds": 1505.8693143748678,
+  "cost_usd": 0.253571281,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,63 @@
+{
+ "case": "188",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "P1": "haiku-xhigh/1/3",
+  "P2": "haiku-xhigh/1/4",
+  "P3": "haiku-xhigh/1/5",
+  "P4": "haiku-xhigh/1/6",
+  "P5": "haiku-xhigh/1/7",
+  "P6": "haiku-xhigh/1/8"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "get_candlesticks` (lines 125\u2013126) and `get_trades` (lines 168\u2013174) build up to 75,000 pydantic records and serialize them on the event loop thread, which breaks the project's explicit async rule and holds up every other request for about a second."
+  ],
+  "F2": [
+   "KEEP",
+   "tape_facts` returns the trades watermark, which tracks how far the whole tape has been walked and so runs later than any one market's newest trade, yet the published field description says \"newest stored trade\", so clients will misjudge freshness."
+  ],
+  "F3": [
+   "DROP",
+   "the mismatch only shows up when a category is added to the exclusion list after its trades were already stored, the description is right otherwise, and the reviewer calls it a design question rather than a defect."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P2": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P3": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P4": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P5": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P6": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 30.3,
+ "duration_seconds": 30.293344541918486,
+ "cost_usd": 0.7053269000000001,
+ "effort": "high",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=257762, cached=180280, cache_write=77472, completion=2437, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `get_candlesticks` (lines 125\u2013126) and `get_trades` (lines 168\u2013174) build up to 75,000 pydantic records and serialize them on the event loop thread, which breaks the project's explicit async rule and holds up every other request for about a second.\nF2: KEEP \u2014 `tape_facts` returns the trades watermark, which tracks how far the whole tape has been walked and so runs later than any one market's newest trade, yet the published field description says \"newest stored trade\", so clients will misjudge freshness.\nF3: DROP \u2014 the mismatch only shows up when a category is added to the exclusion list after its trades were already stored, the description is right otherwise, and the reviewer calls it a design question rather than a defect.\nF1: KEEP \u2014 `get_candlesticks` (lines 125\u2013126) and `get_trades` (lines 168\u2013174) build up to 75,000 pydantic records and serialize them on the event loop thread, which breaks the project's explicit async rule and holds up every other request for about a second.\nF2: KEEP \u2014 `tape_facts` returns the trades watermark, which tracks how far the whole tape has been walked and so runs later than any one market's newest trade, yet the published field description says \"newest stored trade\", so clients will misjudge freshness.\nF3: DROP \u2014 the mismatch only shows up when a category is added to the exclusion list after its trades were already stored, the description is right otherwise, and the reviewer calls it a design question rather than a defect."
+}

@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "New `cf validate frontmatter` command implements the documented 0/1/2 exit-code contract and JSON shape",
+      "description": "`validateFrontmatterAction` resolves the project via the shared `resolveProjectWorktree`, calls the core `validateFrontmatterFiles` service (no duplicated discovery/validation logic), applies `fixAction`s in a single pass with one per-run date stamp, and emits the JSON shape from slice 923's A3 spec (`filesChecked`, `totalFindings`, `errors`, `warnings`, `findings`, plus `fixed`/`fixLog`/`fixErrors` in fix mode). Error handling is per the project rules: per-fix `try/catch` is a documented specific-exception path (failure collected, reported, and reflected in the exit code, not swallowed), and the action-level catch is a process boundary delegating to `handleError(err, 2)`. Verified against `packages/core/src/introspection/writers/markdownWriter.ts` and the 923 slice design \u2014 the stamp semantics and the no-`dateUpdated` machine-artifact schemas are consistent end to end.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:88"
+    },
+    {
+      "severity": "PASS",
+      "title": "`handleError` gains a backward-compatible exit-code parameter with corrected docs",
+      "description": "The change from a hard-coded `process.exit(1)` to `process.exit(exitCode)` with a default of `1` is the minimal change; the doc comment now says \"exits with the given code\" instead of the old (now-wrong) \"exits with code 1\". All existing single-argument callers across `packages/cli/src` are unchanged, and the new default also means the top-level `uncaughtException`/`unhandledRejection` handlers keep their historical code 1.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/errors.ts:46"
+    },
+    {
+      "severity": "PASS",
+      "title": "Schema registration for the three machine-artifact docTypes is correct and the test suite pins the asymmetry",
+      "description": "The three schemas carry exactly `docType` + `dateCreated`, and I verified in `validateFrontmatter` (step 3) that the `dateUpdated`-backfill only fires for *required* fields, so the comment's claim \u2014 \"requiring the field would make the existing backfill manufacture a false claim\" \u2014 is accurate. The pre-existing \"every schema requires docType, status, dateCreated, dateUpdated\" tests were narrowed to the 8 canonical `EXPECTED_DOC_TYPES` rather than deleted or weakened, and a new test asserts the machine-artifact field set exactly (`['dateCreated', 'docType']`), which keeps the no-`dateUpdated` rule enforced. The unknown-docType fall-through is unchanged and explicitly documented.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/schema/frontmatterSchema.ts:118"
+    },
+    {
+      "severity": "PASS",
+      "title": "CLI tests follow the testing rules (vitest, centralized tests/, boundary mocks, one concept per test)",
+      "description": "The test file lives in `packages/cli/tests/commands/` matching the source module name (centralized layout, not colocated `__tests__`), uses vitest, mocks only the package boundary (`@context-forge/core/node`) with the same `vi.fn()`-per-function pattern as the established `check.test.ts`, uses `program.exitOverride()` so `process.exit(2)` is assertable, resets `process.exitCode` in `beforeEach`, and each test asserts one behavior. The `expect(dateStampArg).toMatch(/^\\d{8}$/)` assertion pins the composed #71+#73 guarantee (real `formatDateProject` output passed as the fourth writer argument) rather than implementation detail. No DB access anywhere in the tier (pure fs/core, and the core-side tests use throwaway `mkdtemp` dirs they clean up), so the prod-URL guard rules are not triggered.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate.test.ts:1"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "New `cf validate frontmatter` command implements the documented 0/1/2 exit-code contract and JSON shape",
+      "location": "packages/cli/src/commands/validate.ts:88",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`handleError` gains a backward-compatible exit-code parameter with corrected docs",
+      "location": "packages/cli/src/utils/errors.ts:46",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Schema registration for the three machine-artifact docTypes is correct and the test suite pins the asymmetry",
+      "location": "packages/core/src/schema/frontmatterSchema.ts:118",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "CLI tests follow the testing rules (vitest, centralized tests/, boundary mocks, one concept per test)",
+      "location": "packages/cli/tests/commands/validate.test.ts:1",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:30:44.524321",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 150502,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 711024,
+  "cached_tokens": 633269,
+  "cache_write_tokens": null,
+  "completion_tokens": 38898,
+  "reasoning_tokens": 35314,
+  "duration_seconds": 599.191263457993,
+  "cost_usd": 0.13590025,
+  "cost_basis": "alias_pricing"
+}

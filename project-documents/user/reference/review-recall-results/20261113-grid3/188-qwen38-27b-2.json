@@ -1,0 +1,117 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Verified: clean rename, complete floor promotion, safe SQL, and tier-appropriate test coverage",
+      "description": "Description: Cross-checked against the working tree, not just the diff: (1) no import of the old `models.kalshi` path remains in `src/` or `test/`; (2) the `_effective_floor` \u2192 `effective_tape_floor` rename leaves no stale references and the docstring's \"one spelling\" claim holds \u2014 `read_trade_status` and `tape_facts` both call it; (3) every query in `serve_timeseries.py` composes via `psycopg.sql` with `%s`/`%(name)s` placeholders \u2014 identifiers come only from module-local constants (`kalshi.candlesticks`, `kalshi.trades`) with documented `noqa: S608` justifications, and `tape_filtered` evaluates the exact `trades_filter_sql` parameters rather than re-spelling the membership test, including the `COALESCE(s.category, '')` null semantics; (4) the `kalshi_dense_db` load fixture writes only into the `ephemeral_db` minted by the tier, with every column it inserts present in the kalshi track migrations; (5) the count-before-fetch guard has no `LIMIT`, matching the module's documented refusal-to-truncate contract, and the acknowledged count/fetch race (one row over the ceiling) is explicitly bounded and documented in the module docstring.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Ceiling-sized response serialization runs on the event loop; the 34.80 MB candle case is the API's worst case",
+      "description": "Description: Both new handlers call `timeseries_response(response, fmt)` inside the `async def` after the executor returns. `model_dump(mode=\"json\")` + `orjson.dumps`/`msgpack.packb` on 75,000 rows is synchronous CPU work on the loop; at the admission ceiling the candle response is the largest in the API (34.80 MB measured 2026-09-13, recorded in `test/load/test_188_kalshi_api_nfr.py:CANDLES_CEILING_RESPONSE_MB`), so a request at the ceiling can block the loop for well over 1 ms during encoding, stalling `/health` and other in-flight requests. This is not a defect introduced here: the bars path has serialized through the same helper since slice 187 (11.58 MB at ceiling, measured and bounded at 15 s), and the slice explicitly defers the byte-ceiling question rather than defending it (\"Recorded here rather than asserted\u2026 not a threshold this slice defends\"). Flagging for visibility only \u2014 the accepted open question lives in the load test's constant docstring, and any future byte ceiling or off-loop encoding should land against both route families at once.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#get_candlesticks"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The trades 422 path asserts no fetch but not connection release, unlike the candles twin",
+      "description": "Description: `test_the_connection_is_released_before_the_refusal` (the 185 D8a claim: the 422 is raised after the checkout is returned, `pool.open_now == 0`) is written for the candlesticks route only. The trades counterpart, `test_trades_over_ceiling_is_422_and_skips_the_fetch`, asserts the 422 and that `fetch_trades` never ran, but does not check `pool.open_now == 0`. The `_read` closures are structurally identical, so the risk that the trades variant regresses is low; a two-line extension of the trades test (or parametrizing the existing one over both paths, as `TestUnknownMarket` already does) would make the release-before-refusal claim symmetric across both new routes.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/api_server/test_kalshi_timeseries.py#TestCeiling"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Verified: clean rename, complete floor promotion, safe SQL, and tier-appropriate test coverage",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Ceiling-sized response serialization runs on the event loop; the 34.80 MB candle case is the API's worst case",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#get_candlesticks",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The trades 422 path asserts no fetch but not connection release, unlike the candles twin",
+      "location": "test/unit/api_server/test_kalshi_timeseries.py#TestCeiling",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:38:34.263508",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 55,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 220871,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 1461944,
+  "cached_tokens": 1348224,
+  "cache_write_tokens": null,
+  "completion_tokens": 61315,
+  "reasoning_tokens": 57234,
+  "duration_seconds": 368.12013358296826,
+  "cost_usd": 0.22959700000000002,
+  "cost_basis": "alias_pricing"
+}

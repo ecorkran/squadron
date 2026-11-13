@@ -1,0 +1,99 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "Success-path calls in test_fixture_market_lookups are not asserted",
+      "description": "The last two lines of the test \u2014 `EQUITY_MARKET_FIXTURE.calendar_id_for(SessionMode.EXTENDED)` and `EQUITY_MARKET_FIXTURE.require_adjustment_basis(AdjustmentBasis.SPLIT_DIVIDEND)` \u2014 pass only by not raising, and the returned id is discarded. The behavior is valid (\"the equity market accepts both lookups the futures market rejects\"), but the test passes silently even if `calendar_id_for`'s contract changed to return something wrong, since the return value is never checked. Asserting the returned id (e.g., `== EQUITY_EXTENDED_FIXTURE.calendar_id`) would make the accept-path assertion as strong as the reject-path ones above it.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_markets.py:245-251"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_require_instance` is duplicated between markets.py and instruments.py",
+      "description": "`_require_instance` (and a near-identical `_require_nonempty_str` pattern in `markets.py` vs `Instrument.__post_init__` in `instruments.py`) is copy-pasted across the two new modules, differing only in the raised exception type. This is defensible \u2014 the modules are held apart by an enforced import boundary and the exception vocabulary is intentionally split per module \u2014 and it matches the house style (`calendars.py`, `bar_spec.py`, and `canonical.py` each keep their own private check helpers). Noting it so the duplication is a conscious choice: if a third model module arrives, a small shared `core_model/_validate.py` (importing only `errors`) or a helper factory parameterized on the error type would consolidate it.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": "architecural-decay",
+      "location": "src/manta_trading_engine/core_model/markets.py:133-139"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Success-path calls in test_fixture_market_lookups are not asserted",
+      "location": "tests/core_model/test_markets.py:245-251",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "other",
+      "raw_category": "architecural-decay",
+      "summary": "`_require_instance` is duplicated between markets.py and instruments.py",
+      "location": "src/manta_trading_engine/core_model/markets.py:133-139",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:35:08.294879",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 135940,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 375961,
+  "cached_tokens": 313321,
+  "cache_write_tokens": null,
+  "completion_tokens": 45707,
+  "reasoning_tokens": 43762,
+  "duration_seconds": 531.7460159580223,
+  "cost_usd": 0.13125505,
+  "cost_basis": "alias_pricing"
+}

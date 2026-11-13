@@ -1,0 +1,189 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "`run_mapped`'s process-boundary handler reports mapped failures only to stderr, never to the log",
+      "description": "The `except Exception` at the CLI process boundary is compliant with the AGENTS.md rule (c) (documented top-level handler; unmapped exceptions re-raise with traceback; the comment says so), and the new `storage=` tuple check is correctly ordered before `exit_code_for` so `TickDatabaseUnreachable` exits 4 for read verbs while still exiting 1 for the writers (verified: `exit_code_for` matches `TickPreflightError` first, and `TickDatabaseUnreachable` subclasses it). One gap: a *mapped* run-level failure (e.g. a mid-run `psycopg.OperationalError` during ingest) is reported via `print_error` to stderr and the process exits \u2014 it is never logged via `logger.exception`. If `setup_logging` writes to a file, operator-visible exit codes for these failures leave no log trail. This path is pre-existing for the writers; the diff extends it to status/coverage without changing the reporting. Low urgency for short-lived CLI verbs, but worth a `logger.exception` on the mapped path for consistency with the rest of the codebase.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py#run_mapped"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`READ_EPILOG`'s exit-code descriptions don't cover the \"calendar reachable but refusing\" cases that also exit 4",
+      "description": "The epilog says exit 4 means \"the tick or production (calendar) database is unreachable,\" but two more reachable-database cases also end at 4: (1) the production calendar URL setting is *unset* \u2014 `calendar_url` raises `TickCalendarError`, which `exit_code_for` maps to `EXIT_STORAGE`, not `EXIT_PREFLIGHT`, even though the epilog lists \"a setting\" under exit 1 (that clause only covers the tick URL via `database_url`); (2) `--start`/`--end` (or a wanted range) outside the calendar's populated span raises `OutOfPopulatedRangeError` \u2192 `TickCalendarError` \u2192 4, as designed (\"never guessed\", LLD 225). The operator-facing messages in both cases are clear (they name the variable or say to run `mt data extend`), so this is epilog precision, not behavior. Either widen the exit-4 text (\"unreachable *or refusing*\") or route an unset calendar URL to preflight like the tick URL.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py#READ_EPILOG"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Typer option definitions duplicated between `tick.py` and `tick_store_cmds.py`",
+      "description": "`_DATE_FORMAT`, `_START_OPTION`, `_END_OPTION` and `_JSON_OPTION` are now defined in both `tick.py` (lines ~62\u201379) and `tick_store_cmds.py`. The help texts legitimately differ (\"First UTC day (YYYY-MM-DD)\" vs \"First session date\"), and keeping `tick.py` near its ~290-line limit is a stated goal, but four parallel option objects for the same CLI group will drift (e.g. if the exclusive-end wording is fixed in one and not the other). A small shared options module for the `tick` group, or importing `_JSON_OPTION`/`_DATE_FORMAT` from one place, would remove the duplication at no coupling cost.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:52-62"
+    },
+    {
+      "severity": "PASS",
+      "title": "New verbs are tested alongside their implementation, with behavior-level assertions",
+      "description": "Verified: end-to-end CLI tests seed *real* DBN slices and run the real ingest phase before asserting (test-with, not test-after); `test_coverage_json_is_to_dict_plus_exit_code` recomputes `build_coverage` independently and asserts full dict equality, pinning the `--json` contract slice 230 will reuse; exit codes 0/1/3/4 each have a dedicated test (mismatch via a primary-key row delete, unreachable DB via a closed port with `--product`/window refusals parametrized); the `setup_logging` patch in the CLI fixtures is commented and consistent with the other CLI test files; the unit-tier verb-list test was updated in the same change. The `ingested` fixture in `test_tick_status_build.py` documents the non-obvious calendar facts (session 09-03 spans days 09-02/09-03, degraded day counted twice) that make the bucket assertions meaningful.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "test/integration/data/test_tick_status_cli.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Destructive test statements target only fixture-created throwaway databases",
+      "description": "Both `DELETE FROM tick_trade` statements (here, and in `test_tick_status_cli.py`) run against `migrated_tick_db`/the fixture's own connection \u2014 databases created by `_throwaway_database` in `test/conftest.py`, with `require_usable_test_endpoint()` refusing a production endpoint and `pytest_configure` scrubbing `MT_TIMESCALE_DB_URL`/`MT_TICK_DB_URL` from the environment before collection. The new CLI fixture additionally deletes every `MT_TICK_*`/`DATABENTO*` variable via `monkeypatch` before invoking the app, so the verb under test reads only the fixture-provided settings. The delete-by-primary-key (with the per-chunk-`ctid` comment) correctly applies the production incident's lesson.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "test/integration/data/test_tick_status_build.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "`utc_midnight`/`days_touched` extraction is behavior-preserving",
+      "description": "`utc_midnight` is byte-for-byte the body of the removed `_midnight` in `ingest_plan.py` (`datetime.combine(day, time(), UTC)`), and the `days_touched` extraction keeps the same `close_utc - _LAST_INSTANT` closed-interval semantics; the existing unit tests (`test_close_at_midnight_does_not_touch_the_next_day`, the TD7 horizon test) and the integration `test_tick_session_days.py` still exercise the exact code path, and all callers (`session_days`, `Calendars.frame`, `tick_status_build._scope`, `build_coverage`) were checked for bound validity against `sessions_between`' populated-span refusal.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/session_days.py:33-45"
+    },
+    {
+      "severity": "PASS",
+      "title": "The coverage proof's invariant (ledger vs raw) holds against every write path",
+      "description": "I verified the docstring's claim that raw rows only change \"through supersession (whose ledger is excluded) or by hand\": `ingest_worker.supersede` deletes a superseded ingested unit's rows in the same transaction that marks it superseded, and `COVERAGE_PREDICATE` excludes its ledger rows; `reset` can only touch file-less units (`tick_archive_unit_reopened_check` restricts `reopened_at` to states without a file), so reopening never orphans raw rows; a failed re-ingest rolls back in one transaction. The one `tick_trade` scan in `raw_counts` is correctly bounded by `min(opens)/max(closes)`, assigns rows via non-overlapping session intervals (validated by `SessionIndex`), and `status` itself never scans `tick_trade` as its docstring promises.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`run_mapped`'s process-boundary handler reports mapped failures only to stderr, never to the log",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py#run_mapped",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`READ_EPILOG`'s exit-code descriptions don't cover the \"calendar reachable but refusing\" cases that also exit 4",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py#READ_EPILOG",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Typer option definitions duplicated between `tick.py` and `tick_store_cmds.py`",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:52-62",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "New verbs are tested alongside their implementation, with behavior-level assertions",
+      "location": "test/integration/data/test_tick_status_cli.py",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Destructive test statements target only fixture-created throwaway databases",
+      "location": "test/integration/data/test_tick_status_build.py",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`utc_midnight`/`days_touched` extraction is behavior-preserving",
+      "location": "src/manta_trading/data/tick/session_days.py:33-45",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The coverage proof's invariant (ledger vs raw) holds against every write path",
+      "location": "src/manta_trading/data/tick/status_reads.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:37:23.249853",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 40,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 389876,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1357877,
+  "cached_tokens": 992640,
+  "cache_write_tokens": null,
+  "completion_tokens": 109794,
+  "reasoning_tokens": 105650,
+  "duration_seconds": 699.6069282500539,
+  "cost_usd": 0.37883568,
+  "cost_basis": "alias_pricing"
+}

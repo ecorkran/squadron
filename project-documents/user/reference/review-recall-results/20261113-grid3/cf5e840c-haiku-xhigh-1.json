@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Stale duplicate test file committed",
+      "description": "The diff adds `CoreServiceFactory.test.ts-E`, a 146-line copy of the pre-change `CoreServiceFactory.test.ts`. Its index line matches the old blob (`e6539010`), and it still calls `createContextPipeline(FIXTURE_PROJECT_PATH)` with one argument (lines 29, 35, 59, 99, 119, 141). It looks like a backup left by `sed -i -E` on macOS. Vitest's `*.test.ts` glob does not pick it up, but it is dead code that will show up in every search for the old call signature. Delete it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Adoption failures other than AdoptionError degrade to an error stub",
+      "description": "The comment at line 147 says \"Errors propagate\", but only `AdoptionError` is rethrown (line 123). Any other failure in the adoption step goes to the generic catch at lines 119-125 and comes back as the \"\u26a0\ufe0f Error generating context\" stub. Examples in this step: a malformed `.context-forge.toml` (`readAdoptionState` throws the parser's plain error, pinned by `adoptionState.test.ts:59-63`), or a non-ENOENT read failure in `recognizeCi` (`ciDetection.ts:49-54` rethrows it). `build.ts` prints the stub as the prompt and does not fail. `ContextIntegrator.test.ts:434` pins this behavior. Either wrap the adoption step's errors in `AdoptionError` with `cause`, or correct the comment and the test together so the stated contract matches the behavior.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:146-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Adoption is silently skipped when project.projectPath is absent",
+      "description": "The resolver receives `project.projectPath`, but `ProjectData.projectPath` is optional (`types/project.ts:17`). When it is missing, the condition at line 150 is false, `adoption` is null, and the concept prompt is built for a repository that may be brownfield. No error and no notice are produced. The pipeline already knows its root, since `createContextPipeline(projectPath, ...)` takes it (`CoreServiceFactory.ts:30`, `:51`). The CLI (`build.ts:51`) and the MCP tool guard this case, so only library callers that omit `projectPath` reach it. It is still the silent fallback that the diff's own comment at line 122 warns against. Bind the root inside `createAdoptionResolver` from the pipeline's `projectPath`, or throw when eligibility is met and no path is available.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:149-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Wrap-and-rethrow without the required ERROR log",
+      "description": "`persistInProgress` catches any error from `writeAdoptionState`, rethrows it as `AdoptionError` with `cause`, and logs nothing. The project's exception rule (CLAUDE.md, \"Exception Handling\" (a)) requires ERROR-level logging before a re-raise. Core has no logger, so `console.error`, as used at `ContextIntegrator.ts:124`, is the nearest convention. Add that log before the throw.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:86-97"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Default instruction repeated a fourth time",
+      "description": "The diff adds `project.instruction || 'implementation'` alongside the existing copies at lines 216, 244 and 289. Compute it once in `generateWithTemplateEngine` and pass it on, and define the default in one constant.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:148"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Parity test's CLI half re-implements build.ts instead of running it",
+      "description": "The \"CLI path\" copies the wiring from `build.ts` (override, then `createContextPipeline`, then `generateContextFromProject`). It does not call `build.ts`. The `persist` argument is guarded separately by `build.test.ts:227`, but other changes to the CLI path would not be caught. Say so in the test header, or move the shared step into a helper that both paths call.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/mcp-server/tests/integration/adoptionParity.test.ts:86-87"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Remedy text and state literal repeated",
+      "description": "`DECLINE_REMEDY` repeats the sentence in `adoptionFacts.ts:93` (with backticks). The literal `'in_progress'` appears at lines 88 and 107, while `ADOPTION_STATES` in `ConfigKeys.ts:28` is the single source. Define the remedy once and reference the state constant.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:28"
+    },
+    {
+      "severity": "NOTE",
+      "title": "ContextIntegrator.ts exceeds the file-size guideline",
+      "description": "The file is 397 lines against the ~300-line guideline, and this diff adds about 20 of them. Not blocking, but the next change to this file should extract the adoption wiring.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Comment overstates the import boundary",
+      "description": "The comment says the rule \"keeps services/ and adoption/ from importing each other's internals\". It does not. `adoption/adoptionResolver.ts:13-15` imports `services/` internals, and `CoreServiceFactory.ts:12` imports `adoption/adoptionResolver.js` directly. The review doc (`project-documents/user/reviews/261-review.slice.detection-and-adoption-state.md:101`) accepted the two-way dependency. Narrow the comment to what is enforced: the integrator imports `contracts.ts` only.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:9"
+    },
+    {
+      "severity": "PASS",
+      "title": "Step helpers are awaited correctly and the outcome switches are exhaustive",
+      "description": "I checked the callee signatures. `presentPaths` (`presentPaths.ts:31`) and `recognizeCi` (`ciDetection.ts:73`) are synchronous, and they are called without `await`, which is correct. `readHistory`, `findPlanningArtifacts` and `measureSourceVolume` are async and awaited. `isSelected` and the renderer's `describeOutcome` have `never` default branches, and `NOT_EVALUATED` carries the `not-evaluated` kind.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:36-64"
+    },
+    {
+      "severity": "PASS",
+      "title": "Guide check runs before any state write",
+      "description": "`assertGuideSupportsAdoption` runs before `persistInProgress`, so a guide without the profile or prompt leaves `adoption.state` unset. `adoptionResolver.test.ts` covers this with \"rejects a guide without the profile, before writing\". The remedy `cf build --it` in the persist-failure message matches the flag defined at `build.ts:36`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:126-129"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Stale duplicate test file committed",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Adoption failures other than AdoptionError degrade to an error stub",
+      "location": "packages/core/src/services/ContextIntegrator.ts:146-152",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Adoption is silently skipped when project.projectPath is absent",
+      "location": "packages/core/src/services/ContextIntegrator.ts:149-152",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Wrap-and-rethrow without the required ERROR log",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:86-97",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Default instruction repeated a fourth time",
+      "location": "packages/core/src/services/ContextIntegrator.ts:148",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Parity test's CLI half re-implements build.ts instead of running it",
+      "location": "packages/mcp-server/tests/integration/adoptionParity.test.ts:86-87",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Remedy text and state literal repeated",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:28",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "ContextIntegrator.ts exceeds the file-size guideline",
+      "location": "packages/core/src/services/ContextIntegrator.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Comment overstates the import boundary",
+      "location": "packages/core/src/services/ContextIntegrator.ts:9",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Step helpers are awaited correctly and the outcome switches are exhaustive",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:36-64",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Guide check runs before any state write",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:126-129",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:21:57.878818",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 31,
+  "prompt_tokens": 2057372,
+  "cached_tokens": 1793953,
+  "cache_write_tokens": 263395,
+  "completion_tokens": 72390,
+  "reasoning_tokens": null,
+  "duration_seconds": 306.38008654210716,
+  "cost_usd": 0.47341447000000003,
+  "cost_basis": "provider"
+}

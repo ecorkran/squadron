@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Validate CLI values before using them in the log path",
+      "description": "`slice_id` and `ref` are interpolated directly into a path, and `start_log` writes to that path before the cutover\u2019s error-handling block. Since `_nonempty` rejects only blank values, path separators and traversal components can make the script create directories and write its log outside `NOTES_DIR`. Restrict these arguments to the expected formats or construct the log path from sanitized filename components.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#main"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Validate CLI values before using them in the log path",
+      "location": "scripts/cutover_304_first_purchase.py#main",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:39:59.085637",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 21,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 12043,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 14,
+  "prompt_tokens": 1204650,
+  "cached_tokens": 1103227,
+  "cache_write_tokens": null,
+  "completion_tokens": 17129,
+  "reasoning_tokens": 15837,
+  "duration_seconds": 185.30777620803565,
+  "cost_usd": 0.02973907,
+  "cost_basis": "alias_pricing"
+}

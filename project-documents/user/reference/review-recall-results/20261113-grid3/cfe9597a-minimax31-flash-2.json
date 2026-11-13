@@ -1,0 +1,315 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`cf validate frontmatter` ignores worktree context \u2014 validates the wrong tree",
+      "description": "`resolveProjectWorktree` returns a `worktreeId` when CWD resolves to a registered worktree, but the command destructures only `{ id }` and then validates `project.projectPath`. Every other path-routing CLI command (`plan.ts:40`, `slice.ts:36`, `task.ts:50`, `prompt.ts:52`, `arch.ts:53`) resolves the operation path via `resolveOperationPath(project, worktreeId)`. The result: run from inside a registered worktree, `cf validate frontmatter` walks the *main* repo's documents, reports \"No inconsistencies found\", and exits 0 \u2014 even when the worktree's own documents are broken. This is the exact silent-pass failure mode a pre-commit gate must not have, and it contradicts the slice's own success criteria (\"checks all methodology documents\"). Fix: use `resolveOperationPath(project, worktreeId) ?? project.projectPath` and pass that to `validateFrontmatterFiles`; the `--fix` path writes via `finding.filePath`, so it is equally mis-targeted today.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:91-97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplicate `SEVERITY_ICON` map \u2014 comparison value scattered across files",
+      "description": "`validate.ts` defines its own `SEVERITY_ICON` with `error`/`warning` only, while `check.ts:22-26` defines an identical map that also includes `info`. CLAUDE.md is explicit: *\"Never scatter comparison values across code. If a value is used in conditionals, switch cases, or lookups, define it once\u2026 Changing a value should require editing exactly one place.\"* The two maps have already drifted (`info` is missing here). Extract the icon map \u2014 and ideally the severity\u2192style function, which is also duplicated \u2014 into `packages/cli/src/output/styles.ts` and import it in both commands.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:13-16"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`severity` is typed as a bare `string` in the icon lookup, losing exhaustiveness",
+      "description": "`const SEVERITY_ICON: Record<string, string>` widens the key type to `string`, so `SEVERITY_ICON[finding.severity]` is unchecked and the `?? '?'` fallback silently swallows a new severity. `FrontmatterFinding.severity` is a proper union (`'warning' | 'error'`) \u2014 use `Record<FrontmatterFinding['severity'], string>` so adding a severity is a compile-time obligation in both `validate.ts` and `check.ts`, and the `?? '?'` becomes unnecessary.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:13"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fix-mode \"Fixed:\" lines are matched by field name only, so a second finding in the same file can be mislabeled as fixed",
+      "description": "The lookup is `fixLog.find((e) => e.filePath === filePath && e.field === finding.fixAction?.field)`. If a file has two findings on the same field (e.g. a missing `status` *and* an invalid `status` value \u2014 both plausible from `validateFrontmatter`), the first fix-log entry matches *both* findings, and the second finding prints a \"\u2192 Fixed: \u2026 \u2192 \u2026\" line for a change it did not receive. `check.ts` avoids this by matching on `rule` *and* file. Since a fix may be applied to the same file twice (once per finding), the match should include the finding's identity/description, or the fix log should be keyed per finding.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`printHumanOutput` is O(findings \u00d7 fixLog) and can grow unbounded",
+      "description": "`fixLog.find(...)` scans the whole fix log for every finding. With a full-project walk (257+ files per the slice's own walkthrough) this is quadratic in the worst case. Build a `Map` keyed by `filePath|field` once before the loop \u2014 same result, linear. Minor at current scale, but this is a command explicitly designed to run as a pre-commit gate over a whole repo.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new core test for the docType `values` constraint asserts nothing",
+      "description": "The test titled *\"a wrong docType literal is still caught by the value-constraint logic\"* asserts `toHaveLength(0)` in all three cases, including the `not-a-real-doctype` case whose comment claims it proves \"the docType `values` constraint, not just key lookup, is what ties a document to its schema.\" In fact `validateFrontmatter` skips the `docType` value check entirely (`if (field === 'docType') continue;` in the required-field loop, and the values loop's `docType` entry is never reached because the required-field loop `continue`s but the *values* loop does check `docType` \u2014 however the lookup `FRONTMATTER_SCHEMAS[data.docType]` already selected the schema by that same literal, so `values: ['devlog']` can never mismatch). The test's own comments contradict its assertions: it asserts that three *different* docTypes all produce zero findings, so it cannot distinguish \"constraint enforced\" from \"constraint never exercised.\" Either the constraint is genuinely unreachable (in which case the `values: [...]` entries on these three schemas are dead weight and the comment overstates the guarantee), or the test needs a case that actually exercises a mismatch. As written, the test name promises a behavior it does not verify.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:366-395"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test file for the new command does not assert the exit-2 path for a missing `projectPath`",
+      "description": "The slice's success criteria require exit code 2 for \"unresolvable project, missing `projectPath`\". The test suite covers only the unresolvable-project case. The `projectPath`-missing branch (`validate.ts:96-98`) is untested \u2014 it is a distinct `UserError` with a distinct remediation message, and it is reachable by any project registered without a `projectPath`. Add a case where `getById` returns a project with `projectPath: undefined` and assert exit 2.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate.test.ts:90-99"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`handleError`'s exit-code parameter is now used for two different failure classes",
+      "description": "`handleError(err, 2)` is used for \"invocation error\", but the same code path also catches *unexpected* runtime errors (e.g. an `EACCES` from `readdir` inside `discoverAllDocuments`) and reports them as exit 2 \u2014 which the JSON contract documents as \"invocation error\". A crashed run is therefore indistinguishable from a bad `--project` flag for a scripted consumer. The slice's own contract is `2` = invocation error; consider distinguishing the two, or at minimum narrowing the `try` so only resolution/setup errors map to 2 and unexpected failures map to 1. Note also that `UserError` construction in `validate.ts` omits the `code` and `suggestion` fields that `resolveProjectWorktree` uses for the same condition (`PROJECT_NOT_FOUND`), so the JSON error shape is less informative here than elsewhere.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/errors.ts:47"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`devlog` is registered as a frontmatter docType but the repo's `DEVLOG.md` uses `docType: changelog`",
+      "description": "The repo's own `DEVLOG.md` (root) carries `docType: changelog` and `scope: project-wide`, so it does not match the newly-registered `devlog` schema and would fall through as an unknown docType if it were ever scanned. `DEVLOG.md` sits at the repo root, outside `project-documents/user/`, so the default walk never reaches it \u2014 but the new schema name may not correspond to what the squadron consumer actually writes. Worth confirming the intended literal before this is published, since the schema is now the public contract for three consumers.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/core/src/schema/frontmatterSchema.ts:136-141"
+    },
+    {
+      "severity": "PASS",
+      "title": "Schema registration for the three machine-artifact docTypes is correct and well-documented",
+      "description": "The three new schemas require only `docType` and `dateCreated`, omitting `status`, `project`, and `dateUpdated`. The inline comment correctly explains *why* `dateUpdated` is not required \u2014 a single-file validator has no evidence of post-creation edits, and requiring it would make the existing `dateCreated`\u2192`dateUpdated` backfill manufacture a false claim \u2014 and explicitly warns future maintainers not to \"fix\" it. The `values` constraint on `docType` is correctly pinned to a single literal. The schema change does not weaken any canonical docType: `EXPECTED_DOC_TYPES` still enforces `docType`/`status`/`dateCreated`/`dateUpdated` on all eight canonical types, and the test was correctly narrowed from \"every schema\" to \"every canonical docType\" rather than the invariant being quietly dropped.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/schema/frontmatterSchema.ts:118-141"
+    },
+    {
+      "severity": "PASS",
+      "title": "`updateFrontmatterField`'s `dateUpdated` stamp has a correct guard and a deterministic caller-supplied clock",
+      "description": "The stamp uses the same replace-or-insert mechanics as the primary key, so it works whether `dateUpdated` is present or absent. The `key !== 'dateUpdated'` guard correctly protects the `dateCreated`\u2192`dateUpdated` backfill from being immediately overwritten with today's date \u2014 the subtle failure mode the slice explicitly calls out. Taking the date as a required parameter keeps the writer clock-free and deterministic, and `ConsistencyChecker.applyFixes` computes one stamp per run so a multi-fix run dates every touched document identically. The `FixLogEntry` correctly continues to record only the primary field's before/after.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/writers/markdownWriter.ts:110-142"
+    },
+    {
+      "severity": "PASS",
+      "title": "`handleError`'s new optional exit-code parameter is backward compatible",
+      "description": "`handleError(err, exitCode = 1)` keeps every existing call site unchanged \u2014 all ~15 other callers pass only the error and still exit 1. The JSON-mode error structure, plain-text formatting, and `UserError` suggestion handling are untouched. The existing `errors.test.ts` suite remains valid.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/errors.ts:47"
+    },
+    {
+      "severity": "PASS",
+      "title": "The CLI test suite covers the exit-code contract and the JSON shape",
+      "description": "The tests cover all three exit codes (0 clean, 1 findings, 1 fix-failure, 1 unfixable, 2 unresolvable project), the JSON shape in both report and fix mode (`filesChecked`, `totalFindings`, `errors`, `warnings`, `findings[]`, `fixed`, `fixLog`, `fixErrors`), the path-forwarding contract (explicit paths unchanged, `undefined` when none given), and the `dateUpdated` stamp via the fourth argument to `updateFrontmatterField`. The `@context-forge/core/node` module is mocked at the boundary, so the real writer is not exercised \u2014 but that is appropriate, since the writer has its own suite. The `process.exitCode` assertions (rather than `process.exit`) are the right choice for a command that sets an exit code instead of throwing.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate.test.ts"
+    },
+    {
+      "severity": "PASS",
+      "title": "`validateFrontmatterFiles` handles the staged-file-list case correctly",
+      "description": "`resolveExplicitPaths` filters to `.md` files that resolve inside `project-documents/user/` and actually exist, silently skipping everything else. The containment check is against the document *root*, not the scan-dir list, so an explicitly named file under e.g. `user/notes/` is validated even though the default walk would not visit it \u2014 a deliberate and correct distinction. The core test suite exercises this against a real temp-dir tree with out-of-root, non-`.md`, and nonexistent paths, satisfying the project's parsing rule that test fixtures must include the actual formats the parser consumes. Files whose frontmatter is absent are skipped and not counted in `filesChecked`, keeping strict parity with `cf check` Rule 12.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/schema/frontmatterFileValidator.ts:47-68"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`cf validate frontmatter` ignores worktree context \u2014 validates the wrong tree",
+      "location": "packages/cli/src/commands/validate.ts:91-97",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Duplicate `SEVERITY_ICON` map \u2014 comparison value scattered across files",
+      "location": "packages/cli/src/commands/validate.ts:13-16",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`severity` is typed as a bare `string` in the icon lookup, losing exhaustiveness",
+      "location": "packages/cli/src/commands/validate.ts:13",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fix-mode \"Fixed:\" lines are matched by field name only, so a second finding in the same file can be mislabeled as fixed",
+      "location": "packages/cli/src/commands/validate.ts:65",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`printHumanOutput` is O(findings \u00d7 fixLog) and can grow unbounded",
+      "location": "packages/cli/src/commands/validate.ts:65",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The new core test for the docType `values` constraint asserts nothing",
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:366-395",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test file for the new command does not assert the exit-2 path for a missing `projectPath`",
+      "location": "packages/cli/tests/commands/validate.test.ts:90-99",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`handleError`'s exit-code parameter is now used for two different failure classes",
+      "location": "packages/cli/src/utils/errors.ts:47",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`devlog` is registered as a frontmatter docType but the repo's `DEVLOG.md` uses `docType: changelog`",
+      "location": "packages/core/src/schema/frontmatterSchema.ts:136-141",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Schema registration for the three machine-artifact docTypes is correct and well-documented",
+      "location": "packages/core/src/schema/frontmatterSchema.ts:118-141",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`updateFrontmatterField`'s `dateUpdated` stamp has a correct guard and a deterministic caller-supplied clock",
+      "location": "packages/core/src/introspection/writers/markdownWriter.ts:110-142",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`handleError`'s new optional exit-code parameter is backward compatible",
+      "location": "packages/cli/src/utils/errors.ts:47",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The CLI test suite covers the exit-code contract and the JSON shape",
+      "location": "packages/cli/tests/commands/validate.test.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`validateFrontmatterFiles` handles the staged-file-list case correctly",
+      "location": "packages/core/src/schema/frontmatterFileValidator.ts:47-68",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:57:51.578398",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 42,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 191397,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 876494,
+  "cached_tokens": 747776,
+  "cache_write_tokens": null,
+  "completion_tokens": 48871,
+  "reasoning_tokens": 44583,
+  "duration_seconds": 323.2014419171028,
+  "cost_usd": 0.029549581999999998,
+  "cost_basis": "alias_pricing"
+}

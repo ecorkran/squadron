@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Symlinks can bypass the document-root check and allow out-of-root fixes",
+      "description": "The containment check is lexical: it resolves the supplied path and checks whether that path is beneath the document root, but it does not resolve symlinks. A `.md` symlink inside the root that targets a file outside it therefore passes validation; with `cf validate frontmatter --fix`, the writer follows the symlink and can modify the external target. The default directory scan can also include symlinked files. Resolve and verify the canonical target before reading or writing, or reject symlinks.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/core/src/schema/frontmatterFileValidator.ts:59-62"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Symlinks can bypass the document-root check and allow out-of-root fixes",
+      "location": "packages/core/src/schema/frontmatterFileValidator.ts:59-62",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:20:13.426337",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 18090,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 371688,
+  "cached_tokens": 311620,
+  "cache_write_tokens": null,
+  "completion_tokens": 13242,
+  "reasoning_tokens": 11780,
+  "duration_seconds": 165.78432183293626,
+  "cost_usd": 0.015744,
+  "cost_basis": "alias_pricing"
+}

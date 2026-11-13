@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Coverage raw counts are not scoped to the product shape",
+      "description": "`raw_counts()` counts every `tick_trade` row in the supplied session intervals (`src/manta_trading/data/tick/status_reads.py:167-172`) without joining `unit_id` back to `tick_archive_unit`/`tick_request` or applying the shape predicate. `build_coverage()` filters the ledger by `shape_of(entry)` (`src/manta_trading/data/tick/tick_coverage.py:107-109`) and then compares it to that unfiltered raw scan (`src/manta_trading/data/tick/tick_coverage.py:113`). Because `Shape` is explicitly documented as \u201ca product's request shape\u201d (`src/manta_trading/data/tick/status_reads.py:30-44`) and `build_status()` is built for a sequence of universe entries (`src/manta_trading/data/tick/tick_status_build.py:232-247`), a second product with overlapping sessions will produce false raw-count mismatches. The current one-product universe hides this, so the new integration tests cannot catch it. Scope the raw rows by dataset/symbols/stype-in/stored-tier shape while still detecting superseded or out-of-band rows, and add a multi-product regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:154-174"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Calendar outage errors are not normalized to the documented exit 4",
+      "description": "`calendar_sessions()` constructs `TradingCalendar` at `src/manta_trading/data/tick/tick_status_build.py:67` outside the `try`, then catches only `psycopg.OperationalError`, `CalendarNotFoundError`, and `OutOfPopulatedRangeError` at lines 70-73. `TradingCalendar.__init__` uses `ConnectionPool(..., open=True)` (`src/manta_trading/data/base/trading_calendar.py#TradingCalendar.__init__`), and this project already treats `psycopg_pool.PoolTimeout` as a distinct pool failure (`src/manta_trading/cli/commands/data.py:406-416`; `test/integration/data/test_tick_ingest_plan.py:112-119`). A pool/constructor failure can therefore escape as `PoolTimeout`; `run_mapped()` maps only `TickDatabaseUnreachable` via its `storage` tuple and otherwise calls `exit_code_for()` (`src/manta_trading/cli/commands/tick_store_cmds.py:74-81`), which maps `TickCalendarError` and `psycopg.OperationalError` but not `PoolTimeout` (`src/manta_trading/cli/commands/tick_exit.py:38-58`). That contradicts `READ_EPILOG`\u2019s promise of exit 4 for calendar unreachability (`src/manta_trading/cli/commands/tick_store_cmds.py:36-41`), and `test/integration/data/test_tick_status_cli.py:147-153` covers only an unreachable tick database. Wrap constructor/pool failures in the same calendar error boundary, include `PoolTimeout`, and add an unreachable-calendar CLI test.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:63-75"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New database read paths lack the required load-tier coverage",
+      "description": "The changed commands add a network/DB read path that opens a calendar pool and can execute a large `count(*) FROM tick_trade` (`src/manta_trading/data/tick/status_reads.py:154-174`; `src/manta_trading/data/tick/tick_coverage.py:93-114`). The Python rules require a load test for simulation, network, concurrency, or environment-layer paths, asserting latency, throughput, or resource bounds. The slice-225 load tier still contains only `test/load/test_225_tick_ingest_nfr.py`, whose header at lines 1-20 measures ingest time and event-loop gaps; no load test exercises `status`/`coverage` query latency, large session arrays, raw-row volume, or calendar-pool behavior. Add a gated load test with a realistic multi-session/row volume and a latency or resource bound for these read commands.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Coverage can issue an unbounded `tick_trade` scan without a server statement timeout",
+      "description": "`tick_coverage` validates only that `--end` is after `--start` (`src/manta_trading/cli/commands/tick_store_cmds.py:216-221`), then `build_coverage()` derives all sessions in that arbitrary range and calls `raw_counts()` over `[min(open_ns), max(close_ns)]` (`src/manta_trading/data/tick/tick_coverage.py:93-114`; `src/manta_trading/data/tick/status_reads.py:165-172`). `_read()` opens the connection through `connect_migrated()` and closes it but never sets `statement_timeout` (`src/manta_trading/cli/commands/tick_store_cmds.py:156-167`); `store_context.py#_connect` sets only `connect_timeout`. SQL rules require `statement_timeout` for long-running queries, and this coverage query can hold a backend for an unbounded range. Add a bounded server-side statement timeout with cancellation semantics, cap the date range/session count, and include EXPLAIN/latency evidence for the chosen bound.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:156-167"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Coverage raw counts are not scoped to the product shape",
+      "location": "src/manta_trading/data/tick/status_reads.py:154-174",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Calendar outage errors are not normalized to the documented exit 4",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:63-75",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New database read paths lack the required load-tier coverage",
+      "location": "test/load",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Coverage can issue an unbounded `tick_trade` scan without a server statement timeout",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:156-167",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:39:34.196308",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 329566,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2038199,
+  "cached_tokens": 1775360,
+  "cache_write_tokens": null,
+  "completion_tokens": 85946,
+  "reasoning_tokens": 83530,
+  "duration_seconds": 877.5668187919073,
+  "cost_usd": 0.254318923,
+  "cost_basis": "alias_pricing"
+}

@@ -64,15 +64,25 @@ def changed_files(repo: str, base: str, head: str) -> str:
     return out.stdout.strip()
 
 
-async def comb_one(alias: str, case: str, reviewer: str, run: str, sem: asyncio.Semaphore) -> None:
+async def comb_one(
+    alias: str, case: str, reviewer: str, run: str, sem: asyncio.Semaphore, prefilter: str | None
+) -> None:
     from squadron.models.aliases import model_effort, resolve_model_alias
     from squadron.review.review_client import run_review_with_profile
     from squadron.review.templates import load_template
 
-    target = HERE / "out" / alias / f"{case}-{reviewer}-{run}.json"
+    label = f"{prefilter}+{alias}" if prefilter else alias
+    target = HERE / "out" / label / f"{case}-{reviewer}-{run}.json"
     findings = review_findings(case, reviewer, run)
     if target.exists() or not findings:
         return
+    screened_out: list[str] = []
+    if prefilter:
+        # Two-stage comb: this comb sees only what the first comb kept; the rest count as DROP.
+        first = json.loads((HERE / "out" / prefilter / target.name).read_text())
+        kept = {first["refs"][fid] for fid, (decision, _) in first["decisions"].items() if decision == "KEEP"}
+        screened_out = [x["ref"] for x in findings if x["ref"] not in kept]
+        findings = [x for x in findings if x["ref"] in kept]
     repo, base, head = load_cases()[case]
     worktree = Path(os.environ["COMB_WT"]) / case
     if not worktree.is_dir():
@@ -85,37 +95,46 @@ async def comb_one(alias: str, case: str, reviewer: str, run: str, sem: asyncio.
         "changed_files": changed_files(repo, base, head),
         "cwd": str(worktree),
     }
-    async with sem:
-        started = time.monotonic()
-        result = await run_review_with_profile(
-            load_template(HERE / "comb.yaml"), inputs,
-            profile=profile, model=model, effort=model_effort(alias), alias=alias,
-        )
-    decisions = {}
-    for line in result.raw_output.splitlines():
-        if (m := DECISION.search(line)) and m.group(1).upper() not in decisions:
-            decisions[m.group(1).upper()] = (m.group(2).upper(), m.group(3).strip())
+    decisions: dict[str, tuple[str, str]] = {}
+    refs = {f"F{n}": x["ref"] for n, x in enumerate(findings, 1)}
+    started = time.monotonic()
+    result = None
+    if findings:
+        async with sem:
+            started = time.monotonic()
+            result = await run_review_with_profile(
+                load_template(HERE / "comb.yaml"), inputs,
+                profile=profile, model=model, effort=model_effort(alias), alias=alias,
+            )
+        for line in result.raw_output.splitlines():
+            if (m := DECISION.search(line)) and m.group(1).upper() not in decisions:
+                decisions[m.group(1).upper()] = (m.group(2).upper(), m.group(3).strip())
+    for n, ref in enumerate(screened_out, 1):
+        refs[f"P{n}"] = ref
+        decisions[f"P{n}"] = ("DROP", f"dropped by {prefilter}")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps({
-        "case": case, "reviewer": reviewer, "run": run, "comb": alias,
-        "refs": {f"F{n}": x["ref"] for n, x in enumerate(findings, 1)},
+        "case": case, "reviewer": reviewer, "run": run, "comb": label,
+        "refs": refs,
         "decisions": decisions,
         "wall_seconds": round(time.monotonic() - started, 1),
-        "duration_seconds": result.duration_seconds,
-        "cost_usd": result.cost_usd,
-        "effort": str(result.effort) if result.effort else None,
-        "tool_calls_made": result.tool_calls_made,
-        "recovery_turn_used": result.recovery_turn_used,
-        "usage": str(result.usage),
-        "raw_output": result.raw_output,
+        "duration_seconds": result.duration_seconds if result else 0,
+        "cost_usd": result.cost_usd if result else 0,
+        "effort": str(result.effort) if result and result.effort else None,
+        "tool_calls_made": result.tool_calls_made if result else 0,
+        "recovery_turn_used": result.recovery_turn_used if result else False,
+        "usage": str(result.usage) if result else None,
+        "raw_output": result.raw_output if result else "",
     }, indent=1))
     print(f"{alias} {case} {reviewer} {run}: {len(decisions)}/{len(findings)} decided", flush=True)
 
 
-async def run_all(alias: str, runs: list[str], jobs: int, only_case: str | None) -> None:
+async def run_all(
+    alias: str, runs: list[str], jobs: int, only_case: str | None, prefilter: str | None
+) -> None:
     sem = asyncio.Semaphore(jobs)
     tasks = [
-        comb_one(alias, case, reviewer, run, sem)
+        comb_one(alias, case, reviewer, run, sem, prefilter)
         for case in load_cases() if only_case in (None, case)
         for reviewer in REVIEWERS for run in runs
     ]
@@ -192,13 +211,14 @@ def main() -> None:
     run.add_argument("--runs", default="1")
     run.add_argument("--jobs", type=int, default=3)
     run.add_argument("--case")
+    run.add_argument("--after", help="two-stage: comb only what this earlier comb kept")
     sub.add_parser("score")
     args = parser.parse_args()
     if args.cmd == "score":
         score()
         quality()
         return
-    asyncio.run(run_all(args.alias, args.runs.split(","), args.jobs, args.case))
+    asyncio.run(run_all(args.alias, args.runs.split(","), args.jobs, args.case, args.after))
 
 
 if __name__ == "__main__":

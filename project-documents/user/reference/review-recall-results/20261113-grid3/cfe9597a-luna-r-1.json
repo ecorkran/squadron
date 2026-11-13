@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Validation can report success after silently skipping unreadable directories",
+      "description": "The new command treats the result of `validateFrontmatterFiles` as a complete scan, but `discoverAllDocuments` in `packages/core/src/schema/frontmatterFileValidator.ts` catches every `readdir` error and skips that directory. If a scan directory exists but cannot be read, its documents are omitted and the command can report \u201cNo inconsistencies found\u201d with exit code 0. Limit the skip behavior to expected missing-directory errors and surface other scan failures so validation cannot give a false clean result.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:98"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Validation can report success after silently skipping unreadable directories",
+      "location": "packages/cli/src/commands/validate.ts:98",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:17:33.936290",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 19,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 7402,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 150013,
+  "cached_tokens": 119005,
+  "cache_write_tokens": null,
+  "completion_tokens": 5728,
+  "reasoning_tokens": 5027,
+  "duration_seconds": 79.47130212490447,
+  "cost_usd": 0.007154850000000001,
+  "cost_basis": "alias_pricing"
+}

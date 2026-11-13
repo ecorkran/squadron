@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The shared CLI harness now puts a working `sq` stub on PATH for every CLI test",
+      "description": "`cli_environment` unconditionally prepends a stub `sq` to `PATH` for every `run_cli`/`start_background` call. That stub is not a version-only stub: `tests/sq_stub.py` implements `sq runs prune` (deleting `<id>.json` from the runs directory and exiting 0 when the files exist), `sq runs wait` and `sq run`. Before this change, `sq` was whatever the developer's shell had (usually absent), so CLI tests that exercise `sq`-dependent commands saw \"sq missing\" unless they supplied their own `PATH`. Now the stub shadows it for all of them, so a command like `amoeba prune sq-runs --yes` will actually delete candidate files and exit 0 rather than reporting `PRUNE_INCOMPLETE` for a missing executable.\n\nI did not read `tests/cli/` in this session, so I cannot say whether those tests already override `PATH` (in which case this is harmless) or whether their assertions now mean something different (in which case the suite is green for the wrong reason). Either way, a harness that changes the meaning of every existing CLI test is a shared-fixture change that deserves an explicit check rather than an implicit one. The safer shape is for the stub to be added by the tests that need it, or for `cli_environment` to take the stub directory as an argument.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/cli_harness.py#cli_environment"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two mechanisms confirm a launch, and the tracker's is dead code that raises `KeyError`",
+      "description": "`LaunchTracker.confirm(entry_id)` sets `self._launches[entry_id].confirmed = True`, which raises `KeyError` for an entry id the tracker never saw. Nothing in `src/amoeba/runner/` calls it: `RunObserver._confirm` (`src/amoeba/runner/observe.py`) mutates the `TrackedLaunch` it already holds (`tracked.confirmed = True`) and never goes through the tracker. Only tests call `LaunchTracker.confirm`.\n\nTwo ways to do the same thing, one of which is unreachable from production and fails with an opaque `KeyError` \u2014 the \"one value, one source\" and DRY rules both point at deleting `LaunchTracker.confirm` and keeping a single path (either the observer mutates the handle directly, or the observer asks the tracker to confirm and the tracker raises a named error). Whichever survives should be the only way, so a future caller cannot pick the one that crashes.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/launch.py#LaunchTracker.confirm"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A journal entry without a run id makes the fault handler raise `KeyError`",
+      "description": "`_in_flight_run_ids` does `str(entry.parameters[PARAM_RUN_ID])` for every unresolved `SQ_RUN` entry of the node. `PARAM_RUN_ID` is a *required* key for new `SQ_RUN` entries (`REQUIRED_PARAMETER_KEYS` in `src/amoeba/store/journal_models.py`), but entries journaled before slice 120 carry no run id \u2014 that is exactly why `SquadronRunObserver` routes on `PARAM_RUN_ID in entry.parameters` (`src/amoeba/process/observers/sq_run_id.py`).\n\nThis runs inside `escalate()`, which is called from the tenant's process-boundary handler (`src/amoeba/runner/tenant.py`, the `except Exception` branch). A `KeyError` raised there escapes the handler that was supposed to isolate the fault, so a legacy entry turns a per-project fault into a process crash. `entry.parameters.get(PARAM_RUN_ID)` with a `isinstance` check (the pattern used in `src/amoeba/runner/observe.py` and `src/amoeba/runner/finish.py`) keeps the same behaviour for well-formed entries and does not raise for the rest.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py#_in_flight_run_ids"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`escalate` can raise a state error inside the handler meant to contain failures",
+      "description": "`escalate` calls `store.block(...)`, which raises `InvalidTransitionError` if the node's status is one of `BLOCKED_STATUSES` (`src/amoeba/store/_block_writer.py`, `_refuse_if_blocked`). The guard is `store.blocked_state_for(node.id) is None`, which reads the open blocked state rather than the node's status, so the two can disagree in an integrity problem or under a race. Because the call is made from the tenant's `except Exception` branch, such an error propagates out of the tenant tick and out of `ResidentProcess.run` rather than being isolated to the project. The window is narrow (the status/blocked-state pair is written in one transaction by the store), so this is a robustness note rather than a live bug \u2014 but the comment \"a failing escalation write means a broken store\" only covers store failures, not state errors.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py#escalate"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A launch's parameters are validated twice, and one failure mode lands after the entry is journaled",
+      "description": "`_launch` calls `build_argv(action.pipeline, run_id, action.params)` purely for its `ValueError` and discards the result \u2014 `launch()` then rebuilds the same argv from the journal entry. The discarded call is not dead: it is what makes a bad parameter fail *before* the entry is journaled, as the comment says. But the validation is partial. `build_argv` does not reject an empty pipeline, while `launch()`'s `_text_parameter` does (`src/amoeba/runner/launch.py`), so an empty pipeline journals an entry and then raises `ValueError` from `launch()`, leaving an unresolved entry that no launch will ever satisfy (recovery later closes it as `not_applied`). Extending `build_argv` to reject an empty pipeline closes the gap in one place and keeps the \"validate before journaling\" promise true.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py#_launch"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A node stays `RUNNABLE` after a successful run, so any planner will offer it again",
+      "description": "`finish.record` blocks the node for `FAILED`, `PAUSED`, `ORPHANED` and launch failures, but a `COMPLETED` run leaves the node in `RUNNABLE` status. `ProjectTick._decide` excludes only nodes with an unresolved journal entry, so once the entry is resolved the node is offered to the planners again. With `PRODUCTION_PLANNERS` empty this cannot happen yet, and `finish.py`'s docstring says routing and checkpoint handling arrive with 125/126 \u2014 but the deduplication currently lives entirely in the *test* planners (`OncePerNode` in `tests/runner/test_end_to_end.py`, `ProofPlanner` in `tests/runner/crash_entry.py`), not in the Runner. Worth making explicit in the slice design that 125/126 must move \"a node whose run completed is not offered again\" into the Runner, or the first real planner will double-launch.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/finish.py#record"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`ProjectView.link_probes` uses a missing key to mean \"not probed\"",
+      "description": "`LinkProbes.results` (`src/amoeba/runner/probes.py`) returns only the links that have been probed, so a planner reading `view.link_probes[\"cf-1\"]` gets a `KeyError` for an unprobed link and `view.link_probes.get(\"cf-1\")` gets `None` for a type that promises `bool`. `Mapping[str, bool]` with an implicit third state is a trap at a trust boundary; `Mapping[str, bool | None]` (or including every known link with `False`/`None` for \"not probed\") states the contract in the type.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/amoeba/runner/decide.py#ProjectView"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`amoeba.runner.tick` imports its sibling through the package, creating an import cycle",
+      "description": "`from amoeba.runner import finish` resolves the `amoeba.runner` package, which is mid-initialisation when `__init__` imports `factory` \u2192 `tenant` \u2192 `tick`. It works today only because CPython's `_handle_fromlist` falls back to importing `amoeba.runner.finish` as a submodule when the attribute is not yet bound. `from amoeba.runner.finish import record` removes the reliance on that fallback and makes the dependency explicit.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py:26"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`validate_settings` re-lists field names as strings and covers only three of the bounds",
+      "description": "The bound names are spelled as a tuple of strings and read with `getattr(settings, name)`, so a renamed field becomes a runtime `AttributeError` rather than a type error. `launch_grace_seconds` and `sq_timeout_seconds` are not checked for positivity even though the other three are, and the values are read in three separate places in the file (`validate_settings`, `partial(poll_run, ...)`, `LinkProbes`). Naming the fields once \u2014 or iterating over the dataclass fields with a predicate \u2014 keeps the \"one definition site\" rule.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/amoeba/runner/factory.py#validate_settings"
+    },
+    {
+      "severity": "PASS",
+      "title": "The journal-before-the-side-effect ordering is enforced and asserted",
+      "description": "`_launch` journals the entry (`store.journal_issue`) before `launch()` starts the child, and `tests/runner/test_tick.py::test_the_entry_is_journaled_before_the_launch_call` asserts it directly by counting unresolved entries at the moment `Popen` is called (`rig.popen.open_entries_at_call == [1]`). The crash proof (`tests/runner/test_crash_recovery.py`) then exercises the four failure windows around that ordering with real `SIGKILL`s and predicates rather than sleeps.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py#_launch"
+    },
+    {
+      "severity": "PASS",
+      "title": "The tick budget is checked before every subprocess call site, and the check is mechanical",
+      "description": "`allows_call` is consulted before the poll (`observe._confirmed`, `observe._unconfirmed`), before each `cf` probe command (`probes.probe_link`), and before `Popen` (`tick._act`). `tests/runner/test_budget_coverage.py` wraps all three call kinds so that a call starting after the deadline fails the test, which is the property the project wants enforced rather than asserted in prose.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/amoeba/runner/budget.py#TickBudget.allows_call"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The shared CLI harness now puts a working `sq` stub on PATH for every CLI test",
+      "location": "tests/cli_harness.py#cli_environment",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Two mechanisms confirm a launch, and the tracker's is dead code that raises `KeyError`",
+      "location": "src/amoeba/runner/launch.py#LaunchTracker.confirm",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A journal entry without a run id makes the fault handler raise `KeyError`",
+      "location": "src/amoeba/runner/faults.py#_in_flight_run_ids",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`escalate` can raise a state error inside the handler meant to contain failures",
+      "location": "src/amoeba/runner/faults.py#escalate",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A launch's parameters are validated twice, and one failure mode lands after the entry is journaled",
+      "location": "src/amoeba/runner/tick.py#_launch",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "A node stays `RUNNABLE` after a successful run, so any planner will offer it again",
+      "location": "src/amoeba/runner/finish.py#record",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`ProjectView.link_probes` uses a missing key to mean \"not probed\"",
+      "location": "src/amoeba/runner/decide.py#ProjectView",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`amoeba.runner.tick` imports its sibling through the package, creating an import cycle",
+      "location": "src/amoeba/runner/tick.py:26",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`validate_settings` re-lists field names as strings and covers only three of the bounds",
+      "location": "src/amoeba/runner/factory.py#validate_settings",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The journal-before-the-side-effect ordering is enforced and asserted",
+      "location": "src/amoeba/runner/tick.py#_launch",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The tick budget is checked before every subprocess call site, and the check is mechanical",
+      "location": "src/amoeba/runner/budget.py#TickBudget.allows_call",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:13:52.605190",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 344154,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1684987,
+  "cached_tokens": 1423488,
+  "cache_write_tokens": null,
+  "completion_tokens": 89475,
+  "reasoning_tokens": 85593,
+  "duration_seconds": 578.6926032921765,
+  "cost_usd": 0.056419341,
+  "cost_basis": "alias_pricing"
+}

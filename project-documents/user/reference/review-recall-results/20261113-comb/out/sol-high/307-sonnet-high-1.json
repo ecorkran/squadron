@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The duplicated validation works correctly; extracting a helper is refactoring, not a behavioral fix."
+  ],
+  "F2": [
+   "DROP",
+   "The project config uses mypy without strict generic checks, and these annotations cause no runtime defect."
+  ]
+ },
+ "wall_seconds": 24.8,
+ "duration_seconds": 24.842345249839127,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=92271, cached=80512, cache_write=None, completion=124, reasoning=21)",
+ "raw_output": "F1: DROP \u2014 The duplicated validation works correctly; extracting a helper is refactoring, not a behavioral fix.\nF2: DROP \u2014 The project config uses mypy without strict generic checks, and these annotations cause no runtime defect.\nF1: DROP \u2014 Both checks behave correctly; deduplication is refactoring, not a defect fix.\nF2: DROP \u2014 The repository config uses mypy without strict generic checks, and these annotations cause no runtime defect."
+}

@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Bound background-agent stop requests",
+      "description": "After the idle timeout, agents are stopped sequentially with unbounded `await self.client.stop_task(task_id)` calls. The exception handler only logs after a call returns or raises; it cannot prevent a stalled stop request from delaying dispatch completion. With multiple agents, the delay can accumulate. Bound each stop request or otherwise ensure cleanup cannot indefinitely hold the dispatch.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#_stop_background"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reject invalid background idle-timeout values",
+      "description": "The new timeout setting accepts any integer, including negatives, and `get_typed_config(..., int)` also accepts TOML booleans because `bool` is a subclass of `int`. These values reach `asyncio.timeout` directly and can make a dispatch stop tracked agents immediately instead of waiting for a valid silence interval. Validate that the setting is a non-boolean, non-negative timeout (or explicitly document and handle any special values).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/config/keys.py:118-126"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Add a load test for background dispatch waiting",
+      "description": "This change adds asynchronous stream handling, background-task waiting, idle timeouts, and stop requests, but the added session tests use scripted clients and short unit-test timeouts. The project\u2019s testing rules require a realistic load test for network/concurrency paths that asserts latency, throughput, or resource bounds; there is no corresponding SDK-session test under `tests/load/`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#_collect_turns"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Bound background-agent stop requests",
+      "location": "src/squadron/pipeline/sdk_session.py#_stop_background",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Reject invalid background idle-timeout values",
+      "location": "src/squadron/config/keys.py:118-126",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Add a load test for background dispatch waiting",
+      "location": "src/squadron/pipeline/sdk_session.py#_collect_turns",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:45:28.268792",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 26,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 15429,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 715953,
+  "cached_tokens": 606495,
+  "cache_write_tokens": null,
+  "completion_tokens": 18704,
+  "reasoning_tokens": 17290,
+  "duration_seconds": 187.7834919579327,
+  "cost_usd": 0.02636275,
+  "cost_basis": "alias_pricing"
+}

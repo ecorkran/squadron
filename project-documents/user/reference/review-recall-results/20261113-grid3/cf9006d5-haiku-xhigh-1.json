@@ -1,0 +1,261 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Manifest-driven deletion lost its containment guard",
+      "description": "`finish()` builds its stale list from `.context-forge/<target>.manifest` plus the hard-coded legacy entries, then runs `fs.rmSync(path.join(this.targetRoot, rel))` at line 192. Before that it checks only `isFile` and a CRC+size match. Nothing stops `rel` from escaping the root: `path.join` resolves `../`, and nothing checks whether a parent directory is a symlink pointing out of the root. `removeEmptyInstallDirs` (lines 212-220) has the same gap and can `rmdir` outside the root.\n\nThe manifests are real files in this repo (`.context-forge/claude.manifest` and `agents.manifest` exist in the worktree), so this input comes from the checkout, not only from the user.\n\nThe removed `worktreePrune.ts` had `escapesLexically` and an `isWithin` check on realpaths. The diff deletes the tests that pinned them: `keeps ../ and absolute paths with reason \"containment\"` and the symlinked-directory case. A grep for `realpath|escapesLexically|isWithin|containment` in `packages/cli/src/ideInstall` returns nothing, and no ideInstall test uses `../` or a symlink.\n\nThe CRC+size match means an attacker must know the target file's exact bytes, so exposure is narrow. The old code required that match and still layered containment on top, so removing the containment layer is the regression. In a worktree, `../main/...` reaches the main checkout.\n\nFix: reject absolute and `..` paths, compare the realpath of each parent with the realpath of `targetRoot` before `rm`, and restore the deleted containment tests against the installer, plus a symlinked-install-directory case.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/manifest.ts:187-199"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Report-only lint fails when a guide template is missing",
+      "description": "`writeOrSuggest`'s third argument is evaluated before the call, so `fs.readFileSync(this.source('python', 'ruff.toml'))` runs even when `writeLint` is false. The same eager read happens at lines 151, 178, and 196 for dart, typescript, and csharp. The bash `lint_write_or_suggest` reads `$src` only inside the `WRITE_LINT=true` branch (`setup-ide-lint.sh:55-62`).\n\nIn this worktree, `project-documents/ai-project-guide/project-guides/lint/python/ruff.toml` does not exist. The guide's own `setup-ide-lint.sh:98` and `readme.setup-ide.md:127` both reference it, and the fixture guide has it. So a Python project with no `[tool.ruff]` gets an ENOENT, which `isFilesystemError` turns into exit 1, even in default mode. `.gitmodules` also reads as empty in this worktree, so confirm the guide checkout is the intended version.\n\nFix: read the template inside the write branch, or pass a loader. Add a test for report-only mode when the template is absent.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts:116"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dry run can write into the real tree through a symlinked install directory",
+      "description": "`copyInstallPaths` calls `fs.cpSync` without `dereference`, so a symlinked install directory such as `.claude/rules` is copied as a symlink. The sandbox install then writes through it. If the link target is absolute, `verbatimSymlinks: true` keeps it absolute, so writes land in the real project. The docstring says \"The project is never touched,\" and the `projectTree` check in `flags.test.ts` covers only regular directories.\n\nThis is from reading Node's `cpSync` semantics, not from running it.\n\nFix: dereference install paths into the sandbox, or refuse to dry-run through symlinked install directories with a clear error. Add a test with a symlinked install directory.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:37-48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Node errors with a `code` property are treated as environment failures",
+      "description": "`isFilesystemError` accepts any `Error` with a string `code`. Node programmer errors such as `ERR_INVALID_ARG_TYPE` also carry `code`. The doc comment at lines 64-67 says \"anything else is a bug and propagates,\" and the worktree loop in `setup-ide.ts` relies on that. A bug with a code becomes exit 1, prints only its message, and the loop continues with the next worktree.\n\nFix: check for an errno-style error (`'errno' in err` or `code` matching `^E[A-Z]+$`), and let `ERR_*` errors propagate. Add a test that an `ERR_INVALID_ARG_TYPE`-style error propagates out of `installIde`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/installer.ts:59-62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lint filenames and language keys are repeated literals",
+      "description": "`ruff.toml`, `analysis_options.yaml`, `eslint.config.mjs`, `.editorconfig`, and `Directory.Build.props` are typed out in several places in `lint.ts` (for example lines 116 and 137), and the language keys `'python'`, `'dart'`, and so on are repeated in each method and in `source(...)` lookups. `LINT_WRITE_PATHS` (`paths.ts:44`) and `LANGUAGES` already exist. `LINT_WRITE_PATHS` is what keeps the dry-run sandbox in sync. If a literal changes without the constant, dry-run reports will show the wrong `+`/`~` results.\n\nCLAUDE.md requires each comparison or lookup value to be defined once. Fix: derive the write names and language keys from one definition in `lint.ts`/`paths.ts`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts:137"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two parsers for the same manifest line format",
+      "description": "`mayOverwrite` extracts the path with an inline regex, `line.replace(/^[^ ]+ [^ ]+ /, '')`, while `pathField()` (lines 87-92) does the same job in the same module. They disagree on malformed lines. Use `pathField` in both places.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/manifest.ts:153"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Worktree `rules.exclude` does not inherit the root's value",
+      "description": "`ConfigManager(root)` reads that checkout's project config, then user config, and never the root's. If the root sets `rules.exclude = dart.md` and a worktree has no value of its own, the worktree installs every rule. The copy-based propagation this replaces gave worktrees the root's output. This matches the v0.20.1 guide path, where the script ran with `cwd` in the worktree, so it may be intended. No test covers a root-set exclusion with an unset worktree, because `setup-ide.test.ts` sets only `wt1`. Please confirm the intent.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:75-81"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Overwrite prompt says files \"will be overwritten\"",
+      "description": "The installer no longer overwrites. For an unmanaged file it appends the managed block (`managedSection.ts:158-163`), and a legacy file keeps its content above the block. Originals go to `.pre-context-forge`. The prompt should say the file will be merged and backed up.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:151"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test names and snapshot labels refer to a `--root` flag that no longer exists",
+      "description": "`run()` in `harness.ts:103-126` never passes `--root` to `installIde`; the root is positional. `--root` appears only in the snapshot label. `test_flags_root_outside_guide` and `test_flags_root_separate.snap` describe a flag that cf does not have. Drop the argument or rename the test.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/ideInstall/flags.test.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unreadable subdirectory fails the whole install after files are written",
+      "description": "`findDotnetProjects` calls `readdirSync` on every directory up to depth 3. An unreadable subdirectory throws, which `isFilesystemError` classifies as an environment failure. The lint check runs after the target's files are already written, so the install exits 1 partway through. `find(1)`, which the comment names as the model, would warn and continue.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts:206-218"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`parseRulesExclude` doc overstates the validator",
+      "description": "The comment says \"the key's validator already rejects \u2026 whitespace around them.\" `validate` runs only on `cf config set`. A hand-edited `rules.exclude = \"dart.md, swift*.md\"` is read untrimmed, and `warnUnmatched` reports it. The comment should say the validator covers values set through `cf config set`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/cli/src/config/ConfigKeys.ts:189-193"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Manifest-driven deletion lost its containment guard",
+      "location": "packages/cli/src/ideInstall/manifest.ts:187-199",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Report-only lint fails when a guide template is missing",
+      "location": "packages/cli/src/ideInstall/lint.ts:116",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Dry run can write into the real tree through a symlinked install directory",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:37-48",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Node errors with a `code` property are treated as environment failures",
+      "location": "packages/cli/src/ideInstall/installer.ts:59-62",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Lint filenames and language keys are repeated literals",
+      "location": "packages/cli/src/ideInstall/lint.ts:137",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Two parsers for the same manifest line format",
+      "location": "packages/cli/src/ideInstall/manifest.ts:153",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Worktree `rules.exclude` does not inherit the root's value",
+      "location": "packages/cli/src/commands/setup-ide.ts:75-81",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Overwrite prompt says files \"will be overwritten\"",
+      "location": "packages/cli/src/commands/setup-ide.ts:151",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test names and snapshot labels refer to a `--root` flag that no longer exists",
+      "location": "packages/cli/tests/ideInstall/flags.test.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unreadable subdirectory fails the whole install after files are written",
+      "location": "packages/cli/src/ideInstall/lint.ts:206-218",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`parseRulesExclude` doc overstates the validator",
+      "location": "packages/cli/src/config/ConfigKeys.ts:189-193",
+      "location_verified": false
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:22:52.628528",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 46,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 47,
+  "prompt_tokens": 6016614,
+  "cached_tokens": 5618551,
+  "cache_write_tokens": 398013,
+  "completion_tokens": 73376,
+  "reasoning_tokens": null,
+  "duration_seconds": 336.1734058749862,
+  "cost_usd": 0.87221965,
+  "cost_basis": "provider"
+}

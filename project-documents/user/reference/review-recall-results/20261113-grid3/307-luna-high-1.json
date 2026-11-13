@@ -1,0 +1,75 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Publication exceptions can hide unfinished non-statistics sessions",
+      "description": "The code derives a publication tail from every coverage entry, then passes that tail to `_label` for each family. `_label` uses the tail only to exempt statistics sessions, but `_family_evidence` calls `not_caught_up_report` for each coverage read. For a statistics family, the tail is computed from that entry\u2019s sessions, so this is sound only if the coverage result contains the full requested range and the tail truly corresponds to the want-end publication window. However, it also labels any statistics session among the final `STATISTICS_PUBLICATION_SESSIONS` returned by coverage, regardless of whether it is actually at the universe\u2019s want end. Verify the date against the requested end before treating it as a justified publication exception; otherwise a missing latest session in an earlier truncated range can pass without a failure.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:280-288"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Publication exceptions can hide unfinished non-statistics sessions",
+      "location": "scripts/purchase_verdicts.py:280-288",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:35:36.173370",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 71056,
+  "cached_tokens": 70144,
+  "cache_write_tokens": null,
+  "completion_tokens": 212,
+  "reasoning_tokens": 0,
+  "duration_seconds": 22.42055429215543,
+  "cost_usd": null,
+  "cost_basis": null
+}

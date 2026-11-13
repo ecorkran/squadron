@@ -1,0 +1,38 @@
+{
+ "case": "197",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/2",
+  "P1": "sonnet-high/1/1",
+  "P2": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "load_pipeline` at `item_resume.py:186` is not wrapped. A missing pipeline raises `FileNotFoundError`, which is an `OSError`, so line 133 catches it and returns HALTED with the false message \"cannot write the batch report\". A YAML validation error escapes completely, so the caller gets a traceback and no `ResumeExit` code."
+  ],
+  "F2": [
+   "DROP",
+   "The leaked temp files are hidden, randomly suffixed files that only appear when a write has already failed, and that failure is logged and re-raised. A 0600 mode on reports in a private runs dir is not a defect, so the cost is cleanup at most."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P2": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 31.7,
+ "duration_seconds": 31.718434541020542,
+ "cost_usd": 0.7761030000000001,
+ "effort": "high",
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=435065, cached=354260, cache_write=80791, completion=2895, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `load_pipeline` at `item_resume.py:186` is not wrapped. A missing pipeline raises `FileNotFoundError`, which is an `OSError`, so line 133 catches it and returns HALTED with the false message \"cannot write the batch report\". A YAML validation error escapes completely, so the caller gets a traceback and no `ResumeExit` code.\nF2: DROP \u2014 The leaked temp files are hidden, randomly suffixed files that only appear when a write has already failed, and that failure is logged and re-raised. A 0600 mode on reports in a private runs dir is not a defect, so the cost is cleanup at most.\nF1: KEEP \u2014 `load_pipeline` at `item_resume.py:186` is not wrapped. A missing pipeline raises `FileNotFoundError`, which the `OSError` branch at line 133 turns into HALTED with the false message \"cannot write the batch report\". A YAML validation error escapes as a traceback with no `ResumeExit` code.\nF2: DROP \u2014 The leaked temp files are hidden, randomly suffixed files that only appear after a write has already failed, and that failure is logged and re-raised. A 0600 mode on reports in the private runs dir is not a defect."
+}

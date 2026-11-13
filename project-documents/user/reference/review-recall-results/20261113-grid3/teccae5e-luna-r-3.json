@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "StrEnum values can bypass runtime type validation",
+      "description": "`TimeMeaning` is a `StrEnum`, so a plain string such as `\"period_start\"` compares equal to `TimeMeaning.PERIOD_START` and passes the membership check. The `Market` then stores a plain string despite the field\u2019s enum contract. The same equality issue lets `calendar_id_for(\"extended\")` and `require_adjustment_basis(\"raw\")` accept plain strings. Additionally, `_normalize_bases` converts its input to a `frozenset` before checking element types; `[AdjustmentBasis.RAW, \"raw\"]` can therefore deduplicate to the enum and be accepted, silently discarding an invalid element. Validate enum types before membership checks and before normalization.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:94-101"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "StrEnum values can bypass runtime type validation",
+      "location": "src/manta_trading_engine/core_model/markets.py:94-101",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:27:33.149589",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 3829,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 300046,
+  "cached_tokens": 255382,
+  "cache_write_tokens": null,
+  "completion_tokens": 4409,
+  "reasoning_tokens": 3502,
+  "duration_seconds": 55.06951737497002,
+  "cost_usd": 0.00922472,
+  "cost_basis": "alias_pricing"
+}

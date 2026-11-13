@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "CLI item resume reuses and mutates completed run state",
+      "description": "`run_body()` passes the original completed batch `run_id` into `_run_pipeline_sdk`. That runner wires `on_step_complete=state_mgr.make_step_callback(run_id)` at `src/squadron/cli/commands/run.py:262-267` and calls `state_mgr.finalize(run_id, result)` in the normal path and exception path at `src/squadron/cli/commands/run.py:268-279`. A CLI item resume therefore appends another `StepState` for the `each` step and can overwrite a completed run's status to `failed`/`paused` when the item body raises a git fault, lazy-session error, or checkpoint pause. The slice design explicitly says the run's status stays COMPLETED for a batch with flags. The CLI tests patch `resume_item` (`tests/cli/commands/test_run_item.py:42-64`) and the integration helper calls `execute_pipeline` directly (`tests/pipeline/item_resume_support.py#body_runner`), so this production path is not covered. Use a read-only run state context or a separate/no-op state observer for item resume.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:78-87"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "report.json parsing is a hand-rolled trust boundary with unhandled malformed shapes",
+      "description": "`BatchReport.load()` says \"any problem raises `BatchReportLoadError`\", but it only checks that the top level is a dict and that `schemaVersion` matches. It does not validate `docType`, does not check that `items` is a list, and uses `cast()` at `src/squadron/pipeline/batch_report.py:331`; `BatchItemRecord.from_json()` then assumes each item is a dict at `src/squadron/pipeline/batch_report.py:164-179`. If `items` is a dict, or a list containing a string/int, `data.get(...)` raises `AttributeError`, which is not in the `except (KeyError, TypeError, ValueError)` at `src/squadron/pipeline/batch_report.py:335-338`. That escapes `resume_item()` (`src/squadron/pipeline/item_resume.py:117-132` catches only `_Stop`, `GitEnvironmentError`, and `OSError`) and produces an unhandled CLI error instead of the documented REJECTED exit. The Python rules require Pydantic for external file boundaries; at minimum this needs explicit schema validation and tests for non-list/non-dict `items` (`tests/pipeline/test_batch_report.py:308-337` only covers missing, unparseable, and version-mismatch files). Also, `REPORT_DOC_TYPE` is defined at `src/squadron/pipeline/batch_report.py:33` but `render()` hardcodes `\"batch-report\"` at `src/squadron/pipeline/batch_report.py:260`, and `src/squadron/pipeline/item_resume.py:187` hardcodes `.report.json` instead of using `REPORT_JSON_SUFFIX`/`BatchReport.json_path`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:313-338"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Report write atomicity is per-file, not for the Markdown/JSON pair, and failed writes leak temp files",
+      "description": "`BatchReport.write()` replaces the Markdown report first and the JSON report second at `src/squadron/pipeline/batch_report.py:307-308`. A failure only on the JSON write leaves the Markdown report with the new outcome while item resume still reads the old `report.json` record; the docstring at `src/squadron/pipeline/batch_report.py:302-306` overstates the guarantee. `_write_atomic()` also creates a `NamedTemporaryFile(..., delete=False)` at `src/squadron/pipeline/batch_report.py:345-351` but has no `finally` cleanup, so an `OSError` from `handle.write()` or `temp.replace()` leaves hidden temp files beside the report. The failure tests patch `Path.replace` globally so the first Markdown replace fails (`tests/pipeline/test_batch_report.py:282-298`, `tests/pipeline/test_item_resume_body.py:123-148`); they never exercise a second-write-only failure. Stage/rename the two files as a coherent pair or make JSON the canonical source with explicit recovery, and unlink the temp path on all failures.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:302-354"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mutating fan_out inner steps bypass the project run lock",
+      "description": "`pipeline_mutates()` only walks `config[\"steps\"]` and checks `loop.commit_each_iteration`. A `fan_out` step stores its nested step under `config[\"inner\"]` (`src/squadron/pipeline/steps/fan_out.py:39-58`), and the executor runs that inner step via `_execute_step_once()` (`src/squadron/pipeline/executor.py:1746-1806`). A valid custom `fan_out` whose `inner` is `design`, `tasks`, `implement`, `devlog`, `branch`, or a committing loop mutates cf/git state but `pipeline_mutates()` returns `False`, so `sq run` skips `project_run_lock`. This violates the \"one mutating run per checkout\" contract for custom pipelines. The lock tests cover built-ins and a loop with `steps` (`tests/cli/commands/test_run_lock_cli.py:26-58`) but not `fan_out.inner`. Traverse both `steps` and `inner` configurations, and add a lock test with a mutating fan-out inner step.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py:53-68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New item-resume async path performs blocking file, git, and cf work on the event loop",
+      "description": "`src/squadron/cli/commands/run_item.py:89-91` runs `resume_item()` on an asyncio loop, but the async call chain performs synchronous I/O directly: `_validate()` loads run state, pipeline YAML, and `report.json` (`src/squadron/pipeline/item_resume.py:179-201`), `_git_precondition()` runs cf config and multiple git subprocesses (`src/squadron/pipeline/item_resume.py:230-244`), `_select_item()` calls cf and git again (`src/squadron/pipeline/item_resume.py:277-305`), and `run.report.write()` is called synchronously at `src/squadron/pipeline/item_resume.py:151` and `:323`. The new `cf.slices_ready_to_implement` source is also an `async def` with synchronous cf subprocesses and filesystem reads (`src/squadron/pipeline/sources.py#_cf_slices_ready_to_implement`). These operations cannot be guaranteed under 1ms; they block all I/O on the loop, contrary to the Python async rule. Move blocking orchestration to `asyncio.to_thread`/an executor or make the non-`run_body` orchestration synchronous and only await the actual pipeline body.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:109-157"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Git-unavailable reconciliation is reported as \"not merged\" instead of HALTED",
+      "description": "`run_git([\"merge-base\", \"--is-ancestor\", ...])` returns `None` when git times out or cannot run (`src/squadron/review/git_utils.py#run_git`), but `_select_item()` treats `None` exactly like a non-zero return code and raises `_Stop(ResumeExit.REJECTED, ... \"status complete but {branch} is not merged into {target}\")`. A timeout is at least logged by `run_git`, but an `OSError` path is intentionally unlogged, and neither case produces the item-resume HALTED signal. This conflates \"git could not answer\" with \"branch is not merged\" and breaks the failure-mode enumeration rule: each new git I/O failure should be observable and mapped to the expected exit. Raise a `GitEnvironmentError`/`GitStateUnknownError` (handled as HALTED at `src/squadron/pipeline/item_resume.py:117-132`) or log ERROR and return HALTED, with a test covering `run_git(...) is None`; the current source tests at `tests/pipeline/test_item_resume_source.py:52-95` cover only merge/no-merge outcomes.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:296-304"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "CLI item resume reuses and mutates completed run state",
+      "location": "src/squadron/cli/commands/run_item.py:78-87",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "report.json parsing is a hand-rolled trust boundary with unhandled malformed shapes",
+      "location": "src/squadron/pipeline/batch_report.py:313-338",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Report write atomicity is per-file, not for the Markdown/JSON pair, and failed writes leak temp files",
+      "location": "src/squadron/pipeline/batch_report.py:302-354",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mutating fan_out inner steps bypass the project run lock",
+      "location": "src/squadron/pipeline/run_lock.py:53-68",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "New item-resume async path performs blocking file, git, and cf work on the event loop",
+      "location": "src/squadron/pipeline/item_resume.py:109-157",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Git-unavailable reconciliation is reported as \"not merged\" instead of HALTED",
+      "location": "src/squadron/pipeline/item_resume.py:296-304",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:10:05.958507",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 63,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 542559,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2895343,
+  "cached_tokens": 2545728,
+  "cache_write_tokens": null,
+  "completion_tokens": 140686,
+  "reasoning_tokens": 136255,
+  "duration_seconds": 1441.9554425419774,
+  "cost_usd": 0.375107243,
+  "cost_basis": "alias_pricing"
+}

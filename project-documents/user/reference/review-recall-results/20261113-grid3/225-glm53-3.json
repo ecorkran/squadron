@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "`_read`'s connection parameter is typed `Any` instead of `Conn`",
+      "description": "`_read` and the `read` closure in `tick_coverage` declare the connection as `Any` even though `manifest_reads.Conn` (`psycopg.AsyncConnection[Any]`) exists and is exactly what `connect_migrated` returns and what every callee (`build_status`, `build_coverage`) accepts. It works, but it removes the compiler's ability to catch a signature drift between the CLI plumbing and the build functions. A `Conn` alias import (under `TYPE_CHECKING`) would close it at zero runtime cost.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:160-171"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`raw_counts` performs an unindexed scan of every `tick_trade` row in the range",
+      "description": "The `count(*)` join against `unnest` prunes to the touched hypertable chunks via `ts_event BETWEEN min(opens) AND max(closes)`, but within those chunks it scans every row (no index beyond the hypertable's chunk constraint) and evaluates the session-window join per row. This is the documented, deliberate \"one scan\" and is correct; for wide `--start/--end` ranges on a populated archive it will be the verb's cost driver. The module docstrings already promise slice-226 re-measurement \u2014 worth keeping that promise in mind for this query specifically.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:157-173"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_closed_port` in the status CLI test has a bind/close race",
+      "description": "The socket is closed before the port is used as an \"unreachable\" target, so another process could reclaim it between `_closed_port()` and the connect attempt; the test would then fail with a different error than the intended `TickDatabaseUnreachable`. Low probability on loopback and self-evident when it flakes, but a comment (or retry-tolerance) would help the next reader. The rest of the tier's DB safety (dedicated test URL fixtures, no production-variable reads) checks out.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/integration/data/test_tick_status_cli.py:32-35"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Coverage of a range outside the calendar's populated span exits 4, not 1",
+      "description": "`build_coverage` deliberately widens the calendar window by one day and lets `calendar_sessions`/`sessions_between` refuse (`OutOfPopulatedRangeError` \u2192 `TickCalendarError` \u2192 `EXIT_STORAGE`) rather than silently returning an empty report \u2014 consistent with the module docstring (\"there is no degraded output\"). However, an operator running `coverage --start 1999-01-01` gets exit 4 (\"database unreachable\") with a message about the populated span, which `READ_EPILOG` does not mention as an exit-4 cause. Behaviorally fine as designed; only the epilog text slightly under-describes it.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py:104-111"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`_read`'s connection parameter is typed `Any` instead of `Conn`",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:160-171",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`raw_counts` performs an unindexed scan of every `tick_trade` row in the range",
+      "location": "src/manta_trading/data/tick/status_reads.py:157-173",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`_closed_port` in the status CLI test has a bind/close race",
+      "location": "test/integration/data/test_tick_status_cli.py:32-35",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Coverage of a range outside the calendar's populated span exits 4, not 1",
+      "location": "src/manta_trading/data/tick/tick_coverage.py:104-111",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:05:52.404738",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 133796,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 943717,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 15,
+  "prompt_tokens": 665849,
+  "cached_tokens": 515685,
+  "cache_write_tokens": null,
+  "completion_tokens": 36452,
+  "reasoning_tokens": 33502,
+  "duration_seconds": 438.00190579192713,
+  "cost_usd": 0.5046965,
+  "cost_basis": "alias_pricing"
+}

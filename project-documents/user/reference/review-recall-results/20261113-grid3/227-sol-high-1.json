@@ -1,0 +1,111 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Production cron comparison prevents cutover recovery",
+      "description": "Only the new cron lines have arguments stripped before comparison. After setup installs the new cron file, every subsequent cutover run compares an unstripped baseline against stripped output and fails step 4\u2014even when both files are identical. This blocks recovery from failures in later steps. Normalize both sides and add a regression test comparing the rendered cron file with itself.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:95-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Health verification can accept an old successful result",
+      "description": "`run_health()` ignores the command result and reads the existing log\u2019s last line without checking that this invocation appended it. If the command fails before logging, an earlier `FLAGS archive=0 stale=0` can incorrectly pass verification. Require a fresh summary; account for the initial health run legitimately reporting stale backups.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:157-165"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "File errors bypass the promised failure report",
+      "description": "The runner catches only `StepFailed` and `CalledProcessError`. File operations inside steps can raise `OSError`, and indexing an empty health log raises `IndexError`. These escape `run_steps()`, so execution never reaches report writing in `main()`. Handle these failures at the process boundary and ensure the report is attempted after a failed step.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:269-281"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Production cron comparison prevents cutover recovery",
+      "location": "scripts/cutover_227_helpers.py:95-99",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Health verification can accept an old successful result",
+      "location": "scripts/cutover_227_tick_backup.py:157-165",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "File errors bypass the promised failure report",
+      "location": "scripts/cutover_227_tick_backup.py:269-281",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:14:02.469748",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 123934,
+  "cached_tokens": 123648,
+  "cache_write_tokens": null,
+  "completion_tokens": 321,
+  "reasoning_tokens": 0,
+  "duration_seconds": 69.95890062488616,
+  "cost_usd": null,
+  "cost_basis": null
+}

@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Unexpected exceptions abort the cutover without writing the report",
+      "description": "`run_steps` catches only `(StepFailed, subprocess.CalledProcessError)`, but several step bodies can raise other exception types that are not converted to `StepFailed`:\n\n- `step_production` (scripts/cutover_227_tick_backup.py:243) does `(ctx.main.backup_root / \"backup-health.log\").read_text().splitlines()[-1]` with no guard \u2014 a missing log raises `FileNotFoundError`, an empty one raises `IndexError`.\n- `step_weekly` (scripts/cutover_227_tick_backup.py:180) does `log.read_text().splitlines()[-1] if log.exists() else \"\"` \u2014 an existing-but-empty `base.log` raises `IndexError`.\n\nEither exception escapes `run_steps`, propagates out of `main()`, and the script dies with a traceback **without writing the report** \u2014 exactly the outcome the module docstring and TD8 promise against (\"the first failure stops the run and the report is still written\"). The same applies to `main()`'s pre-step calls: `cluster(TABLE_PATH, MAIN)` can raise `KeyError`, and `env_value` can raise `CalledProcessError`, both uncaught.\n\nNote that `run_health` and `step_weekly` already guard the *existence* of their log files; the inconsistency between the guarded and unguarded reads is what makes the gap easy to miss. Catching `Exception` at the step boundary (recording it as the step's failure and continuing to the report write) would restore the documented contract.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:run_steps"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The replication host is defined in the table but hard-coded again in the cutover helper",
+      "description": "`deploy/backup-clusters.conf` is the single source for `replication_host` (`127.0.0.1` for `17/main`), and `BackupCluster.replication_host` already carries it into the cutover's `Context`. But `strip_new_args` hard-codes the literal:\n\n```python\nline = line.replace(\" --replication-host 127.0.0.1\", \"\")\n```\n\nand `test/unit/test_setup_backup.py` hard-codes a third copy in `_NEW_MAIN_ARGS`. AGENTS.md is explicit: \"If a value is used in conditionals, switch cases, or lookups, define it once \u2026 Changing a value should require editing exactly one place.\"\n\nThe failure mode is fail-safe but confusing: if the table's `replication_host` changes, `strip_new_args` stops stripping the new argument, `production_changes` reports a spurious production-line change, and `step_apply` aborts the cutover with a diff that looks like a real production regression. Passing `ctx.main.replication_host` into `strip_new_args`/`production_changes` would make the comparison track the table automatically.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:strip_new_args"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The sudoers file no longer enumerates the commands the cutover issues",
+      "description": "The file's header states it holds \"Exactly the commands those scripts issue, nothing wider \u2026 add a line when deploy/systemd gains a unit\", and its `MT_UNITS` alias lists specific systemd units. The new cutover issues five root commands \u2014 `sudo -u postgres env PGCLUSTER=\u2026 psql`, `sudo sha256sum \u2026`, `sudo deploy/setup-backup.sh \u2026`, `sudo scripts/provision_tick_cluster.sh`, and `sudo systemctl restart postgresql@17-tick` \u2014 and none of them appear in `manta-ops`. The cutover will therefore prompt for an interactive sudo password at every root step (or fail outright if the operator has no general sudo), which the design's \"one PM-run `sudo` session\" wording glosses over. Either the needed entries are added, or the design states plainly that the PM types the password for these steps.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The failure line of the per-cluster `pg_settings.sh` run names `env`, not the library",
+      "description": "`run_lib` shifts the prefix off and then reports `basename \"$1\"` \u2014 but the only call that does not pass the library path first is the per-cluster PostgreSQL settings call:\n\n```bash\nrun_lib \"$C\" env PGCLUSTER=\"$C\" \"$LIB_DIR/pg_settings.sh\" \"${CHECK_FLAG[@]}\" \"${PG_AS_USER[@]}\" ...\n```\n\nAfter the `shift`, `$1` is `env`, so the failure line reads `MISSING 17/tick env exited 1` instead of naming `pg_settings.sh`. The `timeshift_merge.sh` and `restic_repo.sh` calls pass the library path first and are unaffected. This line is what an operator sees when a cluster's settings fail, so it should name the library.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh:run_lib"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The block-termination convention is coupled to the current template layout",
+      "description": "`block_lines` ends a cluster block at the first line beginning with `#`. In the rendered file the tick block is terminated by the host template's `# host: system backup (restic), once per host` comment, so the cutover's parse of \"the tick block\" silently depends on the host template's comment placement. Separately, `render_cron.sh` drops only lines starting with `##`, so a single-`#` comment added to `deploy/cron.d/manta-trading-backup.cluster` as a template comment would be rendered verbatim into `/etc/cron.d/manta-trading-backup` **and** truncate the block the cutover parses (`block_commands` would then raise \"lacks jobs\"). The `##` convention is documented in the template header but nothing enforces it; a guard in `render_cron.sh` that rejects any unrecognised `#` line in the cluster template would make the convention self-enforcing rather than advisory.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:block_lines"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Production host facts are hard-coded in two test modules",
+      "description": "`test/unit/test_setup_backup.py` defines `_PROD_CHECKOUT = \"/home/manta/source/repos/manta/trading-data\"` and `_PROD_BUCKET = \"b2:manta.trading.data\"`, and `test/unit/test_cutover_227.py` defines its own `CHECKOUT` and `BUCKET` constants with the same values. Two copies of the same production facts mean a change to the checkout path or bucket name must be made in two files, and a mismatch between them would surface as an opaque diff in the production-equivalence comparison rather than as a naming error. A shared fixture or a single constants module would remove the duplication.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "test/unit/test_setup_backup.py:_PROD_CHECKOUT"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The new scripts sit outside the configured type-checking scope",
+      "description": "`[tool.mypy]` sets `files = [\"src/manta_trading\"]`, so `scripts/cutover_227_helpers.py`, `scripts/cutover_227_host.py` and `scripts/cutover_227_tick_backup.py` are not covered by the configured run, and the repository's only GitHub workflow (`.github/workflows/ci.yml`) is a tag-triggered publish job with no lint or test step. The slice's Technical Requirements call for \"ruff, mypy and shellcheck (-x) clean on touched files\", but nothing in the configuration mechanically enforces it for these files. The `[tool.ruff.lint]` block does satisfy the required select list (`E`, `F`, `W`, `I`, `UP`, `BLE`, `ASYNC`, `B`), and the new files' imports and formatting are consistent with it \u2014 the gap is only that the check is opt-in rather than configured.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "pyproject.toml:64"
+    },
+    {
+      "severity": "PASS",
+      "title": "Production's cron lines are protected by a two-sided equivalence check",
+      "description": "The render refuses a template without an exact `@CLUSTER_BLOCKS@` line, refuses unfilled `@NAME@` placeholders across both templates, and refuses an unescaped `%` before anything can reach `/etc/cron.d`. The production-equivalence contract (TD3) is enforced independently in two places: `test/unit/test_setup_backup.py::test_production_lines_gain_only_the_new_arguments` compares the stripped rendered main block and host block against the real pre-227 fixture line for line, and `cutover_227_helpers.production_changes` applies the same comparison to the file the cutover actually installs. The `--replication-host` duplication noted above is the one place where that equivalence depends on a value that is not read from the table.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "deploy/lib/render_cron.sh"
+    },
+    {
+      "severity": "PASS",
+      "title": "The B2 lifecycle path is read-only and the destructive alternative is documented",
+      "description": "`b2_lifecycle.sh` reads the rules through rclone's native `:b2:` backend and never sets one, with the rclone v1.75.0 `b2_update_bucket` behaviour (which replaces every rule with one whole-bucket rule) documented in the header so a future maintainer does not \"fix\" the gap by adding a write path. The rule's non-fatal status is implemented coherently across both languages: `setup-backup.sh` prints the missing rule with `echo` rather than `report`, so it never enters the `not-ok` tally, and `cutover_227_helpers.setup_not_ok` excludes the same line shape with `^MISSING \\S+ lifecycle ` \u2014 a shape that deliberately does *not* match the `lifecycle-read` line, so an unreadable rule set still fails the cutover. `test/unit/test_setup_backup.py::test_never_sets_a_rule` asserts that every rclone invocation is `backend lifecycle` with no write flags, and `test_missing_rule_does_not_change_the_exit_code` pins the exit-code invariance.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "deploy/lib/b2_lifecycle.sh"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unexpected exceptions abort the cutover without writing the report",
+      "location": "scripts/cutover_227_tick_backup.py:run_steps",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The replication host is defined in the table but hard-coded again in the cutover helper",
+      "location": "scripts/cutover_227_helpers.py:strip_new_args",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The sudoers file no longer enumerates the commands the cutover issues",
+      "location": "deploy/sudoers.d/manta-ops",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The failure line of the per-cluster `pg_settings.sh` run names `env`, not the library",
+      "location": "deploy/setup-backup.sh:run_lib",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The block-termination convention is coupled to the current template layout",
+      "location": "scripts/cutover_227_helpers.py:block_lines",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Production host facts are hard-coded in two test modules",
+      "location": "test/unit/test_setup_backup.py:_PROD_CHECKOUT",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "The new scripts sit outside the configured type-checking scope",
+      "location": "pyproject.toml:64",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Production's cron lines are protected by a two-sided equivalence check",
+      "location": "deploy/lib/render_cron.sh",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The B2 lifecycle path is read-only and the destructive alternative is documented",
+      "location": "deploy/lib/b2_lifecycle.sh",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:44:44.382795",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 992153,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2000177,
+  "cached_tokens": 1622912,
+  "cache_write_tokens": null,
+  "completion_tokens": 279074,
+  "reasoning_tokens": 272727,
+  "duration_seconds": 1187.746772958897,
+  "cost_usd": 0.123377459,
+  "cost_basis": "alias_pricing"
+}

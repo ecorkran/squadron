@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The slice design explicitly documents this SDK race (#1190) and accepts it: the owed follow-up is read and discarded with a WARNING at the start of the next dispatch, so this is a deliberate trade-off, not an overlooked defect."
+  ],
+  "F2": [
+   "KEEP",
+   "idle_s` stays set for the whole `_read_turn`, so after a notification empties the ledger, the parent's foreground continuation is still under the idle timer; if it fires, dispatch returns partial text as success while the parent keeps working, which contradicts the design rule that foreground turns get no timer."
+  ]
+ },
+ "wall_seconds": 42.6,
+ "duration_seconds": 42.55895433295518,
+ "cost_usd": 0.7986781,
+ "effort": "high",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=368586, cached=283334, cache_write=85242, completion=2961, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The slice design explicitly documents this SDK race (#1190) and accepts it: the owed follow-up is read and discarded with a WARNING at the start of the next dispatch, so this is a deliberate trade-off, not an overlooked defect.\n\nF2: KEEP \u2014 `idle_s` stays set for the whole `_read_turn`, so after a notification empties the ledger, the parent's foreground continuation is still under the idle timer; if it fires, dispatch returns partial text as success while the parent keeps working, which contradicts the design rule that foreground turns get no timer.\nYou've hit your 5-hour limit \u00b7 resets 11:20am (America/Denver)"
+}

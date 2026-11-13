@@ -1,0 +1,72 @@
+[
+ {
+  "ref": "luna-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Clear node context before project-level work",
+  "location": "src/amoeba/runner/tick.py:95-98",
+  "description": "`RunObserver.observe()` sets the shared context to each observed node and leaves it set. The following project-level link lookup and probe run before `_decide()` clears it. If either raises an unexpected exception, `RunnerTenant` may block the last observed node instead of escalating the project-level fault. Clear the context before these project-level stages."
+ },
+ {
+  "ref": "luna-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Add a load test for Runner subprocess work",
+  "location": "tests/runner/test_budget_coverage.py",
+  "description": "The budget test uses fakes and simulated call costs; the crash and end-to-end tests verify behavior, not load bounds. The project rules require a realistic load test for process/environment-layer work, asserting latency, throughput, or resource bounds, and gating it in CI."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "FAIL",
+  "title": "Observing one project discards other projects\u2019 polling state",
+  "location": "src/amoeba/runner/observe.py:108-111",
+  "description": "`RunnerTenant` shares one observer across projects, but these lines prune its caches against only the current project\u2019s entries. Observing A, B, then A therefore polls A twice even at the same clock time\u2014confirmed by an isolated diagnostic. This defeats the polling interval and discards standing faults and overdue-launch state. Keep caches per project, or prune against all hosted entries. Add a multi-project regression test."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "CONCERN",
+  "title": "Unconfirmed launches lose standing poll faults between retries",
+  "location": "src/amoeba/runner/observe.py:192-193",
+  "description": "After an unconfirmed launch receives `PollFailure`, subsequent ticks before the next poll return `_still_overdue()` without replaying `_faulted`. A diagnostic confirmed the state changes from `FAULT` to `LAUNCHING` with no recurring fault, despite no successful observation. Consequently, `ProjectTick._close_recovered()` closes the escalation prematurely. Replay standing poll faults here, as the confirmed-run path does."
+ },
+ {
+  "ref": "sol-high/1/2",
+  "severity": "FAIL",
+  "title": "Launch budget check precedes blocking journal and file operations",
+  "location": "src/amoeba/runner/tick.py:176-187",
+  "description": "The budget is checked in `_act()`, but `journal_issue()` commits a SQLite transaction and `launch()` opens both logs before `Popen`. If those operations consume the remaining budget\u2014or stop is requested during them\u2014the subprocess still starts. This violates the deadline and shutdown contract. Recheck immediately before spawning, with an explicit safe resolution or continuation policy for an already-journaled command that is not spawned. Add coverage that advances the clock or requests stop during journal issuance."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Recheck the budget at the actual process-start boundary",
+  "location": "src/amoeba/runner/tick.py:161-187",
+  "description": "`_act` checks the budget before `_launch`, but `_launch` then mints the run ID and writes the journal entry before `launch` opens log files and calls `Popen` (`src/amoeba/runner/launch.py:212-214`). If that work takes the tick past its deadline\u2014or a stop is requested meanwhile\u2014the subprocess can still start after the budget refuses new calls. Recheck immediately before `Popen`, and handle a refusal after journaling so the unresolved entry is not later mistaken for a launch that occurred."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Add a Runner load test",
+  "location": "tests/runner",
+  "description": "The Runner starts detached `sq` processes and invokes `cf` subprocesses, but its added tests exercise fakes, end-to-end scenarios, and crash recovery\u2014not load under a realistic Runner configuration. The testing rules require a CI-gated load test for environment-layer, network, or concurrency paths, with latency, throughput, or resource bounds. Add a Runner load test in `tests/load/` that exercises those bounds."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "CONCERN",
+  "title": "The shared CLI harness now puts a working `sq` stub on PATH for every CLI test",
+  "location": "tests/cli_harness.py#cli_environment",
+  "description": "`cli_environment` unconditionally prepends a stub `sq` to `PATH` for every `run_cli`/`start_background` call. That stub is not a version-only stub: `tests/sq_stub.py` implements `sq runs prune` (deleting `<id>.json` from the runs directory and exiting 0 when the files exist), `sq runs wait` and `sq run`. Before this change, `sq` was whatever the developer's shell had (usually absent), so CLI tests that exercise `sq`-dependent commands saw \"sq missing\" unless they supplied their own `PATH`. Now the stub shadows it for all of them, so a command like `amoeba prune sq-runs --yes` will actually delete candidate files and exit 0 rather than reporting `PRUNE_INCOMPLETE` for a missing executable.\n\nI did not read `tests/cli/` in this session, so I cannot say whether those tests already override `PATH` (in which case this is harmless) or whether their assertions now mean something different (in which case the suite is green for the wrong reason). Either way, a harness that changes the meaning of every existing CLI test is a shared-fixture change that deserves an explicit check rather than an implicit one. The safer shape is for the stub to be added by the tests that need it, or for `cli_environment` to take the stub directory as an argument."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "CONCERN",
+  "title": "Two mechanisms confirm a launch, and the tracker's is dead code that raises `KeyError`",
+  "location": "src/amoeba/runner/launch.py#LaunchTracker.confirm",
+  "description": "`LaunchTracker.confirm(entry_id)` sets `self._launches[entry_id].confirmed = True`, which raises `KeyError` for an entry id the tracker never saw. Nothing in `src/amoeba/runner/` calls it: `RunObserver._confirm` (`src/amoeba/runner/observe.py`) mutates the `TrackedLaunch` it already holds (`tracked.confirmed = True`) and never goes through the tracker. Only tests call `LaunchTracker.confirm`.\n\nTwo ways to do the same thing, one of which is unreachable from production and fails with an opaque `KeyError` \u2014 the \"one value, one source\" and DRY rules both point at deleting `LaunchTracker.confirm` and keeping a single path (either the observer mutates the handle directly, or the observer asks the tracker to confirm and the tracker raises a named error). Whichever survives should be the only way, so a future caller cannot pick the one that crashes."
+ },
+ {
+  "ref": "minimax31-flash/1/2",
+  "severity": "CONCERN",
+  "title": "A journal entry without a run id makes the fault handler raise `KeyError`",
+  "location": "src/amoeba/runner/faults.py#_in_flight_run_ids",
+  "description": "`_in_flight_run_ids` does `str(entry.parameters[PARAM_RUN_ID])` for every unresolved `SQ_RUN` entry of the node. `PARAM_RUN_ID` is a *required* key for new `SQ_RUN` entries (`REQUIRED_PARAMETER_KEYS` in `src/amoeba/store/journal_models.py`), but entries journaled before slice 120 carry no run id \u2014 that is exactly why `SquadronRunObserver` routes on `PARAM_RUN_ID in entry.parameters` (`src/amoeba/process/observers/sq_run_id.py`).\n\nThis runs inside `escalate()`, which is called from the tenant's process-boundary handler (`src/amoeba/runner/tenant.py`, the `except Exception` branch). A `KeyError` raised there escapes the handler that was supposed to isolate the fault, so a legacy entry turns a per-project fault into a process crash. `entry.parameters.get(PARAM_RUN_ID)` with a `isinstance` check (the pattern used in `src/amoeba/runner/observe.py` and `src/amoeba/runner/finish.py`) keeps the same behaviour for well-formed entries and does not raise for the rest."
+ }
+]

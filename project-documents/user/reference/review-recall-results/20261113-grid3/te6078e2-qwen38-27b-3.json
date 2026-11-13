@@ -1,0 +1,61 @@
+{
+  "verdict": "FAIL",
+  "findings": [],
+  "structured_findings": [],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:27:28.677771",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 331059,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 2,
+    "in_section": 0,
+    "surviving": 0
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 475191,
+  "cached_tokens": 377216,
+  "cache_write_tokens": null,
+  "completion_tokens": 92516,
+  "reasoning_tokens": 87895,
+  "duration_seconds": 342.19545212504454,
+  "cost_usd": 0.24591000000000002,
+  "cost_basis": "alias_pricing"
+}

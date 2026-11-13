@@ -1,0 +1,333 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Per-chunk session-bounds query adds a DB round trip to every chunk of every symbol",
+      "description": "The new `fetch_session_bounds(bounds_conn, symbol, chunk_start, chunk_end)` call runs for every fetched chunk, for every symbol, in both phases. With ~13,000 symbols and multiple chunks per symbol per pass this is thousands of extra queries per pass, each opening a fresh pooled connection (`pool.connection()`), on top of the provider request. The session calendar is already loaded per symbol elsewhere in the loop (the seed path calls `fetch_sessions`/`fetch_session_bounds` inside `compute_missing_minute_sessions`); caching the bounds per symbol for the pass, or restricting the query to the sessions actually intersecting the chunk, would remove the repeated round trip. This is a hot path that scales with the universe, so it should be bounded rather than per-chunk.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:888-896"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A chunk judged PARTIAL keeps the gap row but the retry loop can spin on it",
+      "description": "When `judge_chunk_by_sessions` returns PARTIAL because the provider has not yet published the session, `_advance_minute_gap` maps PARTIAL to `FetchStatus.UNKNOWN` (via `outcome_to_fetch_status`), which keeps the row actionable and increments `attempt_count`. The next chunk selection re-picks the same newest actionable gap (`ORDER BY gap_end DESC`), so the same unpublished session is re-requested immediately, burning quota until `MAX_RETRY_COUNT` promotes it to `RETRY_EXHAUSTED` \u2014 a terminal status that then requires the repair script to clear. The previous behaviour deleted the row (the bug being fixed) but at least did not burn the allowance in a tight loop. The new path needs an explicit backoff or a distinct \"provider has not published\" status so the retry does not become a quota spin; note the comment says \"row kept\" but does not say what stops the immediate re-request.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:888-925"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cagg_freshness_for_session` compares a refresh timestamp with `created_at`, but `created_at` is not part of the cagg's read window",
+      "description": "The probe reads `max(created_at)` from `minute_ohlcv` over the session window and compares it with the cagg policy's `last_successful_finish`. Two problems: (1) `minute_ohlcv.created_at` defaults to `NOW()` at insert, but rows inserted by the COPY/ON CONFLICT path are only written when the bar is new \u2014 so a re-fetch of an already-present bar does not move `created_at`, meaning the probe can report \"fresh\" while the cagg is genuinely behind. (2) The `last_successful_finish` of *any* refresh job for the cagg is used, including a run whose window did not cover the session at all, so a recent-but-irrelevant refresh reads as fresh. The `cagg_freshness.assert_cagg_fresh` module already exists and encodes the project's D3 rule (\"indeterminate freshness is stale\", never a pass); this new probe duplicates that logic in a second place with a weaker comparison, which the AGENTS.md \"one value, one source\" and \"do not duplicate logic\" rules discourage. Consider deriving the verdict from `assert_cagg_fresh` plus a content check instead.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py:178-224"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The WAIT verdict is indistinguishable from FAIL to the health check and the cutover",
+      "description": "`run_verify` prints `[WAIT]` and returns `False`, which the repair CLI maps to `EXIT_REFUSED` (2). The cutover's `_verify_when_fresh` detects the `[WAIT]` literal in the text and re-polls, but `mt data health` does not run `--verify` at all, and any other consumer of the repair script's exit code cannot distinguish \"not yet measurable\" from \"measured and failed\". A WAIT that ends up as a generic non-zero exit is exactly the kind of silent-ish failure the project rules forbid. A distinct exit code (or a structured verdict) would let the cutover and any operator distinguish the two.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/repair_921_minute_sessions.py:274-291"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cagg_freshness_for_session` can report stale for a session whose bars were never written",
+      "description": "`newest_bar_written` is `max(created_at)` over `minute_ohlcv` for the session window, and `CaggFreshness.stale` is False only when `newest_bar_written is None`. A judged session with genuinely zero bars (the very failure the mass check exists to catch) yields `newest_bar_written = None` \u2192 not stale \u2192 the mass read proceeds and correctly reports FAIL. That path is fine, but the inverse is not: a session whose bars were written *before* the last refresh but which the cagg's `end_offset` deliberately excludes (the 4-hour cagg has `end_offset => 4 hours`, so the newest bucket is never materialized while open) will read as fresh while the mass read legitimately reports fewer bars than exist. The probe's premise \u2014 \"a bar landed after the last refresh\" \u27fa \"the cagg has not materialized it\" \u2014 is not equivalent to the cagg's own policy semantics.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py:213-224"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Sudoers wildcards are broader than the file's own comment claims",
+      "description": "The header says \"Exactly the commands those scripts issue, nothing wider\", but `MT_UNITS` grants `systemctl stop mt-*`, `start mt-*`, `restart mt-*` \u2014 that wildcard covers every `mt-*` unit, including `mt-serve.service` (the API server) and any future unit, and `restart mt-*` allows taking the serving layer down. `MT_RUN` grants `/usr/local/bin/mt-run *`, which reaches `mt-run <anything>` \u2192 the production `mt` CLI with root (`run_production_mt` execs `/opt/manta-trading/.venv/bin/mt`), i.e. arbitrary production database operations as root. `MT_INSTALL` names an absolute path under `/home/manta/...` while the installer's `ProtectHome`/unit assumptions are elsewhere \u2014 and the script actually runs the installer from the checkout, so the path is operator-specific and will not match on other hosts. These are broad grants for a \"limited root\" file; the comment's claim is inaccurate, and the grants should be narrowed (specific unit names, specific `mt-run` subcommands) or the comment corrected to describe what is actually granted.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:9-14"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The cutover log is written into the repository tree, not a gitignored location",
+      "description": "`start_log(NOTES_DIR / f\"921-cutover-{...}.log\")` writes under `project-documents/user/notes/`, which is inside the repo. The cutover runs with root privileges on the production host and writes a file the operator's checkout will then see as an untracked modification \u2014 the same class of problem `deploy/install-production.sh` guards against with its dirty-tree check (\"existing checkout has local modifications \u2014 aborting untouched\"). There is no `.gitignore` entry for `*.log` under that directory (the global `*.log` ignore is in the standard Python block, so it may be covered, but the notes directory is a documents tree, not a log tree). Consider writing the narration outside the checkout (e.g. `/var/log/manta-trading/`) or adding an explicit ignore entry.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:226-229"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`judge_chunk_by_sessions` computes `judged` and then recomputes the same set inside `sessions_without_bars`",
+      "description": "`judge_chunk_by_sessions` builds `judged = [open_ for open_, close in session_bounds.items() if close <= chunk_end]` and then calls `sessions_without_bars`, which re-derives the same filter internally. The two lists cannot disagree, but the duplication is avoidable: `sessions_without_bars` could return the judged set and the missing set in one pass. Minor, but it is the kind of duplicated predicate that drifts.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:78-88"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`bar_timestamp` catches `OverflowError` but `datetime.fromtimestamp` can also raise `OSError` on some platforms",
+      "description": "The tuple `(ValueError, TypeError, OverflowError)` matches `_bar_to_row`'s handling for the same field, and the comment explains the intent, but on some platforms `datetime.fromtimestamp` raises `OSError` for out-of-range values. `_bar_to_row` has the same gap (pre-existing), so this is consistent with the surrounding code rather than a new inconsistency \u2014 worth noting only if the two are ever unified.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:41-42"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `mt-minute-pass.timer` comment still describes the old staggering rationale",
+      "description": "The comment says \"Staggered 30 minutes behind mt-daily-pass.timer\", but the daily pass fires at 00:35/12:35 and the minute pass now at 04:05/13:05 \u2014 the offset is 3.5 h and 30 min, not 30 minutes. The `mt-kalshi-pass.timer` comment was updated to the new times (`04:05/13:05`) in this same change, so the minute timer's own rationale line was left behind.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "deploy/systemd/mt-minute-pass.timer:6-9"
+    },
+    {
+      "severity": "PASS",
+      "title": "The firing-time constant, the timer unit, and the drift guard moved together",
+      "description": "`MINUTE_PASS_FIRING_TIMES_UTC` changed to `(time(4, 5), time(13, 5))`, `deploy/systemd/mt-minute-pass.timer` changed to the matching `OnCalendar` lines, and `test/unit/deploy/test_units.py::TestMinutePassTimerMatchesTheConstant` asserts both directions of agreement (every constant firing appears in the timer; the timer declares nothing the constant does not know; the counts match). The unit test in `test/unit/test_constants.py` was updated to the same value. The health check's `collecting_firing_finished_at` reads the constant rather than restating it, and its docstring, the `07:05` boundary, and `test_data_health.py` were all updated consistently \u2014 the derivation (20:00 close \u2192 next 04:05 firing \u2192 +3 h lag \u2192 07:05) holds for both regular and early closes, and the \"falls between the 13:05 and the following 04:05 firing\" reasoning is correct.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/constants.py:150"
+    },
+    {
+      "severity": "PASS",
+      "title": "The session-judgement predicate agrees with the repair's truncation predicate",
+      "description": "The daemon judges a session collected only when a bar lands in `(open, close]`, and the repair's `find_truncated_days` calls a day truncated when `max(time) <= session_open_utc`. These are complementary halves of one predicate: a stored bar at or before the open means not collected; a bar strictly after the open and at or before the close means collected. The module docstring states this explicitly rather than restating the rule independently, and `test_minute_sessions.py` pins each boundary (bar at the open does not satisfy, bar at the close does, a bar one minute in does).",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:1-18"
+    },
+    {
+      "severity": "PASS",
+      "title": "The removal of the four-day trailing-weekend tolerance is covered by a behaviour test",
+      "description": "The old `_latest_bar_dt` + four-day tolerance was a heuristic; the replacement is session-based. The tests cover the weekend-tail case explicitly (`test_last_bar_before_the_chunk_end_is_still_success` and `test_all_sessions_covered_promotes_partial_to_success`), the spillover-only case, and the fully-covered case, and assert the resulting `fetch_status` passed to `_advance_minute_gap` \u2014 so the row-deletion behaviour is pinned, not just the returned enum.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:888-900"
+    },
+    {
+      "severity": "PASS",
+      "title": "The unit tests for the cutover script now block subprocess, file writes, and sleeping",
+      "description": "The `_no_side_effects` autouse fixture patches `cutover_common.subprocess.run` to raise, pins `_LOG_FILE` to None, patches `start_log` to a tmp path, and patches both `time.sleep` seams. This directly addresses the stated incident (\"an un-patched seam ran `sudo mt-run minute` from pytest\"), and the `_verify_when_fresh` polling tests assert the poll count is bounded (`VERIFY_WAIT_POLLS + 1`) rather than merely that it terminates.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_cutover_921.py:41-59"
+    },
+    {
+      "severity": "PASS",
+      "title": "The cagg freshness verdict is a pure, well-tested function with an explicit indeterminate-is-stale rule",
+      "description": "`CaggFreshness.stale` treats \"no refresh on record\" as stale when bars exist, and \"no bars at all\" as not stale \u2014 both pinned by tests in `test_repair_921.py::TestVerifyWaitsForTheCagg`, including the case where the probe reads the job stats and the session chunk with bound parameters (no string-built SQL).",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py:165-176"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Per-chunk session-bounds query adds a DB round trip to every chunk of every symbol",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:888-896",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A chunk judged PARTIAL keeps the gap row but the retry loop can spin on it",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:888-925",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`cagg_freshness_for_session` compares a refresh timestamp with `created_at`, but `created_at` is not part of the cagg's read window",
+      "location": "src/manta_trading/data/gaps/repair_921.py:178-224",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The WAIT verdict is indistinguishable from FAIL to the health check and the cutover",
+      "location": "scripts/repair_921_minute_sessions.py:274-291",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`cagg_freshness_for_session` can report stale for a session whose bars were never written",
+      "location": "src/manta_trading/data/gaps/repair_921.py:213-224",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Sudoers wildcards are broader than the file's own comment claims",
+      "location": "deploy/sudoers.d/manta-ops:9-14",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "The cutover log is written into the repository tree, not a gitignored location",
+      "location": "scripts/cutover_921_minute_sessions.py:226-229",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`judge_chunk_by_sessions` computes `judged` and then recomputes the same set inside `sessions_without_bars`",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:78-88",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`bar_timestamp` catches `OverflowError` but `datetime.fromtimestamp` can also raise `OSError` on some platforms",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:41-42",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The `mt-minute-pass.timer` comment still describes the old staggering rationale",
+      "location": "deploy/systemd/mt-minute-pass.timer:6-9",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The firing-time constant, the timer unit, and the drift guard moved together",
+      "location": "src/manta_trading/constants.py:150",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The session-judgement predicate agrees with the repair's truncation predicate",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:1-18",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The removal of the four-day trailing-weekend tolerance is covered by a behaviour test",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:888-900",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The unit tests for the cutover script now block subprocess, file writes, and sleeping",
+      "location": "test/unit/test_cutover_921.py:41-59",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The cagg freshness verdict is a pure, well-tested function with an explicit indeterminate-is-stale rule",
+      "location": "src/manta_trading/data/gaps/repair_921.py:165-176",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:33:36.243972",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 417278,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1807804,
+  "cached_tokens": 1415680,
+  "cache_write_tokens": null,
+  "completion_tokens": 108413,
+  "reasoning_tokens": 103717,
+  "duration_seconds": 695.8159083749633,
+  "cost_usd": 0.07184295999999998,
+  "cost_basis": "alias_pricing"
+}

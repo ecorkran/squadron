@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Review failure path double-logs the same provider error at ERROR with a traceback",
+      "description": "In `_run_part`, the `except ProviderError` branch already logs the failure at WARNING (\"review: provider failed in step %s; failure artifact: %s\"), but the new code then also calls `_logger.exception(\"review: unexpected error in step %s\", context.step_name)`. A provider failure is an *expected, named* failure, not an unexpected one \u2014 the previous code deliberately re-raised so the executor's catch-all handled it, and the new comment even says \"The step still fails, with what the call spent before it failed.\" As written, every provider failure now emits a WARNING plus a full ERROR traceback, contradicting the project's rule that a named provider failure gets \"one ERROR line and no traceback\" (see the parallel handling in `dispatch.py::_provider_failure`, which logs exactly one ERROR line). The `_logger.exception` call should be removed or downgraded, keeping the single observable signal.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:483"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Provider-error telemetry is lost on the pipeline review path because the error is converted to a generic result",
+      "description": "`capture.record_from_error(...)` reads `exc.telemetry` and `exc.duration_seconds`, but `run_review_with_profile` only sets `exc.duration_seconds` and `exc.cost_usd`/`exc.cost_basis` in its own `except ProviderError` handler \u2014 it never attaches `exc.telemetry` for a failed review, because the review's agent path (`collect_turn`) folds telemetry into `TurnCapture` rather than onto the error. `record_from_error` therefore returns `None` (its `telemetry is None` branch), so the usage record for a failed review is empty and `sq stats run` reports the review as an LLM action with no usage recorded. The D5 intent (\"the step still fails, with what the call spent before it failed\") is not achieved on this path: the spend that `TurnCapture` accumulated before the failure is discarded. The capture needs to receive the partial `TurnCapture` state (or the error needs to carry the telemetry) so a failed review's spend is recorded.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:495"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews` reads `Path.cwd()` instead of the resolved repository root",
+      "description": "`reviews_dir = Path.cwd() / REVIEWS_DIR` resolves the reviews directory against the process working directory. Every other review-aware command in this codebase anchors on the repository root (`resolve_repo_cwd` in `src/squadron/cli/commands/cwd_resolution.py`, used by `sq review` and `sq pr`). A user running `sq stats reviews` from a subdirectory of the repo gets \"No review directory at ...\" even though reviews exist, and a user whose cwd happens to contain an unrelated `project-documents/user/reviews` directory reads the wrong artifacts. This is a silent-wrong-data path for a reporting command and should resolve the repo root the same way the rest of the CLI does.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:57"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats run` silently drops the totals for rows whose usage record is unreadable",
+      "description": "`_row` maps a malformed usage record to `record=None, unreadable=True`, and `run_usage_report` then computes `records = [row.record for row in rows if row.record is not None]` \u2014 so an unreadable record's tokens and cost are silently excluded from the totals. The table shows the cell \"unreadable\" for that row, but the \"Total\" line then under-reports, with no indication that the total is incomplete. `RunUsageReport.unrecorded` counts the unreadable row (it is an LLM action with no record), but the totals line does not say so. At minimum the totals footer should state that unreadable rows were excluded, so the total cannot be read as complete.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/usage_report.py:118"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`format_usd` renders a zero cost as `$0.00`, indistinguishable from \"cost was zero\"",
+      "description": "`format_usd` special-cases only `0 < abs(amount) < 0.01`. A legitimately reported `$0.00` cost (e.g. a subscription-tier provider reporting zero) formats as `\"$0.00\"`, which reads identically to a rounded-away non-zero cost and to the \"not reported\" sentinel the rest of this slice is careful to distinguish. `resolve_cost` explicitly treats a reported `0.0` as \"a real provider cost\" (`src/squadron/models/aliases.py:381`), so the formatter should not obscure it. Consider rendering a reported zero distinctly (e.g. `$0.0000`) so a real zero is distinguishable from a rounding artifact.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/core/usage.py:33"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `_total_row` cell counts are coupled to column layout by magic `leading`/`trailing` arguments",
+      "description": "`_total_row` receives `leading`/`trailing` as integers that must exactly match the number of columns in `_RUN_COLUMNS` / `_REVIEW_COLUMNS` before the usage cells. The two call sites pass `leading=3, trailing=1` and `leading=5, trailing=0` respectively. Adding or removing a column in either list silently misaligns the total row instead of failing. Deriving the padding from the column definitions (or asserting the produced row length equals `len(columns)`) would make the layout self-checking.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats_views.py:209"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`sq stats reviews` totals count a row whose frontmatter has no usage at all",
+      "description": "Every readable artifact becomes a row, and `reviews_usage_report` builds its totals from all rows including those with no tokens, turns, or cost. Such a row contributes `None` to the totals (so it does not inflate them) but it does count toward `len(report.rows)`, which the table uses as the denominator in the \"N of M priced\" text \u2014 so a review with no usage at all makes the denominator larger than the number of priced-or-otherwise-spend-bearing reviews. This is defensible but worth an explicit comment, since \"reviews counted\" and \"reviews with spend\" are different numbers.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py:120"
+    },
+    {
+      "severity": "PASS",
+      "title": "Usage capture is centralized and the report cores are cleanly separated from presentation",
+      "description": "`UsageCapture` is the single place a `UsageRecord` is built (`_build`, `record_from_message`, `record_from_telemetry`, `record_from_review`, `record_from_error`), cost resolution is delegated to the one `resolve_cost` precedence function in `models/aliases.py`, and `stamp` is the single writer into `ActionResult.metadata`. `squadron/stats/*` returns typed, Typer-free and Rich-free reports while `squadron/cli/stats_views.py` renders them, so the `--json` serializer and the table formatter share the same source values as the module docstring claims. The per-run `UsageCapture` is threaded through every executor entry point including nested `each`/`loop`/`fan_out` bodies, and the pricing-warning dedupe set is correctly per-run.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Review failure path double-logs the same provider error at ERROR with a traceback",
+      "location": "src/squadron/pipeline/actions/review.py:483",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Provider-error telemetry is lost on the pipeline review path because the error is converted to a generic result",
+      "location": "src/squadron/pipeline/actions/review.py:495",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats reviews` reads `Path.cwd()` instead of the resolved repository root",
+      "location": "src/squadron/cli/commands/stats.py:57",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats run` silently drops the totals for rows whose usage record is unreadable",
+      "location": "src/squadron/stats/usage_report.py:118",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`format_usd` renders a zero cost as `$0.00`, indistinguishable from \"cost was zero\"",
+      "location": "src/squadron/core/usage.py:33",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The `_total_row` cell counts are coupled to column layout by magic `leading`/`trailing` arguments",
+      "location": "src/squadron/cli/stats_views.py:209",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats reviews` totals count a row whose frontmatter has no usage at all",
+      "location": "src/squadron/stats/reviews_report.py:120",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Usage capture is centralized and the report cores are cleanly separated from presentation",
+      "location": "src/squadron/pipeline/usage_capture.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:31:18.158018",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 80044,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2329129,
+  "cached_tokens": 2016768,
+  "cache_write_tokens": null,
+  "completion_tokens": 22441,
+  "reasoning_tokens": 19570,
+  "duration_seconds": 148.09975366597064,
+  "cost_usd": 0.044276750999999996,
+  "cost_basis": "alias_pricing"
+}

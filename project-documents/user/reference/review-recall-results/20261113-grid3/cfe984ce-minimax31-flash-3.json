@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Heading regex accepts `#` with more than six hashes, unlike the ported script and markdown",
+      "description": "`HEADING_PATTERN = /^(#{1,6})\\s+(.*)$/` is greedy, so it matches `####### seven hashes` as a level-7 heading (the `{1,6}` part backtracks to leave one `#` for the `\\s+` separator only if no whitespace exists; with whitespace present, `#{1,6}` consumes up to six and the text capture takes the remainder). The guide script this ports (`project-documents/ai-project-guide/scripts/validate-slice-design`) counted *any* line starting with `#` that contains a space, so the port is already a deliberate narrowing \u2014 but the port's stated intent in the file header and the slice design (\"A heading is a line matching `^(#{1,6})\\s+(.*)$`\") says seven-hash lines are not headings, while the regex accepts them as level-7 keys. Seven-hash lines then never match a required level-2/3 heading, so the practical effect is limited, but the regex does not implement the documented rule. Either anchor the pattern to reject more than six hashes (e.g. require the hash run to be followed by whitespace, not partially consumed) or update the documented rule to match the script's broader behavior.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:27"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`requiredHeadings` reads the marker from the next line only, so a marker separated by a blank line is silently ignored",
+      "description": "The template contract is \"a heading is required when the next line is exactly `<!-- required -->`\", and the guide script uses the same next-line rule (`if [ \"$line\" = \"$REQUIRED_MARKER\" ] && is_heading \"$prev\"`). The port matches that contract, but the failure mode is silent and asymmetric: if a future guide release inserts a blank line between a heading and its marker, `requiredHeadings` drops that heading from the required list, and every document then *passes* the check that was supposed to catch the missing section. The guide's own design calls this out as the desired failure mode (\"the command fails loudly with 'template declares no required headings'\"), but that only triggers when *all* markers disappear \u2014 a partial loss of markers silently weakens the gate. Consider validating that the template's marker count matches the headings the guide expects, or at least detecting marker lines in the template that are not preceded by a heading and failing with exit 2 instead of ignoring them.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:53-59"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`parseFrontmatter` failures are indistinguishable from a missing `docType`",
+      "description": "`parseFrontmatter` never throws \u2014 it returns `{ found: false, data: {} }` on any error, including a read failure or an unterminated frontmatter block. `validateFile` therefore maps every such case to `DesignFailureReason.DocType`, printing \"frontmatter must declare 'docType: slice-design'\". A file that *is* readable (the preflight confirmed it) but whose frontmatter is malformed \u2014 unterminated `---`, or a YAML block the flat parser cannot handle \u2014 is reported as a docType problem, which sends the user looking in the wrong place. The project convention in `AGENTS.md` is explicit failure rather than silent fallback. Consider distinguishing `frontmatter.found === false` (and checking whether the file even starts with `---`) from a frontmatter block that exists but lacks `docType`, and giving the former a distinct message or reason value.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:97-101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `preflight` readability check and the later `readFile` disagree on error classification",
+      "description": "`preflight` uses `stat` + `access(R_OK)` to classify a bad argument, mapping `ENOENT` to \"no such file\" and everything else to \"cannot read file\". But `stat` on a path whose *parent* directory is missing also raises `ENOENT`, and a path with a non-directory component (`file/child.md`) raises `ENOTDIR` \u2014 reported as \"cannot read file\" rather than as the missing-file case. More importantly, the `access` check is advisory and redundant: on platforms with POSIX access semantics the subsequent `readFile` is the authoritative check, and `access(R_OK)` can succeed for root regardless of mode bits. The design's stated intent \u2014 \"a file argument that is missing, not a regular file or unreadable\" each exit 2 \u2014 is met, but the message text can be misleading. A simpler and more accurate approach is to let the `readFile` failure drive the classification and use `stat` only for the `isFile()` check.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:76-92"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `validate-slice-design` bash script remains in the guide and still ships with the guide",
+      "description": "This is not a defect in the changed code \u2014 the slice design explicitly defers guide-side edits to a separate ai-project-guide session after the cf release. Flagging it only so the duplication is tracked: the guide script and the new core validator now implement the same contract in two places, and the slice design notes that \"If a future guide changes the marker, the command fails loudly\". The `SLICE_DESIGN_TEMPLATE_RELATIVE_PATH` constant in `packages/core/src/guides/types.ts:315` and the script's own `TEMPLATE` default are separate definitions of the same path.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "project-documents/ai-project-guide/scripts/validate-slice-design"
+    },
+    {
+      "severity": "PASS",
+      "title": "Template path is defined once and resolved worktree-aware",
+      "description": "`SLICE_DESIGN_TEMPLATE_RELATIVE_PATH` is a single exported constant consumed by `packages/cli/src/commands/validateDesign.ts:12` and re-exported through `packages/core/src/guides/index.ts`. The CLI resolves the template as `path.resolve(checkoutRoot, GUIDE_RELATIVE_PATH, SLICE_DESIGN_TEMPLATE_RELATIVE_PATH)` via `resolveOperationPath(project, worktreeId)`, which selects the invoking worktree's guide over the project root \u2014 matching the `cf validate frontmatter` precedent in `packages/cli/src/commands/validate.ts`. The `packages/cli/tests/commands/validate-design.test.ts` worktree test covers this by changing CWD and asserting the template path follows.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/guides/types.ts:315"
+    },
+    {
+      "severity": "PASS",
+      "title": "Typed error boundary keeps every usage and template failure at exit 2 with empty stdout",
+      "description": "`SliceDesignValidationError` (defined at `packages/core/src/schema/sliceDesignFiles.ts:40`) is thrown for a missing template, a template with no required headings, a non-regular file, an unreadable file, and an empty argument list; the CLI action routes all of them through `handleError(err, 2)`. Because `validateSliceDesignFiles` runs `preflight` over all arguments before producing any result (`packages/core/src/schema/sliceDesignFiles.ts:119`), no partial results can accompany an error \u2014 the `packages/cli/tests/commands/validate-design.test.ts` \"valid file before a missing one\" case asserts both the exit-2 rejection and empty stdout in human and JSON mode.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:96-105"
+    },
+    {
+      "severity": "PASS",
+      "title": "The CLI command adds no new dependency and keeps the core layer browser-safe",
+      "description": "The pure validator is exported from the browser-safe `@context-forge/core` entry and the fs-dependent file layer only from `@context-forge/core/node` (`packages/core/src/node.ts:30-38`), matching the existing `frontmatterSchema` / `frontmatterFileValidator` split. No new runtime dependencies were added to either `packages/core/package.json` or `packages/cli/package.json`; the implementation uses only `node:fs/promises`, `node:fs`, `node:path`, and the existing `commander`.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "packages/core/src/index.ts:41-48"
+    },
+    {
+      "severity": "PASS",
+      "title": "The pure validator handles the real-world formats the ported script mishandled",
+      "description": "`splitLines` strips a trailing `\\r` before matching, so CRLF documents match (the script did not), and `documentHeadingKeys` toggles on any line starting with three backticks to skip fenced code blocks, matching the script's fence handling. `headingKey` removes HTML comments, parentheticals, and truncates at the first `{`, then lowercases and trims \u2014 reproducing the script's `heading_key` normalization while widening it for the quoted-`docType` case documented in the slice design. `packages/core/tests/schema/sliceDesignValidator.test.ts` covers case, whitespace, comments, parentheticals, placeholder prefix matching, level mismatch, fenced blocks, and CRLF.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:34-37"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Heading regex accepts `#` with more than six hashes, unlike the ported script and markdown",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:27",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`requiredHeadings` reads the marker from the next line only, so a marker separated by a blank line is silently ignored",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:53-59",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`parseFrontmatter` failures are indistinguishable from a missing `docType`",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:97-101",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `preflight` readability check and the later `readFile` disagree on error classification",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:76-92",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The `validate-slice-design` bash script remains in the guide and still ships with the guide",
+      "location": "project-documents/ai-project-guide/scripts/validate-slice-design",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Template path is defined once and resolved worktree-aware",
+      "location": "packages/core/src/guides/types.ts:315",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Typed error boundary keeps every usage and template failure at exit 2 with empty stdout",
+      "location": "packages/cli/src/commands/validateDesign.ts:96-105",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "The CLI command adds no new dependency and keeps the core layer browser-safe",
+      "location": "packages/core/src/index.ts:41-48",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The pure validator handles the real-world formats the ported script mishandled",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:34-37",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:15:00.381206",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 261554,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 772186,
+  "cached_tokens": 634496,
+  "cache_write_tokens": null,
+  "completion_tokens": 67993,
+  "reasoning_tokens": 64303,
+  "duration_seconds": 366.4017049591057,
+  "cost_usd": 0.035166122,
+  "cost_basis": "alias_pricing"
+}

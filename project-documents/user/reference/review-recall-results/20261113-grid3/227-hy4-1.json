@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Cutover failures can bypass the promised report",
+      "description": "The module docstring at `scripts/cutover_227_tick_backup.py:2-8` promises that the first failure stops the run and the report is still written. But `run_steps()` at lines 269-284 only catches `StepFailed` and `subprocess.CalledProcessError`, while `main()` at lines 287-316 writes the report only after `run_steps()` returns. Ordinary operational failures raise other exceptions and skip `report.write_text()` at line 312: `CRON_FILE.read_text()` at line 95 and `tick_commands()` at `scripts/cutover_227_host.py:99-100` can raise `FileNotFoundError`; `step_production()` at `scripts/cutover_227_tick_backup.py:224` can raise `FileNotFoundError` or `IndexError` on a missing/empty health log; `conf_sums()` at `scripts/cutover_227_host.py:81-82` can raise `StopIteration`; and `int(psql(...))` at `scripts/cutover_227_host.py:96` can raise `ValueError`. Add a documented top-level handler or `try/finally` around report writing, record the exception/traceback in `step.seen`, and still emit the FAIL report.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:269-284"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lock query builds SQL with constants instead of parameterized values",
+      "description": "`tick_locks_held()` at lines 90-96 builds `objid IN ({keys})` with an f-string and sends the resulting SQL to `psql()` at `scripts/cutover_227_host.py:59-62` as a literal `-c` argument. The SQL rules require parameterized queries and prefer `EXISTS` over `COUNT` for existence checks. Even though `TICK_LOCK_KEYS` are trusted integer constants, this is string-built SQL and should not be the pattern for a database-facing host primitive. Use `SELECT EXISTS(...)` with bound/quoted values via a parameterized client or psql variables, and return a boolean rather than counting all matching locks.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "scripts/cutover_227_host.py:90-96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Offsite verification discards push command failures and output",
+      "description": "`step_offsite()` at lines 207-217 calls `shell(tick_commands()[\"push\"], step)` at line 209 but ignores the returned `CompletedProcess`. `shell()` at `scripts/cutover_227_host.py:53-56` captures stdout/stderr but only appends the command text to `step.seen`; no `record()` call is made. If `sync_wal_offsite.sh` exits non-zero, the cutover report contains neither its exit code nor its error output, and the step can still pass if the later `rclone check` calls are clean. The same observability gap appears in `step_weekly()` at `scripts/cutover_227_tick_backup.py:173-187` and `step_metadata()` at lines 192-195, which rely on log tails and return codes but do not record stdout/stderr for failures before log redirection. Record each shell result and explicitly assert the push command\u2019s success, or document and handle an allowed skip.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:207-217"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--check --rehearse` creates a directory despite the no-change contract",
+      "description": "The header comment at `deploy/setup-backup.sh:4-8` says `--check` changes nothing, but the rehearsal setup at lines 134-138 runs `mkdir -p \"$REHEARSE\"` whenever `--rehearse` is supplied, including check mode, before step 1. The tests in `test/unit/test_setup_backup.py` invoke `_check(host)` with `--rehearse` and assert that no `cron.d` or cluster directories are created, but a normal check still leaves `$REHEARSE` behind; `test_malformed_table_stops_before_any_step` only sees no rehearsal directory because table parsing happens before this block. Create the rehearsal root only in apply mode, require the caller to create it, or update the documented `--check` contract and tests to state this side effect explicitly.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh:134-138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Production cron comparison hard-codes the table's replication host",
+      "description": "`strip_new_args()` at lines 84-88 removes ` --replication-host 127.0.0.1` using a literal, while `production_changes()` at lines 91-99 accepts only `url_key` and `bucket_remote`; `step_apply()` at `scripts/cutover_227_tick_backup.py:114-116` likewise passes only those two values. The `17/main` row in `deploy/backup-clusters.conf` defines the replication host, and `test/unit/test_setup_backup.py` repeats the same literal in `_NEW_MAIN_ARGS`. This scatters one comparison value across config, helper, cutover call, and test. If the table\u2019s replication host changes, the TD3 comparison can fail even though the rendered cron is correct. Pass `ctx.main.replication_host` into the comparison and derive the test\u2019s expected arguments from the same table/parser.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:84-88"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New provisioning tests assert source text rather than behavior",
+      "description": "The new 227 TD5 tests at `test/unit/test_provision_tick_lib.py:176-259` largely parse the shell script and SQL file as text: `test_only_trading_tick_is_created`, `test_parent_directories_755_data_directory_700`, `test_roles_are_applied_with_replication`, and `test_roles_sql_grants_replication_only_when_asked` assert exact assignment strings or substring ordering. This violates the testing rule against asserting implementation rather than behavior: harmless refactors can fail, while a behavioral regression that preserves a matching substring can pass. Prefer executing `hba_content()`/`ensure_databases()` through stubbed `tick_psql` that records arguments and outputs, or an integration fixture against a throwaway database, then assert generated HBA lines, invoked psql variables, and role attributes.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_provision_tick_lib.py:176-259"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Cutover failures can bypass the promised report",
+      "location": "scripts/cutover_227_tick_backup.py:269-284",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Lock query builds SQL with constants instead of parameterized values",
+      "location": "scripts/cutover_227_host.py:90-96",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Offsite verification discards push command failures and output",
+      "location": "scripts/cutover_227_tick_backup.py:207-217",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`--check --rehearse` creates a directory despite the no-change contract",
+      "location": "deploy/setup-backup.sh:134-138",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Production cron comparison hard-codes the table's replication host",
+      "location": "scripts/cutover_227_helpers.py:84-88",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New provisioning tests assert source text rather than behavior",
+      "location": "test/unit/test_provision_tick_lib.py:176-259",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:27:08.651184",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 556567,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2458556,
+  "cached_tokens": 2126720,
+  "cache_write_tokens": null,
+  "completion_tokens": 152901,
+  "reasoning_tokens": 150417,
+  "duration_seconds": 1513.0779747089837,
+  "cost_usd": 0.374162982,
+  "cost_basis": "alias_pricing"
+}

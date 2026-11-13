@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`tape_complete_through` field description contradicts the value it carries",
+      "description": "`TradesResponse.tape_complete_through` is documented as \"Created time of the newest stored trade. Null means the trades phase has never run \u2014 not that the tape is empty today.\" The value actually served is `sync_state['trades'].watermark_ts` \u2014 the *end of the last fully walked window*, not the newest stored trade. The schema comment in `src/manta_trading/market/schema/migrations/kalshi.py` (kalshi_006) is explicit that this is \"the tape is complete through this instant (end of the last fully walked window) - NOT the newest stored trade\", and the slice design (D5) says the same. This matters because the field's whole job (D5) is to let a client distinguish \"the window is past what the collector has reached\" from \"no activity in the window\" \u2014 a description that says \"newest stored trade\" teaches a client the wrong inference rule for exactly the zero-count case the field exists to explain. The `CandlesResponse.complete_through` description gets this right (\"Requested and stored through this instant \u2014 not 'the newest stored candle'\"), so the two sibling fields disagree with each other as well. Fix the `tape_complete_through` description to match the watermark semantics.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:194-199"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`TradeRecord.from_row` indexes row values positionally against an independently-ordered column list",
+      "description": "`TradeRecord.from_row` reads `values[0]`\u2026`values[7]` positionally, while the SELECT projection is built from `TRADE_VALUE_COLUMNS` in `src/manta_trading/data/kalshi/serve_timeseries.py:44-47`, which is `tuple(column for column, _ in TRADE_COLUMNS if column != \"market_ticker\")`. The two orderings agree only by coincidence of the current `TRADE_COLUMNS` tuple; nothing enforces it. A column inserted or reordered in `TRADE_COLUMNS` (e.g. adding `taker_side` back, or moving `is_block_trade`) silently mis-maps every trade field on the wire \u2014 `created_time` would still be right only if it stays first, and `trade_id`/`count_fp`/prices would shift under it. The candle path does not have this problem: `CandleRecord.from_row` zips `row.values` against `CANDLE_COLUMNS` with `strict=True` and walks each column's declared attribute path, so a mapping change is caught by `zip(strict=True)` and by the parity test. The trade path should do the same \u2014 carry the column names with the row, or zip against a named tuple \u2014 rather than depending on positional agreement between two files.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:151-166"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tape_filtered` duplicates the exclusion-set comparison it claims not to",
+      "description": "`tape_filtered` renders `trades_filter_sql(excluded)` and then reads back `selection.params[\"trades_excluded_categories\"]` to do a Python `in` test \u2014 so the membership test *is* effectively re-spelled in Python, even though the docstring says \"The membership test is not re-spelled here.\" The current behaviour is correct (the integration test `TestTapeFiltered` verifies agreement with the rendered SQL across five configurations, including the `None` category and the empty-set case), and re-using the rendered parameter set does avoid a second source of truth for the *set*. But the function still depends on the SQL renderer's internal parameter name (`\"trades_excluded_categories\"`) and on `params` being empty exactly when the set is empty \u2014 a fragile coupling to an implementation detail of `selection.py`. A cleaner shape would expose the excluded set's membership as a small helper in `selection.py` next to `trades_filter_sql`, so both the SQL predicate and the Python predicate derive from one function. Not a defect; noting it because the docstring currently overstates the guarantee.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:164-192"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Load-tier assertion 2 relies on a private psycopg pool attribute",
+      "description": "The \"no row fetch ran\" assertion reaches into `pool._pool` (`# noqa: SLF001`) to install the recording `ClientCursor` on live connections. This works today and the reasoning is sound (a `ClientCursor` renders client-side, so `mogrify` gives the statement the server sees, without a second round trip), but it depends on a psycopg_pool private attribute whose shape is not part of the public API and could change between psycopg_pool versions \u2014 the project pins `psycopg_pool>=3.2.0` with no upper bound. Worth an explicit comment naming the psycopg_pool version this was verified against, or a small compatibility shim, so a dependency bump surfaces here rather than as a silent loss of coverage. The test is skipped unless `MT_RUN_LOAD_TESTS=1`, so a break would not be noticed by ordinary CI.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:186-188"
+    },
+    {
+      "severity": "PASS",
+      "title": "Window resolution is correctly extracted and shared, with the end-of-day convention preserved",
+      "description": "`windows.py` centralises the day-boundary convention that `bars.py` previously owned privately, and `bars.py` now imports `window_start_utc`/`window_end_utc` rather than restating them. The `end` bound remains inclusive at every granularity (`time.max`), the reversed-range message matches the bars route's wording and format, and a naive datetime is resolved to UTC deterministically rather than to the server's local zone. `resolve_window` raises before any database work, which the unit test `test_reversed_range_is_rejected_before_any_db_work` pins (`pool.checkouts == 0`). The `date | datetime` annotation with `# noqa: TC003` is required at runtime for FastAPI's query parsing and is documented inline.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/windows.py:1-73"
+    },
+    {
+      "severity": "PASS",
+      "title": "Count-first admission runs before any row fetch on both time-series routes",
+      "description": "The candlesticks and trades routes both seek the market, then count, then fetch \u2014 and the fetch is skipped when the count exceeds the ceiling. The over-ceiling `HTTPException` is raised *after* `run_in_executor` returns, so the pooled connection is already released when the 422 unwinds (pinned by `test_the_connection_is_released_before_the_refusal`, which asserts `pool.open_now == 0`). The readers build the count and fetch predicates from one `_window` helper, so they cannot drift, and neither carries a `LIMIT` \u2014 the documented trade-off being that a row inserted between count and fetch overshoots rather than under-shoots the ceiling. The ceiling itself comes from `get_max_bars` (the live setting), never a literal, and the 422 message quotes both the live count and the live ceiling.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:112-140"
+    },
+    {
+      "severity": "PASS",
+      "title": "The tape floor is genuinely shared, not re-derived",
+      "description": "`_effective_floor` was promoted to the public `effective_tape_floor` in the same module and is now called from both `read_trade_status` (the CLI) and `serve_timeseries.tape_facts` (the API), so the two surfaces cannot report different floors \u2014 the exact risk the slice design named. The function's own query against the `historical` surface row is a single indexed read. The three branches (no historical row, older historical watermark, newer historical watermark) are each covered by a direct integration test in `TestEffectiveTapeFloor`, not only indirectly through the CLI.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/trade_status.py:130-145"
+    },
+    {
+      "severity": "PASS",
+      "title": "The load tier asserts the refusal property mechanically, not just by status code",
+      "description": "`test_over_ceiling_is_refused_without_fetching_rows` installs a recording cursor over the real pool and asserts that a `count(*)` against `kalshi.trades` ran *and* that no row-projecting `SELECT` against that table ran. A test asserting only the 422 status would pass even if the rows were read and discarded \u2014 this one does not, which is what D8 required. The fixture seeds `ceiling + 1,000` rows so both sides of the boundary are reachable from one fixture, and the window used by assertion 1 is derived from `API_MAX_BARS_PER_REQUEST` rather than written down, so raising the ceiling moves the window with it. The per-tier prod-URL guard in `test_167_data_status_nfr.py` still covers the new module (it globs every `*.py` in `test/load/`), and the new module never reads `MT_TIMESCALE_DB_URL` \u2014 `create_app(db_url=...)` is the seam.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:243-266"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`tape_complete_through` field description contradicts the value it carries",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:194-199",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`TradeRecord.from_row` indexes row values positionally against an independently-ordered column list",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:151-166",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`tape_filtered` duplicates the exclusion-set comparison it claims not to",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:164-192",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Load-tier assertion 2 relies on a private psycopg pool attribute",
+      "location": "test/load/test_188_kalshi_api_nfr.py:186-188",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Window resolution is correctly extracted and shared, with the end-of-day convention preserved",
+      "location": "src/manta_trading/api_server/routes/windows.py:1-73",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Count-first admission runs before any row fetch on both time-series routes",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:112-140",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The tape floor is genuinely shared, not re-derived",
+      "location": "src/manta_trading/data/kalshi/trade_status.py:130-145",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The load tier asserts the refusal property mechanically, not just by status code",
+      "location": "test/load/test_188_kalshi_api_nfr.py:243-266",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:36:34.709724",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 258383,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1634048,
+  "cached_tokens": 1363968,
+  "cache_write_tokens": null,
+  "completion_tokens": 70440,
+  "reasoning_tokens": 66671,
+  "duration_seconds": 277.5004411251284,
+  "cost_usd": 0.050935776,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Midnight/day helpers de-duplicated into `session_days`",
+      "description": "`ingest_plan.py` had its own private `_midnight()`; the diff deletes it and reuses the shared `utc_midnight`, and the day-walk loop is now `days_touched()`, reused by `tick_status_build`. This is exactly the \"one definition, referenced everywhere\" rule, and it keeps the semantics (the `_LAST_INSTANT` microsecond adjustment that keeps a session closing at midnight from touching the next day) in a single place.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/session_days.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exhaustiveness guards keep the status report from silently dropping a bucket",
+      "description": "`_BUCKET_ROWS` is asserted to cover exactly `set(TickSessionStatus)`, so adding a new member to the enum fails loudly instead of producing a status report that omits it. The same style is used for `EXIT_BY_OUTCOME` in `tick_exit.py`, so the convention is consistent across the slice.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The coverage \"proof\" compares the ledger and the raw rows over different populations",
+      "description": "`ledger_totals()` is restricted to the shape's *current* units (`_SHAPE_WHERE`: dataset, symbols, stype_in, stored tiers, `COVERAGE_PREDICATE`), while `raw_counts()` counts **every** row in `tick_trade` whose `ts_event` falls in the session window, with no `unit_id`, shape or product restriction. The comparison in `tick_coverage._session_row` then pairs the two per instrument.\n\nThe module docstring's premise \u2014 \"Raw rows change after commit only through supersession (whose ledger is excluded) or by hand, so a mismatch is evidence of an out-of-band edit or a defect\" \u2014 does not hold: `adopt` accepts any batch job, and a unit ingested for a *different* shape of the same product (e.g. `symbols = [ESZ4]`, `stype_in = raw_symbol`) writes rows with the same `instrument_id` into `tick_trade`. Those rows are counted as \"raw\" for the universe's shape but are absent from its ledger, so `mt data tick coverage` would report a mismatch and exit 3 for a database that is in fact consistent. The same asymmetry can mask a real defect if a shape's rows were deleted while another shape's rows keep the count non-zero.\n\nThe fix is to scope `raw_counts` to the same units the ledger is scoped to (join through `tick_archive_unit`/`tick_request` with `_SHAPE_WHERE` and `COVERAGE_PREDICATE`, or pass the current unit ids in), so both sides of the proof describe one population.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py#raw_counts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`status`/`coverage` exit 4 when the held days reach the calendar's populated horizon",
+      "description": "`_scope` builds its calendar bounds from the held unit days as `utc_midnight(d)` and `utc_midnight(d + 1 day)`, then calls `calendar_sessions(...)` \u2192 `TradingCalendar.sessions_between`, which refuses with `OutOfPopulatedRangeError` unless *both* bounds lie inside `[first_open, last_close]` (`trading_calendar.py::_require_populated`).\n\nTwo consequences:\n\n* the lower bound `midnight(earliest held day)` is earlier than the calendar's `first_open` when the earliest held unit is the calendar's first session date (that session opens at 22:00, so `midnight` of the same day precedes it);\n* the upper bound `midnight(latest held day + 1)` is later than `last_close` whenever the latest held unit is the calendar's last session date \u2014 the normal case for an ingest that has caught up to the horizon.\n\nEither case raises `TickCalendarError`, which `exit_code_for` maps to exit 4, so the whole command fails with \"calendar \u2026 outside populated sessions\" instead of reporting the status. This is the same bound rule 225 TD7 established for ingest (`test/unit/data/tick/test_session_days.py`: \"ingest's `sessions_between(d, d+1)` never passes the horizon\"), where the offending day is instead reported as a per-unit `session_boundary` check failure (`ingest_plan.Calendars.frame`). `build_coverage` widens the same exposure by querying from `utc_midnight(start - timedelta(days=1))`.\n\nClamping the bounds to the populated span (or intersecting them with the sessions actually held) would keep the verb usable at the edges.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py#_scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `degraded` count is attached to the wrong bucket line",
+      "description": "The bucket rows are appended in a loop over `_BUCKET_ROWS`, and then\n\n```python\nlines[-1] += f\"   (degraded {p.degraded})\"\n```\n\nappends the degraded **condition** count to the last bucket line \u2014 which is the `edge unknown` row. The output therefore reads `edge unknown 2   (degraded 1)`, which a reader will take as a qualifier of the edge-unknown bucket rather than as the count of degraded days. `degraded` counts sessions whose worst condition is `degraded` (see `tick_status_build._product_status`), which is unrelated to any bucket. It deserves its own line, e.g. `degraded sessions: N`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py#_product_lines"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No load test covers the new bounded `tick_trade` scan",
+      "description": "The slice adds a read path over the `tick_trade` hypertable (`raw_counts`: a `count(*)` over the range's first open to last close joined against the session array). The project rules require a load test for code on the database/environment paths that asserts on latency, throughput or resource bounds, and the slice already has a load tier (`test/load/test_225_tick_ingest_nfr.py` covers ingest). Nothing exercises `coverage` at scale: a wide `--start/--end` range, a session array with hundreds of entries, or the resulting scan cost on a multi-chunk hypertable is untested. The range is unbounded by the CLI (only `end > start` is checked), so an operator can ask for a decade-wide scan with no statement timeout on the connection.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_225_tick_ingest_nfr.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The same shape query is issued twice per product",
+      "description": "`_scope` calls `shape_units(conn, shape_of(entry))` to learn the held days, and `session_verdicts` calls `shape_units(conn, shape_of(entry))` again for the same shape. The result is identical and the query is not date-bounded, so it reads every unit of the shape twice per product per invocation. Passing the already-fetched map down (or bounding it by day) would halve the work and remove the risk of the two reads disagreeing.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py#session_verdicts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Shape matching relies on order-sensitive array equality",
+      "description": "`Shape.params()` sends `symbols` as the universe's tuple and the predicate compares `r.symbols = %(symbols)s`, which in PostgreSQL is element-wise, order-sensitive array equality. The universe validates that its own symbols are sorted (`universe._validate_entry`), but `tick_request.symbols` is written from the request as adopted/passed. For the single-symbol universe of today this is moot; when slice 231 adds a multi-symbol product whose request was stored in a different order, that unit would silently not match the shape, and `status` would report it as absent rather than held. Sorting on both sides (or comparing as sets) would remove the hazard.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py#Shape.params"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Calendar error handling is now implemented twice",
+      "description": "`calendar_sessions` opens a `TradingCalendar`, calls one method, maps `psycopg.OperationalError` / `CalendarNotFoundError` / `OutOfPopulatedRangeError` to `TickCalendarError` and closes the calendar in a `finally` \u2014 the same sequence `tick_calendar.product_session_days` already implements. Two copies of the same exception-to-`TickCalendarError` mapping can drift (as the horizon issue above shows, only one of them was considered). A shared helper in `tick_calendar.py` would keep one definition.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py#calendar_sessions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The read epilog promises exit 1 for \"a setting\", but an unset calendar URL exits 4",
+      "description": "`READ_EPILOG` says exit 1 covers \"a setting\". An unset `MT_TICK_DB_URL` does exit 1 (`database_url` raises `TickPreflightError`), but an unset `MT_TIMESCALE_DB_URL` \u2014 the same class of problem, a missing setting \u2014 raises `TickCalendarError` from `calendar_url` and exits 4. The epilog should either name the distinction or the calendar-URL failure should be mapped to the preflight exit.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py#READ_EPILOG"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tick.py`'s docstring no longer names the render modules",
+      "description": "The docstring still says \"Rich rendering lives in `tick_render.py` and `tick_pass_render.py`\", but the slice adds `tick_status_render.py` (and `tick_ingest_render.py` already existed). The sentence should mention them, since it is the map a new contributor reads first.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick.py:8"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The renderer's `age()` helper has no direct test",
+      "description": "`age()` is pure and has three branches (days, hours, minutes) but is only exercised indirectly through the CLI integration test, which asserts on substrings that do not include the age string. A negative value (a clock skew between the writing host and the reader) would render as `-1h -3m`, which is also untested.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py#age"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Midnight/day helpers de-duplicated into `session_days`",
+      "location": "src/manta_trading/data/tick/session_days.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Exhaustiveness guards keep the status report from silently dropping a bucket",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The coverage \"proof\" compares the ledger and the raw rows over different populations",
+      "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`status`/`coverage` exit 4 when the held days reach the calendar's populated horizon",
+      "location": "src/manta_trading/data/tick/tick_status_build.py#_scope",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `degraded` count is attached to the wrong bucket line",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py#_product_lines",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No load test covers the new bounded `tick_trade` scan",
+      "location": "test/load/test_225_tick_ingest_nfr.py",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "The same shape query is issued twice per product",
+      "location": "src/manta_trading/data/tick/tick_status_build.py#session_verdicts",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Shape matching relies on order-sensitive array equality",
+      "location": "src/manta_trading/data/tick/status_reads.py#Shape.params",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Calendar error handling is now implemented twice",
+      "location": "src/manta_trading/data/tick/tick_status_build.py#calendar_sessions",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The read epilog promises exit 1 for \"a setting\", but an unset calendar URL exits 4",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py#READ_EPILOG",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`tick.py`'s docstring no longer names the render modules",
+      "location": "src/manta_trading/cli/commands/tick.py:8",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The renderer's `age()` helper has no direct test",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py#age",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:03:17.634993",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 31,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 314508,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1198575,
+  "cached_tokens": 1026560,
+  "cache_write_tokens": null,
+  "completion_tokens": 84947,
+  "reasoning_tokens": 80989,
+  "duration_seconds": 499.3081905830186,
+  "cost_usd": 0.04557114499999999,
+  "cost_basis": "alias_pricing"
+}

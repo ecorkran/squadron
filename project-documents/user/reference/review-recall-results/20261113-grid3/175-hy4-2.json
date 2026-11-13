@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "SDK result usage reader assumes the untyped usage object is a mapping",
+      "description": "`read_result_usage()` documents `msg.usage` as an untyped CLI value read defensively, but after the `None` check it only type-annotates `usage: dict[str, Any] = msg.usage`; there is no runtime mapping check. `_usage_int()` at `src/squadron/providers/sdk/usage.py:57-62` then does `key not in usage` and `usage[key]`, which raises `TypeError` for a non-mapping such as a list or int. `tests/providers/sdk/test_usage.py` covers `usage=None` and malformed fields, but not a malformed `usage` object. A single bad SDK result can crash the session/review path before provider-error telemetry is attached. Guard with `isinstance(msg.usage, Mapping)`, warn once, and return `(None, turns, cost)`; add a regression test.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/usage.py:39-42"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Boolean usage metadata can be persisted as an unreadable record",
+      "description": "`record_from_message()` accepts `turns if isinstance(turns, int)` and `cost if isinstance(cost, float | int)`. Because `bool` subclasses `int`, metadata containing `True`/`False` is accepted, then `UsageRecord.to_dict()` writes booleans into run state. `UsageRecord.from_dict()` in `src/squadron/core/usage.py` rejects bool via `_opt_int()`, so `sq stats run` later marks that row unreadable. Other boundaries explicitly exclude booleans (`src/squadron/providers/sdk/usage.py:68-72`, `src/squadron/stats/reviews_report.py:130-135`), so this is inconsistent boundary validation. Exclude `bool` here and add a test that malformed provider metadata produces `None` fields rather than a corrupt persisted record.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py:101-104"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failed compact actions discard provider-error telemetry",
+      "description": "`CompactAction._execute_sdk_rotate()` now measures `started` and requires a `UsageCapture`, and its success path stamps the reply telemetry. Its broad `except Exception` around `context.sdk_session.compact()` returns a failed `ActionResult` with no metadata and never calls `record_from_error()` or `record_from_telemetry()`. `SDKExecutionSession.dispatch()` attaches partial telemetry to `ProviderError` on failure, and dispatch/review/summary paths record that spend; compact does not. This violates the new failure-mode expectation that a failed I/O/LLM call has an observable usage signal. Add a `ProviderError` branch that stamps available telemetry (including partial on unusable stalls) and a test with a stalled compact call.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py:73-88"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews --json` emits plain text on stdout when the reviews directory is missing",
+      "description": "`stats_reviews()` computes `reviews_dir`, calls `reviews_usage_report()`, and on `report.missing_dir` calls `typer.echo(\"No review directory at ...\")` before reaching the `as_json` branch. With `--json`, stdout therefore contains human text instead of parseable JSON, while the command still exits 0. `commands/sq/stats.md` and `commands/agents/sq-stats/SKILL.md` both advertise `--json` for `reviews`. `tests/cli/test_stats.py` only covers the missing-directory table path, not `--json`. Emit the same empty report shape as JSON (with `missing_dir`), or write the message to stderr and exit non-zero; add a `--json` regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:59-65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews` does not use the project\u2019s shared review-directory resolution",
+      "description": "The new command hard-codes `Path.cwd() / REVIEWS_DIR`. Review/runtime paths use `resolve_repo_cwd()` in `src/squadron/cli/commands/review.py:286-292` to anchor at the git root, and `resolve_reviews_dir()` in `src/squadron/review/reviews_dir.py#resolve_reviews_dir` handles config/PR external review directories. Running `sq stats reviews` from a repository subdirectory with no `--cwd`/`--reviews-dir` reports \u201cNo review directory\u201d even when the repo-root reviews exist; PR reviews saved to an external directory are never visible to stats. The CLI tests monkeypatch into a temp root and create the expected directory there, so they do not cover this path drift. Route through the shared resolution (or expose equivalent flags) and test from a nested directory plus an external reviews directory.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:59"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`reviews_usage_report()` counts any frontmattered markdown as a review",
+      "description": "The loop globs `*.md`, parses frontmatter, applies the slice filter, and excludes `runId`; it never checks `docType: review` or `reviewType`. Any markdown file in the reviews directory with a YAML mapping therefore becomes a `ReviewUsageRow` and contributes to `UsageTotals`. The test fixtures hard-code `docType: review` in `tests/stats/test_reviews_report.py:12-18`, but the production code ignores that key and no test covers a non-review document in the same directory. Filter on the persisted review contract (at minimum `docType == \"review\"`) before building a row, and add a negative test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py:69-81"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unreadable review artifacts can abort the whole stats report",
+      "description": "`read_frontmatter()` in `src/squadron/documents/frontmatter.py:59-70` calls `Path.read_text(encoding=\"utf-8\")`; it returns `None` for missing/invalid YAML blocks, but `OSError`, `UnicodeDecodeError`, and a file removed after `glob()` propagate. `reviews_usage_report()` only handles `front is None`, so one permission error or invalid UTF-8 artifact crashes `sq stats reviews` with a traceback instead of incrementing `skipped`. The report\u2019s `skipped` field is documented as \u201cunreadable frontmatter\u201d, and the new tests only exercise a text file with no fence. Catch specific read/decode errors, log a WARNING naming the path, increment `skipped`, and continue; add a test for an unreadable/invalid-encoding artifact.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py:69-73"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Standalone review reports cannot recover the alias from `requestedModel`",
+      "description": "`_record()` sets `alias=requested if requested in get_all_aliases() else None`, reading `requestedModel`. Persistence writes `requestedModel` only when `result.model_substituted` is true and writes the resolved model id (`src/squadron/review/persistence.py:459`); `run_review_with_profile()` sets `result.requested_model = resolved_model` after alias resolution. It does not write the alias name, and normal reviews omit the key entirely. As a result, standalone review `UsageRecord.alias` is almost always `None`; `cost_cell()` in `src/squadron/cli/stats_views.py:166-179` cannot identify `cost_tier = \"subscription\"` aliases, so provider costs are rendered as real money (`$0.41 prov`) instead of `api-rate equiv.`. `tests/stats/test_reviews_report.py` hand-writes `requestedModel=\"opus\"`, which production frontmatter does not produce. Persist the resolved alias explicitly (for example `aiAlias`) and read that key in the stats report, with a test using a real formatted review artifact.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py:109-125"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "SDK result usage reader assumes the untyped usage object is a mapping",
+      "location": "src/squadron/providers/sdk/usage.py:39-42",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Boolean usage metadata can be persisted as an unreadable record",
+      "location": "src/squadron/pipeline/usage_capture.py:101-104",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Failed compact actions discard provider-error telemetry",
+      "location": "src/squadron/pipeline/actions/compact.py:73-88",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats reviews --json` emits plain text on stdout when the reviews directory is missing",
+      "location": "src/squadron/cli/commands/stats.py:59-65",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats reviews` does not use the project\u2019s shared review-directory resolution",
+      "location": "src/squadron/cli/commands/stats.py:59",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`reviews_usage_report()` counts any frontmattered markdown as a review",
+      "location": "src/squadron/stats/reviews_report.py:69-81",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unreadable review artifacts can abort the whole stats report",
+      "location": "src/squadron/stats/reviews_report.py:69-73",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Standalone review reports cannot recover the alias from `requestedModel`",
+      "location": "src/squadron/stats/reviews_report.py:109-125",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:41:13.471743",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 66,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 280468,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 16,
+  "prompt_tokens": 2699643,
+  "cached_tokens": 2347648,
+  "cache_write_tokens": null,
+  "completion_tokens": 74129,
+  "reasoning_tokens": 70380,
+  "duration_seconds": 768.774910209002,
+  "cost_usd": 0.288743773,
+  "cost_basis": "alias_pricing"
+}

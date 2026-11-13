@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Fix routed to a checkout that does not own the subject can write to the wrong file",
+      "description": "In `routeView`, when the resolved owner is a different view but the owner's checkout does not contain the target file, the finding is kept in the *reporting* view (`kept.push(finding)`). The comment says \"The owner has no copy to diverge from: fix it where it was reported (D2)\" \u2014 but the condition tested is `existsSync(join(viewRoot(owner), fixRelPath(view, finding)))`, i.e. the owner does have a copy of the path. When it does *not* exist in the owner, the fix is written into the non-owner's copy of the file, which is precisely the divergence D2 exists to prevent: the owner's copy keeps the stale status and will be re-detected as an inconsistency on the next run. The routing test `4. owner lacks the file \u2192 kept in the view that reported it` (packages/core/tests/introspection/routedFixes.test.ts:227-239) pins this behaviour for slice 955, so it is intentional as designed \u2014 but the design leaves two checkouts permanently out of sync, with the owner's copy never converging. If the intent is \"the owner genuinely does not own this document,\" the subject index should be re-resolved rather than falling back to the reporting checkout.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:146-158"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`routeView` compares the fix path of the *reporting* view against the *owner's* root",
+      "description": "`fixRelPath(view, finding)` computes the path relative to the reporting view's root, and that relative path is then joined onto the owner's root to test existence. This is only meaningful when the two checkouts share the same relative layout \u2014 which is the normal case for linked worktrees, but not guaranteed (a worktree may hold the file at a different relative path, or the project's `fileSlicePlan`/`fileArch` overlay may point at different documents per worktree). The existence test then answers a question about a *different* file than the one that would be written, so the NOT_OWNER-vs-keep decision can be made against the wrong document. Using the owner's own document resolution (or comparing absolute paths derived per view) would make the check unambiguous.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:150-156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`FIX_COMMIT_MESSAGE` hardcodes a commit message in core instead of using the project's commit-message convention",
+      "description": "`export const FIX_COMMIT_MESSAGE = 'docs: update project documents in response to cf check --fix'` is a magic string embedded in a source file. AGENTS.md specifies commit-message format `{type}: {short imperative summary}` \u2014 `docs: update project documents in response to cf check --fix` is not imperative (\"update ... in response to\" is fine, but the trailing clause reads as a justification rather than part of the summary) and is well over the ~72-character guideline (it is 78). Other commit messages in the codebase should be checked for a central definition; if none exists, this is at least the place where a shared constant belongs rather than a literal.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:23"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`FIX_GIT_TIMEOUT_MS` is applied to commits but not to the invoking-checkout probe",
+      "description": "`resolveInvokingCheckout` calls `gitExec(['rev-parse', '--show-toplevel'], cwd)` with no `opts`, so it inherits the unbounded default \u2014 while every other git call this slice introduces is explicitly bounded by `FIX_GIT_TIMEOUT_MS` (D5a). The stated purpose of the bound is \"a hanging hook or a stuck lock\", but an unbounded `rev-parse` in a corrupted repository is exactly the same class of hang, and this call is on the critical path before any write. Passing `{ timeoutMs: FIX_GIT_TIMEOUT_MS }` would make the bound uniform.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:88-97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`commitPathsIfChanged` stages with `add -A`, which can pick up more than the intended paths",
+      "description": "`gitExec(['add', '-A', '--', ...relPaths], repoPath, opts)` is scoped by pathspec, so the *staging* is limited to `relPaths` \u2014 but the `commit` then runs `git commit -m message -- <relPaths>`, which commits the index. If a file under `relPaths` was already staged with *other* modifications by the user, `add -A` will stage the user's version rather than the fix's version \u2014 the fix's write is overwritten in the index and the user's staged content is what lands in the commit. The pre-existing `commitPathIfChanged` had the same shape, so this is not a regression, but the new multi-path variant amplifies it: the comment \"The pathspec on `commit` keeps anything else the user has staged out of this commit\" only protects paths *outside* `relPaths`, which is a weaker guarantee than the surrounding prose implies.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts:167-171"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`applyPlanEntry` decrements `fixed` by `fixLog.length` after a failed commit, but `fixLog` may not be 1:1 with findings",
+      "description": "On a failed commit that was successfully rolled back, the code does `fixed -= fixLog.length; fixLog = []`. `fixed` counts applied fixes and `fixLog` counts applied fixes, so the arithmetic is right *if* every log entry corresponds to exactly one increment of `fixed`. That holds for `applyFixes`, but the two are separate counters that would silently drift if a future writer path ever produced a log entry without incrementing `fixed`. The coupling is implicit and worth an explicit comment or a single source of truth.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:262-266"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`printCheckOutput` prints two different summaries for multi-checkout fix runs",
+      "description": "When `showWorktree` is true, the routed report prints `Fixed N finding(s)`; otherwise the legacy branch prints `Fixed N of M findings` or `Fixed M finding(s) (N file update(s) across checkouts)`. The legacy \"across checkouts\" wording is now unreachable in multi-checkout mode \u2014 the routed report supersedes it \u2014 but the message remains for the single-checkout path where \"across checkouts\" is misleading. Worth pruning the now-dead branch of that sentence.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/output/checkReport.ts:96-111"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`printDeferred` uses `d.finding.worktree?.path` as the path root, which is the *reporting* checkout, not the owner",
+      "description": "For a NOT_OWNER deferral the deferred entry's file path is relative to the reporting checkout's root, which is what the code does \u2014 correct for the path \u2014 but the printed owner name comes from `d.owner`, so the line mixes \"this file in checkout A\" with \"owned by checkout B\". The text `stale copy; owned by beta` reads reasonably, but the two roots are not adjacent in the output, so a reader may misattribute which file is stale.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/output/fixReport.ts:44-54"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`DEFER_REASON_LABELS` is exported from the CLI output module and imported by a test",
+      "description": "The map is exported for testability, which is reasonable, but the labels are part of the user-facing contract for the MCP/JSON consumers too. Keeping the reason\u2192text mapping in one place in `core` (next to `DeferReason`) would let both the CLI and any future MCP text output share it, and would let the completeness test live with the enum.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/output/fixReport.ts:12"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`checker.fix` / `checker.fixAll` are now dead in production paths but still exercised by core tests",
+      "description": "`fix()` and `fixAll()` are no longer called by the CLI or MCP (both now use `planRoutedFixes` + `applyFixPlan`), yet they remain public API and are covered by packages/core/tests/introspection/ConsistencyChecker.test.ts. They still behave correctly and are a reasonable single-checkout convenience, but they now bypass the routing entirely \u2014 meaning a future caller of `checker.fix()` in a multi-checkout project would get the old, unrouted behaviour. Worth either deprecating them or noting that they are single-checkout only.\n\n**Verified as sound**\n\n- `checkoutReadiness.ts` probes in the documented order (not-a-checkout \u2192 detached HEAD \u2192 busy \u2192 dirty), each probe maps to a distinct `DeferReason`, and the `--git-path` marker technique correctly distinguishes a checkout's own git dir from the primary's (important for linked worktrees). Its own test file covers all six branches.\n- `resolveFixOwner` is genuinely pure, and its `rangeOverride` exclusion is explicitly reasoned in the doc comment (matching the project rule against using user-visible labels as structure).\n- `mergeFixResults` now concatenates `deferred`/`commits` without dedup, consistent with its existing treatment of `fixLog`, and the merge test pins that.\n- The `subjectIndex` addition is threaded through every fixable rule in `ConsistencyChecker`, and `ConsistencyChecker.subjectIndex.test.ts` asserts per-rule expected indices rather than just \"the key exists\" \u2014 a good guard against a rule silently defaulting to `null`.\n- The CLI/MCP both fail explicitly when the invoking checkout is unregistered (`resolveInvokingCheckout` throws; CLI converts to `UserError`, MCP to `errorResult`), and both have tests asserting nothing was written.\n- The real-git fixture (`gitWorktreeFixture.ts`) pins `core.hooksPath`, `commit.gpgsign`, and identity in local config so a developer's global git config cannot change test outcomes \u2014 good hygiene, and explicitly documented.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:202-215"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fix routed to a checkout that does not own the subject can write to the wrong file",
+      "location": "packages/core/src/introspection/routedFixes.ts:146-158",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`routeView` compares the fix path of the *reporting* view against the *owner's* root",
+      "location": "packages/core/src/introspection/routedFixes.ts:150-156",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`FIX_COMMIT_MESSAGE` hardcodes a commit message in core instead of using the project's commit-message convention",
+      "location": "packages/core/src/introspection/routedFixes.ts:23",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`FIX_GIT_TIMEOUT_MS` is applied to commits but not to the invoking-checkout probe",
+      "location": "packages/core/src/introspection/routedFixes.ts:88-97",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`commitPathsIfChanged` stages with `add -A`, which can pick up more than the intended paths",
+      "location": "packages/core/src/guides/gitExec.ts:167-171",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`applyPlanEntry` decrements `fixed` by `fixLog.length` after a failed commit, but `fixLog` may not be 1:1 with findings",
+      "location": "packages/core/src/introspection/routedFixes.ts:262-266",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`printCheckOutput` prints two different summaries for multi-checkout fix runs",
+      "location": "packages/cli/src/output/checkReport.ts:96-111",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`printDeferred` uses `d.finding.worktree?.path` as the path root, which is the *reporting* checkout, not the owner",
+      "location": "packages/cli/src/output/fixReport.ts:44-54",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`DEFER_REASON_LABELS` is exported from the CLI output module and imported by a test",
+      "location": "packages/cli/src/output/fixReport.ts:12",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`checker.fix` / `checker.fixAll` are now dead in production paths but still exercised by core tests",
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:202-215",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:53:52.979539",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 350380,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1624605,
+  "cached_tokens": 1459712,
+  "cache_write_tokens": null,
+  "completion_tokens": 90519,
+  "reasoning_tokens": 86990,
+  "duration_seconds": 525.0726370830089,
+  "cost_usd": 0.049740659000000007,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Review action logs every provider failure as \"unexpected error\" with a full traceback",
+      "description": "The new `ProviderError` branch in `_run_part` adds `_logger.exception(\"review: unexpected error in step %s\", context.step_name)` immediately before `return self._exception_result(context, exc, usage_record=record)`. But `ProviderError` is a named, *expected* failure class here \u2014 the surrounding comment positions this as the slice 175 D5 \"step still fails, with what the call spent before it failed\" path, and the durable record is the failure artifact written via `_save_failure_artifact` plus the stamped usage. This slice's own refactored dispatch code (dispatch.py `_provider_failure`, non-stall branch) deliberately logs \"one ERROR line and no traceback\" for exactly this case (\"the message says what happened\"). As written, every pipeline review whose provider fails emits a misleading \"unexpected error\" label plus a traceback, on top of the WARNING from the artifact save and the ERROR the design says is unnecessary. Change it to a plain `_logger.error(\"review: step %s provider failed: %s\", context.step_name, exc)` (or drop the line, since the artifact + result are the designated observers), matching the dispatch convention.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:486"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews` re-reads and re-parses both alias TOML files once per artifact and again per cost cell",
+      "description": "`cost_cell` \u2192 `_is_subscription` calls `get_all_aliases()`, and `stats/reviews_report.py:_record` also calls `get_all_aliases()`. `get_all_aliases()` (models/aliases.py) runs `load_builtin_aliases()` (reads `data_dir()/\"models.toml\"`) + `load_user_aliases()` (reads `~/.config/squadron/models.toml`) with no caching, so each call is two file reads plus a `tomllib` parse. A reviews directory with N artifacts therefore does N alias-table loads for the records and up to N more for the table's cost cells. It's a read-only CLI report so this is not hot-path blocking, but it is wasted serialization/IO that scales linearly and is trivially avoided by resolving the alias table (or the cost tier) once and threading it into the report/render. The run-side path avoids this by design (pricing warnings dedupe on the run's set), so the asymmetry is worth noting.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats_views.py:178"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A missing `UsageCapture` surfaces through the \"unexpected error\" catch-all, not a dedicated path",
+      "description": "`require_capture` is called before the inner `try` in all four LLM actions (review `_run_part`, dispatch `_dispatch_via_agent`/`_dispatch_via_session`, compact `_execute_sdk_rotate`). If `context.usage_capture` is `None`, `UsageCaptureMissingError` escapes the inner block and lands in `execute()`'s blanket `except Exception`, logged as \"unexpected error in step %s\" with a traceback. The behavior is pinned by `test_missing_capture_is_a_clear_error` (result.error contains \"usage capture\"), so it is not a bug \u2014 but the log wording is generic for what is a specific, deliberate fail-fast. Consider naming it in the catch-all, or documenting that this is the intended \"programmer-error\" channel.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:434"
+    },
+    {
+      "severity": "PASS",
+      "title": "Usage threading is correct end-to-end and the `None`-as-unreported contract holds",
+      "description": "Verified against the full files: `RunTelemetry` sums result-level usage (never per-message), `SessionReply` cleanly carries spend out of `dispatch`/`capture_summary`/`compact` (I confirmed all call sites \u2014 including `emit.py:_emit_rotate`, which discards the reply and only needs the text \u2014 were updated consistently), `resolve_cost` precedence (provider > alias pricing > none) is applied once per path, and `UsageRecord`/`TokenUsage` keep `None` for unreported fields through `plus`/`add_optional`. `format_usd`'s sub-cent handling (0.005 \u2192 `$0.0050`, 0.01 \u2192 `$0.01`) matches its docstring. `ResolvedModel.alias` is set only for true aliases (`alias in get_all_aliases()`), and both resolver paths (`_resolved` and pool `_resolve_pool`) flow through it, so bare model ids correctly leave it `None`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "The `sq stats` surface is complete and internally consistent",
+      "description": "Verified: `stats_app` is registered in `cli/app.py`; `commands/sq/stats.md` exists, so the `EXPECTED_FILES` (11) and `test_all_command_files_exist_in_source` assertions hold; table and JSON are produced by one serializer (`run_report_json`/`reviews_report_json`) and one set of row builders, so `--json` and the table cannot disagree (as the module docstring claims). `sq stats run` maps `RunUsageLoadError` to exit 1 naming the id/dir; `sq stats reviews` is read-only, excludes pipeline-stamped artifacts (`runId`) so each review's spend appears in exactly one view, skips unreadable frontmatter with a WARNING and a `skipped` count, and flags a missing dir rather than raising. The pre-slice (v3/v4/v5) state fixtures exist under `tests/pipeline/fixtures/state/` and round-trip without a `usage` key, and `StateManager.load`'s raised set (`STATE_READ_ERRORS`) is a subset of what `run_usage_report` catches, so nothing leaks.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure-mode observability is explicit and tested on the new I/O paths",
+      "description": "Per the failure-mode rule: an interrupted turn that drains no result is marked `partial` and logs a WARNING naming run/step (`record_from_telemetry`, asserted in `test_stall_with_failed_drain_records_partial`); a result that reports no usage logs one WARNING per dispatch (`test_results_without_usage_warn_once_per_dispatch`) and per agent call (`test_missing_usage_stamps_none_and_warns_once`); a stalled-but-unusable session logs the interrupt at ERROR. The `ProviderError.telemetry`/`duration_seconds`/`cost_usd` ride-along means a failed call still records what it spent (D5), covered by `test_one_shot_provider_error_records_its_telemetry`, `test_failed_review_records_error_telemetry_and_logs`, and `test_provider_error_telemetry_cost_reaches_failure_run_cost`. Cancellation is explicitly non-recording (`test_cancellation_propagates_and_writes_no_record`), matching the module docstring. No silent failure path found in the new code.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:230"
+    },
+    {
+      "severity": "NOTE",
+      "title": "One pre-existing test docstring/count is now stale",
+      "description": "`test_install_copies_files`'s docstring still reads \"Install copies all 10 command files to the target directory.\" while the suite now installs 11 (the author updated the sibling docstrings and every hardcoded `== 10` to `== len(EXPECTED_FILES)` but missed this one line). Cosmetic, but it now contradicts the code.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/cli/test_install_commands.py:172"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Review action logs every provider failure as \"unexpected error\" with a full traceback",
+      "location": "src/squadron/pipeline/actions/review.py:486",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`sq stats reviews` re-reads and re-parses both alias TOML files once per artifact and again per cost cell",
+      "location": "src/squadron/cli/stats_views.py:178",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A missing `UsageCapture` surfaces through the \"unexpected error\" catch-all, not a dedicated path",
+      "location": "src/squadron/pipeline/actions/review.py:434",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Usage threading is correct end-to-end and the `None`-as-unreported contract holds",
+      "location": "src/squadron/pipeline/usage_capture.py",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `sq stats` surface is complete and internally consistent",
+      "location": "src/squadron/cli/stats.py",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Failure-mode observability is explicit and tested on the new I/O paths",
+      "location": "src/squadron/pipeline/sdk_session.py:230",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "One pre-existing test docstring/count is now stale",
+      "location": "tests/cli/test_install_commands.py:172",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:39:47.895862",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 49,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 240342,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2737532,
+  "cached_tokens": 2010560,
+  "cache_write_tokens": null,
+  "completion_tokens": 63930,
+  "reasoning_tokens": 59677,
+  "duration_seconds": 610.7081704998855,
+  "cost_usd": 0.41564728000000006,
+  "cost_basis": "alias_pricing"
+}

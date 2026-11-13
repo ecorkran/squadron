@@ -1,0 +1,117 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Manifest pruning can delete files outside the checkout",
+      "description": "The new worktree loop in `packages/cli/src/commands/setup-ide.ts:181-197` calls `installCheckout()` for every registered worktree, so `InstallManifest.finish()` now performs stale-file deletion in each checkout. In `packages/cli/src/ideInstall/manifest.ts:174-196`, stale manifest paths are read from a user-editable file and passed directly to `path.join(this.targetRoot, rel)`; `fs.rmSync(file)` at line 190 deletes the result when checksum/size match. There is no lexical guard against `../` entries and no `realpath` containment guard against symlinked install directories. Because `isFile()` follows symlinks (`packages/cli/src/ideInstall/fsChecks.ts:12-15`), an entry such as `../outside.md`, or a stale path beneath a symlinked directory, can delete a file outside the worktree. The deleted `packages/cli/tests/commands/worktreePrune.test.ts` had pinned those containment cases; the native installer needs equivalent checks before manifest-driven deletes can run in worktrees.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/manifest.ts:174-196"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Native setup-ide hard-fails older supported guides only after writing install output",
+      "description": "`installTarget()` calls the lint check after `manifest.finish()` (`packages/cli/src/ideInstall/installer.ts:50-58`). `checkLintConfigs()` throws `InstallAbort` when `ctx.guide.lint` is absent (`packages/cli/src/ideInstall/lint.ts:228-232`), and `guidePaths()` always resolves that path to `<guide>/project-guides/lint` (`packages/cli/src/ideInstall/paths.ts:19-25`). The guide changelog says lint baselines were added under `project-guides/lint/` in v0.20.0, while the slice design still says any guide from v0.19 onward works (`project-documents/user/slices/215-slice.native-setup-ide-install.md:195`). On a v0.19.x guide, `cf setup-ide` will write the target files and manifest, then fail at the lint check with exit 1. Either skip the lint check when the guide has no lint directory, or explicitly raise the minimum supported guide version and add a regression test for that path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts#checkLintConfigs"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Install-path list is duplicated and can drift from snapshots",
+      "description": "`dryRun.ts:21-32` defines `INSTALL_PATHS` from constants, including `LINT_WRITE_PATHS` from `packages/cli/src/ideInstall/paths.ts:44-51`, but `packages/cli/tests/ideInstall/harness.ts:27-42` repeats the same top-level list with literal `.pre-context-forge`, `.context-forge`, and lint-config paths. This violates the project\u2019s DRY / \u201cnever scatter comparison values\u201d rule: adding a new lint write path in `paths.ts:44-51` will make production dry runs copy and report it, while snapshot coverage will silently omit it because the harness list is stale. Export one shared install-path list and use it from both the installer/dry-run path and the snapshot harness.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:21-32"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Manifest pruning can delete files outside the checkout",
+      "location": "packages/cli/src/ideInstall/manifest.ts:174-196",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Native setup-ide hard-fails older supported guides only after writing install output",
+      "location": "packages/cli/src/ideInstall/lint.ts#checkLintConfigs",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Install-path list is duplicated and can drift from snapshots",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:21-32",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:28:06.266360",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 491119,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2343255,
+  "cached_tokens": 2138304,
+  "cache_write_tokens": null,
+  "completion_tokens": 129458,
+  "reasoning_tokens": 126765,
+  "duration_seconds": 1377.3996525001712,
+  "cost_usd": 0.292191451,
+  "cost_basis": "alias_pricing"
+}

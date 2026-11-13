@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Over-session names are not matched to the family being reported",
+      "description": "`over_sessions` discards each volume check\u2019s family, and `_family_evidence` aggregates names by product across coverage results. `over_failures` then uses that combined list for each family with an `over` count. The failure can therefore name sessions from a different family\u2014or include duplicates\u2014rather than identifying the sessions behind that family\u2019s count. Keep the family with each name and filter names when constructing each failure.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py:105-113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Record totals silently omit families missing from the after snapshot",
+      "description": "`totals_delta` detects families present after but absent before, but not families present before and missing after. Because it iterates only `after`, a family omitted from the accounting output disappears from the reported delta instead of stopping the cutover. Validate that the before and after family-key sets match before calculating deltas.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py:141-144"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Over-session names are not matched to the family being reported",
+      "location": "scripts/purchase_accounting.py:105-113",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Record totals silently omit families missing from the after snapshot",
+      "location": "scripts/purchase_accounting.py:141-144",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:15:57.357133",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "xhigh",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 88690,
+  "cached_tokens": 86656,
+  "cache_write_tokens": null,
+  "completion_tokens": 1268,
+  "reasoning_tokens": 1034,
+  "duration_seconds": 80.24938041693531,
+  "cost_usd": null,
+  "cost_basis": null
+}

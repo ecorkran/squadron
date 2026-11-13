@@ -1,0 +1,38 @@
+{
+ "case": "197",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/3",
+  "P1": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "slices-plan` gets its items from `cf.undesigned_slices`, which drops any slice that has a `design_file`. Once a design exists but its review is still unresolved, `_select_item` therefore can't find the item and returns REJECTED for both retry and accept; the test hides this because its mock still reports the slice as undesigned."
+  ],
+  "F2": [
+   "KEEP",
+   "_git_precondition` reads the target and calls `restore_target`, which can commit leftovers and switch branches, without first calling `_require_registered_worktree` the way `enter_slice_branch` does. So an unregistered worktree gets changed using the primary checkout's target before any later check refuses."
+  ],
+  "F3": [
+   "DROP",
+   "True that a non-dict entry such as `null` raises `AttributeError` in `from_json`, but `report.json` is written atomically by squadron itself, so this only guards against a hand-corrupted file that has no realistic way to arrive."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 46.5,
+ "duration_seconds": 46.49977220897563,
+ "cost_usd": 1.0142382,
+ "effort": "high",
+ "tool_calls_made": 12,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=685997, cached=584555, cache_write=101422, completion=4247, reasoning=None)",
+ "raw_output": "I'm checking the slices-plan pipeline to confirm F1, then I'll give the verdicts.\nF1: KEEP \u2014 `slices-plan` gets its items from `cf.undesigned_slices`, which drops any slice that has a `design_file`. Once a design exists but its review is still unresolved, `_select_item` therefore can't find the item and returns REJECTED for both retry and accept; the test hides this because its mock still reports the slice as undesigned.\nF2: KEEP \u2014 `_git_precondition` reads the target and calls `restore_target`, which can commit leftovers and switch branches, without first calling `_require_registered_worktree` the way `enter_slice_branch` does. So an unregistered worktree gets changed using the primary checkout's target before any later check refuses.\nF3: DROP \u2014 True that a non-dict entry such as `null` raises `AttributeError` in `from_json`, but `report.json` is written atomically by squadron itself, so this only guards against a hand-corrupted file that has no realistic way to arrive.\nF1: KEEP \u2014 `slices-plan` selects items through `cf.undesigned_slices`, which skips any slice with a `design_file`, so once a design exists with an unresolved review, retry and accept both return REJECTED; the test hides this because its mock keeps reporting the slice as undesigned.\nF2: KEEP \u2014 `_git_precondition` reads the target and calls `restore_target` (which commits leftovers and checks out a branch) without the `_require_registered_worktree` check that `enter_slice_branch` makes, so it can change an unregistered worktree using the primary checkout's target.\nF3: DROP \u2014 True that a non-dict item such as `null` raises `AttributeError` in `from_json`, but squadron writes `report.json` itself atomically, so only a hand-corrupted file could trigger it."
+}

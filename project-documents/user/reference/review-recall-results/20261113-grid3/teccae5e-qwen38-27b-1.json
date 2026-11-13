@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Test-only fixtures are shipped inside the production source tree",
+      "description": "The fixtures live in `src/manta_trading_engine/core_model/fixtures/`, not under `tests/`. The module docstrings make the intent explicit (\"Hand-written fixture calendars for tests. These are not served data\"), and the import-boundary test (`tests/core_model/test_import_boundary.py:31-35`, `test_market_and_instrument_types_keep_their_boundary`) enforces that model modules (`markets.py`, `instruments.py`) never import `fixtures.*`. So the boundary is one-directional: production model code cannot depend on fixtures, but the shipped package still contains test-only data, and the only consumer of the new `FIXTURE_CALENDARS` mapping (`src/manta_trading_engine/core_model/fixtures/calendars.py:168-179`) is a test. This matches the project's pre-existing convention (the fixtures package already held `calendars.py`), so it is not a regression this slice introduces \u2014 but it is a dependency-direction smell that will grow with every new fixture added this way, and `Mapping`/`MappingProxyType` imports in a shipped test-data module are machinery that only tests need. Flagging it so the project can consciously decide to move the fixtures under `tests/` (the ruff `testpaths` layout already supports that) before the pattern spreads to more modules in later slices.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": "architectural-decision",
+      "location": "src/manta_trading_engine/core_model/fixtures/calendars.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`make_market` helper is duplicated across two test modules",
+      "description": "`tests/core_model/test_market_uniformity.py` defines its own `make_market(market_id)` (line 33) that builds a valid `Market`, while `tests/core_model/test_markets.py:29-40` defines a second `make_market(**overrides)` with different defaults (different timezone, two session calendars, two bases). Both test the same concept and will both have to be updated whenever the `Market` constructor changes (e.g., a new required field in a later slice). This is the kind of shared test scaffolding the rules say belongs in `conftest.py` (\"Use `conftest.py` for shared fixtures; keep individual test files clean\"). Minor today, but a third caller (the slice that validates metadata against the `Market` contract) would make the drift real.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_market_uniformity.py:33-40"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unused constant `SIXTY_SECONDS_NS` in the uniformity test",
+      "description": "`SIXTY_SECONDS_NS = 60_000_000_000` is defined but never referenced; the test uses `BarSpec.time(60)` instead (line 57). It looks like a leftover from drafting the expected ends. Harmless, but dead test code that a reader might mistake for a load-bearing constant.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/core_model/test_market_uniformity.py:34"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Uniformity test hard-copies fixture session-open literals instead of deriving them",
+      "description": "`EQUITY_OPEN_NS` / `GLOBEX_OPEN_NS` are \"copied from the fixture literals\" (per the comment on line 24). The fixture module already publishes these same instants as the `Session.open_ns` of session 0 of `EQUITY_RTH_FIXTURE` and `FUTURES_GLOBEX_FIXTURE` (and the test file `test_calendars.py` has an oracle that rebuilds them from wall times). If the fixture sessions are ever rescheduled, the copied constants here silently test bars that start in a different session than intended and the uniformity test can still pass or fail for the wrong reason. Deriving the start instant from the fixture (e.g., `EQUITY_RTH_FIXTURE.sessions[0].open_ns`) would keep one source of truth. The Kalshi row's reuse of the equity instant is justified by the always-open calendar and is fine.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_market_uniformity.py:24-30"
+    },
+    {
+      "severity": "PASS",
+      "title": "Verification notes",
+      "description": "Confirmed the substantive claims behind the new code:\n- `Market.__post_init__` normalization is sound: `_normalize_calendars` (markets.py:141-158) rejects non-ref elements, duplicate modes, and markets without `REGULAR`, then sorts lexicographically by mode value (`extended` < `regular`), which is a total order on the two-member `StrEnum`; `_normalize_bases` (markets.py:161-167) enforces non-empty and enum-only. Both run via `object.__setattr__` on the frozen-slots dataclass, so `hash(market)` is stable and order-independent \u2014 matching `test_order_of_refs_and_bases_does_not_change_identity` in `test_markets.py`.\n- The canonical encoder handles the new types without new encoder code: `StrEnum` values encode as their string value (`_encode_enum` in canonical.py:172-176), `frozenset` as `$set` sorted by element bytes (canonical.py:233-237), and the dataclass header check (frozen + `CANONICAL_TYPE`/`SCHEMA_VERSION`) is satisfied by both `Market` and the instruments. The hand-written golden bytes for `session-calendar-ref` and `contract-terms-unknown-tick` in `test_canonical_golden.py` match the documented rules (sorted keys, `$unknown` tag).\n- `Instrument` validation (instruments.py:71-78) correctly rejects `None`/`int`/`bytes`/str-subclass ids via the `type(...) is str` check, and `ContractTerms` rejects non-Decimal numerics and malformed currency via `fullmatch` (trailing newline covered by test case `\"USD\\n\"`).\n- The new extended-hours fixture literals are internally consistent with the documented EDT\u2192EST transition on 2026-11-01 and are cross-checked by the wall-time oracle in `test_calendars.py` (`FIXTURE_SESSIONS` rows for `EQUITY_EXTENDED`, plus the shared-coverage row), and by `test_extended_fixture_has_the_same_session_dates_as_regular`.\n- The import-boundary test additions (`test_import_boundary.py:103-112`) and the `EXPECTED_MODULES` extension are consistent with the actual file set; `markets.py` imports only `errors`/`timestamps` and `instruments.py` only `errors`/`markets`/`unknown`, as required.\n- No bare/blanket `except`, no swallowed errors, no `os.environ` reads in tests, no database access in the diff; typing is consistent with the strict-pyright config in `pyproject.toml` (PEP 604 unions, `list`/`tuple` built-ins, `from __future__ import annotations` throughout).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": "architectural-decision",
+      "summary": "Test-only fixtures are shipped inside the production source tree",
+      "location": "src/manta_trading_engine/core_model/fixtures/calendars.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`make_market` helper is duplicated across two test modules",
+      "location": "tests/core_model/test_market_uniformity.py:33-40",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Unused constant `SIXTY_SECONDS_NS` in the uniformity test",
+      "location": "tests/core_model/test_market_uniformity.py:34",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Uniformity test hard-copies fixture session-open literals instead of deriving them",
+      "location": "tests/core_model/test_market_uniformity.py:24-30",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Verification notes",
+      "location": "src/manta_trading_engine/core_model/markets.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:28:16.230823",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 135649,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 660984,
+  "cached_tokens": 544384,
+  "cache_write_tokens": null,
+  "completion_tokens": 43544,
+  "reasoning_tokens": 40623,
+  "duration_seconds": 155.47743120905943,
+  "cost_usd": 0.151,
+  "cost_basis": "alias_pricing"
+}

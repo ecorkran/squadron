@@ -1,0 +1,28 @@
+{"case": "a122",
+ "matched": {
+  "luna-xhigh/1/1": "a122-I5",
+  "sol-high/1/0": "a122-I1",
+  "sol-high/1/1": "a122-I2",
+  "sol-high/1/2": "a122-I4",
+  "luna-r-xhigh/1/0": "a122-I4",
+  "luna-r-xhigh/1/1": "a122-I5",
+  "minimax31-flash/1/1": "a122-I10",
+  "minimax31-flash/1/2": "a122-I13"
+ },
+ "new_issues": [
+  {"id": "a122-N1",
+   "title": "The NodeContext still holds the last observed node during the link lookup and probe stages, so an unexpected fault there would block that node instead of escalating the project.",
+   "members": ["luna-xhigh/1/0"],
+   "grade": "FALSE", "confidence": "high",
+   "why": "It is true that observe() leaves the context set and _decide() clears it only later. But every node observe() sets comes from an unresolved SQ_RUN entry, and nothing resolves those entries before _record_finished, which runs after the probes. So if a probe raises, escalate() finds a non-empty _in_flight_run_ids for that node and takes the project-scoped raise_project_escalation path, not store.block. A failure in the cf_links store read is a STORE_FAILURE, which the tenant re-raises without calling escalate. The node is never blocked as claimed; at most the project escalation's payload names an unrelated node_id.",
+   "evidence": ["src/amoeba/runner/tick.py:91-108", "src/amoeba/runner/observe.py:116-118", "src/amoeba/runner/faults.py:168-191", "src/amoeba/runner/faults.py:194-199", "src/amoeba/runner/tenant.py:142-148"],
+   "known": null, "fail_justified": null},
+  {"id": "a122-N2",
+   "title": "cli_environment now puts a working sq stub first on PATH for every CLI test, which could change the meaning of existing CLI tests that relied on sq being absent.",
+   "members": ["minimax31-flash/1/0"],
+   "grade": "FALSE", "confidence": "medium",
+   "why": "The stub is added unconditionally (cli_harness.py:58-59), and that part is true. But no test that uses cli_environment runs prune or any other sq-dependent command: git grep finds prune tests only under tests/contract and tests/process, which do not use this harness. CLI lifecycle tests reach recovery only with nothing to reconcile. start needs sq because of the new D9 probe. Before this change, a developer whose shell had the real sq would have run it, so the stub makes the tests more hermetic. The tests that are 'green for the wrong reason' do not exist at head.",
+   "evidence": ["tests/cli_harness.py:51-59", "tests/test_cli_lifecycle.py:323-343", "tests/sq_stub.py:1-27"],
+   "known": null, "fail_justified": null}
+ ],
+ "disputes": []}

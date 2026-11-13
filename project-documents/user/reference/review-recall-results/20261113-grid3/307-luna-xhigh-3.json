@@ -1,0 +1,75 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Suggested 30-day ceiling omits unheld job costs",
+      "description": "The estimate includes `unheld_jobs`, and the spend guard counts their costs toward the 30-day cap alongside trailing spend and new planned spend. The suggested command uses only `trailing_30d_usd + planned_usd`, so when unheld jobs have costs, the PM can set the printed cap and still have the purchase refused. Include those costs when deriving the cap.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:274-275"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Suggested 30-day ceiling omits unheld job costs",
+      "location": "scripts/cutover_304_first_purchase.py:274-275",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:35:40.297839",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": "xhigh",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 92232,
+  "cached_tokens": 87680,
+  "cache_write_tokens": null,
+  "completion_tokens": 824,
+  "reasoning_tokens": 693,
+  "duration_seconds": 91.53079737513326,
+  "cost_usd": null,
+  "cost_basis": null
+}

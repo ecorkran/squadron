@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Avoid applying fixes twice to views of the same checkout",
+      "description": "When multiple worktree records resolve to the same filesystem root\u2014for example, a worktree without `worktreePath`, which falls back to the project root\u2014`buildAttributedViews` still creates a view for each record. This branch treats findings from both views as owned because their roots match, so `applyFixPlan` can apply the same fix twice to the same files and overcount `fixed` and `fixLog`. Deduplicate views by checkout root before planning, or ensure each physical checkout receives each fix only once.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:146"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Rollback can erase edits made after the readiness check",
+      "description": "For non-invoking checkouts, readiness is checked immediately before applying fixes, but a concurrent edit can still occur before a commit failure triggers `restorePathsToHead`. That helper restores the entire target path to `HEAD`, potentially deleting the concurrent edit and its staged state. Preserve the pre-write state and roll back only this operation\u2019s changes, or otherwise avoid a destructive whole-path restore in this race.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:232"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Avoid applying fixes twice to views of the same checkout",
+      "location": "packages/core/src/introspection/routedFixes.ts:146",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Rollback can erase edits made after the readiness check",
+      "location": "packages/core/src/introspection/routedFixes.ts:232",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:25:03.434499",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 65,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 49024,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "xhigh",
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2110126,
+  "cached_tokens": 1847634,
+  "cache_write_tokens": null,
+  "completion_tokens": 77683,
+  "reasoning_tokens": 74757,
+  "duration_seconds": 730.8191840001382,
+  "cost_usd": 0.08356704000000001,
+  "cost_basis": "alias_pricing"
+}

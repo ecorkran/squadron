@@ -1,0 +1,135 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Estimate command output does not match the cutover's summary contract",
+      "description": "`fetch_estimate()` at `scripts/cutover_304_first_purchase.py:152-163` returns `json.loads(result.stdout)` as though it were `plan_summary`. Its callers assume top-level keys: `judge()` at `scripts/cutover_304_first_purchase.py:166-175` reads `summary[\"requests\"]`, `_estimate_only()` at `scripts/cutover_304_first_purchase.py:255-276` reads `planned_usd`, `requests`, `verdict`, and `trailing_30d_usd`, and `final_failures()` receives the same shape from `_steps()` at `scripts/cutover_304_first_purchase.py:279-298`. But `ESTIMATE_ARGS` at `scripts/cutover_304_first_purchase.py:80` invokes `mt data tick pass --estimate-only --json`; `src/manta_trading/data/tick/purchase_phase.py#PurchasePhase.run` places `plan_summary(purchase)` in a phase summary, and `src/manta_trading/cli/commands/tick_pass_render.py#pass_to_dict` plus `src/manta_trading/data/tick/pass_contract.py#PassResult.to_dict` emit `{run_id, phases[{name, summary: {...}}], outcome, exit_code}`. The plan fields are nested under `phases[].summary`, not top-level. On a real run, `main()` catches the resulting `KeyError` at `scripts/cutover_304_first_purchase.py:249-252` and exits 1 before estimating or buying. Even if the nested summary were extracted, `src/manta_trading/data/tick/spend_guard.py#evaluate_spend` sets `status = VerdictStatus.ESTIMATE_ONLY` whenever `estimate_only=True`, while `scripts/cutover_304_checks.py#judge_estimate` with `check_ceilings=True` only accepts `VERDICT_ALLOWED`; a nonempty full-cutover estimate would therefore be refused as `verdict estimate_only`. The tests at `test/unit/scripts/test_cutover_304_first_purchase.py:46-62`, `test/unit/scripts/test_cutover_304_first_purchase.py#_drive_estimate`, and `test/unit/scripts/test_cutover_304_checks.py:52-70` fake a top-level `allowed`/`nothing_to_buy` summary and monkeypatch `fetch_estimate`, so they do not cover the real CLI payload.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:152-163"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Baseline record totals are captured before the release that creates the new accounting family is installed",
+      "description": "`_steps()` at `scripts/cutover_304_first_purchase.py:279-288` calls `record_start_and_baselines(slice_id)` before `install_release(ref, commit)`. `record_start_and_baselines()` at `scripts/cutover_304_first_purchase.py:107-122` calls `evidence.record_totals()`, which runs `mt data accounting --json` through `scripts/cutover_304_evidence.py:97-100` against the currently installed production release. The 307 universe at `src/manta_trading/data/tick/universe.py:80-110` adds `ohlcv-1m` for GC; the slice design at `project-documents/user/slices/307-slice.futures-history-acquisition.md:35` records that 304 bought no GC bars. `src/manta_trading/data/tick/family_report.py#family_reports` emits one row per wanted family, with `include_tier=True` adding only an unwanted tick tier, so pre-install accounting has no `GC/bar_1m` family. After install, `collect()` at `scripts/cutover_304_evidence.py:244-279` reads accounting rows that do include `GC/bar_1m`, and `totals_delta()` at `scripts/purchase_accounting.py:135-144` treats any `set(after) - set(before)` entry as a stop. A first 307 run therefore fails in evidence with `the baseline holds no record total for ['GC/bar_1m']`; re-runs keep reading the same state files at `scripts/cutover_304_first_purchase.py:110-111` and fail identically. The tests at `test/unit/scripts/test_cutover_304_first_purchase.py:57-62`, `test/unit/scripts/test_cutover_304_first_purchase.py#_accounting`, and `test/unit/scripts/test_purchase_accounting.py:139-143` pre-populate every product/family pair and do not model the old-release baseline shape.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:279-288"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Over-session names are not keyed by volume family",
+      "description": "`src/manta_trading/data/tick/tick_coverage.py:88-97` emits a `family` field for every `VolumeVerdict`, and `src/manta_trading/data/tick/cross_tier_checks.py#traded_vs_cleared` emits one `CrossTierResult` per wanted volume family. `over_sessions()` at `scripts/purchase_accounting.py:104-115` ignores `v[\"family\"]`, and `over_failures()` at `scripts/purchase_accounting.py:118-127` resolves the names only with `named.get(row.product, ())`. `_family_evidence()` at `scripts/cutover_304_evidence.py:207-236` accumulates all over-session names into `named[product]` for every coverage read. As a result, an `ES/tbbo` over failure and an `ES/ohlcv-1m` over failure can both be narrated with the same product-wide list, mixing tick-tier and bar-family sessions; D6 item 4 at `project-documents/user/slices/307-slice.futures-history-acquisition.md:231` requires each over session to be listed by name. The tests at `test/unit/scripts/test_purchase_accounting.py:70-91` and `test/unit/scripts/test_cutover_304_first_purchase.py#test_an_over_session_fails_the_exit_rule` omit the `family` key and do not assert family-specific attribution. The exit rule still fails on any over count, so this is a report-correctness concern rather than a purchase blocker.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py:104-127"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Not-caught-up tick-tier families are never covered by item 3",
+      "description": "`coverage_reads()` at `scripts/cutover_304_evidence.py:71-90` iterates only `entry.history` and skips definitions, so it returns `ohlcv-1m` and `statistics` reads but no `tbbo` read for each product's tier range. `_family_evidence()` at `scripts/cutover_304_evidence.py:207-236` therefore calls `ledger_failures()` and `not_caught_up_report()` only for those two families. `accounting.narration(rows)` prints the `tbbo` row's `caught_up`, but a `False` tick-tier family is never converted into a session list or a `report.failures` entry through D6 item 3. `src/manta_trading/data/tick/tick_coverage.py#coverage_family` accepts `schema == entry.tier`, so a `--schema tbbo` coverage read is available; the slice design at `project-documents/user/slices/307-slice.futures-history-acquisition.md:230` says every not-caught-up family must list every judged session with its bucket and reason. Only `scripts/cutover_304_evidence.py#final_failures`'s health-exit delta might catch this; if baseline health was already non-zero and stays non-zero, the cutover can exit 0 with tick-tier gaps unlisted. `test/unit/scripts/test_cutover_304_first_purchase.py#test_coverage_reads_derive_from_the_universe` only asserts a synthetic history want and has no `tbbo` not-caught-up case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py:71-90"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Estimate command output does not match the cutover's summary contract",
+      "location": "scripts/cutover_304_first_purchase.py:152-163",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Baseline record totals are captured before the release that creates the new accounting family is installed",
+      "location": "scripts/cutover_304_first_purchase.py:279-288",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Over-session names are not keyed by volume family",
+      "location": "scripts/purchase_accounting.py:104-127",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Not-caught-up tick-tier families are never covered by item 3",
+      "location": "scripts/cutover_304_evidence.py:71-90",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:02:23.178250",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 57,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 260233,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2294926,
+  "cached_tokens": 2049984,
+  "cache_write_tokens": null,
+  "completion_tokens": 70115,
+  "reasoning_tokens": 66078,
+  "duration_seconds": 704.5654750829563,
+  "cost_usd": 0.232834228,
+  "cost_basis": "alias_pricing"
+}

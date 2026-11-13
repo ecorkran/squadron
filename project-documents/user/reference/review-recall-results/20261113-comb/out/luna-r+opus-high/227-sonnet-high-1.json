@@ -1,0 +1,28 @@
+{
+ "case": "227",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The crash paths need inputs that can't really happen on this host: a health log that exists but is empty, a missing production log, or no 17/main cluster. The `main()` read runs before any step, so no report is lost there. The stale-line claim is also wrong: `backup_health_cron.sh` uses `set -uo pipefail`, not `set -e`, and appends a line on every path except argument-usage errors."
+  ],
+  "F2": [
+   "DROP",
+   "The hard-coded `127.0.0.1` matches the `17/main` table row in this same change, and this is a one-time cutover script. If the two ever drifted, the guard would block the cutover rather than let a bad change through. The other duplicated constants are a DRY/style point, not a defect."
+  ]
+ },
+ "wall_seconds": 35.0,
+ "duration_seconds": 35.039005417143926,
+ "cost_usd": 0.7933606,
+ "effort": "high",
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=367747, cached=281716, cache_write=86019, completion=2401, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The crash paths need inputs that can't really happen on this host: a health log that exists but is empty, a missing production log, or no 17/main cluster. The `main()` read runs before any step, so no report is lost there. The stale-line claim is also wrong: `backup_health_cron.sh` uses `set -uo pipefail`, not `set -e`, and appends a line on every path except argument-usage errors.\n\nF2: DROP \u2014 The hard-coded `127.0.0.1` matches the `17/main` table row in this same change, and this is a one-time cutover script. If the two ever drifted, the guard would block the cutover rather than let a bad change through. The other duplicated constants are a DRY/style point, not a defect.\nF1: DROP \u2014 The crash inputs can't occur on this host, the `main()` read runs before any step so no report is lost, and the stale-line case is wrong because the health script uses `set -uo pipefail` (no `set -e`) and appends a line on every path except argument errors.\nF2: DROP \u2014 The hard-coded `127.0.0.1` matches the `17/main` table row in this same change, drift would make the guard block the cutover rather than let a bad change through, and the other duplicated constants are a style point in a one-time script."
+}

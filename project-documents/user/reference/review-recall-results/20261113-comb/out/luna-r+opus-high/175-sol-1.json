@@ -1,0 +1,33 @@
+{
+ "case": "175",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "_append_step` serializes only `step_result.action_results` and never `prior_rounds`, so `run_usage_report` totals leave out the spend from earlier loop rounds, and the slice design doesn't mention this as a known limitation."
+  ],
+  "F2": [
+   "KEEP",
+   "stamp` writes usage to `metadata[USAGE_KEY]` on each part, but `fold_review_parts._metadata` copies only `parts[0].metadata` and adds up nothing except tool calls, so a split review reports only the first part's usage."
+  ],
+  "F3": [
+   "KEEP",
+   "the new `return self._exception_result(...)` hands back `outputs={}`, so the loop goes on to pay for later parts, then `_part_input` raises `TypeError` during the fold and `execute`'s generic handler replaces the result with one that has no usage record."
+  ]
+ },
+ "wall_seconds": 47.3,
+ "duration_seconds": 47.26659583393484,
+ "cost_usd": 0.8867964999999998,
+ "effort": "high",
+ "tool_calls_made": 9,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=651098, cached=562157, cache_write=88923, completion=3096, reasoning=None)",
+ "raw_output": "Verified all three; quick check whether the slice design acknowledges the loop-round gap.\nF1: KEEP \u2014 `_append_step` serializes only `step_result.action_results` and never `prior_rounds`, so `run_usage_report` totals leave out the spend from earlier loop rounds, and the slice design doesn't mention this as a known limitation.\nF2: KEEP \u2014 `stamp` writes usage to `metadata[USAGE_KEY]` on each part, but `fold_review_parts._metadata` copies only `parts[0].metadata` and adds up nothing except tool calls, so a split review reports only the first part's usage.\nF3: KEEP \u2014 the new `return self._exception_result(...)` hands back `outputs={}`, so the loop goes on to pay for later parts, then `_part_input` raises `TypeError` during the fold and `execute`'s generic handler replaces the result with one that has no usage record.\nF1: KEEP \u2014 `StateManager._append_step` saves only `step_result.action_results` and drops `prior_rounds`, so the new `run_usage_report` totals miss the spend from earlier loop rounds.\nF2: KEEP \u2014 Each part gets its own record under `metadata[USAGE_KEY]`, but `fold_review_parts._metadata` copies only `parts[0].metadata` and sums nothing but tool calls, so a split review reports just the first part's usage.\nF3: KEEP \u2014 The new `_exception_result` return gives a failed part with `outputs={}`, so later parts still run and get paid for. The fold then raises `TypeError` in `_part_input`, and `execute`'s generic handler returns a result with no usage record and no original error."
+}

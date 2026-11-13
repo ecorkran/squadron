@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Readiness probe misclassifies git timeouts/failures as NOT_A_CHECKOUT or DETACHED_HEAD",
+      "description": "Description: Both probe catches treat *any* `gitExec` rejection as the specific signal they are probing. `checkoutReadiness` passes `FIX_GIT_TIMEOUT_MS` to these calls, and the constant's own docstring says the bound exists \"to cover a hanging hook or a stuck lock\". When a read-only probe hits that bound (e.g. a stuck network filesystem, or any unexpected git failure), `rev-parse --show-toplevel` timing out is reported to the user as `NOT_A_CHECKOUT` (\"checkout missing or not a git checkout\") and `symbolic-ref -q HEAD` timing out as `DETACHED_HEAD` (\"checkout is on a detached HEAD\") \u2014 a wrong cause for exactly the failure mode the timeout was added for, violating the project rule to fail explicitly rather than substitute a misleading value. The behavior is still safe (the fix is deferred, nothing is written), and neither case has a test, so the misclassification is invisible in CI. Suggested fix: inspect the error (e.g. `gitExec`'s timeout message) and either rethrow, or block with a reason that says \"probe failed\" rather than asserting the checkout is missing/detached; add a test that stubs a rejecting `gitExec` to pin the label.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/git/checkoutReadiness.ts:40-53"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A failure mid-apply leaves earlier checkouts written/committed with only a raw error",
+      "description": "Description: `applyFixPlan` (packages/core/src/introspection/routedFixes.ts, `applyFixPlan`/`applyPlanEntry`) applies plan entries sequentially with no per-entry fault isolation. If an unexpected error escapes one entry (the apply-time `gateByReadiness` re-probe can throw on a git timeout, unlike plan time where the same call is inside the same probe \u2014 same risk, but plan time happens before any writes), the whole call rejects: entries already applied are committed in their checkouts and the invoking checkout's writes stay uncommitted, and the user sees only the raw git error from `handleError`/`errorResult` with no indication that an earlier checkout was already fixed. The state is recoverable (re-running checks finds only the remaining findings), so this is informational, but a brief \"applied in N checkout(s) before stopping\" note on the error path would make partial application explicit.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts#applyFixPlan"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`fixAction!` non-null assertions rely on an upstream filter invariant",
+      "description": "Description: `fixRelPath` (packages/core/src/introspection/routedFixes.ts:59) and `routeView`'s use of `finding.fixAction!.subjectIndex` (line 143) force-unwrap `fixAction`. Every current call site guards with `fixable && fixAction` first (see `planRoutedFixes`' `fixableOf` and `applyFixes`), so this is safe today, but the type contract of `ConsistencyFinding` allows `fixable: true` with `fixAction` undefined, so a future rule emitting an unguarded fixable finding would crash `planRoutedFixes` instead of degrading to a deferral. A one-line comment on `fixRelPath` naming the invariant, or a guard that defers with `OWNER_UNRESOLVED`/skips, would make the contract local to this module.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:59"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Multi-checkout fix output prints each applied fix's detail twice",
+      "description": "Description: In multi-checkout fix mode, `printCheckOutput` first renders every finding with its matched `\u2192 Fixed: before \u2192 after in <path>` line (checkReport.ts:88-90, via `formatFinding`), then the `fixRes && showWorktree` branch (line 95) calls `printRoutedFixResult`, which re-prints the same before/after lines grouped by checkout (packages/cli/src/output/fixReport.ts, `printRoutedFixResult`). For the invoking checkout's and each committed checkout's writes the user sees the change detail twice in one run. The existing grouping test (packages/cli/tests/commands/check-worktree-fix.test.ts, \"groups the invoking write...\") only asserts the grouped section, so the duplication isn't pinned either way \u2014 worth a deliberate decision (e.g. suppress the per-finding `Fixed:` line when `showWorktree` is true, since the grouped section carries it).",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/output/checkReport.ts:88-95"
+    },
+    {
+      "severity": "PASS",
+      "title": "Routing, committing, restoring, and deferral behavior is pinned by real-git tests",
+      "description": "Description: The test additions follow the house testing rules well: tests accompany the implementation across every tier (unit: `fixOwnership.test.ts`, `checkoutReadiness.test.ts`, `commitPaths.test.ts`; integration: `routedFixes.test.ts`, `subjectIndex` coverage; CLI/MCP end-to-end: `check-worktree-fix.test.ts`, `workflowCheckRouting.test.ts`). The shared `gitWorktreeFixture` helper uses real git with per-repo pinned identity, `commit.gpgsign=false`, and `core.hooksPath` so global config can't change outcomes; the rejecting-hook and restore-failure cases (routedFixes.test.ts cases 5\u20137) verify the D5a rollback contract against real git state (`porcelain`, `commitCount`, `lastSubject`). The `DEFER_REASON_LABELS` exhaustiveness test pins the label map to the `DeferReason` union, and the single-checkout cases assert no git process is spawned (`execFile` spy) \u2014 matching the SC 9 contract. No test reads any production/external environment variable, and fixtures are self-contained temp directories cleaned up in `afterEach`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/routedFixes.test.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Readiness probe misclassifies git timeouts/failures as NOT_A_CHECKOUT or DETACHED_HEAD",
+      "location": "packages/core/src/git/checkoutReadiness.ts:40-53",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A failure mid-apply leaves earlier checkouts written/committed with only a raw error",
+      "location": "packages/core/src/introspection/routedFixes.ts#applyFixPlan",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`fixAction!` non-null assertions rely on an upstream filter invariant",
+      "location": "packages/core/src/introspection/routedFixes.ts:59",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Multi-checkout fix output prints each applied fix's detail twice",
+      "location": "packages/cli/src/output/checkReport.ts:88-95",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Routing, committing, restoring, and deferral behavior is pinned by real-git tests",
+      "location": "packages/core/tests/introspection/routedFixes.test.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:44:37.459661",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 458224,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 1713555,
+  "cached_tokens": 1538377,
+  "cache_write_tokens": null,
+  "completion_tokens": 120068,
+  "reasoning_tokens": 117029,
+  "duration_seconds": 1799.115846666973,
+  "cost_usd": 0.38311117,
+  "cost_basis": "alias_pricing"
+}

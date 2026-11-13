@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Concept-profile aliases bypass brownfield detection",
+      "description": "The resolver only treats an instruction as eligible when `resolvePhaseValue(instruction)` equals `CONCEPT_PHASE`. However, the prompt parser can select the concept prompt directly from its profile key: for example, `concept-phase-0` matches that prompt\u2019s key, but `resolvePhaseValue('concept-phase-0')` is undefined. A build using that instruction therefore renders the concept prompt without running adoption detection, contrary to the resolver\u2019s stated goal of applying adoption wherever the concept prompt runs. Align eligibility with the prompt/profile instruction normalization and cover this alias in a test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stale duplicate test file is not discovered by the test runner",
+      "description": "This new file duplicates `CoreServiceFactory.test.ts` but retains calls to `createContextPipeline` without its now-required options argument. Its `.test.ts-E` suffix does not match the normal Vitest test-file pattern, so it is neither a useful executable test nor an obvious maintained fixture. Remove the accidental duplicate or rename and update it if it is intended to be a test.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Concept-profile aliases bypass brownfield detection",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:121",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Stale duplicate test file is not discovered by the test runner",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:23:59.264513",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 5149,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 516195,
+  "cached_tokens": 472563,
+  "cache_write_tokens": null,
+  "completion_tokens": 9011,
+  "reasoning_tokens": 7861,
+  "duration_seconds": 98.39852758310735,
+  "cost_usd": 0.013594330000000002,
+  "cost_basis": "alias_pricing"
+}

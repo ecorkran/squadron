@@ -1,0 +1,43 @@
+{
+ "case": "932",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/1",
+  "F2": "haiku-xhigh/1/2",
+  "P1": "haiku-xhigh/1/0",
+  "P2": "haiku-xhigh/1/3",
+  "P3": "haiku-xhigh/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "get_typed_config`'s int branch is a shared helper that predates this change. A bool or a value \u22640 only gets in if a user sets it in config themselves, so this is validation hardening, not a defect in the new code."
+  ],
+  "F2": [
+   "DROP",
+   "Each dispatch does a few small TOML reads, next to SDK turns that take minutes. Other async callers already read config the same way, so this has no real performance effect."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P2": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P3": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 31.2,
+ "duration_seconds": 31.186781000113115,
+ "cost_usd": 0.7111158000000001,
+ "effort": "high",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=266240, cached=187045, cache_write=79185, completion=1960, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 `get_typed_config`'s int branch is a shared helper that predates this change. A bool or a value \u22640 only gets in if a user sets it in config themselves, so this is validation hardening, not a defect in the new code.\nF2: DROP \u2014 Each dispatch does a few small TOML reads, next to SDK turns that take minutes. Other async callers already read config the same way, so this has no real performance effect.\nF1: DROP \u2014 `get_typed_config`'s int check is an existing shared helper this change didn't add; a bool or a zero/negative timeout only arrives if a user sets that value in config, so this is validation hardening, not a defect.\nF2: DROP \u2014 A few small TOML reads per dispatch next to SDK turns lasting minutes have no real effect, and existing async callers already read config this way."
+}

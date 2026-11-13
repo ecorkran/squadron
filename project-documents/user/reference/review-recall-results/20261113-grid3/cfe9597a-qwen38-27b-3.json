@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`validate frontmatter` ignores the resolved worktree and operates on the main checkout",
+      "description": "Description: `validateFrontmatterAction` calls the worktree-aware `resolveProjectWorktree` (validate.ts:89) but destructures only `{ id }`, silently dropping `worktreeId`, then passes `project.projectPath` to `validateFrontmatterFiles` (validate.ts:99-101). `resolveProjectWorktree` deliberately sets `worktreeId` when the CWD is inside a registered worktree (see `findProjectByCwd` in packages/cli/src/utils/project.ts, `source: 'worktree'`). Every sibling file-scanning command in the CLI routes its path through `resolveOperationPath(project, worktreeId)` for exactly this reason \u2014 `plan.ts:43`, `task.ts:50,62,84`, `prompt.ts:52`, `arch.ts:53` all do; `check.ts:222` overlays per worktree. This command is the outlier.\n\nConcrete effect: a user standing in a git worktree directory (no `--project`) resolves to the worktree's project, but the command then validates \u2014 and with `--fix`, **writes** \u2014 against `project.projectPath`, i.e. the main checkout. So `--fix` can mutate the main tree's `project-documents/user/...` while the operator believes they're working in the worktree. This is a real deviation from the established worktree-routing convention and a foot-gun on the destructive `--fix` path. Suggested fix: destructure `worktreeId` and use `resolveOperationPath(project, worktreeId) ?? project.projectPath`, matching the other commands. (No test exercises a worktree-CWD scenario, which is why it slipped through.)",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:89-100"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`--fix` (via the shared writer) stamps `dateUpdated` on machine-artifact docs",
+      "description": "Description: The new command reuses `updateFrontmatterField`, which unconditionally writes `dateUpdated: dateStamp` whenever the fixed key is not itself `dateUpdated` (markdownWriter.ts: `if (key !== 'dateUpdated') { setFrontmatterField(lines, closingIndex, 'dateUpdated', dateUpdated); }`). The #73 schemas for `review-resolution`/`gate-evidence`/`devlog` deliberately omit `dateUpdated`, with an explicit comment that the validator must not \"manufacture a false claim by copying dateCreated into it.\" But when `--fix` corrects any other field on such a doc (e.g. a missing/invalid `dateCreated` or `docType`), the writer still injects `dateUpdated: <today>`, re-introducing exactly the field the design said these moment-snapshots shouldn't carry. This is pre-existing writer behavior (also shared by `cf check --fix`), so it's not introduced here \u2014 but the new command is the first path that realistically fixes these docTypes, and it's worth a follow-up: either the writer should skip the `dateUpdated` stamp for these docTypes, or the intent should be documented as accepted.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/writers/markdownWriter.ts#updateFrontmatterField"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`exitCode = 2` for setup errors is a new, undocumented convention",
+      "description": "Description: The refactor changes `handleError(err)` to `handleError(err, exitCode = 1)` and `validate` calls `handleError(err, 2)` (validate.ts:180) for setup errors (project not found / no projectPath), while `process.exitCode = 1` is used for validation findings. That's a sensible and, I think, intentional split for a script-oriented validator (2 = \"couldn't even run\" vs. 1 = \"ran, found problems\") \u2014 and it's covered by the \"an unresolvable project exits 2\" test. The default-param form is backward-compatible, so no other command's behavior changes. It's just a second exit-code meaning that appears in exactly one command and isn't mentioned in the command's help text; a one-line note in the `frontmatter` description (\"setup errors exit 2; findings exit 1\") would make the script contract explicit.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/errors.ts:46"
+    },
+    {
+      "severity": "PASS",
+      "title": "Command and schema additions are well-typed and well tested",
+      "description": "Description: Verified, not just asserted: the CLI test suite covers the meaningful paths \u2014 clean run (exit 0), findings without `--fix` (exit 1), unresolvable project (exit 2, via the `resolveProjectWorktree` throw path), `--fix` success (exit 0 + the #71/#73 date-stamp argument asserted against `updateFrontmatterField`), `--fix` failure (exit 1 + error surfaced), unfixable finding (stays unfixed, exit 1), JSON shape (`filesChecked`/`findings`/`errors`/`warnings`), JSON fix-mode fields (`fixed`/`fixLog`/`fixErrors`), and explicit-vs-undefined path forwarding. Tests are organized per the convention (centralized `tests/commands/`, centralized `tests/schema/`), mock external deps at the boundary (`vi.mock('@context-forge/core/node')`), and follow arrange-act-assert with one concept per test. The core schema tests correctly re-scope the \"universal fields\" and \"status uses VALID_STATUSES\" loops to the 8 canonical types so the new 3 docTypes don't trip them, and add positive/negative/alias cases for each new docType. No `any`, discriminated-union-friendly types, and `printHumanOutput`/`groupByFile` are clean and correctly handle the no-`fixAction` case (no spurious \"Fixed\" line, since a fix log entry's `field` is always a string while an unfixable finding's `fixAction?.field` is `undefined`).\n\nOne deliberate design choice I confirmed is intentional and documented, not a defect: `--fix` here applies without a confirmation prompt, explicitly contrasted with `cf check --fix` in the command description (\"findings are per-document and deterministic, and this command is meant for scripts\") \u2014 reasonable given the narrower blast radius, and the no-worktree default case behaves correctly.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate.test.ts:1"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`validate frontmatter` ignores the resolved worktree and operates on the main checkout",
+      "location": "packages/cli/src/commands/validate.ts:89-100",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`--fix` (via the shared writer) stamps `dateUpdated` on machine-artifact docs",
+      "location": "packages/core/src/introspection/writers/markdownWriter.ts#updateFrontmatterField",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`exitCode = 2` for setup errors is a new, undocumented convention",
+      "location": "packages/cli/src/utils/errors.ts:46",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Command and schema additions are well-typed and well tested",
+      "location": "packages/cli/tests/commands/validate.test.ts:1",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:28:37.668231",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 44,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 301896,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 821574,
+  "cached_tokens": 704128,
+  "cache_write_tokens": null,
+  "completion_tokens": 77710,
+  "reasoning_tokens": 73944,
+  "duration_seconds": 701.0637046669144,
+  "cost_usd": 0.23435544,
+  "cost_basis": "alias_pricing"
+}

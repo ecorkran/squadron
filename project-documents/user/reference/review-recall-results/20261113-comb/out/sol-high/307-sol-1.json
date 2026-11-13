@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Configured tbbo tiers never reach session validation, allowing unaccounted incomplete sessions to pass the exit rule."
+  ],
+  "F2": [
+   "KEEP",
+   "Product-only grouping discards volume-check family identity and attributes discrepancies to the wrong family."
+  ]
+ },
+ "wall_seconds": 39.8,
+ "duration_seconds": 39.81258191703819,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=111115, cached=100992, cache_write=None, completion=125, reasoning=17)",
+ "raw_output": "F1: KEEP \u2014 Configured tbbo tiers never reach session validation, allowing unaccounted incomplete sessions to pass the exit rule.\nF2: KEEP \u2014 Product-only grouping discards volume-check family identity and attributes discrepancies to the wrong family.\nF1: KEEP \u2014 Configured tbbo tiers never reach session validation, allowing unaccounted incomplete sessions to pass the exit rule.\nF2: KEEP \u2014 Product-only grouping discards volume-check family identity and attributes discrepancies to the wrong family."
+}

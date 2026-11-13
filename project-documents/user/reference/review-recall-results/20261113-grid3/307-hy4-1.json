@@ -1,0 +1,189 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Purchase estimate is read and judged against a fabricated payload contract",
+      "description": "`fetch_estimate()` at `scripts/cutover_304_first_purchase.py:152-162` returns `json.loads(result.stdout)` unchanged and the cutover treats it as a flat purchase summary. The real `mt data tick pass --estimate-only --json` writer emits a pass report whose purchase fields are nested under a phase summary; `scripts/cutover_234_checks.py:145` demonstrates the expected `estimate[\"phases\"]` lookup, and `src/manta_trading/cli/commands/tick_pass_render.py:213-228` renders those fields from a phase `summary`, not from the document root.\n\nThere is a second contract break even after unwrapping: `src/manta_trading/data/tick/spend_guard.py:266-269` sets the spend verdict to `estimate_only` for any non-empty estimate run, and `src/manta_trading/data/tick/purchase_plan.py:277-303` emits that value, while `judge_estimate()` at `scripts/cutover_304_checks.py:208-237` only accepts `allowed` or `nothing_to_buy`. The `--estimate` path avoids this by passing `check_ceilings=False`, but `_steps()` at `scripts/cutover_304_first_purchase.py:279-306` uses the default check and will either raise on missing top-level keys or refuse `verdict estimate_only` before buying. `main()` at `scripts/cutover_304_first_purchase.py:229-247` turns that into a recorded failure, so the full cutover cannot proceed against real CLI output.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Ceiling math diverges from the runtime spend guard",
+      "description": "`ceiling_values()` and `ceiling_command()` at `scripts/cutover_304_checks.py:88-96` derive the 30-day cap from only `planned + trailing`; `_estimate_only()` at `scripts/cutover_304_first_purchase.py:255-274` passes only `summary[\"trailing_30d_usd\"]`, and `judge_estimate()` uses the same formula around `scripts/cutover_304_checks.py:225-237`. The actual guard in `src/manta_trading/data/tick/spend_guard.py:232-269` evaluates `trailing + unheld + planned_new`, excluding resubmits already counted in trailing and including provider jobs that the manifest does not hold; `src/manta_trading/data/tick/purchase_plan.py:277-303` exposes those `unheld_jobs` separately.\n\nAs a result, the printed cap can be too low when unheld jobs exist, and the local cap check can disagree with the runtime guard when resubmits are present. The tests at `test/unit/scripts/test_cutover_304_first_purchase.py#test_estimate_prints_the_command_and_buys_nothing` use no unheld jobs and no resubmits, so this divergence is not covered.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:88"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests pin the wrong estimate contract and miss production payload shapes",
+      "description": "The new estimate tests use flat synthetic dictionaries such as `test/unit/scripts/test_cutover_304_checks.py#_summary` and `test/unit/scripts/test_cutover_304_first_purchase.py#NOTHING` with `verdict: \"allowed\"`. That is neither the pass-report shape consumed from `mt-run` nor the `estimate_only` verdict produced by `src/manta_trading/data/tick/spend_guard.py:266-269`. `scripts/cutover_234_checks.py:145` shows the repository already has a parser that reads the purchase phase from `phases`.\n\nThis violates the project convention that parser fixtures include the actual production format. A regression test built from `PassResult.to_dict()` plus `plan_summary()` nested under `phases[].summary`, including the `estimate_only` verdict, would have caught the broken full-cutover path at `scripts/cutover_304_first_purchase.py:279-306`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_cutover_304_checks.py#_summary"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New external JSON and env boundaries are untyped and unvalidated",
+      "description": "`mt_json()` returns `Any` from `json.loads`; `fetch_estimate()` at `scripts/cutover_304_first_purchase.py:152-162`, `check_gate_issue()`/`check_dataset_edge()` at `scripts/purchase_verdicts.py:43-113`, and `accounting_rows()`/`over_sessions()` in `scripts/purchase_accounting.py` all consume production command output or file/env text via `Mapping[str, Any]` and direct key access. Missing keys are translated to `CutoverError`, but value types are not validated at the boundary.\n\nThe Python rules require Pydantic for external boundaries, including output/file/env parsing. Without schema models, a changed field type (for example `records` as a string, `edge_available_end` as a number, or `caught_up` as a string) can flow into comparisons, f-strings, or int-annotated DTOs before failing with an unhelpful `TypeError`/`ValueError`; `scripts/purchase_accounting.py#accounting_rows` and `scripts/purchase_verdicts.py:93-113` are the primary trust boundaries.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py#mt_json"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Translated exceptions lose ERROR-level stack observability",
+      "description": "Several new `try/except` blocks catch specific failures and translate them to `CutoverError` without logging at ERROR level: `scripts/purchase_verdicts.py:43-61` and `:93-113`, `scripts/cutover_304_checks.py:143-164`, and `scripts/purchase_accounting.py#accounting_rows` and `#over_sessions`. These modules import no logger. Using `raise ... from exc` preserves the cause object, but the process-boundary handler at `scripts/cutover_304_first_purchase.py:229-247` only records the final message via `say()`.\n\nThe exception-handling rule requires non-swallowing catches to re-raise after `logger.exception`, or to be documented top-level process-boundary handlers. These helper functions are not the process boundary, so malformed CLI JSON, `gh` failures, missing accounting keys, and bad timestamps lose stack-level diagnostics in the cutover log.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:43"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New test helpers use loose generic types under strict test checking",
+      "description": "New test helpers such as `test/unit/scripts/test_purchase_verdicts.py#_request`, `#_unit`, `#_report`, and `#_status` use bare `dict`, `list`, and `object` return/parameter types; `test/unit/scripts/test_purchase_accounting.py#_line` returns `Any`; `test/unit/scripts/test_cutover_304_first_purchase.py#_fake_mt_run` also relies on loosely typed lambdas. The Python rules require strict checking with tests included, so these generic types create missing-type-argument/unknown-type debt on the changed test paths.\n\nThe production DTOs are typed with `FamilyRow`, `ExhaustedRequest`, and `SessionReport`, but the tests that build their inputs do not mirror those contracts. That weakens the static guarantee that the tests are exercising the same shapes as the scripts.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_purchase_verdicts.py#_request"
+    },
+    {
+      "severity": "NOTE",
+      "title": "EXIT_USAGE is dead in the changed cutover script",
+      "description": "`EXIT_USAGE = 2` was added at `scripts/cutover_304_first_purchase.py:79`, but `main()` at `scripts/cutover_304_first_purchase.py:229-236` returns `int(exc.code or 0)` directly for argparse\u2019s `SystemExit`, and no caller in this file uses the constant. This is harmless at runtime but leaves an unused constant alongside the actual usage behavior.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:79"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Purchase estimate is read and judged against a fabricated payload contract",
+      "location": "scripts/cutover_304_first_purchase.py:152",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Ceiling math diverges from the runtime spend guard",
+      "location": "scripts/cutover_304_checks.py:88",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests pin the wrong estimate contract and miss production payload shapes",
+      "location": "test/unit/scripts/test_cutover_304_checks.py#_summary",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "New external JSON and env boundaries are untyped and unvalidated",
+      "location": "scripts/cutover_304_evidence.py#mt_json",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Translated exceptions lose ERROR-level stack observability",
+      "location": "scripts/purchase_verdicts.py:43",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "New test helpers use loose generic types under strict test checking",
+      "location": "test/unit/scripts/test_purchase_verdicts.py#_request",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "EXIT_USAGE is dead in the changed cutover script",
+      "location": "scripts/cutover_304_first_purchase.py:79",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:31:55.993023",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 26,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 269727,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2419039,
+  "cached_tokens": 2084608,
+  "cache_write_tokens": null,
+  "completion_tokens": 72001,
+  "reasoning_tokens": 68563,
+  "duration_seconds": 770.3370788749307,
+  "cost_usd": 0.273235745,
+  "cost_basis": "alias_pricing"
+}

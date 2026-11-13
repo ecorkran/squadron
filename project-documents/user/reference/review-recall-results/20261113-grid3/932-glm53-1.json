@@ -1,0 +1,225 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "No load-test tier for new concurrency/stream paths",
+      "description": "The testing rules require a `tests/load/` tier for code on concurrency/network paths, and this slice is squarely there: `dispatch()` now multiplexes a live SDK stream, per-message idle timeouts (`asyncio.timeout` around each `anext`), background-agent bookkeeping, and `stop_task` control requests (src/squadron/pipeline/sdk_session.py:222-344). Unit tests with `ScriptedClient` verify functional behavior but cannot catch event-loop starvation, timer/cancellation contention, or budget overruns under a realistic stream. No `tests/load/` directory exists in the repo. The rules say CI must gate load tests for slices touching these paths.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`background_tasks_waited` docstring overstates what it counts",
+      "description": "The session attribute comment says \"background agents it waited for\", but the value assigned in `dispatch()`'s `finally` is `turns.ledger.seen_count` \u2014 \"distinct waited-for agents *ever tracked*\", including ones that started and finished entirely within the foreground turn (never waited on). `BackgroundLedger.seen_count` documents this correctly; the session field comment drifts. Minor, but the metadata key `background_tasks_waited` written into `ActionResult.metadata` inherits the same imprecision.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:147-149"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Cancelled stream iterator abandoned on idle timeout",
+      "description": "When `asyncio.timeout(idle_s)` expires, the pending `anext(stream)` is cancelled and the async generator from `receive_response()` is abandoned mid-iteration; `_collect_turns` then returns via `_stop_background` without closing it, and the next `dispatch()` opens a fresh iterator. I could not verify from the SDK source available here whether a cancelled-and-abandoned `receive_response()` iterator leaks a queued message or emits warnings on collection \u2014 flagging as unverified rather than asserting a defect. A defensive `finally: await stream.aclose()` (or a comment that the SDK iterator tolerates abandonment) would close the question.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:296-306"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Silently dropped resume seed when no session ever connects",
+      "description": "If `start_from` produced a `resume_seed` but the run is resumed under a path where no SDK session is ever connected (e.g. all steps route to non-SDK, or `_step_needs_sdk` cannot statically confirm a pool candidate), the seed is discarded with no log line. This is defensible \u2014 there is no session to seed \u2014 but it differs from the \"never use silent fallback\" convention; a DEBUG log (\"resume seed dropped: no SDK session connected\") would make the discard observable.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:502-518"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`open_pipeline_session` suppresses a pyright argument-type error",
+      "description": "`setting_sources=settings[\"setting_sources\"],  # pyright: ignore[reportArgumentType]` works around an SDK stub mismatch rather than fixing it at the boundary. Given the project targets zero pyright errors as a merge blocker, an inline ignore is debt; a local narrow (e.g. `cast` with a comment naming the SDK stub limitation) would keep strict mode honest.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:478"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`sdk_session.py` has grown past the ~300-line file guideline",
+      "description": "The file is now ~490 lines versus the project's ~300-line guideline, and `executor.py` (~950 lines) was already well past it. The extraction of `sdk_turns.py` and `text_tail.py` was the right move and offsets the growth; a further split of the turn-reading loop (`_collect_turns`/`_read_turn*`) into its own module would bring it back under the guideline.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Settings policy is single-sourced and mechanically enforced",
+      "description": "`pipeline_setting_sources` / `REVIEW_SETTING_SOURCES` / `sdk_settings_options` centralize what was previously a scattered `CLAUDE_CODE_DISABLE_AUTO_MEMORY` literal plus per-caller env merging. Every consumer (pipeline session, one-shot dispatch, reviews, provider) now routes through it, the test matrix in `tests/providers/sdk/test_settings_policy.py` drives each real builder, and the old duplicated env-merge logic in `provider.py` was removed rather than left alongside. No drift found.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/settings.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exception handling and observability conform to the project rules",
+      "description": "Every broad catch carries a specific justification comment and the correct treatment: `_reconnect` logs at ERROR via `logger.exception` and re-raises (also recording `unusable_reason` so later calls fail loudly rather than silently); `_stop_background`'s `except Exception` documents why no narrower type exists and logs each failure; the executor's lazy-connect failure logs at ERROR and re-raises as `LazySessionConnectError`. New failure modes (stream end with agents running, leftover follow-up turn, idle timeout) all emit WARNING-level signals and each has a test asserting the observable output \u2014 matching the failure-mode-enumeration rule.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Bool config coercion and typed reads are correct including the bool/int subclass trap",
+      "description": "`_coerce_bool` handles case/whitespace leniently and names the key in the error; `get_typed_config` checks `type_ is bool` before the int check with an explicit comment on `bool` being an `int` subclass, and rejects `1`/`0` written directly into TOML for a bool key (covered by `test_typed_read_rejects_non_bool`). The CLI's `_display_value` renders TOML spelling consistently for both `get` and `list`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/config/manager.py:56-79,118-135"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No load-test tier for new concurrency/stream paths",
+      "location": "tests",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`background_tasks_waited` docstring overstates what it counts",
+      "location": "src/squadron/pipeline/sdk_session.py:147-149",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cancelled stream iterator abandoned on idle timeout",
+      "location": "src/squadron/pipeline/sdk_session.py:296-306",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Silently dropped resume seed when no session ever connects",
+      "location": "src/squadron/pipeline/executor.py:502-518",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`open_pipeline_session` suppresses a pyright argument-type error",
+      "location": "src/squadron/pipeline/sdk_session.py:478",
+      "location_verified": false
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`sdk_session.py` has grown past the ~300-line file guideline",
+      "location": "src/squadron/pipeline/sdk_session.py",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Settings policy is single-sourced and mechanically enforced",
+      "location": "src/squadron/providers/sdk/settings.py",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Exception handling and observability conform to the project rules",
+      "location": "src/squadron/pipeline/sdk_session.py",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Bool config coercion and typed reads are correct including the bool/int subclass trap",
+      "location": "src/squadron/config/manager.py:56-79,118-135",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:17:54.051888",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 83446,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 943717,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 524630,
+  "cached_tokens": 397248,
+  "cache_write_tokens": null,
+  "completion_tokens": 21621,
+  "reasoning_tokens": 19535,
+  "duration_seconds": 239.97344258404337,
+  "cost_usd": 0.37675168,
+  "cost_basis": "alias_pricing"
+}

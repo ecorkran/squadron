@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Shutdown grace is not actually guaranteed to bound one Runner tick; shipped defaults violate the invariant",
+      "description": "`validate_settings` enforces `tick_call_timeout_seconds < shutdown_grace_seconds`, justified by its docstring as \"so a stop waits for at most one call.\" But a tick's worst-case duration is `tick_deadline_seconds + tick_call_timeout_seconds`: calls may start until the deadline passes, and a call starting just inside the deadline may then run for its full `tick_call_timeout_seconds`. With the shipped defaults (`ProcessSettings`: deadline 5.0, call 8.0, grace 10.0), that is 13 s > 10 s grace \u2014 and the validation accepts it. Concretely: with a SIGTERM arriving at tick start on a healthy process, the in-flight tick can legitimately still be running at the grace expiry; the CLI (`exit_on_grace_expiry=True`, see `src/amoeba/cli/lifecycle.py:44-67`) then abandons the process with `GRACE_EXPIRED` (6) and `amoeba stop` reports a timeout, even though the tenant would have returned moments later. This contradicts `shutdown_grace_seconds`'s own docstring in `src/amoeba/process/settings.py` (\"It bounds one tick, not the whole shutdown\") and the \"larger than `tick_deadline_seconds` so one call that starts just inside the deadline still has room to finish\" intent for `tick_call_timeout_seconds`: the two fields as defaulted cannot jointly satisfy it. The check should be `tick_deadline_seconds + tick_call_timeout_seconds <= shutdown_grace_seconds` (or the defaults adjusted, e.g. call timeout 4.0); the crash-proof entry (`tests/runner/crash_entry.py`, grace 5.0, deadline 5.0 + call 4.0 = 9) has the same shape and only passes because the stub's calls return instantly. Note this is exactly the class of property (tick duration under realistic call latency) a load test would catch, which connects to the next finding.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/factory.py:30-50"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No load-tier test for the new Runner tenant's tick/subprocess path",
+      "description": "The Python rules' load-test tier requires that \"any code on the simulation, network, concurrency, or environment-layer paths requires at least one load test exercising a realistic configuration,\" asserting \"latency, throughput, or resource bounds \u2014 not just functional correctness,\" and that CI gate it for slices touching those paths. This slice puts a new subprocess-spawning tenant on every `amoeba start` tick in production: even with `PRODUCTION_PLANNERS` empty, production ticks issue budgeted `sq runs wait` polls for recovery-left in-flight entries (`InFlight` entries are deliberately left unresolved by `reconcile` in `src/amoeba/process/recovery.py`) and per-lifetime `cf` probes, and the tenant manages detached child handles via `LaunchTracker.reap`. `tests/load/` contains load tests for the other process paths (`test_crash_loop.py`, `test_recovery_scale.py`, `test_inbox_concurrent.py`, `test_verdict_concurrent.py`, `test_cf_watch_load.py`, `test_serve_load.py`, `test_feed_and_detection_load.py`) but none asserting bounds on the Runner's tick time, call counts, or child-lifetime hygiene under a realistic multi-project/multi-link configuration (I did not read `test_crash_loop.py` in full, so if it drives the Runner through `start` with such assertions, please treat this as verified-against that file). The crash harness in `tests/runner/` proves correctness of crash points, not resource/latency bounds, and would not have caught the grace arithmetic above.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/load"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stub `sq` does not model `--version`, so every start-based test logs a capture warning and records `unavailable`",
+      "description": "`cli_environment` now prepends the stub `sq` to PATH for all CLI tests, but the stub (`tests/sq_stub.py`) only handles `runs wait`, `run`, and `runs prune`; `sq --version` falls through to its \"unexpected arguments\" branch and exits 2, so `capture_sq_version_label` (called by `standard_tenants` on every `start`) logs a warning and records `VERSION_UNAVAILABLE`. This is safe by design of `capture_version_label` (no test asserts on the sq label), but it means persistent warning noise in the output of every `start`-driven test. Adding a trivial `--version` branch to the stub (as `detection_e2e_harness.py` already does with `FAKE_SQ_LABEL`) would keep those logs clean. Separately, in `tests/runner/test_end_to_end.py`, `tick_until(\"the shape error\", lambda: False)` uses an impossible predicate and relies on `UpstreamShapeError` to break out; it fails correctly but only after the full 20 s wait if the raise ever regresses \u2014 a small clarity trap worth a dedicated helper if the pattern grows.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "tests/cli_harness.py:47-56"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Shutdown grace is not actually guaranteed to bound one Runner tick; shipped defaults violate the invariant",
+      "location": "src/amoeba/runner/factory.py:30-50",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No load-tier test for the new Runner tenant's tick/subprocess path",
+      "location": "tests/load",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Stub `sq` does not model `--version`, so every start-based test logs a capture warning and records `unavailable`",
+      "location": "tests/cli_harness.py:47-56",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:32:05.440851",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 221351,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1710315,
+  "cached_tokens": 1432480,
+  "cache_write_tokens": null,
+  "completion_tokens": 58201,
+  "reasoning_tokens": 54899,
+  "duration_seconds": 1375.252860291861,
+  "cost_usd": 0.2663466,
+  "cost_basis": "alias_pricing"
+}

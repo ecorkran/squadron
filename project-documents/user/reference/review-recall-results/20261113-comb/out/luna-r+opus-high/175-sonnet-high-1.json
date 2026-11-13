@@ -1,0 +1,38 @@
+{
+ "case": "175",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "P1": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The extra \"unexpected error\" log line is a wording and consistency problem, not a behavior defect. The profile lookup inside the `except` uses the same profile `run_review_with_profile` already resolved, so masking the original error is not a realistic risk."
+  ],
+  "F2": [
+   "DROP",
+   "The judge file was not changed. The slice doc (`175-slice.usage-and-cost-tracking.md:55`) already lists the addressed-findings judge as out of scope, so the gap is recorded."
+  ],
+  "F3": [
+   "DROP",
+   "Passing a fresh `set()` in `review_client` only repeats a pricing warning in the log. `record_from_error` uses the same inputs and precedence, so it gets the same cost, and no value is wrong."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 37.7,
+ "duration_seconds": 37.721752875018865,
+ "cost_usd": 0.8273066,
+ "effort": "high",
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=463876, cached=376899, cache_write=86963, completion=2756, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The extra \"unexpected error\" log line is a wording and consistency problem, not a behavior defect. The profile lookup inside the `except` uses the same profile `run_review_with_profile` already resolved, so masking the original error is not a realistic risk.\nF2: DROP \u2014 The judge file was not changed. The slice doc (`175-slice.usage-and-cost-tracking.md:55`) already lists the addressed-findings judge as out of scope, so the gap is recorded.\nF3: DROP \u2014 Passing a fresh `set()` in `review_client` only repeats a pricing warning in the log. `record_from_error` uses the same inputs and precedence, so it gets the same cost, and no value is wrong.\nF1: DROP \u2014 The extra \"unexpected error\" log line is a wording and consistency problem, not a behavior defect. The profile lookup inside the `except` uses the same profile `run_review_with_profile` already resolved, so masking the original error is not a realistic risk.\nF2: DROP \u2014 The judge file was not changed. The slice doc (`175-slice.usage-and-cost-tracking.md:55`) already lists the addressed-findings judge as out of scope, so the gap is recorded.\nF3: DROP \u2014 Passing a fresh `set()` in `review_client` only repeats a pricing warning in the log. `record_from_error` uses the same inputs and precedence, so it gets the same cost, and no value is wrong."
+}

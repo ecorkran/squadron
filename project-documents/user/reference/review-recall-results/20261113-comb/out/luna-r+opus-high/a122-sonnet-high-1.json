@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sonnet-high/1/1",
+  "P1": "sonnet-high/1/0",
+  "P2": "sonnet-high/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The code does close an `unexpected_fault` escalation after the next clean tick, but the slice design (line 297, \"every open project-scoped escalation whose kind did not recur\u2026is closed\") calls for exactly that, so this is intended behavior and the remaining ask is a docstring note."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P2": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 20.5,
+ "duration_seconds": 20.52231558295898,
+ "cost_usd": 0.7116406000000001,
+ "effort": "high",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=345710, cached=266422, cache_write=79274, completion=1155, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The code does close an `unexpected_fault` escalation after the next clean tick, but the slice design (line 297, \"every open project-scoped escalation whose kind did not recur\u2026is closed\") calls for exactly that, so this is intended behavior and the remaining ask is a docstring note.\nF1: DROP \u2014 The code does close an `unexpected_fault` escalation after one clean tick, but the slice design at `122-slice.runner-tenant-and-control-surface.md:297` says every open escalation that did not recur gets closed, so this is intended and only a docstring note remains."
+}

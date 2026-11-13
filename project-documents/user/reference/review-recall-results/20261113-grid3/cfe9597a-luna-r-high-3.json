@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`--fix` can write through an in-root symlink to an external file",
+      "description": "Description: Explicit paths are accepted by `validateFrontmatterFiles` after a lexical containment check in `frontmatterFileValidator.ts:58-62`. A symlink located under `project-documents/user/` can therefore pass that check while targeting a file outside the project. When `--fix` applies a finding, `updateFrontmatterField` writes through that symlink, modifying the external target without confirmation. Resolve and validate the real path before allowing fixes, or otherwise prevent writes through symlinks.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:119"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`--fix` can write through an in-root symlink to an external file",
+      "location": "packages/cli/src/commands/validate.ts:119",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:19:18.573998",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 41,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 19407,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 354218,
+  "cached_tokens": 319711,
+  "cache_write_tokens": null,
+  "completion_tokens": 17252,
+  "reasoning_tokens": 15749,
+  "duration_seconds": 232.5539884159807,
+  "cost_usd": 0.01527381,
+  "cost_basis": "alias_pricing"
+}

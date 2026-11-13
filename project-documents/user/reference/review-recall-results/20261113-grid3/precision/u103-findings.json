@@ -1,0 +1,65 @@
+[
+ {
+  "ref": "luna-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Range translation does not run when the first series is added",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "The effect depends on `range` and `mount.ready`, but `seriesCountRef` is updated by facade calls without triggering a render. If a series is added while the range is unchanged, this effect never applies the current range; removing and re-adding a series has the same issue. The translation tests only exercise adding a series followed by changing the range, which triggers the effect and misses this case. Add a reactive series-count signal or otherwise trigger translation when series membership changes."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "CONCERN",
+  "title": "Adding data does not activate range synchronization",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "After the hook becomes ready, adding the first populated series only updates a ref. None of the effect dependencies change, so the existing Context range remains unapplied until another range change occurs. The translation test masks this by calling `setRange` immediately after `addSeries`. Make data availability reactive and test adding data without changing the range."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "CONCERN",
+  "title": "Series count does not establish data availability",
+  "location": "src/chart/chart-facade.ts:49-64",
+  "description": "`addSeries` increments the count even for valid `data: []` configurations, and `updateSeries` can clear all data without updating that count. Consequently, the hook\u2019s empty-time-scale guard permits `setVisibleRange` when no points exist\u2014the failure it explicitly intends to prevent. Track populated series across additions, updates, and removals; cover empty-series and data-clearing cases."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Applying the current range is not triggered when a series is added",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "The range effect only reruns when `mount.ready`, `chart`, or `range` changes. Adding a series updates `seriesCountRef` in `src/chart/chart-facade.ts:49-55`, but changing a ref does not rerun the effect. As a result, a chart that becomes populated after mount does not receive the current range unless the range changes later. The translation test changes the range after adding a series, so it does not cover this case."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Later operation failures overwrite the documented first error",
+  "location": "src/chart/use-chart-provider.ts:97-99",
+  "description": "`setOperationError` replaces `current.error` on every failure. This conflicts with the `UseChartProviderResult` contract in `src/chart/chart-operations.ts:77`, which says `error` is the first error. A second failed operation therefore changes the reported error instead of preserving the first."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "FAIL",
+  "title": "Adding the first series does not retrigger visible-range translation",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "The effect depends only on `mount.ready`, `chart`, and `range`, while series presence is tracked by mutating `seriesCountRef.current` in `buildChartOperations.addSeries`. A successful `addSeries` does not update React state or otherwise invalidate the effect. Consequently, if the range changes while the chart is empty and a series is added later\u2014the expected asynchronous-data flow\u2014the effect has already run and skipped the range, and it will not run again. The current range is therefore never sent to the provider.\n\nThe `applies the range once a series exists` test in `src/test/use-chart-provider.translation.test.tsx` masks this by changing the range only after adding the series. Promote series readiness or a series revision into React state and include it in the effect dependencies, or explicitly apply the current range after a successful first-series addition. Add a regression test with the reverse ordering: range first, series second."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "CONCERN",
+  "title": "Later failures replace the documented first error",
+  "location": "src/chart/use-chart-provider.ts:97-99",
+  "description": "`setOperationError` unconditionally assigns the latest failure, although the public contract in `src/chart/chart-operations.ts:77` says `error` contains the \u201cfirst error from any provider operation.\u201d If two operations fail, the second masks the original diagnostic. Preserve the existing error with `current.error ?? failure`, or change the public contract if the latest-error behavior is intentional. The existing test only verifies that a later successful operation does not clear the error; it should force two failures and verify the required behavior."
+ },
+ {
+  "ref": "minimax31-flash/1/2",
+  "severity": "CONCERN",
+  "title": "Mount-stage failures are always logged as create failures",
+  "location": "src/chart/use-chart-provider.ts:302-304",
+  "description": "The catch covers the entire mount sequence, including initial resize, `ResizeObserver` construction and observation, and both subscription registrations. Nevertheless, every failure is logged as `provider create failed`, which can send developers toward the wrong stage. Log a generic `provider mount failed` message or introduce stage-specific errors for create, resize, observer setup, and subscription setup."
+ },
+ {
+  "ref": "minimax31-flash/1/3",
+  "severity": "CONCERN",
+  "title": "Exported React components omit explicit return types",
+  "location": "src/routes/chart-route.tsx#ChartRoute",
+  "description": "The TypeScript convention requires explicit return types on exported functions, but `ChartRoute` has none. The same issue exists in `src/app/App.tsx#App` and `src/routes/routes.tsx#RootLayout`. Add explicit `ReactElement` or equivalent return annotations to these exported components."
+ }
+]

@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The purchase doesn't touch the `tbbo` tier (the slice puts it out of scope). Any change in its state would still show up in the unchanged-health check and the every-unit-final check, so this only hardens against an unlikely state."
+  ],
+  "F2": [
+   "KEEP",
+   "Confirmed: the statistics coverage `volume_checks` hold verdicts for both volume families (`tbbo` and `ohlcv-1m`), each tagged with its family. But `over_sessions` drops that tag and `_family_evidence` files the sessions by product only, so an `over` failure under one family names the other family's sessions."
+  ]
+ },
+ "wall_seconds": 36.7,
+ "duration_seconds": 36.69986045919359,
+ "cost_usd": 0.9283925999999999,
+ "effort": "high",
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=591316, cached=495987, cache_write=95313, completion=3284, reasoning=None)",
+ "raw_output": "Both findings are checked against the code; one is worth fixing before merge.\n\nF1: DROP \u2014 The purchase doesn't touch the `tbbo` tier (the slice puts it out of scope). Any change in its state would still show up in the unchanged-health check and the every-unit-final check, so this only hardens against an unlikely state.\nF2: KEEP \u2014 Confirmed: the statistics coverage `volume_checks` hold verdicts for both volume families (`tbbo` and `ohlcv-1m`), each tagged with its family. But `over_sessions` drops that tag and `_family_evidence` files the sessions by product only, so an `over` failure under one family names the other family's sessions.\nF1: DROP \u2014 The purchase doesn't touch the `tbbo` tier (out of scope in the slice), and any change in its state would still trip the unchanged-health and every-unit-final checks.\nF2: KEEP \u2014 Confirmed: `over_sessions` drops the family tag that each `volume_checks` verdict carries, and `_family_evidence` keys the names by product only, so an `over` failure in `tbbo` or `ohlcv-1m` lists the other family's sessions."
+}

@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "TradeRecord.from_row restates the trade column order positionally",
+      "description": "The candle path is mapping-driven and loud: `CandleRecord.from_row` walks `CANDLE_COLUMNS` with `zip(..., strict=True)`, and `test_nested_field_set_is_exactly_what_candle_columns_describes` fails on any name change. The trade path is not. `TradeRecord.from_row` indexes `values[0]`\u2026`values[7]` by hand, so the coupling to `TRADE_VALUE_COLUMNS` (which `fetch_trades` derives from `TRADE_COLUMNS`) is implicit only. Consequences if `TRADE_COLUMNS` ever gains a column: a column appended mid-order shifts every subsequent field silently (`taker_outcome_side` receives the new column's value, wrong data served with 200s); a column appended at the end is silently dropped. The existing guards do not catch this: the integration test `test_value_count_matches_the_repository_mapping` compares `len(r.values)` to `len(TRADE_COLUMNS) - 1` \u2014 both sides derive from the same constant, so it passes regardless \u2014 and the unit tests construct `TradeRow` with exactly 8 hand-written values. The module docstring's design claim (\"a column added there is served here without an edit\") is true for candles and false for trades. Relatedly, `TradeRow.values` is typed `tuple[Any, ...]` while its sibling `CandleRow.values` is `tuple[Decimal | None, ...]` \u2014 the looseness is what makes the positional restatement type-invisible. Driving `from_row` from `TRADE_VALUE_COLUMNS` with a strict zip (mirroring `CandleRecord`) would make the two halves of the same module consistent and the failure loud.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Ceiling-sized responses are built and serialized on the event loop",
+      "description": "After the executor call returns, `CandlesResponse.build(...)` (75,000 `CandleRecord.from_row` pydantic constructions) and `timeseries_response(...)` (a `model_dump` plus an orjson dump of the recorded 34.80 MB payload) run directly on the event-loop thread; `get_trades` has the same shape. The project's async rule is explicit that synchronous code inside an `async def` must be <1 ms worst case or move to an executor \u2014 building and serializing a ceiling-sized response is CPU-bound work measured in the hundreds of milliseconds (the load tier's own 1.034 s end-to-end figure bounds it). During one such request, every other request on the process \u2014 including `/health`, which the 185 D8a connection-scoping work specifically exists to protect \u2014 stalls. I note this follows the established `bars.py` pattern (`BarsResponse.from_dataframe` + serialization also run on the loop), so it is an accepted trade-off rather than a new invention; but this slice makes it materially worse (34.80 MB vs the 11.58 MB bars figure, sixteen decimal strings per row), and the concurrency load test (`test_concurrent_market_detail_requests`) exercises only fast market seeks, so the loop-blocking dimension of a ceiling-sized response is unmeasured by the new tier. The fix is cheap and compatible with the D8a scoping: build and serialize inside the same executor call (they need neither the loop nor a connection).",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#get_candlesticks"
+    },
+    {
+      "severity": "NOTE",
+      "title": "tape_complete_through description contradicts the value it carries",
+      "description": "The field description reads \"Created time of the newest stored trade\", but the value is the trades surface's `sync_state.watermark_ts` (see `tape_facts` in `src/manta_trading/data/kalshi/serve_timeseries.py`, which returns `tape_complete_through=watermark`). Those are different things, and the slice's own integration test proves it: `TestTapeFacts.test_returns_the_effective_floor_and_watermark` seeds a watermark with *zero* trades stored and asserts a non-null `tape_complete_through`. The watermark is the completeness edge the phase advanced to \u2014 on a quiet market it sits ahead of the newest stored trade, exactly the distinction the candles field's description spells out (\"not 'the newest stored candle'\"). The field *name* is right; the description served through OpenAPI will mislead clients about quiet periods.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradesResponse"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Fourteen value columns\" miscounts \u2014 the mapping has sixteen",
+      "description": "`CandleRow`'s docstring says \"its period end plus the fourteen value columns\", but `CANDLE_COLUMNS` has sixteen entries: 4 (`yes_bid`) + 4 (`yes_ask`) + 6 (`price`, OHLC + previous + mean) re-nested, plus `volume_fp` and `open_interest_fp` flat \u2014 and `values` is populated from all of them. The `models/kalshi_timeseries.py` module docstring's \"the fourteen flat stored columns are re-nested\" is similarly ambiguous (fourteen is the re-nested subset, not the flat total). The slice's own load tier and `constants.py` both correctly say \"sixteen decimal strings\", so the codebase now carries both counts. No behavioral impact \u2014 no test or code reads \"fourteen\" \u2014 but the wrong count is in the exact docstrings a future editor will trust when touching the mapping.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#CandleRow"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hardcoded 450 duplicates KALSHI_MARKET_COUNT",
+      "description": "`test_markets_list_scoped_to_the_dense_event` asserts `body[\"count\"] == 450`, restating the `KALSHI_MARKET_COUNT = 450` constant defined in `test/load/conftest.py` \u2014 a value the test module already imports four of its sibling constants from. The project convention is one definition referenced everywhere; raising the fixture's market count would break this test with a misleading failure (a fixture-shape drift message pointing at the API, not at the duplicated literal). Compare `test_events_list_at_production_width`, where `24_382` is a deliberately inline measured production fact with a justifying docstring \u2014 the 450 has no such reason to exist as a literal.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py#test_markets_list_scoped_to_the_dense_event"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "TradeRecord.from_row restates the trade column order positionally",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Ceiling-sized responses are built and serialized on the event loop",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#get_candlesticks",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "tape_complete_through description contradicts the value it carries",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradesResponse",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "\"Fourteen value columns\" miscounts \u2014 the mapping has sixteen",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#CandleRow",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Hardcoded 450 duplicates KALSHI_MARKET_COUNT",
+      "location": "test/load/test_188_kalshi_api_nfr.py#test_markets_list_scoped_to_the_dense_event",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:50:37.457986",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 261990,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 943717,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1222826,
+  "cached_tokens": 1054656,
+  "cache_write_tokens": null,
+  "completion_tokens": 66638,
+  "reasoning_tokens": 64307,
+  "duration_seconds": 1078.876887792023,
+  "cost_usd": 0.8028557599999999,
+  "cost_basis": "alias_pricing"
+}

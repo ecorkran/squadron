@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews` resolves the reviews directory from the process CWD, ignoring the review CLI's git-root anchoring",
+      "description": "`stats_reviews` builds `reviews_dir = Path.cwd() / REVIEWS_DIR`. Every other review-facing CLI path (`src/squadron/cli/commands/review.py:_resolve_review_cwd`, via `resolve_repo_cwd` in `src/squadron/cli/commands/cwd_resolution.py`) anchors at the containing git root, precisely because an agent's `cwd` is a tool-jail root and repo-relative paths must resolve from the repo root. `sq stats reviews` instead uses the raw process CWD, so running it from a subdirectory of a repo (or with the `cwd` config key pointing at a subdirectory) reports \"No review directory at \u2026\" and silently shows nothing even though artifacts exist. The review save path (`save_review_result` \u2192 `REVIEWS_DIR` relative to the target's `cwd`) writes to the repo root, so the read and write sides disagree about where the directory is. This is the exact class of defect `cwd_resolution.py` was introduced to fix.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:55"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`stats reviews` counts pipeline reviews as excluded only when `runId` is present, but the JSON output loses which rows were excluded",
+      "description": "`reviews_usage_report` collects every `runId` into `excluded_run_ids` and drops the artifact from the rows. `reviews_report_json` emits that list verbatim, and `render_reviews_report` prints only `excluded[0]` \u2014 \"1 pipeline review(s) excluded; see sq stats run <first-id>\". With more than one excluded review the operator is told to inspect one run and is given no indication of the others; the count and the single id disagree about what is actionable. The JSON does carry the full list, so this is a presentation gap in the table rather than data loss, but the table is the primary surface.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py:81-87"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`format_usd` renders a negative cost with two decimals while positive sub-cent costs get four",
+      "description": "The guard is `if 0 < abs(amount) < 0.01`, so a negative amount (a refund or a sign convention slip) falls through to `${amount:.2f}` and reads as `$-0.00` or `$-0.50`. The `abs()` in the condition shows the intent was to treat magnitude symmetrically, but the format branch then keys on the signed value's absolute magnitude inconsistently. Costs in this codebase are never negative in normal operation, so this is low impact \u2014 but the function's docstring promises \"four places under a cent so a small real cost never reads as `$0.00`\", which is not true for a negative sub-cent cost.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/core/usage.py:33-37"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `partial` warning is logged twice for a stalled dispatch: once by `record_from_telemetry` and once per-record, and it is a WARNING for a recoverable condition",
+      "description": "`record_from_telemetry` logs \"SDK session interrupt drained no result; spend for the interrupted turn is not recorded\" whenever `partial=True`. The dispatch action only sets `partial=True` for `DispatchStalledError` with `session_usable=False` (`src/squadron/pipeline/actions/dispatch.py:585-596`), and the session-level path already logs the interrupt at WARNING (`src/squadron/pipeline/sdk_session.py:_interrupt_stalled_turn`). The result is two WARNING lines describing the same event at two layers. The more notable half is the polarity: an unusable session *is* a real problem, but the message text describes a measurement gap (\"spend \u2026 is not recorded\"), which reads like a data-quality issue rather than the lost-session condition it accompanies. The test at `tests/pipeline/actions/test_dispatch_usage.py` asserts the message text, so the wording is pinned.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py:120-128"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`UsageCapture.effort_for_session` returns `None` but is typed `-> None`, so a caller cannot distinguish \"effort not sent\" from \"no resolved model\"",
+      "description": "The method's declared return type is `None` and it is used purely for its side effect (the once-per-run DEBUG log). Both call sites (`dispatch.py:571`, `summary.py:273`) bind `effort_sent = capture.effort_for_session(resolved)` and then pass that `None` as the `effort_sent` argument to `record_from_telemetry`. That is correct today \u2014 the SDK session path never applies alias effort \u2014 but the binding reads as though the method produced a value. A reader cannot tell from the signature that the `None` is the answer rather than an accident of the method's shape; naming it for what it does (e.g. `note_session_effort_not_applied`) would remove the ambiguity.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py:174-184"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`dispatch.py` grew past the project's ~300-line source-file guideline",
+      "description": "`src/squadron/pipeline/actions/dispatch.py` is now roughly 930 lines. AGENTS.md asks for source files at ~300 lines \"where practical\". The new usage-capture work added `_provider_failure` and `_one_shot` methods to an already-large class. The extraction of `_one_shot` is a good step in that direction (it isolates the agent call), but the class still carries model resolution, prompt resolution, pre-emption fragment handling, tool gating, feedback resolution, and now usage attribution. A `dispatch_usage.py` sibling (mirroring the existing `dispatch_outcome.py` / `dispatch_rules.py` / `dispatch_helpers` decomposition) would keep the usage concern separate.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`sq stats run` reads the default runs directory only, with no `--runs-dir` escape hatch",
+      "description": "`stats_run` constructs `StateManager()` with no `runs_dir`, so it always reads `~/.config/squadron/runs`. The executor and `sq run` both accept a `runs_dir` override (`src/squadron/cli/commands/run.py:300`), and `sq runs list` uses the same default-only `StateManager()`. The stats command is therefore consistent with `sq runs list`, which is the closest sibling, but a run started with a custom `runs_dir` is invisible to `sq stats run`. This is a usability gap rather than a defect, and the \"see `sq runs list --all`\" help text points at the same default directory, so the two are at least consistent with each other.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:40"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `UsageCapture` per-run pricing-warning set is created in `execute_pipeline` but never shared with the review path, so a review's pricing warning is not deduplicated against the run's",
+      "description": "`execute_pipeline` creates `UsageCapture(set())` once per run and threads it through every step, which is what makes \"one WARNING per alias per run\" true for dispatch/summary/compact. The review path resolves its cost in `review_client.run_review_with_profile` via `resolve_cost(alias, ..., set())` (`src/squadron/review/review_client.py:314-320`), passing a fresh set each call. A review step in a pipeline therefore emits its pricing warning on every part of a split review, unlike every other LLM action. The cost figures themselves are correct \u2014 only the warning cadence differs.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:549"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats reviews` resolves the reviews directory from the process CWD, ignoring the review CLI's git-root anchoring",
+      "location": "src/squadron/cli/commands/stats.py:55",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`stats reviews` counts pipeline reviews as excluded only when `runId` is present, but the JSON output loses which rows were excluded",
+      "location": "src/squadron/stats/reviews_report.py:81-87",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`format_usd` renders a negative cost with two decimals while positive sub-cent costs get four",
+      "location": "src/squadron/core/usage.py:33-37",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The `partial` warning is logged twice for a stalled dispatch: once by `record_from_telemetry` and once per-record, and it is a WARNING for a recoverable condition",
+      "location": "src/squadron/pipeline/usage_capture.py:120-128",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`UsageCapture.effort_for_session` returns `None` but is typed `-> None`, so a caller cannot distinguish \"effort not sent\" from \"no resolved model\"",
+      "location": "src/squadron/pipeline/usage_capture.py:174-184",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`dispatch.py` grew past the project's ~300-line source-file guideline",
+      "location": "src/squadron/pipeline/actions/dispatch.py",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`sq stats run` reads the default runs directory only, with no `--runs-dir` escape hatch",
+      "location": "src/squadron/cli/commands/stats.py:40",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The `UsageCapture` per-run pricing-warning set is created in `execute_pipeline` but never shared with the review path, so a review's pricing warning is not deduplicated against the run's",
+      "location": "src/squadron/pipeline/executor.py:549",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:00:29.860140",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 45,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 189319,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2721712,
+  "cached_tokens": 2236160,
+  "cache_write_tokens": null,
+  "completion_tokens": 50387,
+  "reasoning_tokens": 47002,
+  "duration_seconds": 331.4806464998983,
+  "cost_usd": 0.06718562,
+  "cost_basis": "alias_pricing"
+}

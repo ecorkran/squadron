@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Plain strings can satisfy the TimeMeaning source-stamping contract",
+      "description": "`Market.__post_init__` validates `source_bar_stamping` only with `if self.source_bar_stamping not in SOURCE_BAR_STAMPINGS` at `src/manta_trading_engine/core_model/markets.py:94-99`; the allowed set is built from `TimeMeaning` members at `src/manta_trading_engine/core_model/markets.py:48-50`. `TimeMeaning` is a `StrEnum` at `src/manta_trading_engine/core_model/timestamps.py:37-43`, so in Python 3.12 a plain `\"period_start\"`/`\"period_end\"` compares and hashes like the corresponding member. A dynamically typed caller can therefore construct a `Market` whose `source_bar_stamping` is a plain `str` despite the `TimeMeaning` annotation at `src/manta_trading_engine/core_model/markets.py:84`, breaking identity-based consumers such as `tests/core_model/test_markets.py:160-161`. Add an exact `TimeMeaning` runtime guard before the membership check and a regression test for plain strings.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:88-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Market constructor annotations disagree with accepted iterable inputs",
+      "description": "The `Market` docstring at `src/manta_trading_engine/core_model/markets.py:74-75` says `session_calendars` and `adjustment_bases` accept any iterable, the normalization helpers at `src/manta_trading_engine/core_model/markets.py:141-165` are typed as `Iterable[...]`, and `tests/core_model/test_markets.py:150-153` passes a generator and a set. However, the dataclass fields are annotated `tuple[...]` and `frozenset[...]` at `src/manta_trading_engine/core_model/markets.py:83-85`, so the generated `__init__` tells strict Pyright\u2014configured at `pyproject.toml:39-42`\u2014to reject those inputs for typed callers. The helper at `tests/core_model/test_markets.py:38-46` hides this by constructing through `dict[str, Any]`. Use a typed custom constructor/`InitVar` pattern to express input versus stored types, or tighten the documented runtime contract and tests.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:74-85"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Uniformity corpus is not tied to ALL_INSTRUMENT_FIXTURES",
+      "description": "`UNIFORM_ROWS` hard-codes the five fixture instruments at `tests/core_model/test_market_uniformity.py:36-41` and parametrizes the test at `tests/core_model/test_market_uniformity.py:44-48`. The fixture tuple `ALL_INSTRUMENT_FIXTURES` lives at `src/manta_trading_engine/core_model/fixtures/instruments.py:55-61`, but this uniformity file does not import it; `tests/core_model/test_instruments.py:208-210` uses it only for an id/count assertion. There is no assertion that every `ALL_INSTRUMENT_FIXTURES` member appears in `UNIFORM_ROWS`, so adding a fixture requires manual synchronization and can leave the \u201cone code path over every fixture instrument\u201d criterion uncovered by this specific test. Derive the rows from the fixture tuple or add a coverage assertion.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_market_uniformity.py:36-48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unused 60-second constant leaves dead test scaffolding",
+      "description": "`SIXTY_SECONDS_NS` is declared at `tests/core_model/test_market_uniformity.py:34` but has no other reference in the test tree. The same 60-second width is still hard-coded in `BarSpec.time(60)` at `tests/core_model/test_market_uniformity.py:56` and repeated in the expected-end literals at `tests/core_model/test_market_uniformity.py:37-41`. This is dead code and repeats one timing value in several places, contrary to the project \u201cone value, one source\u201d convention. Remove the constant or use it to build the bar spec and expected values.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "tests/core_model/test_market_uniformity.py:34"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Plain strings can satisfy the TimeMeaning source-stamping contract",
+      "location": "src/manta_trading_engine/core_model/markets.py:88-99",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Market constructor annotations disagree with accepted iterable inputs",
+      "location": "src/manta_trading_engine/core_model/markets.py:74-85",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Uniformity corpus is not tied to ALL_INSTRUMENT_FIXTURES",
+      "location": "tests/core_model/test_market_uniformity.py:36-48",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Unused 60-second constant leaves dead test scaffolding",
+      "location": "tests/core_model/test_market_uniformity.py:34",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:54:37.128114",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 45,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 706101,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1539779,
+  "cached_tokens": 1319360,
+  "cache_write_tokens": null,
+  "completion_tokens": 182791,
+  "reasoning_tokens": 179134,
+  "duration_seconds": 1736.3770730840042,
+  "cost_usd": 0.34811003300000004,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Item-resume flow is correct and observable end to end",
+      "description": "The full D8 path holds up under inspection: lock \u2192 state/`report.json` validation (`_check_record` enforces flagged/not_run and accept-only-for-`review_unresolved`) \u2192 git precondition (`restore_target` from a flagged slice branch, clean-target check, `verify_git_state`) \u2192 item re-selection (reconcile-to-PASSED when merged-but-unreported, rejection naming the status otherwise) \u2192 dependency re-check \u2192 body run. Every failure mode maps to a distinct `ResumeExit` code, is logged at the right level (`WARNING` for rejections, `ERROR` for HALTED), and the tests assert both the code and the log signal (`test_an_unknown_git_state_mid_item_halts`, `test_a_failed_report_rewrite_halts_and_keeps_the_old_report`). The `typer.Exit \u2192 HALTED` translation in `handle_item_resume` for mid-item classification/auth refusal is coherent, and the `GitEnvironmentError` re-raise in `_run_pipeline_sdk` when `item_rerun` is set correctly leaves report writing to the `each` step's `finally`. No action needed.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Run lock only guards commit/branch-moving pipelines, but \"mutates\" hazards include plain review and fan_out runs",
+      "description": "`pipeline_mutates` counts only `design/tasks/implement/devlog/branch` steps (plus `loop` with `commit_each_iteration`). But the module's own docstring justifies the lock by \"interleave\" and \"race on `report.json`\" \u2014 and both hazards also arise from pipelines that never commit:\n- A standalone `review:` step (`src/squadron/pipeline/actions/review.py:_save_part`) writes `project-documents/user/reviews/{slice}-review.{template}\u2026md` into the working tree. Two concurrent runs of the same slice (e.g. `judge-cycle`, which starts with a top-level review step) race on that file, and each run's review reads the other run's inputs mid-mutation.\n- `fan_out` step configs use `inner:`/`models:` keys, not `steps:`, so `_step_mutates` never sees their dispatch bodies \u2014 a fan-out pipeline whose branches write files is classified as non-mutating.\n\nAll *shipped* pipelines happen to be covered (each contains a phase/branch step; `P6`/`implement`/`P456`/`P56` via `branch`, `slices-plan`/`tasks-plan` via `design`/`tasks`, `implement-plan` via the `each` body), which is why the parametrized test passes \u2014 but the detection is a narrower property than the docstring's claimed one, and any project-local pipeline shaped like `judge-cycle` slips through un-locked. Either widen the detection (review writes, `fan_out.inner`) or narrow the docstring to \"one committing/branch-moving run per checkout\" and document the residual file-level race.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py:34-58"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "resume_item's blanket OSError handler mislabels unrelated I/O faults as report-write failures",
+      "description": "`except OSError as exc: return ResumeOutcome(HALTED, f\"cannot write the batch report: {exc}\")` is justified by the comment for the report-write failure mode, but the same clause also catches OS errors raised anywhere else in `_resume_locked` \u2014 e.g. `evaluate_each_source` \u2192 `_design_dependencies`/`_review_flag` do `read_frontmatter` on design/review files in the checkout (see `src/squadron/pipeline/sources.py:_design_dependencies`, which explicitly anticipates `OSError` per file and demotes it to a warning, and `_cf_slices_ready_to_implement`'s dependency reads, which do not). An unreadable design file there would surface to the operator as \"cannot write the batch report\" \u2014 an active write failure that didn't happen. Narrow the clause to the two actual write call sites (`_reconcile`, the `_open_dependencies` branch) or wrap `report.write` explicitly so the message stays truthful.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:130-132"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Checkpoint override instructions stored in run state silently apply to the entire resumed run",
+      "description": "A checkpoint ACCEPT/OVERRIDE merges `OVERRIDE_INSTRUCTIONS` into `merged_params`, and the state callback persists `dict(params)` (including it) to the run file. On `--resume` (`run.py` resume path \u2192 `_run_pipeline_sdk(dict(state.params))`) or implicit paused-run resume, that instruction is re-injected into every dispatch for the rest of the run \u2014 even the ones in *other* items of an `each` step. That contradicts the design the diff itself enforces for item resume: `item_params` deliberately *drops* stored reserved keys with a WARNING (\"an earlier run's instructions never carry into a decision\", `src/squadron/pipeline/item_resume.py:item_params`). The asymmetry is at least plausible (checkpoint instructions were meant for \"the rest of this run\"), but it's currently undocumented anywhere the operator can see it, and `item_params`' reserved-key drop shows the authors thought about exactly this once. Decide whether stored `override_instructions` should also be dropped (or logged) on plain resume, or documented.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:943-944"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No load test accompanies the new per-item report rewrite",
+      "description": "`_execute_each_step` now rewrites `report.md` + `report.json` (each via `asyncio.to_thread`, so off-loop) after *every* item (`await _write_each_report(report, runs_dir, final=False)`), doubling the file writes on the batch path plus the per-item `StateManager` load. `tests/load/` exists and gates concurrency-adjacent paths, but this slice adds no load entry for, say, a 100-item plan asserting rewrite latency stays within bounds. Cheap to add later; flagging for the test-with convention.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:1594"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Item-resume forces the SDK execution path regardless of the stored run's mode",
+      "description": "`handle_item_resume` builds a `run_body` that always calls `_run_pipeline_sdk`, but plain `--resume` honors `state.execution_mode` (SDK vs PROMPT_ONLY, `run.py`). A `PROMPT_ONLY` batch run resumed with `--item` will classify for an SDK session and raise `typer.Exit(1)` inside Claude Code, which the handler reports as \"Item did not finish (exit 1)\". The path is rejected loudly (not silently) and prompt-only batches are an edge, but the mode was available at the call site in `run()` if you ever want to honor it.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:66-76"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Item-resume flow is correct and observable end to end",
+      "location": "src/squadron/pipeline/item_resume.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Run lock only guards commit/branch-moving pipelines, but \"mutates\" hazards include plain review and fan_out runs",
+      "location": "src/squadron/pipeline/run_lock.py:34-58",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "resume_item's blanket OSError handler mislabels unrelated I/O faults as report-write failures",
+      "location": "src/squadron/pipeline/item_resume.py:130-132",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Checkpoint override instructions stored in run state silently apply to the entire resumed run",
+      "location": "src/squadron/pipeline/executor.py:943-944",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No load test accompanies the new per-item report rewrite",
+      "location": "src/squadron/pipeline/executor.py:1594",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Item-resume forces the SDK execution path regardless of the stored run's mode",
+      "location": "src/squadron/cli/commands/run_item.py:66-76",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:47:44.110263",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 47,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 395241,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2417896,
+  "cached_tokens": 1959552,
+  "cache_write_tokens": null,
+  "completion_tokens": 101355,
+  "reasoning_tokens": 99142,
+  "duration_seconds": 738.712822875008,
+  "cost_usd": 0.43096115999999995,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Smoke spec header comment points at the wrong chart spec",
+      "description": "The updated comment says the live chart at \"/\" is \"asserted in chart-render.spec.ts\". That spec (unchanged from slice 102) navigates to `/__chart-harness` \u2014 the slice-102 test harness, not the product route. The live chart at \"/\" is asserted in the new `e2e/chart-live.spec.ts` (`page.goto('/')`). In the sentence's own context (\"As of slice 103 '/' renders the LIVE chart\u2026 the chart itself is asserted in\u2026\"), the pointer is wrong and would send a future maintainer to the harness spec when the product chart regresses. Fix: reference `chart-live.spec.ts`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "e2e/smoke.spec.ts:8-10"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "jsdom measured-rect stub duplicated verbatim across four test files",
+      "description": "`const MEASURED = { width: 1024, height: 640 }` plus `function measuredRect(): DOMRect { \u2026 } as DOMRect` is copy-pasted in `use-chart-provider.errors.test.tsx` (lines 30-43), `use-chart-provider.facade.test.tsx` (~lines 33-46), and `use-chart-provider.translation.test.tsx` (~lines 38-51), and the same literal is inlined inside the `measure` callback in `use-chart-provider.resize.test.tsx` (~lines 33-38). This diff introduces four copies of the same 10-line stub, while the same diff deliberately centralizes the provider spy and the render wrapper \"so the suites share one convention rather than re-deriving a double each file\" (its own words in `chart-provider-spy.ts`). That contradicts the project's DRY rule. Move `MEASURED`/`measuredRect` into `src/test/support/` (e.g. export from `chart-provider-spy.ts` or a small jsdom-stub module) and import in all four files.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.errors.test.tsx:30-43"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`react-hooks/refs` is disabled for the whole hook file; a line-level disable would be tighter",
+      "description": "The new config block disables `react-hooks/refs` for the entire 366-line `src/chart/use-chart-provider.ts`. The rationale comment is thorough and the construction is genuinely correct (I verified `buildChartOperations`/`series` only *store* closures that read refs \u2014 nothing reads `.current` during render, so the rule's finding is a transitive-analysis false positive). But a file-wide disable also silences the rule for any *future* ref-during-render read added anywhere in this complex file. `// eslint-disable-next-line react-hooks/refs` on the two `useMemo` calls (facade + counter callbacks) would keep the suppression exactly as narrow as the false positive. Optional, but strictly better hygiene.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "eslint.config.js:55-79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Range-translation comment overstates when the effect activates",
+      "description": "The comment above the visible-range effect says the seam \"activates the moment [initiative 120] adds the first series\". The effect's dependency array is `[mount.ready, chart, range]` \u2014 series count is a ref read in the body, not a dependency \u2014 so adding the first series does **not** re-run the effect; the current/default range is only pushed on the *next* `range` change (or never, if range never changes after data lands). The behavior itself matches the tests (\"applies the range once a series exists\" works because `setRange` follows `addSeries`), so nothing is broken in this slice \u2014 but the comment should say activation is gated on having a series and triggered by a range change, or initiative 120's implementer may assume the default range applies automatically on first data load.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:326-345"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"does not translate after unmount\" test passes vacuously",
+      "description": "The test unmounts the tree rendered by `renderWithContexts`, which tears down *both* `Host` and the Context providers. The captured `symbolTimeframe().setRange` handle then calls `setState` on an already-unmounted provider \u2014 a no-op \u2014 so the context value can never change, the hook's effect can never re-run, and the assertion `setVisibleRange` not called is true by construction. The stated intent (\"a late setter must not reach the destroyed chart\") is never actually exercised. The real guard (facade calls dropped via `runGuarded`/`disposedRef` after teardown) is covered by the teardown-race tests in `use-chart-provider.errors.test.tsx`, but this test should either keep the provider mounted (unmount only `Host`) to be meaningful, or be removed in favor of those.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.translation.test.tsx:205-215"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Live-chart e2e samples pixels in a single shot right after canvas visibility",
+      "description": "`samplePanes` runs once, immediately after `expect(canvas).toBeVisible()` and two `boundingBox()` round-trips. The canvas becomes visible as soon as lightweight-charts appends it with a size (synchronously in `create`), but the background is painted on a later animation frame; a slow CI frame could interleave before the single `getImageData` read, making `expect(sample.mainPanePixel).toBe(hexToRgba(...))` (line 141) flaky. The resize spec's re-sample (line 167) is safe because the preceding `poll` guarantees a settled repaint. Consider wrapping the pixel assertion in `expect.poll` around `samplePanes` (CI's `retries: 2` currently masks this class of flake).",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "e2e/chart-live.spec.ts:130-144"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A container that appears after first render never mounts the chart (no re-run, no error)",
+      "description": "The mount effect's deps are `[containerRef, setMountOutcome, runGuarded]` \u2014 the ref object's identity is stable, so if `containerRef.current` is `null` on first effect run (e.g. a conditionally rendered container) the effect no-ops and will **never** re-run when the element appears; the chart silently stays `ready: false` with no `error` and no retry. This cannot happen in this slice (`ChartRoute` renders the section unconditionally) and the param doc (\"nothing happens while null\") acknowledges the contract, but it's a latent trap for initiative 120, which will add routes sharing this hook. At minimum, the hook's doc comment should state that the container must exist on first mount; ideally the effect would observe the ref (e.g. a `useSyncExternalStore`-style check or a render-phase `null \u2192 element` transition) so a late container mounts instead of hanging.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts#useChartProvider"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hook file is 366 lines against the ~300-line guide",
+      "description": "Documented in the slice doc's Implementation Outcomes as a known, PM-approved overrun (the type surface and facade were already extracted; the remainder is one inseparable mount sequence). Noted for the record \u2014 no action required, but it's the file most likely to grow further as initiative 120 fills the indicator placeholder, so the extraction seam should be revisited rather than accepting a second overrun.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts"
+    },
+    {
+      "severity": "PASS",
+      "title": "Error funnel and teardown ordering correctly cover every post-mount provider path",
+      "description": "Verified by reading: `runGuarded` is the single funnel (ready/disposed guard + try/catch \u2192 `console.error` + `setOperationError`), the ResizeObserver callback routes through it (line ~250), subscription setup runs inside the mount try/catch so a mid-sequence throw tears down with `ready: false`, each disposer is pushed individually (the argument-evaluation leak is avoided and covered by a test), and teardown order is dispose \u2192 disconnect \u2192 destroy \u2192 null-ref with the `disposed` flag closing the queued-callback window (tested in `use-chart-provider.errors.test.tsx` \"teardown race\"). Every catch logs and either handles with a comment or completes teardown \u2014 compliant with the project exception rule.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts"
+    },
+    {
+      "severity": "PASS",
+      "title": "Harness gate is statically foldable and the e2e mode is wired end to end",
+      "description": "The gate uses direct `===` comparisons on `import.meta.env.MODE` (lines 44-45), which Vite constant-folds to `false` in a `production` build so the dead branch and the `ChartHarnessRoute` import are eliminated \u2014 the comment correctly explains why a runtime `.includes()` form would have shipped the harness (and the slice doc records the production-bundle grep that caught exactly that regression). `playwright.config.ts:41` passes `--mode e2e` to both `build` and `preview`, keeping the e2e artifact consistent with `chart-render.spec.ts`, which I confirmed still targets `/__chart-harness`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/routes/router.ts:44-55"
+    },
+    {
+      "severity": "PASS",
+      "title": "Typed seam is clean: no `any`, generic preserved, lifecycle not exposed",
+      "description": "Verified across the diff: no `any`/`as any` in any changed file (grep confirmed); `ChartOperations` is a typed subset of `IChartProvider` deliberately excluding `create`/`destroy` (asserted in the facade test); `getCapability` keeps its `<K extends CapabilityKey>` generic through the facade with a compile-time `expectTypeOf` check; `MountState`/`UseChartProviderResult` are fully typed with annotated returns on all exports; the two Contexts throw explicitly outside their providers (no silent default context), consistent with the project's no-silent-fallback rule.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/chart/chart-operations.ts:54-62"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Smoke spec header comment points at the wrong chart spec",
+      "location": "e2e/smoke.spec.ts:8-10",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "jsdom measured-rect stub duplicated verbatim across four test files",
+      "location": "src/test/use-chart-provider.errors.test.tsx:30-43",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`react-hooks/refs` is disabled for the whole hook file; a line-level disable would be tighter",
+      "location": "eslint.config.js:55-79",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Range-translation comment overstates when the effect activates",
+      "location": "src/chart/use-chart-provider.ts:326-345",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "\"does not translate after unmount\" test passes vacuously",
+      "location": "src/test/use-chart-provider.translation.test.tsx:205-215",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Live-chart e2e samples pixels in a single shot right after canvas visibility",
+      "location": "e2e/chart-live.spec.ts:130-144",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "A container that appears after first render never mounts the chart (no re-run, no error)",
+      "location": "src/chart/use-chart-provider.ts#useChartProvider",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Hook file is 366 lines against the ~300-line guide",
+      "location": "src/chart/use-chart-provider.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Error funnel and teardown ordering correctly cover every post-mount provider path",
+      "location": "src/chart/use-chart-provider.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Harness gate is statically foldable and the e2e mode is wired end to end",
+      "location": "src/routes/router.ts:44-55",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Typed seam is clean: no `any`, generic preserved, lifecycle not exposed",
+      "location": "src/chart/chart-operations.ts:54-62",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:53:56.121347",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 366999,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 599021,
+  "cached_tokens": 478272,
+  "cache_write_tokens": null,
+  "completion_tokens": 95196,
+  "reasoning_tokens": 93809,
+  "duration_seconds": 713.1814753750805,
+  "cost_usd": 0.26232456000000004,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "\"Ready xor failed\" invariant comment is contradicted by the operation-error path",
+      "description": "`MountState`'s doc comment states \"`ready` and `error` \u2026 are never independent \u2014 a chart is ready xor failed \u2014 \u2026 committed together in a single state update,\" and `src/chart/use-chart-provider.ts` repeats the claim (\"a chart is ready xor failed \u2026 no window in which a stale `ready` is paired with a fresh `error`\"). The code deliberately violates it: `setOperationError` (use-chart-provider.ts) commits `error` alone while keeping `ready: true`, `use-chart-provider.errors.test.tsx` asserts \"A post-mount operation failure does not un-ready a live chart,\" and `chart-route.tsx` renders the chart *and* the error alert simultaneously by design. The behavior is correct and tested; only the invariant comment is wrong. Since this project leans on comments as load-bearing design documentation, a maintainer reading \"ready xor failed\" could \"fix\" the code to match the comment (e.g., un-ready the chart on an operation error), breaking the tested UX. Reword the comment to state the actual invariant: mount outcomes are committed atomically and are ready-xor-failed, while post-mount operation errors set `error` without disturbing `ready`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/chart-operations.ts#MountState"
+    },
+    {
+      "severity": "NOTE",
+      "title": "smoke spec header cites the wrong e2e spec for the \"/\" chart",
+      "description": "The updated header comment says \"The chart itself is asserted in chart-render.spec.ts; this spec covers the shell around it.\" `chart-render.spec.ts` targets the internal `/__chart-harness` route (slice 102); the product \"/\" chart is asserted by the new `chart-live.spec.ts` introduced in this same diff. Fix the cross-reference so the next maintainer lands in the right spec.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "e2e/smoke.spec.ts:9"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Mid-file import statements in the translation test",
+      "description": "After the twelve top-of-file imports, `LINE_SERIES` is declared at lines 15\u201321 and then two more `import` statements appear at lines 22\u201323 (`./support/chart-provider-spy.ts`, `./support/render-with-contexts.tsx`). ESM hoisting makes this work, and Vitest's mock hoisting is unaffected (the `vi.mock` call is already at the top), but it breaks the project's import-sorting convention and the pattern every sibling suite in this diff follows. Move the two imports up with the rest.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.translation.test.tsx:14-23"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hook file exceeds the ~300-line project guide",
+      "description": "The file is 366 lines against the project's \"~300 lines where practical\" guide. The extraction of `chart-operations.ts` (types) and `chart-facade.ts` (forwarding) already did the real splitting, and the remainder is dominated by lifecycle-justification comments rather than code, so this is close to the practical floor \u2014 but the ESLint suppression comment in `eslint.config.js` frames the current size as the *acceptable* outcome, so it is worth watching that the next seam (initiative 120's indicator translation) lands in a sibling module rather than growing this file further.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "File-scoped `react-hooks/refs` suppression is broader than the false positive it documents",
+      "description": "The suppression is unusually well documented (root cause, probe, and the rejected alternative are all recorded), which is good practice. The tradeoff not addressed in the comment: scoping via config disables the rule for *all future code* in `src/chart/use-chart-provider.ts`, not just the memoized-closure false positives. Since the rule fires on specific lines (the `series`/`chart` `useMemo` calls), `// eslint-disable-next-line react-hooks/refs` on those lines would keep the rule armed for everything else added to the file later. I could not execute ESLint to confirm the rule's exact report locations, so this is a suggestion rather than a verified defect.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "eslint.config.js:55-80"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "\"Ready xor failed\" invariant comment is contradicted by the operation-error path",
+      "location": "src/chart/chart-operations.ts#MountState",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "smoke spec header cites the wrong e2e spec for the \"/\" chart",
+      "location": "e2e/smoke.spec.ts:9",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Mid-file import statements in the translation test",
+      "location": "src/test/use-chart-provider.translation.test.tsx:14-23",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Hook file exceeds the ~300-line project guide",
+      "location": "src/chart/use-chart-provider.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "File-scoped `react-hooks/refs` suppression is broader than the false positive it documents",
+      "location": "eslint.config.js:55-80",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:00:32.039500",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 384719,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 943717,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 909846,
+  "cached_tokens": 818880,
+  "cache_write_tokens": null,
+  "completion_tokens": 93307,
+  "reasoning_tokens": 91568,
+  "duration_seconds": 1103.9063222080003,
+  "cost_usd": 0.750812,
+  "cost_basis": "alias_pricing"
+}

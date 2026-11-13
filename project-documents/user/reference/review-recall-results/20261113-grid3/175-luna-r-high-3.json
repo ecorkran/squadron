@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Split review usage is discarded after the first part",
+      "description": "Description: `_run_part` stamps a usage record on each part, but `_review` folds those results into one `ActionResult`. The fold in `squadron/pipeline/actions/review_fold.py` keeps only the first part\u2019s metadata, so usage from later parts is lost. Because `sq stats reviews` excludes artifacts with a `runId`, that spend is not recovered from the individual artifacts either. Aggregate the part records during the fold so run totals include every model call.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py#_review"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Compact actions omit usage on prompt-only runs and failures",
+      "description": "Description: The prompt-only path runs `/compact` but returns without reading or stamping SDK usage, so it is counted as an unrecorded LLM action. In the SDK path, the broad exception handler returns a failed result without recording telemetry attached to a `ProviderError`. Both paths therefore lose spend that the stats report is expected to include; capture prompt-only result telemetry and preserve failure telemetry in the failed result.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py#CompactAction"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Standalone review stats can mislabel subscription cost as spend",
+      "description": "Description: `_record` can recover an alias only from `requestedModel`, but review artifacts emit that field only when the answering model differs from the requested model. For a normal review using a subscription-tier alias, the report therefore cannot identify the alias and `cost_cell` renders a provider-reported amount as ordinary `prov` cost instead of `api-rate equiv.` Persist the selected alias or cost tier in the artifact and use it when building the report row.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py#_record"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Split review usage is discarded after the first part",
+      "location": "src/squadron/pipeline/actions/review.py#_review",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Compact actions omit usage on prompt-only runs and failures",
+      "location": "src/squadron/pipeline/actions/compact.py#CompactAction",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Standalone review stats can mislabel subscription cost as spend",
+      "location": "src/squadron/stats/reviews_report.py#_record",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:04:01.723202",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 10316,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 1870951,
+  "cached_tokens": 1664835,
+  "cache_write_tokens": null,
+  "completion_tokens": 24671,
+  "reasoning_tokens": 23018,
+  "duration_seconds": 284.73779229214415,
+  "cost_usd": 0.04959545,
+  "cost_basis": "alias_pricing"
+}

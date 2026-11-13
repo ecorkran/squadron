@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Item resume cannot retry completed design work in `slices-plan`",
+      "description": "`_select_item` re-evaluates the pipeline\u2019s source and rejects an item that is no longer selected, except when it is complete and merged. For `slices-plan`, the source is `cf.undesigned_slices`; once a failed attempt has written a design file, the item is no longer selected, even if its design review needs retrying or accepting. The resume is therefore rejected instead of rerunning the item. The planning-batch test masks this case by keeping `design_file` null in its mocked Context Forge response.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:287-300"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Item resume can restore a branch in an unregistered worktree",
+      "description": "Before restoring a slice branch, item resume reads the Context Forge integration target but does not verify that the current worktree is registered. Project conventions warn that an unregistered worktree may receive the primary checkout\u2019s target. In that situation, `restore_target` can commit branch leftovers and attempt to check out the wrong target. Branch entry has a registered-worktree check in `branch_ops.py`; item resume should enforce the equivalent precondition before mutating Git.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:230-241"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed report items can escape the report-load error contract",
+      "description": "`BatchReport.load` casts `items` to a list of dictionaries without validating the JSON structure. For example, an item of `null` reaches `BatchItemRecord.from_json`, where `.get()` raises `AttributeError`; that exception is not converted to `BatchReportLoadError`. Some missing fields can also become strings such as `\"None\"` rather than being rejected. A malformed report can therefore crash item resume instead of producing the documented, controlled refusal.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:326-339"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The run-lock change lacks the required load-tier test",
+      "description": "The lock introduces checkout-wide concurrency coordination, but the added tests exercise basic acquisition, contention, process termination, and worktree separation only. There is no load-tier test under `tests/load/` exercising realistic concurrent run-lock use or asserting a resource/latency bound, as required for concurrency-path changes by the project\u2019s Python testing rules.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py:70-103"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Item resume cannot retry completed design work in `slices-plan`",
+      "location": "src/squadron/pipeline/item_resume.py:287-300",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Item resume can restore a branch in an unregistered worktree",
+      "location": "src/squadron/pipeline/item_resume.py:230-241",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Malformed report items can escape the report-load error contract",
+      "location": "src/squadron/pipeline/batch_report.py:326-339",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The run-lock change lacks the required load-tier test",
+      "location": "src/squadron/pipeline/run_lock.py:70-103",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:39:32.008375",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 60,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 23076,
+  "failed_tool_calls": 4,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 16,
+  "prompt_tokens": 2069515,
+  "cached_tokens": 1908691,
+  "cache_write_tokens": null,
+  "completion_tokens": 39591,
+  "reasoning_tokens": 36807,
+  "duration_seconds": 412.21564679197036,
+  "cost_usd": 0.054964809999999996,
+  "cost_basis": "alias_pricing"
+}

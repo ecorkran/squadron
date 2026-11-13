@@ -1,0 +1,99 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Invalid timestamp meanings escape the promised signal error",
+      "description": "`SignalEvent` promises that a timestamp whose meaning is not `AVAILABLE_AT` raises `InvalidSignalError`, but `Timestamp.__post_init__` only validates the nanosecond range and accepts an arbitrary `meaning` at runtime. When `SignalEvent` detects a mismatched meaning, it formats the error with `self.time.meaning.value`; a value such as `Timestamp(100, \"available_at\")` therefore raises `AttributeError` instead of `InvalidSignalError`. Validate the meaning type before comparing it, and add a regression test covering a malformed `Timestamp.meaning`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/signals.py:64-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Integer coercion rounds fractional real values into integers",
+      "description": "For non-`Integral` values, `as_integer` first converts the value to a floating-point number and then checks `is_integer()`. This can silently change a fractional real into an integer: for example, `Fraction(10**100 + 1, 10**100)` converts to `1.0` and is accepted as `1`, despite not being integral. Because parameter declarations and binding use this function, such a value can enter a run parameter under a different value. Determine integrality from the original value before any lossy float conversion, or explicitly restrict the accepted non-integral types, and add regression coverage for a fractional `numbers.Real`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py#as_integer"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Invalid timestamp meanings escape the promised signal error",
+      "location": "src/manta_trading_engine/core_model/signals.py:64-79",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Integer coercion rounds fractional real values into integers",
+      "location": "src/manta_trading_engine/core_model/value_checks.py#as_integer",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:38:31.463046",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 588429,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1446786,
+  "cached_tokens": 1203968,
+  "cache_write_tokens": null,
+  "completion_tokens": 153920,
+  "reasoning_tokens": 149073,
+  "duration_seconds": 806.7247205828317,
+  "cost_usd": 0.07281512600000001,
+  "cost_basis": "alias_pricing"
+}

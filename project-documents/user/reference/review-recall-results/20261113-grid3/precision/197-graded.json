@@ -1,0 +1,136 @@
+{
+ "case": "197",
+ "matched": {
+  "sol-high/1/0": "197-I18",
+  "sol-high/1/1": "197-I19",
+  "sol-high/1/3": "197-I20",
+  "sol-high/1/4": "197-I3",
+  "luna-r-xhigh/1/1": "197-I3",
+  "luna-r-xhigh/1/0": "197-I14",
+  "minimax31-flash/1/0": "197-I5",
+  "minimax31-flash/1/1": "197-I5",
+  "minimax31-flash/1/5": "197-I7",
+  "minimax31-flash/1/7": "197-I21",
+  "minimax31-flash/1/8": "197-I4"
+ },
+ "new_issues": [
+  {
+   "id": "197-N1",
+   "title": "Item resume applies the implementation dependency check (dependency must be cf-complete) to tasks-plan items, so a retried tasks item with an unimplemented dependency is flagged without running.",
+   "members": [
+    "sol-high/1/2"
+   ],
+   "grade": "REAL",
+   "confidence": "medium",
+   "why": "_cf_slices_needing_tasks builds items with _slice_item, which reads the design's dependencies, and _resume_locked runs _open_dependencies for every pipeline, flagging any in-plan dependency whose cf status is not complete. A fresh tasks-plan batch never requires dependencies to be implemented (design: a task batch does not build on its dependencies' output), and the design says item resume works on tasks-plan runs with no pipeline-specific code, so retrying a tasks-plan item whose dependency is only designed returns FLAGGED 'dependency N not complete' and cannot proceed until the dependency is implemented. slices-plan items are unaffected (undesigned slices have no dependencies).",
+   "evidence": [
+    "src/squadron/pipeline/item_resume.py:153-156",
+    "src/squadron/pipeline/item_resume.py:325-335",
+    "src/squadron/pipeline/sources.py:65-72",
+    "src/squadron/pipeline/sources.py:188-215",
+    "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:220",
+    "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:528"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "197-N2",
+   "title": "pipeline_mutates does not walk a fan_out step's 'inner' config, so a fan_out wrapping a mutating step would run without the run lock.",
+   "members": [
+    "luna-r-xhigh/1/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "_step_mutates only recurses into config['steps']; fan_out keeps its nested step under 'inner' and FanOutStep.validate does not restrict the inner type beyond forbidding nested fan_out. True, but no shipped pipeline uses fan_out at all, and a fan_out of a committing phase step (concurrent branches in one checkout) is not a meaningful configuration; same hypothetical class as 197-I9.",
+   "evidence": [
+    "src/squadron/pipeline/run_lock.py:53-67",
+    "src/squadron/pipeline/steps/fan_out.py:38-66"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "197-N3",
+   "title": "The run lock is per worktree while run state and reports live in the shared ~/.config/squadron/runs, so concurrent resumes of the same run from two worktrees can lose a report update.",
+   "members": [
+    "luna-xhigh/1/0"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "project_run_lock locks {git dir}/squadron-run.flock (per worktree, deliberately) and StateManager defaults to a global runs dir, so two item resumes of one run id from different worktrees each load-modify-write the same report.json. True, but it requires deliberately resuming one batch's items from two different checkouts at once, whose cf integration targets differ; the per-worktree scope is the documented D11 choice.",
+   "evidence": [
+    "src/squadron/pipeline/run_lock.py:1-6",
+    "src/squadron/pipeline/state.py:165-178",
+    "src/squadron/pipeline/item_resume.py:118-125"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "197-N4",
+   "title": "A not_run item that is retried and halts is recorded flagged/step_failed, and not_run records carry no flag_kind, so counts under-report.",
+   "members": [
+    "minimax31-flash/1/2"
+   ],
+   "grade": "FALSE",
+   "confidence": "medium",
+   "why": "BatchReport.count counts by outcome, so not_run counts are correct (the finding concedes this), and not_run having no flag_kind is the designed shape. After a retry the item did run, so recording its real outcome with decision=retry is correct, not lost information. No defect.",
+   "evidence": [
+    "src/squadron/pipeline/executor.py:1494-1496",
+    "src/squadron/pipeline/item_resume.py:163-171"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "197-N5",
+   "title": "Rewriting the whole report after every item makes total report bytes written quadratic in batch size.",
+   "members": [
+    "minimax31-flash/1/3"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "_write_each_report(final=False) rewrites both files per item, as D7 requires, off the event loop via asyncio.to_thread. Batches are plan-sized (tens of slices) and each item takes minutes of model work, so the cost has no real effect.",
+   "evidence": [
+    "src/squadron/pipeline/executor.py:1598-1603"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "197-N6",
+   "title": "The run lock is taken at two sites (run.py _locked and item_resume.resume_item) with different error rendering.",
+   "members": [
+    "minimax31-flash/1/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "run() routes --item to handle_item_resume before any _locked call, and resume_item takes project_run_lock itself, so there is no double acquisition; both refusals exit 2. A structure/duplication point with no behavioral defect.",
+   "evidence": [
+    "src/squadron/cli/commands/run.py:944-954",
+    "src/squadron/cli/commands/run.py:1200-1202",
+    "src/squadron/pipeline/item_resume.py:118-123"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "197-N7",
+   "title": "A reserved -p key on an item resume is refused through typer.BadParameter with a generic message that does not name the reserved key.",
+   "members": [
+    "minimax31-flash/1/6"
+   ],
+   "grade": "FALSE",
+   "confidence": "medium",
+   "why": "handle_item_resume calls _apply_param_overrides, which raises typer.BadParameter(reserved_param_error(key)); with no param hint Click renders 'Invalid value: <message>', so the reserved-key message is shown, and the exit code is 2 as D8 requires (the finding concedes the code matches). The claimed defect does not exist.",
+   "evidence": [
+    "src/squadron/cli/commands/run.py:109-117",
+    "src/squadron/cli/commands/run_item.py:67-68"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
+ ],
+ "disputes": []
+}

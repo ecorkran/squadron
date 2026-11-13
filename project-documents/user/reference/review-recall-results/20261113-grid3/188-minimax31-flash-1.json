@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`tape_complete_through` is documented as the newest stored trade but carries the tape watermark",
+      "description": "The field's `description` says *\"Created time of the newest stored trade.\"* But the value is `sync_state['trades'].watermark_ts`, read by `serve_timeseries.tape_facts` \u2014 and the schema comment on that column states the opposite explicitly: *\"the tape is complete through this instant (end of the last fully walked window) - NOT the newest stored trade\"* (`migrations/kalshi.py`, `kalshi_006_trades`). The watermark is the far edge of the last fully walked window, so it is later than (and not derivable from) the newest stored trade. A client that reads the description literally and uses the field as \"data ends here\" will misreport tape gaps. The candle path gets this right \u2014 `complete_through` says *\"Requested and stored through this instant \u2014 not 'the newest stored candle'\"* \u2014 so the two sibling fields document their values inconsistently. Note the load fixture sets `watermark_ts = newest`, which hides the difference in the only end-to-end test that exercises it.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradesResponse"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`TradeRecord.from_row` maps stored columns by positional index while the candle path derives from the shared column map",
+      "description": "`TradeRecord.from_row` reads `values[0]`..`values[7]` positionally, so its correctness depends on the *order* of `TRADE_COLUMNS` in `trade_repository.py` never changing. If a column is inserted or reordered there, the API will keep returning HTTP 200 with every field silently shifted onto the wrong key \u2014 no exception, no test failure. The candle path in the same file avoids this by zipping against `CANDLE_COLUMNS` (`zip(row.values, CANDLE_COLUMNS, strict=True)`), and the module docstring claims both directions are driven by that mapping; the trade path is the outlier. The existing test only asserts the *count* (`len(r.values) == len(TRADE_COLUMNS) - 1`), never the mapping, so nothing would catch the drift. Deriving the trade mapping from `TRADE_COLUMNS` the same way the candle mapping is derived would remove the positional coupling.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The shared row ceiling is enforced by two copies of `_admit_rows`",
+      "description": "`kalshi_timeseries.py` adds its own `_admit_rows(count, max_rows)` \u2014 identical logic to the one already in `kalshi_catalog.py`, differing only in the tail of the message (\"narrow start/end\" vs \"narrow the filter\"). The project rule is explicit that comparison values and their enforcement should exist once, and `constants.py` in this same diff argues that \"a second setting with the same number would be two things to keep in step\"; the enforcement helper now has the same problem. If the ceiling's refusal semantics ever change (say, a different status code or a `Retry-After`), one copy will be updated and the other will not. A single shared helper in `api_server/routes/` (or `deps.py`) parameterized by the advice text would keep the two route families in step.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#_admit_rows"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The route unit test hardcodes the ceiling instead of importing it",
+      "description": "`CEILING = 75_000` in the new unit test duplicates `API_MAX_BARS_PER_REQUEST` (currently 75 000 in `constants.py`). The route under test reads the ceiling from `get_max_bars`, so if the constant moves, the test's `dependency_overrides[get_max_bars] = lambda: CEILING` would keep admitting 75 000 while the application enforces something else \u2014 the fake count of 132 552 would then be under the real ceiling and the \"over the ceiling\" test would stop exercising the refusal at all (it would fail loudly only because the error message quotes the *route's* ceiling while the test asserts its own copy, which is a coincidental failure rather than a designed one). The sibling load test in this same diff does the right thing (`from manta_trading.constants import API_MAX_BARS_PER_REQUEST`), so the two halves of the slice disagree about the same value.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "test/unit/api_server/test_kalshi_timeseries.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`gaps.py` keeps same-named window helpers with the opposite semantics",
+      "description": "`windows.py` exists to be \"the one spelling\" of the day-boundary convention, but `gaps.py` still defines private `_window_start_utc` / `_window_end_utc` whose `_window_end_utc` returns the *next* midnight (half-open predicate) rather than `time.max` (closed predicate). The two functions share a name and differ in meaning, which is exactly the confusion the new module's docstring warns about. The existing docstring in `gaps.py` explains why they differ, so this is not a bug today \u2014 but the new module's stated rationale (\"two derivations of 'the last instant of a day' is exactly how one of them ends up exclusive by accident\") now has three derivations in the routes package rather than two.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/gaps.py#_window_end_utc"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The candle model docstrings say \"fourteen value columns\"; there are sixteen",
+      "description": "`CandleRow`'s docstring says *\"its period end plus the fourteen value columns\"*, and `models/kalshi_timeseries.py` says *\"the fourteen flat stored columns are re-nested\"*. `CANDLE_COLUMNS` holds sixteen entries: fourteen nested (`yes_bid` 4, `yes_ask` 4, `price` 6) plus the two flat `volume_fp` and `open_interest_fp`, which are served as top-level fields rather than re-nested. The load-test module in this diff says \"sixteen decimal strings\", which is the correct count. A reader sizing a response from the docstring will under-count the per-row payload.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#CandleRow"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_as_utc` promises UTC but preserves a non-UTC offset",
+      "description": "The docstring says *\"Resolve one bound to an aware UTC datetime\"*, but an aware datetime in another zone (e.g. `+02:00`) is returned unchanged rather than converted to UTC. The behaviour is correct \u2014 comparisons stay right, and the naive-datetime case is handled as documented \u2014 but the summary sentence does not describe what the function does for the aware non-UTC case.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/windows.py#_as_utc"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`tape_complete_through` is documented as the newest stored trade but carries the tape watermark",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradesResponse",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`TradeRecord.from_row` maps stored columns by positional index while the candle path derives from the shared column map",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The shared row ceiling is enforced by two copies of `_admit_rows`",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#_admit_rows",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The route unit test hardcodes the ceiling instead of importing it",
+      "location": "test/unit/api_server/test_kalshi_timeseries.py",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`gaps.py` keeps same-named window helpers with the opposite semantics",
+      "location": "src/manta_trading/api_server/routes/gaps.py#_window_end_utc",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The candle model docstrings say \"fourteen value columns\"; there are sixteen",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#CandleRow",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`_as_utc` promises UTC but preserves a non-UTC offset",
+      "location": "src/manta_trading/api_server/routes/windows.py#_as_utc",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:08:57.572978",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 387284,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1657516,
+  "cached_tokens": 1446400,
+  "cache_write_tokens": null,
+  "completion_tokens": 102598,
+  "reasoning_tokens": 99053,
+  "duration_seconds": 609.601303792093,
+  "cost_usd": 0.056737899999999994,
+  "cost_basis": "alias_pricing"
+}

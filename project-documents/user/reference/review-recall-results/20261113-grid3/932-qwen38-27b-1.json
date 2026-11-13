@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Non-positive `pipeline.background_idle_timeout_s` degrades dispatches silently instead of failing fast",
+      "description": "Description: `int` coercion in `squadron/config/manager.py` (`_coerce_value`) accepts `0` and negative values for `pipeline.background_idle_timeout_s`, and `_background_idle_timeout_s()` forwards the value verbatim into `asyncio.timeout(idle_s)` in `_read_turn()`. With `delay <= 0`, `asyncio.timeout` fires immediately, so the first waiting read of a dispatch that tracked a background agent goes straight into `_stop_background()`: the agent is stopped and the dispatch returns partial text with a WARNING that reads \"no activity for 0s\" (or a negative number) \u2014 a confusing signal for a misconfiguration, and the run's output silently degrades. This conflicts with the fail-fast rule (invalid state should be caught at the boundary). Suggest rejecting non-positive values where the key is read (raise `ValueError` with the key named, matching `get_typed_config`'s existing mismatch errors) or validating range in `_coerce_value` for this key.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._background_idle_timeout_s"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No load-tier test for the new background-wait / idle-timeout dispatch path",
+      "description": "Description: This slice adds concurrency-layer behavior to `SDKExecutionSession.dispatch()` (`src/squadron/pipeline/sdk_session.py`): multi-turn `receive_response()` reads, a per-message idle timer, `stop_task` fan-out, and cross-turn text joining, all driven from `squadron/pipeline/sdk_turns.py`. The project's Python testing rules require at least one load test for slices touching concurrency paths, asserting latency/resource bounds under a realistic configuration, and CI already gates `tests/load/` via plain `pytest` (`.github/workflows/ci.yml` runs `uv run pytest`; `testpaths = [\"tests\"]`). The new timing tests in `tests/pipeline/test_sdk_session.py` use a 0.05s timer and one or two scripted agents \u2014 unit-scale. A load test (e.g., many simultaneous tracked agents, repeated idle-timeout cycles, realistic timer values) asserting bounded wall-clock time and no event-loop starvation would close the gap the rules name for exactly this class of change.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/load"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`background_tasks_waited` metadata key reports agents seen, not agents actually waited on",
+      "description": "Description: `self.background_tasks_waited = turns.ledger.seen_count` counts every distinct waited-type agent tracked during the dispatch, even when it started and finished inside the same turn so the dispatch never actually entered the waiting state (`turns.waiting` was never true). The name (used in `ActionResult.metadata` in `src/squadron/pipeline/actions/dispatch.py` and asserted in `tests/pipeline/actions/test_dispatch_session.py`) implies \"waited for\". Consider renaming to `background_tasks_seen`/`_tracked` or documenting the looser semantic on the dataclass field, so a reader of run metadata doesn't infer a wait that didn't happen.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession.dispatch"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`sdk_session.py` has grown past the project's ~300-line file guidance",
+      "description": "Description: After this change the file is roughly 480 lines, with `SDKExecutionSession` now covering connect/disconnect lifecycle, the multi-turn dispatch protocol, background-task stopping, idle-timeout policy reads, reconnect/seeding, and settings introspection. The pure turn bookkeeping was correctly extracted to `squadron/pipeline/sdk_turns.py`; the remaining growth is mostly the dispatch-reading loop and its retry/timeout wrappers. AGENTS.md targets ~300 lines \"where practical\" \u2014 extracting the read/retry/timer loop (e.g., a `_TurnReader` collaborator) would keep the class describable in one clause and make the idle-timeout semantics directly testable without a session. Not blocking; flagging the trend.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`scripted_session()` returning `object` forces pervasive `type: ignore` in the new tests",
+      "description": "Description: `tests/pipeline/conftest.py` defines `scripted_session(client) -> object`, which makes every use site in `tests/pipeline/test_sdk_session.py`, `test_executor_each.py`, `test_summary.py`, and `test_compact.py` carry `# type: ignore[attr-defined]` / `[arg-type]` comments (dozens). Since the function always constructs a real `SDKExecutionSession`, annotating it with that type (it's already imported inside the function) would remove the ignores and keep the shared fixture honest for whatever tooling covers tests later (pyright currently excludes `tests` per the documented issue #50, but the fixture is also consumed by the `typed_config`-style strictness the new tests otherwise model).",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/conftest.py#scripted_session"
+    },
+    {
+      "severity": "PASS",
+      "title": "Core new behavior verified: turn joining, leftover discard, idle-stop, settings policy, bool config round-trip",
+      "description": "Description: I traced the new paths against the real code rather than the diff alone and they hold: (1) `seed_context` now frames exactly once (`frame_summary_for_seed` only in `_seeded_options`; the doubled framing in `SummaryAction._execute_restore` was removed and guarded by `test_restore_frames_summary_exactly_once`); (2) the D6 discard path clears `parts` while preserving the ledger, so a leftover injected result cannot mask our own result or leak foreign prose; (3) stream-end with tracked agents raises `ProviderError` (fail-closed) while stream-end with nothing tracked preserves today's behavior; (4) `unusable_reason` latches after a failed reconnect and is enforced by `_require_usable()` on `dispatch`/`compact`/`seed_context`, with later `each` items flagged and `query()` never reached (verified in `TestUnusableSessionInBatch`); (5) the per-path settings policy table in `tests/providers/sdk/test_settings_policy.py` matches the actual builders (review templates all set `[project]`, PR override `[]`, audit hardcodes `[project]`, summary/PR composer `[]`), and `get_typed_config`'s bool check correctly precedes the int check (`bool` is an `int` subclass); (6) `load`/`save` of bool config round-trips native TOML booleans and hand-written non-bool TOML fails loudly with the key named. No silent-failure paths found in the new I/O code: stop-task failures log at ERROR with `exc_info`, idle timeouts and discarded turns log at WARNING, and reconnect failures log at ERROR plus latch.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_turns.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Non-positive `pipeline.background_idle_timeout_s` degrades dispatches silently instead of failing fast",
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._background_idle_timeout_s",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No load-tier test for the new background-wait / idle-timeout dispatch path",
+      "location": "tests/load",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`background_tasks_waited` metadata key reports agents seen, not agents actually waited on",
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession.dispatch",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`sdk_session.py` has grown past the project's ~300-line file guidance",
+      "location": "src/squadron/pipeline/sdk_session.py",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`scripted_session()` returning `object` forces pervasive `type: ignore` in the new tests",
+      "location": "tests/pipeline/conftest.py#scripted_session",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Core new behavior verified: turn joining, leftover discard, idle-stop, settings policy, bool config round-trip",
+      "location": "src/squadron/pipeline/sdk_turns.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:27:07.898978",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 46,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 452943,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2557961,
+  "cached_tokens": 1678144,
+  "cache_write_tokens": null,
+  "completion_tokens": 113700,
+  "reasoning_tokens": 110137,
+  "duration_seconds": 856.8861800420564,
+  "cost_usd": 0.5452032800000001,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,351 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Coverage assigns a trade row to the wrong session when two sessions overlap in time",
+      "description": "`raw_counts` joins `tick_trade` against the session array with\n\n```sql\nJOIN unnest(%s::date[], %s::bigint[], %s::bigint[])\n  AS s(session_date, open_ns, close_ns)\n ON t.ts_event BETWEEN s.open_ns AND s.close_ns\n```\n\n`tick_trade` rows are assigned to a session by the *ingest* worker's `SessionIndex.locate_ns`, which assumes sessions are non-overlapping and ordered (`src/manta_trading/data/base/session_index.py:44-58` asserts `opens[i] <= closes[i-1]` is a violation). A CME session dated `2024-09-03` opens 2024-09-02 22:00 UTC and the session dated `2024-09-04` opens 2024-09-03 22:00 UTC, so the two intervals do not overlap in the populated calendar \u2014 but the join here is not \"locate the containing session\", it is \"count every session whose window contains the row\". Any row whose `ts_event` falls in an interval shared by two sessions (e.g. an early-close session whose close overlaps the next session's open, a holiday-shortened session, or any future calendar change that makes the two overlap) is counted in *both* sessions. The row's count is then duplicated across sessions, the per-session ledger sum and the raw sum diverge, and `coverage` reports a spurious `mismatch` (or, symmetrically, masks a real one).\n\nThe `WHERE t.ts_event BETWEEN min(open) AND max(close)` bound does not fix this: it bounds the scan, it does not make the join mutually exclusive. The correct predicate is \"the one session that contains the row\", i.e. the same `locate_ns` semantics the ingest worker uses \u2014 for example `NOT EXISTS (another session whose open is later but still <= ts_event)`, or a `LATERAL`/`DISTINCT ON` pick of the single containing session. Note the integration test `test_raw_counts_assign_rows_to_sessions_across_midnight` (test/integration/data/test_tick_status_reads.py:113-131) only exercises non-overlapping windows, so it cannot catch this.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:157-172"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`status` cannot report a provider `missing` day as a hole",
+      "description": "`_product_status` computes `holed_sessions` as every verdict whose status is `PROVIDER_HOLE`, and `caught_up` delegates to `caught_up(verdicts, wanted=...)`, which treats a session as acceptable only when it is `COMPLETE` or is `PROVIDER_HOLE` **and** `v.provider_missing` (src/manta_trading/data/tick/tick_status.py:163-175). `provider_missing` is true when a *day* of the session has `DatasetCondition.MISSING`. But `session_verdicts` fetches conditions with\n\n```python\nheld = await conditions(conn, CME_DATASET, days[0][0], days[-1][-1])\n```\n\ni.e. only the days spanned by the sessions in scope. That is fine \u2014 however, the `_scope` selection means a session is in scope only if a current unit touches it or it overlaps the wanted range. A day the provider has marked `missing` typically has *no* unit at all (that is the point of a hole: `tick_archive_unit` with `PROVIDER_HOLE` status exists only when the provider delivered a hole for that day). So the session whose day is `missing` is frequently **out of scope** entirely and is never reported; and when it is in scope because a neighbouring day has a unit, `holed_sessions` reports it only if the day has a unit row of its own, which a provider hole does have (state `requested`/`verified` with `fetch_status = PROVIDER_HOLE`) \u2014 but only for days the pass bought. In practice, with `entry.tier is None` (the current universe \u2014 `src/manta_trading/data/tick/universe.py:43`), `wanted` is `None`, so `_scope` returns only sessions that a current unit touches, and a `missing` day with no unit is never in scope and never reported as a hole. The status report therefore cannot show the one thing it exists to show: the gaps. The `holed_sessions` field and the `caught_up` \"hole on a provider-missing day\" rule are effectively dead for the current universe configuration.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:100-113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`run_mapped` maps *any* exception in the `storage` tuple to exit 4, swallowing the distinction",
+      "description": "```python\ncode = EXIT_STORAGE if isinstance(exc, storage) else exit_code_for(exc)\n```\n\n`storage` is only ever `(TickDatabaseUnreachable,)`, and `TickDatabaseUnreachable` is a subclass of `TickPreflightError`. The ordering means the *storage* mapping wins over `exit_code_for`'s `TickPreflightError \u2192 EXIT_PREFLIGHT` rule \u2014 which is the intent for the read verbs. But `run_mapped` is shared with the writers (`tick.py`'s `_run_writer` calls it without a `storage` tuple), and the new `storage` parameter silently changes the semantics of a shared function for one caller only. More importantly, `run_mapped` still has a blanket `except Exception` that re-raises unmapped exceptions; any `psycopg.OperationalError` raised *after* the connection is established (a dropped connection mid-query, a lock timeout) is mapped to exit 4 by `exit_code_for` \u2014 fine \u2014 but a `psycopg.errors.*` (e.g. a `UndefinedTable` from a half-migrated database) propagates as an unhandled traceback rather than a mapped exit. `connect_migrated` only checks the *ledger* for the tick track, so a database whose ledger says \"applied\" but whose tables are missing produces a raw psycopg traceback out of `mt data tick status`. The read verbs' epilog promises \"exit 4 the tick or production (calendar) database is unreachable\"; an unmapped exception breaks that promise with a stack trace instead of a message.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:66-80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`coverage`'s calendar range is not checked against the populated span before it is used",
+      "description": "`build_coverage` calls `calendar_sessions(calendar_url, calendar_id, utc_midnight(start - 1 day), utc_midnight(end))`. `TradingCalendar.sessions_between` raises `OutOfPopulatedRangeError` when either bound lies outside the populated span, and `calendar_sessions` converts that to `TickCalendarError` \u2192 exit 4 (storage). That is the documented behaviour for `status`, so a `coverage` request for a future range fails with \"calendar unreachable\" (exit 4) rather than with a clear \"range outside the populated calendar\" message, and a range that straddles the horizon fails entirely instead of reporting the sessions it can. The slice doc (project-documents/user/slices/225-slice.ingest-pass-and-proof-parity.md:1068) treats coverage over a proof range as a normal operator action; a range beyond the horizon should say so (exit 1, preflight) rather than masquerading as a storage outage. `status` has the same shape in `_scope` (src/manta_trading/data/tick/tick_status_build.py:170-186) but at least derives its bounds from held units, so it stays inside the populated span.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py:99-115"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`coverage`'s ledger sum is not restricted to the sessions it proves",
+      "description": "`ledger_totals(conn, shape, start, last)` is called with `start` and `end - 1 day`, i.e. the *session-date* range, and it groups by `l.session_date`. But `tick_ingest_ledger.session_date` is the *session* date (the day the session closes), so the two agree \u2014 good. However `raw_counts` is bounded by the sessions' *open/close instants*, while the ledger rows for a session may cover records whose `ts_event` lies outside `[open_ns, close_ns]` of the same session only if the ledger's session assignment differs from this window. The ingest worker assigns records to sessions through `SessionIndex.locate_ns` on the unit's day frame (src/manta_trading/data/tick/ingest_worker.py:143), which is a *different* frame from the one `build_coverage` reconstructs via `calendar_sessions(start-1, end)`. A unit whose day touches two sessions (the normal case: a day boundary splits a session) is ingested with the frame of *its own day*, whereas `build_coverage` uses the frame of the *range*. Where the two frames disagree about which session a record belongs to, the ledger's `session_date` and the coverage window disagree, and the mismatch is a false positive. The two frames must come from the same source; the coverage path currently rebuilds the frame independently.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py:107-112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The coverage `--start`/`--end` window is unbounded relative to the proof range",
+      "description": "`raw_counts` passes the whole session list into `unnest(...)` as three arrays and scans `tick_trade` between the first open and the last close. With a wide `--start`/`--end` (say a year) this is a full hypertable scan over a multi-million-row table inside the CLI's request. The docstring calls it \"the one scan, bounded by the range\", but nothing bounds the *range* the operator can ask for, and `tick_trade` has no index beyond its primary key (222 TD8) \u2014 so `ts_event` filtering is a chunk-pruned scan at best. There is no upper limit on the requested window, no warning, and no `statement_timeout` on the connection. A `coverage --start 2020-01-01 --end 2026-01-01` against a populated production database would run unbounded inside the request.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:157-172"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`status` and `coverage` never take the ingest or acquisition lock, so they can read a half-written state",
+      "description": "The docstring says status and coverage \"take no lock\". That is deliberate (the slice requires it), but it means both read the manifest and the ledger without any consistency guarantee against a concurrent ingest: `tick_ingest_ledger` rows and the `tick_archive_unit` state transition commit in the *same* transaction (the worker's `conn.transaction()`), so the manifest/ledger pair is consistent \u2014 but `raw_counts` scans `tick_trade` in a *separate* transaction from the ledger read (`_read` opens one autocommit connection, but each `conn.execute` on an autocommit connection is its own transaction). A concurrent ingest that commits between the ledger read and the raw scan will show a mismatch that is not an out-of-band edit \u2014 exactly the condition the coverage docstring says is \"evidence of an out-of-band edit or a defect\". This should either take the ingest lock (the acquisition/ingest locks are session-level advisory locks and would not block a read unless the reader asks for them) or the coverage verdict should be documented as \"a snapshot at best\" so operators do not chase a phantom defect.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:159-170"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `--product` universe check produces a preflight error only for an unknown product, not for an empty match",
+      "description": "`_entries` filters `TICK_UNIVERSE` by product and raises `TickPreflightError` when the result is empty. With the current universe (`ES` only) an unknown `--product GC` gives the message \"--product GC is not in the universe (ES)\", which is correct today. But the check lives in the CLI layer rather than beside `TICK_UNIVERSE` (`src/manta_trading/data/tick/universe.py`), which already owns validation (`validate_universe`) and the \"known products\" listing (`FUTURES_PRODUCT_CALENDAR` in `constants.py`). When slice 231 adds `GC`, the CLI message and the universe's own product list become two sources of truth for the same set \u2014 exactly what AGENTS.md forbids (\"Never scatter comparison values across code \u2026 Changing a value should require editing exactly one place\").",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:143-155"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`status` re-reads the same rows for every product",
+      "description": "`build_status` loops over the universe and calls `_product_status` per entry. Each call runs `dataset_edge`, `shape_units` (twice \u2014 once in `_scope`, once in `session_verdicts`), `conditions`, `contract_lines` and `session_verdicts`. With one product today this is four `shape_units`-equivalent reads and two identical `dataset_edge` reads; with `GC` added in 231 it doubles. The reads are per-shape so they are not redundant across products, but `dataset_edge` (dataset-level, not shape-level) is read once per product and `conditions` (dataset-level) is likewise re-read per product. These are cheap relative to the calendar round-trip, so this is informational rather than a defect, but it will grow.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:216-244"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tick_status_render.py` asserts bucket exhaustiveness at import time",
+      "description": "```python\nassert {s for row in _BUCKET_ROWS for s in row} == set(TickSessionStatus), (\n    \"the status report omits a bucket \u2014 update _BUCKET_ROWS\"\n)\n```\n\nThis mirrors `tick_exit.py`'s exhaustiveness assert and is a good pattern, but it runs at *import* time, so under `python -O` the assert is stripped and a new status would silently be omitted from the report. `tick_exit.py` has the same shape, so this is consistent with the codebase; worth noting only because the failure mode (a silently missing bucket in an operator report) is worse than the failure mode of the exit map.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:38-40"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `status` render's `age()` helper silently mis-renders negative ages",
+      "description": "`age(seconds)` does `int(seconds)` then `divmod`. A negative age (an edge `observed_at` in the future relative to `now`, which a clock skew between the writer and the reader can produce) yields e.g. \"-1h -1m\" style output from `divmod` on negatives, e.g. `age(-3600)` \u2192 `minutes=-60`, `hours=-1, minutes=0` \u2192 \"-1h 0m\". No test covers it and the value is cosmetic, but the report is operator-facing.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:44-52"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`jsonable` is duplicated in spirit with `print_result`'s `default=str`",
+      "description": "`jsonable` converts `date`/`datetime` to ISO strings, but `print_result` (src/manta_trading/cli/output.py:26) already passes `default=str` to `json.dumps`, which would render the same values (with a space separator rather than `T`). `TickCoverage.to_dict` and `TickStatus.to_dict` therefore depend on `jsonable` for the JSON contract, while the CLI's own serializer would have produced a slightly different string for the same object. Not a bug today, but two places now define \"how a date becomes JSON\" for the same payload.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:135-144"
+    },
+    {
+      "severity": "PASS",
+      "title": "The pure classification layer is well separated and exhaustively tested",
+      "description": "`tick_status.py` holds no I/O, states the status precedence once (`STATUS_PRECEDENCE`), the condition precedence once (`CONDITION_PRECEDENCE`), and the \"no unit\" mapping once (`_NO_UNIT`). The Saturday exemption is a named constant (`CONDITION_ABSENT_WEEKDAY`). The `caught_up` rule is one expression with the provider-hole carve-out. This is the kind of \"one value, one source\" the project rules ask for, and it is exactly the module a future slice can reuse.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exit codes stay centralized and the read verbs' exit contract is documented",
+      "description": "All exit integers live in `tick_exit.py`; the new verbs reuse `EXIT_OK`, `EXIT_PREFLIGHT`, `EXIT_PARTIAL` and `EXIT_STORAGE` rather than inventing their own, and `READ_EPILOG` states the mapping for the operator. The `TickDatabaseUnreachable` subclass keeps the writer path's preflight semantics intact while giving the readers their storage exit \u2014 a small, well-documented extension point.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_exit.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "The new integration tests exercise the real path",
+      "description": "The CLI tests seed real DBN fixtures, run a real ingest, and assert on stdout, JSON shape, and exit codes (0, 1, 3, 4) \u2014 including the unreachable-database case via a closed local port. `test_tick_status_build.py` asserts the bucket assignment, the degraded count, the `complete_basis` value, the JSON round-trip, and the supersession-hidden spread count. `test_tick_status_reads.py` covers the `COVERAGE_PREDICATE` exclusion, the conditions/edge reads, the latest-definition join and the midnight-crossing session assignment. This is test-with-implementation, not test-after.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "test/integration/data/test_tick_status_cli.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "The `logging` patch in the CLI tests removes a real cross-test leak",
+      "description": "Patching `manta_trading.cli.app.setup_logging` in the CLI fixtures, with the reason stated in a comment, is the right fix for handlers binding `CliRunner`'s closed stream \u2014 and it is applied consistently in the new `test_tick_status_cli.py` too.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "test/unit/cli/commands/test_data_tick_ingest.py:75-85"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Coverage assigns a trade row to the wrong session when two sessions overlap in time",
+      "location": "src/manta_trading/data/tick/status_reads.py:157-172",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`status` cannot report a provider `missing` day as a hole",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:100-113",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`run_mapped` maps *any* exception in the `storage` tuple to exit 4, swallowing the distinction",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:66-80",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`coverage`'s calendar range is not checked against the populated span before it is used",
+      "location": "src/manta_trading/data/tick/tick_coverage.py:99-115",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`coverage`'s ledger sum is not restricted to the sessions it proves",
+      "location": "src/manta_trading/data/tick/tick_coverage.py:107-112",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "The coverage `--start`/`--end` window is unbounded relative to the proof range",
+      "location": "src/manta_trading/data/tick/status_reads.py:157-172",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`status` and `coverage` never take the ingest or acquisition lock, so they can read a half-written state",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:159-170",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The `--product` universe check produces a preflight error only for an unknown product, not for an empty match",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:143-155",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`status` re-reads the same rows for every product",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:216-244",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`tick_status_render.py` asserts bucket exhaustiveness at import time",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:38-40",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The `status` render's `age()` helper silently mis-renders negative ages",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:44-52",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`jsonable` is duplicated in spirit with `print_result`'s `default=str`",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:135-144",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The pure classification layer is well separated and exhaustively tested",
+      "location": "src/manta_trading/data/tick/tick_status.py",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Exit codes stay centralized and the read verbs' exit contract is documented",
+      "location": "src/manta_trading/cli/commands/tick_exit.py",
+      "location_verified": null
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The new integration tests exercise the real path",
+      "location": "test/integration/data/test_tick_status_cli.py",
+      "location_verified": null
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The `logging` patch in the CLI tests removes a real cross-test leak",
+      "location": "test/unit/cli/commands/test_data_tick_ingest.py:75-85",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:30:32.621924",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 230345,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1302158,
+  "cached_tokens": 1044992,
+  "cache_write_tokens": null,
+  "completion_tokens": 64205,
+  "reasoning_tokens": 58294,
+  "duration_seconds": 295.08052666601725,
+  "cost_usd": 0.045863894,
+  "cost_basis": "alias_pricing"
+}

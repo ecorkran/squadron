@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "CF failures during source re-selection escape the item-resume result handling",
+      "description": "Re-evaluating the source can call `ContextForgeClient.list_tasks()` and `list_slices()`, which raise `ContextForgeError` or `ContextForgeNotAvailable` when `cf` fails. `resume_item()` handles `_Stop`, `GitEnvironmentError`, and `OSError`, but not these CF exceptions; the CLI also does not translate them. A transient CF failure therefore escapes as an unhandled exception instead of producing a clear, observable item-resume outcome and documented exit code. Handle and log these expected integration failures at the resume boundary.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:287-288"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mutating fan-out inner steps can bypass the project run lock",
+      "description": "`_step_mutates()` descends through `config[\"steps\"]` but not `config[\"inner\"]`. Fan-out accepts any single inner step other than another fan-out, and the executor runs that inner step; consequently, a fan-out with a mutating inner step such as `branch` can be classified as non-mutating and run without the lock. Inspect fan-out\u2019s `inner` configuration when determining mutation, or reject mutating inner step types during validation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py:53-68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new run-lock concurrency path lacks a required load test",
+      "description": "The added tests verify lock contention, process-exit release, and independent worktrees, but the new concurrency path has no load test exercising concurrent realistic run attempts with latency or resource bounds. The Python testing rules require a load test for concurrency paths. Add one that exercises competing mutating runs and gate it in CI.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/test_run_lock.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "CF failures during source re-selection escape the item-resume result handling",
+      "location": "src/squadron/pipeline/item_resume.py:287-288",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mutating fan-out inner steps can bypass the project run lock",
+      "location": "src/squadron/pipeline/run_lock.py:53-68",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The new run-lock concurrency path lacks a required load test",
+      "location": "tests/pipeline/test_run_lock.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:40:34.056518",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 75,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 30339,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "xhigh",
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2506372,
+  "cached_tokens": 2158562,
+  "cache_write_tokens": null,
+  "completion_tokens": 43712,
+  "reasoning_tokens": 40305,
+  "duration_seconds": 442.9228597499896,
+  "cost_usd": 0.07822261999999999,
+  "cost_basis": "alias_pricing"
+}

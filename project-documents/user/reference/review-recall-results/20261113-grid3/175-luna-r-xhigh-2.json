@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Aggregate usage across split review parts",
+      "description": "Each review part gets its own usage record, but `fold_review_parts` produces one step result. The folding logic in `review_fold.py` copies metadata only from the first part, so `sq stats run` undercounts usage and cost for later parts. If the first part has no record, usage from subsequent parts is lost entirely.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:293"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Preserve telemetry when compact fails after spending",
+      "description": "The SDK compact path catches failures and returns an `ActionResult` without usage metadata. This drops telemetry when the dispatch raises a `ProviderError` carrying spend, and also when summary capture succeeds but session reconnection fails. The failed action is then reported as unrecorded despite having incurred cost.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py:82-89"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Capture usage for prompt-only compact actions",
+      "description": "This path runs `claude_agent_sdk.query` but only waits for the compact boundary; it never reads result usage or stamps a usage record. Since `sq stats run` classifies compact actions as LLM actions, successful prompt-only compactions are omitted from its totals.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py#_execute_prompt_only"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Skip artifacts that cannot be read",
+      "description": "`read_frontmatter` can raise `OSError` while reading an artifact, but this loop only handles frontmatter parse failures returned as `None`. A single unreadable or concurrently removed file therefore aborts the entire reviews report instead of being warned about and skipped.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py:67-68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Validate the frontmatter cost-basis type",
+      "description": "`costBasis` comes from YAML and can be a list or mapping. The set-membership check raises `TypeError` for an unhashable value, aborting the report rather than treating the malformed field as unknown and keeping the row. Check that the value is a string before testing membership.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py:151-155"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Add a load test for SDK usage capture",
+      "description": "The new reader runs on the SDK streaming path, but the existing usage-reader load test exercises the OpenAI reader, not SDK `ResultMessage` processing. The project\u2019s load-test rule requires coverage for network paths; add a realistic SDK stream load test that checks event-loop scheduling or resource bounds.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/usage.py#read_result_usage"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Aggregate usage across split review parts",
+      "location": "src/squadron/pipeline/actions/review.py:293",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Preserve telemetry when compact fails after spending",
+      "location": "src/squadron/pipeline/actions/compact.py:82-89",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Capture usage for prompt-only compact actions",
+      "location": "src/squadron/pipeline/actions/compact.py#_execute_prompt_only",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Skip artifacts that cannot be read",
+      "location": "src/squadron/stats/reviews_report.py:67-68",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Validate the frontmatter cost-basis type",
+      "location": "src/squadron/stats/reviews_report.py:151-155",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Add a load test for SDK usage capture",
+      "location": "src/squadron/providers/sdk/usage.py#read_result_usage",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:38:52.255727",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 90,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 38084,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "xhigh",
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 3346420,
+  "cached_tokens": 2948265,
+  "cache_write_tokens": null,
+  "completion_tokens": 67273,
+  "reasoning_tokens": 63394,
+  "duration_seconds": 702.356887208065,
+  "cost_usd": 0.10293465,
+  "cost_basis": "alias_pricing"
+}

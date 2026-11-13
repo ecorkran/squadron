@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Shared observer state is discarded on every other project's tick",
+      "description": "`RunnerTenant` constructs one `RunObserver` at `src/amoeba/runner/tenant.py:74-82` and passes that same object into every project's `ProjectTick` at `src/amoeba/runner/tenant.py:133`. Each tick calls `observe()` with only the current project's entries (`src/amoeba/runner/tick.py:91-92`), but `RunObserver.observe()` prunes `_last_poll`, `_overdue`, and `_faulted` to just those entry ids at `src/amoeba/runner/observe.py:108-111`. With multiple hosted projects, ticking project B drops project A's poll timestamps and fault/overdue state; on A's next tick, `RunObserver._poll_due()` sees no `_last_poll` and polls immediately. This violates `run_poll_interval_seconds`, can drop standing `RUN_OBSERVATION_FAILED` replay, and can lose launch-overdue state.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:108-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Store integrity failures are not re-raised by the Runner",
+      "description": "`STORE_FAILURES` lists `StoreBusyError`, `StoreCorruptError`, `StorePermissionError`, `StoreSchemaError`, and raw `sqlite3.Error`, but omits `StoreIntegrityError`. `src/amoeba/store/_base.py#StoreBase._execute` wraps `sqlite3.IntegrityError` as `StoreIntegrityError`, so the raw `sqlite3.Error` member never sees that case. `RunnerTenant._tick_project()` re-raises only the tuple plus `UpstreamShapeError` and then catches every other exception, logs, escalates, and returns `COMPLETE, True` (`src/amoeba/runner/tenant.py:143-149`). A store invariant failure can therefore be treated as a per-project unexpected fault and the process can continue, contrary to the Runner's stated rule that store failures stop the process (`src/amoeba/runner/faults.py:49-50`).",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py:51-57"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Runner startup side effects run before the instance lock",
+      "description": "The tenant tuple evaluates `runner_tenant(settings, supervisor_dir)` before `process.run()` is called at `src/amoeba/cli/lifecycle.py:67`. `runner_tenant()` validates settings, creates `launch-logs/`, and runs the `sq` probe at `src/amoeba/runner/factory.py:71-73`. The host does not acquire the instance lock until `src/amoeba/process/host.py:184-191`. If another process already holds the lock and `sq` is unavailable or has the wrong shape, `probe_sq()` raises `StartupFailedError` before the lock check can raise `AlreadyRunningError`; `start` can report `STARTUP_FAILED` instead of `ALREADY_RUNNING`, while also writing under the supervisor directory and starting an upstream subprocess before it owns the process lock.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/cli/lifecycle.py:57-60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Runner's subprocess/budget path has no load-tier coverage",
+      "description": "The added budget tests use fake clocks/call hooks and assert only that no subprocess call starts after a fake deadline; they do not assert latency, throughput, or resource bounds. CI gates the load tier separately at `.github/workflows/ci.yml:54`, but the files under `tests/load` contain no Runner, `TickBudget`, or `RunObserver` coverage. The new tick path starts and bounds subprocess calls in `src/amoeba/runner/tenant.py:96-111` and `src/amoeba/runner/tick.py:87-112`, which is exactly the environment-layer/concurrency path that the Python rules require to have a realistic load test. Add a load-tier test with many projects/runs that measures wall-clock call start behavior, throughput, or leaked child/resource bounds.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/runner/test_budget_coverage.py:65-90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "CLI test harness still injects the whole ambient environment",
+      "description": "`cli_environment()` begins with `environment = dict(os.environ)`, removes only `AMOEBA_SERVE_TOKEN`, and then the diff adds the stub `PATH` at `tests/cli_harness.py:58-59`. Every CLI child created through `tests/cli_harness.py#run_cli` and `tests/cli_harness.py#start_background` receives that full inherited environment. The SQL/testing rules say never inject a whole `.env`/environment into a child process; pass an explicit list of named variables. As written, arbitrary developer or CI credentials and database URL variables can reach test subprocesses, and behavior depends on ambient shell state. Use an explicit environment dictionary like the new crash harness pattern instead.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "tests/cli_harness.py:55-60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The CF probe parses external JSON without Pydantic boundary validation",
+      "description": "`probe_link()` consumes external `cf` stdout via `json.loads(completed.stdout)` and loose `isinstance(dict)` / `isinstance(list)` checks at `src/amoeba/runner/probes.py:141-146`. The Python rules require Pydantic for external boundaries and for validating everything entering the system; this project already uses a Pydantic model for the Squadron output boundary at `src/amoeba/process/sq_outcome.py:80-95`. A minimal Pydantic model or schema for the `cf status` object and `cf list initiatives` array would make the trust boundary explicit and avoid `object`-typed ad hoc validation.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/amoeba/runner/probes.py:115-147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New comments contradict the code they describe",
+      "description": "`src/amoeba/runner/faults.py:4` still says \"Escalation writes join this module in a later task,\" but escalation writes are already implemented in the same file at `src/amoeba/runner/faults.py:120-191`. Similarly, `tests/cli_harness.py:45` says `AMOEBA_STORE_DIR` is \"the only variable set,\" while `tests/cli_harness.py:59` also sets `PATH`. These stale comments obscure the actual behavior introduced by this slice and should be updated with the implementation.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py:4"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Shared observer state is discarded on every other project's tick",
+      "location": "src/amoeba/runner/observe.py:108-111",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Store integrity failures are not re-raised by the Runner",
+      "location": "src/amoeba/runner/faults.py:51-57",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Runner startup side effects run before the instance lock",
+      "location": "src/amoeba/cli/lifecycle.py:57-60",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The Runner's subprocess/budget path has no load-tier coverage",
+      "location": "tests/runner/test_budget_coverage.py:65-90",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "CLI test harness still injects the whole ambient environment",
+      "location": "tests/cli_harness.py:55-60",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "The CF probe parses external JSON without Pydantic boundary validation",
+      "location": "src/amoeba/runner/probes.py:115-147",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "New comments contradict the code they describe",
+      "location": "src/amoeba/runner/faults.py:4",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:50:26.034868",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 47,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 580598,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2570400,
+  "cached_tokens": 2353792,
+  "cache_write_tokens": null,
+  "completion_tokens": 147307,
+  "reasoning_tokens": 143555,
+  "duration_seconds": 1529.3942421250977,
+  "cost_usd": 0.32388891799999997,
+  "cost_basis": "alias_pricing"
+}

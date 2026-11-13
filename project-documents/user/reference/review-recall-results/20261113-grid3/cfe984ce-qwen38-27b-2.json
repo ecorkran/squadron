@@ -1,0 +1,153 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Worktree-aware template resolution follows the established convention",
+      "description": "`resolveTemplatePath` uses `resolveProjectWorktree` + `resolveOperationPath` and guards the missing-`projectPath` case with the same `UserError` message string used by `arch.ts`, `check.ts`, `plan.ts`, `slice.ts`, `task.ts`, and the sibling `frontmatter` command in `validate.ts`. The `SLICE_DESIGN_TEMPLATE_RELATIVE_PATH` constant is defined once in `packages/core/src/guides/types.ts` next to `GUIDE_RELATIVE_PATH` and exported through both entry points, satisfying the \"define a value once\" rule.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:36-47"
+    },
+    {
+      "severity": "PASS",
+      "title": "Preflight guarantees the \"no partial results with an error\" contract",
+      "description": "`preflight` stat/reads every file argument before any `DesignValidationResult` is produced, re-throws its own typed error correctly (so the internal \"not a regular file\" throw isn't misclassified as ENOENT), wraps unexpected I/O in `SliceDesignValidationError` with `cause`, and the template error paths name the remediation (`cf guides update`) per the design doc. Error handling is typed and specific \u2014 no blanket catches.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:74-127"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tests cover the real data contract and all exit-code paths",
+      "description": "The pure validator tests pin normalization edges (case, whitespace, HTML comments, parentheticals, `{placeholder}` prefix match, level mismatch, fenced blocks, CRLF, template-order output), the file layer tests run against the actual installed template and a real passing design, and the CLI test runs end-to-end through Commander with the real core validator (only the store mocked), pinning the full `--json` object, the exit 0/1/2 codes, empty-stdout-on-error in both modes, ordered multi-file output, and worktree template selection against a two-worktree fixture. This matches the testing rules: centralized `tests/` directories, real-format fixtures, one concept per test, and the design doc's own success criteria.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/sliceDesignValidator.test.ts:1-100"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test fixtures are live documents in project-documents/user/slices",
+      "description": "Both test suites depend on `214-slice.native-slice-design-validation.md` (plus 212, 213, 928) as fixtures, and `brokenCopy()` additionally assumes 214's exact section sequence (`## Value` immediately followed by `## Technical Scope`). This dependency is intentional and justified \u2014 the project's parsing rule requires parser tests to consume the real production format, and the 214 design's own Technical Requirements mandate tests against the real template and designs. The risk is only that an unrelated future edit to those historical documents (e.g., reordering sections in 214) breaks the package test suites. The 214 doc is `status: complete`, so the coupling is low; worth knowing, not worth action.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:44-50"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`--project` flag path has no end-to-end coverage on the design subcommand",
+      "description": "All CLI tests resolve the project via CWD detection (including the worktree-cwd test); none invoke the command with an explicit `--project` flag, so the flag branch of `resolveProjectWorktree` is not exercised through `resolveTemplatePath`. The resolver itself is covered by `packages/cli/tests/utils/project.test.ts`, and the sibling `frontmatter` command tests do use `--project`, so this is a small coverage gap in the new command specifically rather than a risk in the shared logic.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:126-131"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Worktree-aware template resolution follows the established convention",
+      "location": "packages/cli/src/commands/validateDesign.ts:36-47",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Preflight guarantees the \"no partial results with an error\" contract",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:74-127",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Tests cover the real data contract and all exit-code paths",
+      "location": "packages/core/tests/schema/sliceDesignValidator.test.ts:1-100",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test fixtures are live documents in project-documents/user/slices",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:44-50",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`--project` flag path has no end-to-end coverage on the design subcommand",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:126-131",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:46:36.885542",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 28,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 137942,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 14,
+  "prompt_tokens": 488662,
+  "cached_tokens": 374976,
+  "cache_write_tokens": null,
+  "completion_tokens": 35315,
+  "reasoning_tokens": 32581,
+  "duration_seconds": 350.42604475002736,
+  "cost_usd": 0.12372644,
+  "cost_basis": "alias_pricing"
+}

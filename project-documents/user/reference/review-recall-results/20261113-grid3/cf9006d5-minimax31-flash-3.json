@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Lint check reads the project but writes to a target root that may not be the project",
+      "description": "`writeOrSuggest` writes to `path.join(this.ctx.targetRoot, rel)`, but the lint *detection* reads from `this.ctx.projectRoot`. The bash original had the same split (`PROJECT_ROOT` for reading, `TARGET_ROOT` for writing), and the module docstring explicitly documents that intent (\"Reads the project from projectRoot and writes to targetRoot\"). But the new cf call sites always pass `projectRoot === targetRoot` (`installCheckout` in `packages/cli/src/commands/setup-ide.ts:88-100`), so the split is dead in production while remaining live in the dry-run path \u2014 where `targetRoot` is the sandbox. The consequence is that in a dry run the lint check reports on the real project but writes nothing to the sandbox, so `--dry-run --write-lint` will not show `ruff.toml` / `eslint.config.mjs` as an added file, and the dry run's diff will under-report what `--write-lint` would create. `packages/cli/src/ideInstall/dryRun.ts:103-117` copies `LINT_WRITE_PATHS` into the sandbox specifically to make this comparison work, so the sandbox copy is prepared and then never written to. Either the lint writer should target the sandbox in dry-run mode, or the dry-run report should account for lint writes; today the two are inconsistent.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts:78-83"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`lint/python/ruff.toml` baseline does not exist in the shipped guide",
+      "description": "`LintCheck.python()` calls `fs.readFileSync(this.source('python', 'ruff.toml'))` when no ruff config exists, but the vendored guide at `project-documents/ai-project-guide/project-guides/lint/python/` contains only `required` \u2014 there is no `ruff.toml`. The guide's own bash script has the same read (`lint_write_or_suggest python ruff.toml \"$LINT_SOURCE_DIR/python/ruff.toml\"`), so the guide ships without it too, but the guide's `readme.setup-ide.md` documents `lint/python/ruff.toml` as the Python baseline. In cf this path throws `ENOENT` from `fs.readFileSync`; `installIde` catches it as a filesystem error (`packages/cli/src/ideInstall/installer.ts:59-66`) and returns `exitCode: 1`, so `cf setup-ide` on any Python project without a ruff config fails with a raw ENOENT message rather than the intended \"no ruff.toml \u2014 run setup-ide with --write-lint\" suggestion. The test suite only passes because `packages/cli/tests/ideInstall/fixture_guide/lint/python/ruff.toml` exists in the fixture but not in the real guide, and the `realGuide.test.ts` smoke test uses the `agents` target against the real guide \u2014 where the project has no `pyproject.toml`, so the Python branch never runs. This is exactly the \"test fixture must include the actual format that parser will consume in production\" rule from AGENTS.md: the fixture has a file the shipped guide lacks.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts:126-128"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Worktree installs lose the stale-file prune the deleted propagation path performed",
+      "description": "The removed `propagateToWorktrees` pruned worktree files that a previous guide version installed but the new one no longer ships, using the worktree's own `.context-forge/<target>.manifest` as the baseline. The new `installWorktrees` loop calls `installCheckout` per worktree, which does run `InstallManifest.finish()` \u2014 but `finish()` reads `this.oldManifest`, i.e. the manifest inside the worktree's own root (`packages/cli/src/ideInstall/manifest.ts:118-122`). Since each worktree previously received a byte copy of the root's manifest under the old propagation path, this should work for worktrees installed by a pre-slice cf. However, for worktrees that never received a manifest copy (installed by a guide older than v0.19.0, or created after the last root install), `oldManifest` is absent and `finish()` falls back to `LEGACY_MANIFEST_ENTRIES` only \u2014 so files the guide dropped between versions stay in the worktree indefinitely. This is the same gap the deleted code explicitly closed via `rootBaseline` (the pre-run root manifest snapshot) joined to the worktree's own manifest. The new code has no equivalent: `setupIdeAction` no longer snapshots the root manifest before the install, and `installWorktrees` passes only `guideDir`. The behavior difference is not covered by any test \u2014 `packages/cli/tests/commands/worktreePrune.test.ts` was deleted wholesale and no replacement exercises the manifest-driven prune in a worktree.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:172-190"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Deleted worktree-prune and generated-prompt-sweep coverage was not replaced",
+      "description": "`worktreePrune.test.ts` (373 lines) was deleted with no equivalent added. It covered `pruneStaleFiles` (edited-file retention, containment/escape rejection, symlinked-directory containment, non-regular files, empty-dir removal depth) and `sweepGeneratedPrompts` (marked vs. unmarked files, empty-dir removal), plus end-to-end propagation with manifest carry-over. The new `packages/cli/tests/commands/worktreePropagation.test.ts` shrank to 50 lines covering only `propagationTargets` filtering. The containment/symlink protections were explicitly security-relevant (the old `pruneStaleFiles` had `escapesLexically` and `realpathSync` guards against deleting outside the worktree); with the code deleted there is no live path that needs them, but the corresponding manifest-driven prune in `InstallManifest.finish()` (`packages/cli/src/ideInstall/manifest.ts:126-149`) now performs deletions in worktrees and has no test for the edited-file retention case (`\u26a0\ufe0f Kept <rel>: ... edited since`) or for a path that escapes the target root. `packages/cli/tests/ideInstall/manifest.test.ts` lost its `readManifest`/`parseManifestLine` suites entirely, and no new test covers `finish()`'s prune branch.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/worktreePrune.test.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`parseRulesExclude` does not trim, but the bash script did",
+      "description": "`parseRulesExclude` splits on `,` with no trimming, and the validator rejects entries with surrounding whitespace \u2014 so the two are consistent for values that pass validation. The bash `rule_is_excluded` did trim each pattern (`pattern=\"${pattern#\"${pattern%%[![:space:]]*}\"}`), so a hand-edited `.context-forge.toml` containing `rules.exclude = \"dart.md, swift*.md\"` would work under bash but is rejected by cf's validator and will not match under the new installer. The validator's comment still says the consumer \"matches each pattern literally (bash `case` glob rules)\", which is accurate for the new installer, so this is a deliberate tightening rather than a bug \u2014 but the config description and error message do not tell a user upgrading from the bash flow that a previously working value is now rejected. Worth a note in the changelog for `rules.exclude` consumers.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/config/ConfigKeys.ts:194"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`readRulesExclude` throws a plain `Error` for a non-string config value",
+      "description": "`readRulesExclude` raises `new Error(...)` when `rules.exclude` resolves to a non-string. `ConfigManager.get` already types the value as `string | boolean | number`, so a boolean or number in a hand-edited TOML reaches this branch. A plain `Error` surfaces through `handleError` as `Error: rules.exclude resolved to a boolean, expected a string` with no stack, which is acceptable, but a `UserError` would match the surrounding convention (every other expected-failure path in this file throws `UserError`). Note also that `readRulesExclude` is called once per checkout inside `installCheckout`, so a worktree with a malformed config aborts the whole run with a stack-shaped message rather than being recorded as a per-worktree failure.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:76-82"
+    },
+    {
+      "severity": "PASS",
+      "title": "Target model remains single-sourced and the removed capability-probe scaffolding has no dangling references",
+      "description": "The descriptor table now drives validation and the managed-marker check only, with `propagateDirs`/`generatedPromptDirs` removed along with `guideScript.ts`. A grep across `packages/` for `runSetupIdeInWorktrees`, `execSetupIde`, `guideSupports`, `readCapabilities`, `setupIdeScriptPath`, `GuideCapability`, `propagateDirs`, and `generatedPromptDirs` returns no remaining references, so the deletion left no dead imports or orphaned exports. The `Record<Target, TargetDescriptor>` annotation still makes an unhandled target a compile error, and `normalizeTarget` remains the single alias resolver used by both `setup-ide.ts` and `init.ts`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/ideTargets.ts:44-77"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Lint check reads the project but writes to a target root that may not be the project",
+      "location": "packages/cli/src/ideInstall/lint.ts:78-83",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`lint/python/ruff.toml` baseline does not exist in the shipped guide",
+      "location": "packages/cli/src/ideInstall/lint.ts:126-128",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Worktree installs lose the stale-file prune the deleted propagation path performed",
+      "location": "packages/cli/src/commands/setup-ide.ts:172-190",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Deleted worktree-prune and generated-prompt-sweep coverage was not replaced",
+      "location": "packages/cli/tests/commands/worktreePrune.test.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`parseRulesExclude` does not trim, but the bash script did",
+      "location": "packages/core/src/config/ConfigKeys.ts:194",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`readRulesExclude` throws a plain `Error` for a non-string config value",
+      "location": "packages/cli/src/commands/setup-ide.ts:76-82",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Target model remains single-sourced and the removed capability-probe scaffolding has no dangling references",
+      "location": "packages/cli/src/commands/ideTargets.ts:44-77",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:34:28.994687",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 285729,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2044444,
+  "cached_tokens": 1781760,
+  "cache_write_tokens": null,
+  "completion_tokens": 79462,
+  "reasoning_tokens": 72910,
+  "duration_seconds": 294.3995622920338,
+  "cost_usd": 0.05601222,
+  "cost_basis": "alias_pricing"
+}

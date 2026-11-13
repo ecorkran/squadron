@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The `slice-design` docType literal is now scattered across four places instead of one",
+      "description": "The change introduces `SLICE_DESIGN_DOC_TYPE = 'slice-design'` as a canonical constant, but the same literal is still hardcoded in the pre-existing frontmatter registry: `packages/core/src/schema/frontmatterSchema.ts:76` (`values: ['slice-design']`), `packages/core/src/schema/frontmatterSchema.ts:148` (`slice: 'slice-design'`), and `packages/core/src/schema/frontmatterSchema.ts:185` (`docType === 'slice-design'`). AGENTS.md is explicit: \"Never scatter comparison values across code. If a value is used in conditionals, switch cases, or lookups, define it once \u2026 Changing a value should require editing exactly one place.\" As written, renaming the docType requires editing four files, and the new constant is dead weight because nothing else consumes it. Either have `frontmatterSchema.ts` import `SLICE_DESIGN_DOC_TYPE` (or move the constant into a shared, browser-safe module both can import without a cycle), or drop the new constant and reuse the registry's existing spelling \u2014 but do not leave both spellings live.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:21"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Project resolution and the \"Project not found\" message are duplicated across two command files",
+      "description": "`resolveTemplatePath` in `packages/cli/src/commands/validateDesign.ts:34-46` repeats the project-resolution preamble that already exists in `packages/cli/src/commands/validate.ts:160-172`: constructing a `FileProjectStore`, calling `resolveProjectWorktree({ project: opts.project }, store)`, calling `store.getById(id)`, and throwing the byte-identical user-facing string `Project not found: '${id}'. Run cf project list to see available projects.` The only real difference between the two is the final step (one checks `project.projectPath`, the other checks the resolved checkout root). AGENTS.md requires \"Do not duplicate logic. Respect DRY\" and defines shared values once. Extracting a single helper into `packages/cli/src/utils/project.ts` \u2014 e.g. `resolveProjectCheckout(opts)` returning `{ project, checkoutRoot }` and owning the not-found error \u2014 would remove the duplicated message and keep the two `validate` subcommands from drifting as resolution rules evolve.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:34"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `--json` error path is never actually exercised by the new CLI test",
+      "description": "The `for (const json of [false, true])` loop at lines 205-214 exercises the `--json` flag but only asserts an empty stdout and exit code 2. The structured JSON error contract on stderr is never checked, because JSON mode is enabled by `setJsonMode()` in `packages/cli/src/index.ts:178` \u2014 and this test builds its own `Command` and calls `registerValidateCommand` directly, bypassing `index.ts`. `isJsonMode()` therefore returns false, and `handleError` takes the plain `console.error` branch rather than the JSON branch in `packages/cli/src/utils/errors.ts:41-52`. Production behavior is correct (the real entry point enables JSON mode), so this is a coverage gap rather than a defect: the `--json` variants of the three exit-2 cases silently test the non-JSON error path twice. Setting `process.env.CF_JSON = '1'` for the JSON iterations and asserting the stderr payload parses as `{ error: true, message: \u2026 }` would close it.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:205"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The core API accepts an empty file list and returns an empty result set",
+      "description": "`validateSliceDesignFiles(templatePath, files)` runs `preflight` over `files` and returns `[]` when the list is empty \u2014 no `SliceDesignValidationError` is raised, even though the class docstring at lines 34-40 says \"Usage and template problems throw `SliceDesignValidationError`\" and the file header says \"every file argument is checked before any result is produced\". The empty-list usage guard therefore lives only in the CLI at `packages/cli/src/commands/validateDesign.ts:62-66`. That is fine for the one caller today, but the function is exported from `@context-forge/core/node` and the slice design explicitly anticipates reuse (\"A later `cf check` rule can reuse them\"), where a caller passing an empty list would get a silent \"nothing to validate\" instead of the usage error. Moving the empty-list check into `validateSliceDesignFiles` would make the core contract match its own documentation.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:115"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Each validated document is read from disk twice",
+      "description": "`validateFile` calls `parseFrontmatter(file)` \u2014 which itself does a full `readFile` in `packages/core/src/introspection/parsers/frontmatterParser.ts:29` \u2014 and then reads the same file again at lines 100-105 to extract its headings. For a batch of N designs this is 2N full reads where N would do. The impact is small for typical batches and the fix (a text-overload on `parseFrontmatter`) touches a shared parser, so this is informational; worth revisiting only if `cf validate design` is ever pointed at large document sets.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:95"
+    },
+    {
+      "severity": "PASS",
+      "title": "Faithful port of the guide script with a clean pure/file-layer split",
+      "description": "I compared the port against the original `project-documents/ai-project-guide/scripts/validate-slice-design` line by line. The heading normalization (`packages/core/src/schema/sliceDesignValidator.ts:32-41`), the \"heading followed by the trimmed `<!-- required -->` marker\" rule (lines 44-55), the fenced-code skip (lines 58-73), the prefix match that lets `# Slice Design: {slice-name}` match a concrete title (lines 76-83), and the PASS/FAIL + `  missing: <heading>` output contract in `packages/cli/src/commands/validateDesign.ts:49-59` all match the bash original, including its intentional divergences (real markdown heading syntax only, CRLF stripping, quoted `docType` accepted via `parseFrontmatter`). The deliberate leniency widenings are documented in the slice design rather than left implicit. The exit-code contract (0 pass / 1 fail / 2 usage-or-template) is implemented consistently, including the deliberate `[files...]` optional-argument trick at `packages/cli/src/commands/validateDesign.ts:92-93` so that \"no files\" exits 2 instead of Commander's 1. The tests use the real template and real slice designs rather than synthetic fixtures, which is the right way to catch a template-format change.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:44"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The `slice-design` docType literal is now scattered across four places instead of one",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:21",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Project resolution and the \"Project not found\" message are duplicated across two command files",
+      "location": "packages/cli/src/commands/validateDesign.ts:34",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The `--json` error path is never actually exercised by the new CLI test",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:205",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "The core API accepts an empty file list and returns an empty result set",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:115",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Each validated document is read from disk twice",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:95",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Faithful port of the guide script with a clean pure/file-layer split",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:44",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:25:16.600184",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 43,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 619444,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1066718,
+  "cached_tokens": 857216,
+  "cache_write_tokens": null,
+  "completion_tokens": 157370,
+  "reasoning_tokens": 153334,
+  "duration_seconds": 744.0934448339976,
+  "cost_usd": 0.068924162,
+  "cost_basis": "alias_pricing"
+}

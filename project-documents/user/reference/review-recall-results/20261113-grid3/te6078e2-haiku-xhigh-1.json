@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Element-loop guard duplicated in three test files with conflicting node sets",
+      "description": "`ELEMENT_LOOP_NODES` and the AST walk are copied into `test_labels.py` (lines 27-34 and 283-286) and `test_confidence.py` (lines 25-32 and 133-136). `test_import_boundary.py` already has the same check as `_loop_lines` (lines 172-209). The copies disagree. `test_import_boundary.py:179` includes `ast.GeneratorExp`, while the two new copies exclude it on purpose so that the `all(... for category in ...)` generator in `labels.py` is allowed. The same \"no element loops\" rule therefore means different things in different test modules. Fix: keep one node set and one helper in `test_import_boundary.py`, parametrize it over the vector modules (`confidence.py`, `labels.py`), and put the generator-expression exemption in that one place.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "tests/core_model/test_labels.py:27-34"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`LabelVocabulary.category_ids` is typed `frozenset[int]` but the constructor accepts `set`",
+      "description": "The field is annotated `frozenset[int]`, so under strict pyright the generated `__init__` rejects sets. The runtime check at line 56 accepts both `set` and `frozenset`, and it needs `# pyright: ignore[reportUnnecessaryIsInstance]` to pass. The tests then pass sets with `# pyright: ignore[reportArgumentType]` (`test_vocabulary_builds_and_stores_a_frozenset` and `test_equal_vocabularies_are_equal` in `tests/core_model/test_labels.py`). The public signature and the runtime contract disagree. The rest of this module requires exact types (`type(category) is int`), so the simplest fix is to require `frozenset` at runtime, drop the `set` branch, and update those two tests. That removes both suppressions.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/labels.py:50"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_coerce` returns an implicit `None` for an unhandled `ParameterType`",
+      "description": "`_coerce` handles `INTEGER` and `REAL` in a `match` with no fall-through. Its return type includes `None`, which means \"uncoercible\". A future `ParameterType` member would therefore return `None` silently. A valid default would fail as \"is not a valid <type>\", and a valid supplied value would be reported as `wrong_type`. Neither message points at the missing branch, and pyright does not flag it, because `None` is already in the return type. Fix: add `case _: assert_never(parameter_type)` (from `typing`). Pyright then reports the gap when a member is added, and the runtime fails loudly.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py:50-60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Vacuous test: `test_match_selects_the_branch_for_each_form`",
+      "description": "The test runs a `match` in its own body on the output it was given, then asserts on the string the test itself built. It never calls anything in `declarations.py`, so it passes regardless of what the library does with the three output forms. Delete it. The behavior it implies is already covered by `test_declared_order_is_preserved` and `test_declarations_reject`, which includes a non-declaration item at `outputs[1]`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_declarations.py:154-164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test pins the int64-extreme ordering that `_require_time_order` depends on",
+      "description": "Line 117 says subtraction would wrap at the int64 extremes, which is why the code compares neighbours. No test in `tests/core_model/test_signals.py` covers that case. `test_rejects_decreasing_times` (line 146) uses 100, 300, 200. A refactor to `np.diff` would silently accept `[INT64_MAX, INT64_MIN]`, because the difference wraps to a positive value. `tests/core_model/test_series_index.py:252-260` already covers this for `BarIndex`. Add the equivalent `SignalSequence` case.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/signals.py:114-121"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`bind_parameters` accepts `str`-subclass keys that equal a declared name",
+      "description": "The check `key not in declared` uses `str` hashing and equality, so `np.str_(\"window\")` binds as `window`. The rest of the module requires exact `str`: `require_name` uses `type(value) is not str`, and `canonicalize` rejects non-exact mapping keys. The bound output is keyed by `declaration.name`, so no bad data results. This is an inconsistency. If exact keys are intended, add a `type(key) is str` check; otherwise, say in the docstring that subclasses are accepted.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py#Declarations.bind_parameters"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`errors.py` and `declarations.py` depend on each other at the type level",
+      "description": "`errors.py` imports `ParameterIssue` under `TYPE_CHECKING` from `declarations.py`, which imports `errors.py`. The comment records the intent, and nothing breaks at runtime. The cycle exists only to annotate `InvalidParametersError.issues`. If it grows, move `ParameterIssue` and `ParameterIssueKind` into a module that both can import.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/errors.py:10-12"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`display.py` has no production consumer yet",
+      "description": "Nothing under `src/` imports `display.py`. In this slice its only effect is the canonicalization-rejection test, and its docstring says the catalog will use it later, which matches D11. Keep it if the catalog slice follows; otherwise it is dead code.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/display.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Numeric coercion rejects `bool`, NaN, infinity and out-of-range integers",
+      "description": "Traced `as_integer` and `as_real` by hand. `bool` and `np.bool_` are excluded, `np.float32(5.0)` coerces to `5`, and `2**63` and `2.0**63` return `None` from the int64 range check. `10**400` returns `None` through `as_real`'s `OverflowError` path. The table in `tests/core_model/test_value_checks.py` matches these outcomes.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py#as_integer"
+    },
+    {
+      "severity": "PASS",
+      "title": "The one broad-scope `try/except` follows the exception rule",
+      "description": "The `try` catches only `OverflowError`, and the comment explains why `None` is returned rather than raising. This meets rule (b) in the project's exception-handling standard.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py#as_real"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Element-loop guard duplicated in three test files with conflicting node sets",
+      "location": "tests/core_model/test_labels.py:27-34",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`LabelVocabulary.category_ids` is typed `frozenset[int]` but the constructor accepts `set`",
+      "location": "src/manta_trading_engine/core_model/labels.py:50",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`_coerce` returns an implicit `None` for an unhandled `ParameterType`",
+      "location": "src/manta_trading_engine/core_model/declarations.py:50-60",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Vacuous test: `test_match_selects_the_branch_for_each_form`",
+      "location": "tests/core_model/test_declarations.py:154-164",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No test pins the int64-extreme ordering that `_require_time_order` depends on",
+      "location": "src/manta_trading_engine/core_model/signals.py:114-121",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`bind_parameters` accepts `str`-subclass keys that equal a declared name",
+      "location": "src/manta_trading_engine/core_model/declarations.py#Declarations.bind_parameters",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`errors.py` and `declarations.py` depend on each other at the type level",
+      "location": "src/manta_trading_engine/core_model/errors.py:10-12",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`display.py` has no production consumer yet",
+      "location": "src/manta_trading_engine/core_model/display.py",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Numeric coercion rejects `bool`, NaN, infinity and out-of-range integers",
+      "location": "src/manta_trading_engine/core_model/value_checks.py#as_integer",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The one broad-scope `try/except` follows the exception rule",
+      "location": "src/manta_trading_engine/core_model/value_checks.py#as_real",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:16:50.121620",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 27,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 28,
+  "prompt_tokens": 1567575,
+  "cached_tokens": 1325425,
+  "cache_write_tokens": 242130,
+  "completion_tokens": 56224,
+  "reasoning_tokens": null,
+  "duration_seconds": 237.79446645802818,
+  "cost_usd": 0.40525047,
+  "cost_basis": "provider"
+}

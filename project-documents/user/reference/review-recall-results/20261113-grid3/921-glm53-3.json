@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`cagg_freshness_for_session` does not normalize `-infinity` and will crash on a never-run policy",
+      "description": "The new probe selects `stats.last_successful_finish` verbatim. The project's own sibling query (`_JOB_SQL` in `src/manta_trading/market/maintenance/cagg_freshness.py:68-84`) wraps the column in `nullif(s.last_successful_finish, '-infinity'::timestamptz)` specifically because \"psycopg cannot load that into a datetime \u2014 it raises DataError mid-fetch\", a hazard documented at length there and pinned by `test/integration/test_policy_advances_head.py:85-98`. A refresh policy that has been created but never completed a run reports `-infinity`; this query will raise `psycopg.DataError` inside `run_verify`, which only catches `RepairScanTimeout` at `scripts/repair_921_minute_sessions.py`'s `main` \u2014 so the operator gets a raw traceback instead of the intended `[WAIT]`/refusal path. Copy the `nullif` normalization (or reuse the existing catalog-read helper) so the probe degrades to `last_refresh=None` (conservatively stale) instead of crashing.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py:195-226"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The sudoers file does not cover the repair invocations the cutover script issues",
+      "description": "`manta-ops` claims to name \"Exactly the commands those scripts issue, nothing wider\", but `scripts/cutover_921_minute_sessions.py:_repair` runs `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode>` (via `cutover_common.run(..., sudo=True)`), which matches no `Cmnd_Alias` (`MT_RUN` is only `/usr/local/bin/mt-run *`). Run as `manta` with this sudoers file, the cutover dies at the first `--check` with a password prompt / `sudo: command not allowed`. Either add a `MT_REPAIR` alias for the production-interpreter repair invocation or change `_repair` to go through `mt-run` (e.g. `sudo mt-run data \u2026` / a wrapper verb), and reconcile the header comment. Related, unverified: plain `journalctl -u mt-*` (no sudo) also needs journal-group membership for the `manta` account; I could not verify that from the repo.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:8-14"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Per-chunk `fetch_session_bounds` adds a DB round trip to every minute chunk",
+      "description": "`_do_minute_symbol` now issues `fetch_session_bounds` once per chunk \u2014 including on the backfill phase, which walks ~69 chunks per symbol over ~13k symbols, and even for outcomes that carry no bars (where `judge_chunk_by_sessions` returns immediately). The query is small and indexed, so this is unlikely to be the pass's bottleneck next to provider calls, but hoisting the fetch to only the `SUCCESS`/`PARTIAL`-with-bars branch (or memoizing per `(symbol, chunk_start\u2026chunk_end)` coalescence) would keep the hot loop unchanged where the new logic does not apply.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:772-776"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`MT_INSTALL`'s `--ref *` wildcard over a user-writable script is effectively unrestricted root",
+      "description": "The sudoers wildcard permits any arguments after `--ref`, and the named script lives in the operator's own checkout (`/home/manta/source/repos/manta/trading-data/...`), so the operator account can already edit what runs as root \u2014 the rule grants root to a user who controls the payload. This is presumably a deliberate trust boundary (single-operator host), but the header's \"exactly the commands those scripts issue\" framing overstates the containment; worth a comment acknowledging it, or pinning the installer's checksum/ref.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:7"
+    },
+    {
+      "severity": "PASS",
+      "title": "Session-predicate judgement (`judge_chunk_by_sessions`) is correct and well tested",
+      "description": "`bar_timestamp` mirrors `_bar_to_row`'s parsing (epoch wins, ISO fallback, UTC), `sessions_without_bars` uses `bisect_right(stamps, open)` + `<= close`, which is exactly the `(open, close]` predicate the repair's truncated-day index applies, and the pass-through cases (no bars, non-SUCCESS/PARTIAL, no judgeable session) preserve the classifier's verdict. The new unit tests cover the 2026-09-10 spillover case, the open-bar boundary, the weekend-tail promotion, and the wiring through `_do_minute_symbol`/`_run_minute_phase`/`run_minute_cycle`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:33-91"
+    },
+    {
+      "severity": "PASS",
+      "title": "Timer drift to 04:05 UTC is consistent across every holder",
+      "description": "`MINUTE_PASS_FIRING_TIMES_UTC` (04:05, 13:05), `deploy/systemd/mt-minute-pass.timer` (04:05/13:05), `test/unit/test_constants.py`, `test/unit/deploy/test_units.py`'s drift guard, and the health-check boundary tests (07:04/07:05) all agree; the Kalshi timer's collision comment was updated to match.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/constants.py:150"
+    },
+    {
+      "severity": "PASS",
+      "title": "Bounded firing, verify-WAIT polling, and log tee are tested with side-effect guards",
+      "description": "The autouse `_no_side_effects` fixture blocks real subprocesses and sleeps, and the new tests pin: stop-once-trailing-line-appears, no-stop-when-unit-ends-first, log tee content, WAIT re-polling (bounded at `VERIFY_WAIT_POLLS + 1` calls), and a WAIT verdict never counting as acceptance (exit 1). The `stale`/fresh/None semantics of `CaggFreshness` and the probe's SQL shape are pinned in `test_repair_921.py`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_cutover_921.py:441-526"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`cagg_freshness_for_session` does not normalize `-infinity` and will crash on a never-run policy",
+      "location": "src/manta_trading/data/gaps/repair_921.py:195-226",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The sudoers file does not cover the repair invocations the cutover script issues",
+      "location": "deploy/sudoers.d/manta-ops:8-14",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Per-chunk `fetch_session_bounds` adds a DB round trip to every minute chunk",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:772-776",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`MT_INSTALL`'s `--ref *` wildcard over a user-writable script is effectively unrestricted root",
+      "location": "deploy/sudoers.d/manta-ops:7",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Session-predicate judgement (`judge_chunk_by_sessions`) is correct and well tested",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:33-91",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Timer drift to 04:05 UTC is consistent across every holder",
+      "location": "src/manta_trading/constants.py:150",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Bounded firing, verify-WAIT polling, and log tee are tested with side-effect guards",
+      "location": "test/unit/test_cutover_921.py:441-526",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:06:50.276873",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 177508,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 943717,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 851752,
+  "cached_tokens": 597632,
+  "cache_write_tokens": null,
+  "completion_tokens": 45685,
+  "reasoning_tokens": 43653,
+  "duration_seconds": 721.2544852921274,
+  "cost_usd": 0.71216632,
+  "cost_basis": "alias_pricing"
+}

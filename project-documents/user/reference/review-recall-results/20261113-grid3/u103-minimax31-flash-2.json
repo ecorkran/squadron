@@ -1,0 +1,297 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Playwright config header still claims e2e runs against the production build",
+      "description": "The file's own header comment states: *\"Specs run against the PRODUCTION build served by `vite preview` (not the dev server) so e2e exercises the same artifact `pnpm build` ships.\"* The `webServer` command at line 44 now builds with `--mode e2e`, which is a **different artifact** from `pnpm build` (the whole point of the change \u2014 `production` mode tree-shakes the harness route out). The comment directly contradicts the change made in the same file, and the more detailed `webServer` comment below it describes the new behavior correctly. A reader who trusts the header will believe the e2e suite covers the shipped artifact, which it no longer does. The header should be updated to say the e2e suite runs against an `e2e`-mode build (with the harness route present) while `pnpm build` produces the production artifact.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "playwright.config.ts:6"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "reuseExistingServer defeats the e2e-mode artifact guarantee locally",
+      "description": "`reuseExistingServer: !process.env.CI` means that locally, if anything is already listening on port 4173, Playwright reuses it and **skips the `pnpm build --mode e2e && pnpm preview --mode e2e` command entirely**. The most common case is a developer who ran `pnpm preview` against a default `production` build \u2014 where `src/routes/router.ts` folds `harnessEnabled` to `false` and tree-shakes `/__chart-harness` out of the bundle. `chart-render.spec.ts` would then fail against a stale artifact that cannot serve the harness route, with an error that points at the spec rather than at the config. This directly contradicts the `webServer` comment's stated guarantee that *\"the mode is passed to preview as well so it resolves the same config the artifact was built under\"* \u2014 `reuseExistingServer` defeats exactly that guarantee. Consider either dropping `reuseExistingServer` (the build is fast and CI already forces a fresh server), or gating reuse on a marker that proves the running server was built in `e2e` mode.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "playwright.config.ts:46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A null container ref leaves the chart permanently unmounted with no error",
+      "description": "The mount effect early-returns when `containerRef.current` is null:\n```ts\nconst container = containerRef.current\nif (container === null) {\n  return\n}\n```\nThe effect's dependency array is `[containerRef, setMountOutcome, runGuarded]` \u2014 all three are referentially stable (`containerRef` is a ref object; `setMountOutcome` and `runGuarded` are `useCallback`s with empty/stable dep chains). React does not re-run an effect when a ref's `.current` changes. Therefore, if the container element is not attached on the first commit (conditional rendering, a ref forwarded through a component that mounts later, an async-loaded route), the effect **never re-runs**: the hook stays at `ready: false, error: null` forever, the provider is never created, and nothing is logged. That is a silent failure mode, which conflicts directly with the project principle *\"Never use silent fallback values. Fail explicitly with errors\"* and with the architecture's requirement that failures surface as hook state. The unit test `does nothing when the container ref is null` (`src/test/use-chart-provider.lifecycle.test.tsx`) currently codifies this behavior. Options: surface an explicit error state for a missing container, or re-run the effect when the container actually becomes available (e.g. via a callback ref or a state-backed element rather than a plain `RefObject`).",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:167"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Measured-rect fixture duplicated verbatim across four test files",
+      "description": "`MEASURED` and `measuredRect` are copy-pasted into four suites \u2014 `use-chart-provider.errors.test.tsx:30-40`, `use-chart-provider.facade.test.tsx:33-43`, `use-chart-provider.resize.test.tsx:30-42`, and `use-chart-provider.translation.test.tsx:38-48` \u2014 with the resize variant even formatted differently from the other three (a single long inline expression at line 40). Each suite also defines its own near-identical `Host` component. The project already established the right home for this: `src/test/support/` holds `chart-provider-spy.ts` and `render-with-contexts.tsx`, and `render-with-contexts.tsx`'s own comment says *\"Centralized here so the four hook suites share one wrapper.\"* The measurement stub belongs in `src/test/support/` for the same reason \u2014 as written, a change to the stub's shape (e.g. adding a `devicePixelRatio` field) requires four coordinated edits, and the inconsistency between the resize variant and the rest signals the copies have already begun to drift.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.errors.test.tsx:30-40"
+    },
+    {
+      "severity": "NOTE",
+      "title": "mockClear does not clear pending mockImplementationOnce queues, contrary to the comment",
+      "description": "The comment at line 248 states: *\"mockClear keeps implementations, but a mockImplementationOnce from a prior test must not bleed into the next one.\"* That is not what `mockClear()` does in Vitest \u2014 it clears `mock.calls`/`mock.instances`/`mock.results` but leaves the `mockImplementationOnce` queue intact; only `mockReset()` clears it. The code happens to work today because every `mockImplementationOnce` is armed immediately before the call that consumes it (I traced each one across the four suites), but the stated guarantee is false, and a test that arms a once-implementation which is never consumed would leak it into the next test. Using `mockReset()` instead would be both correct and simpler: in Vitest 4 `mockReset()` restores the original implementation passed to `vi.fn(impl)`, which for `subscribeCrosshairMove`/`subscribeVisibleRangeChange`/`getVisibleRange`/`getCapability` is exactly what the manual `mockImplementation` re-establishment below it does by hand.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/test/support/chart-provider-spy.ts:238-254"
+    },
+    {
+      "severity": "NOTE",
+      "title": "styleRef captures the first render's style and never updates",
+      "description": "`const styleRef = useRef(style)` captures `style` on the first render only; React ignores subsequent initial values for a ref, so the value is write-once. The surrounding comment correctly explains why `style` is excluded from the effect dependencies (avoiding teardown/rebuild on every render for a fresh object literal), and \"Chrome colors are read once at create()\" is the provider contract. But the hook's public API gives a caller no signal that the parameter is write-once: a future theme switch that passes a new `style` will be silently ignored, leaving the chart in the old palette with no error and no log. Worth either documenting this on the hook's `@param style` JSDoc or emitting a warning when a changed `style` is observed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:165"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Range translation does not activate when the first series is added",
+      "description": "The visible-range effect reads `seriesCountRef.current` but the series count is not in the dependency array (`[mount.ready, chart, range]`), and it cannot be \u2014 it is a ref. Consequently, adding the first series through the facade does **not** trigger the translation; the range is applied only on a *subsequent* change to `range`. The slice design's own wording (\"activating on the first `addSeries`\") is therefore only true if a range change follows. In practice, initiative 120 will add a series with the current range already set, and the chart will display the library's default viewport until the user next changes the range. The visible-range test at `src/test/use-chart-provider.translation.test.tsx:135-145` adds a series and *then* changes the range, so it does not surface this. Adding a series-count signal to the hook's state (rather than a ref) would let the effect depend on it and fire correctly.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:340-347"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Imports appear after a const declaration in the translation suite",
+      "description": "The file declares `const LINE_SERIES` (lines 14-21) and then continues with `import { chartSpy, resetChartSpy } from './support/chart-provider-spy.ts'` and `import { renderWithContexts } from './support/render-with-contexts.tsx'` at lines 22-23. Imports must precede other statements. This violates the project's import-ordering convention (external \u2192 internal \u2192 sibling \u2192 styles) and reads as an accidental merge artifact. ESLint does not catch it because no import plugin is configured, so it will persist. The four imports belong with the other imports at lines 1-12.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.translation.test.tsx:22-23"
+    },
+    {
+      "severity": "NOTE",
+      "title": "E2E measures the first canvas while the sampler selects the tallest canvas",
+      "description": "`samplePanes` deliberately identifies the main pane as the **tallest** canvas (`canvases.reduce(... el.height > tallest.height ...)`), with a comment explaining that the axis strip is a short layer. But the bounding-box assertions in both specs use `container.locator('canvas').first()` \u2014 the first canvas in DOM order, which is not necessarily the tallest. If lightweight-charts changes its canvas ordering, the box assertions and the pixel assertions would silently measure different elements, and the \"sized to its container\" check could pass against an axis canvas while the theme-color check passes against the pane. Both should select the same element; the cleanest fix is to have `samplePanes` also return the main pane's bounding box so the spec asserts against a single, explicitly chosen canvas.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "e2e/chart-live.spec.ts#samplePanes"
+    },
+    {
+      "severity": "NOTE",
+      "title": "ChartRoute's error-banner path has no unit test",
+      "description": "`ChartRoute` deliberately renders the chart container **unconditionally** and surfaces provider failures in a sibling `role=\"alert\"` paragraph \u2014 a non-obvious decision that the code comments justify at length. No unit test covers that decision: there is no test that renders `ChartRoute` with a failing provider and asserts (a) the container is still rendered and (b) the alert contains the error message. The only coverage is `e2e/smoke.spec.ts` and `e2e/chart-live.spec.ts`, which assert the alert's **absence** (`toHaveCount(0)`). The \"error renders beside a still-live chart\" behavior \u2014 the one worth locking in \u2014 is therefore unprotected against regression. A focused unit test on `ChartRoute` would cover it.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/routes/chart-route.tsx"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Context provider nesting duplicated between the app shell and the test helper",
+      "description": "The `SymbolTimeframeProvider > IndicatorProvider` nesting is written out in `src/app/App.tsx:18-21` and again in `src/test/support/render-with-contexts.tsx` (`ChartContexts`). `render-with-contexts.tsx`'s own comment claims it exists so that *\"if the hook later consumes another Context, this is the single place to add it rather than four divergent copies\"* \u2014 but the app shell is a fifth place, and it is the one that matters at runtime. Exporting a single `ChartProviders` wrapper from `src/state/` and using it in both `App.tsx` and the test helper would make the claim true.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/app/App.tsx:16-24"
+    },
+    {
+      "severity": "NOTE",
+      "title": "React namespace referenced via UMD global in a file that otherwise uses named imports",
+      "description": "The signature reads `containerRef: React.RefObject<HTMLElement | null>` while the file imports `{ useCallback, useEffect, useMemo, useRef, useState } from 'react'` \u2014 no `React` namespace import. This compiles only because `React.RefObject` is a type-position reference to the UMD global declared by `@types/react`, which is permitted where a *value* reference would be an error. It is inconsistent with the file's own import style and with every other file in `src/` (which imports React members by name). `import type { RefObject } from 'react'` and `RefObject<HTMLElement | null>` is the consistent form.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:52"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Teardown calls destroy() on a provider whose create() threw, which throws by contract",
+      "description": "In the mount-failure path, `teardown()` runs `provider.destroy()` on a provider whose `create()` already threw. `LightweightChartsProvider.destroy()` calls `this.assertReady()`, which throws `\"LightweightChartsProvider not ready: call create() before use and not after destroy()\"` when `this.chart === null`. The hook correctly catches it (`console.error('[useChartProvider] provider teardown failed', ...)`), so nothing escapes \u2014 but every create failure consequently produces **two** console errors: the real one plus a spurious teardown error, which reads as a second, unrelated failure. The unit test masks this: `chart-provider-spy.ts`'s mock `destroy()` never throws, so `expect(chartSpy.destroy).toHaveBeenCalledTimes(1)` after a failed create passes against a mock whose behavior differs from the real provider. Either skip the `destroy()` call when `create()` did not succeed (track a `created` flag), or make the spy throw on destroy-when-not-created so the test exercises the real contract.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts#teardown"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Playwright config header still claims e2e runs against the production build",
+      "location": "playwright.config.ts:6",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "reuseExistingServer defeats the e2e-mode artifact guarantee locally",
+      "location": "playwright.config.ts:46",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A null container ref leaves the chart permanently unmounted with no error",
+      "location": "src/chart/use-chart-provider.ts:167",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Measured-rect fixture duplicated verbatim across four test files",
+      "location": "src/test/use-chart-provider.errors.test.tsx:30-40",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "mockClear does not clear pending mockImplementationOnce queues, contrary to the comment",
+      "location": "src/test/support/chart-provider-spy.ts:238-254",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "styleRef captures the first render's style and never updates",
+      "location": "src/chart/use-chart-provider.ts:165",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Range translation does not activate when the first series is added",
+      "location": "src/chart/use-chart-provider.ts:340-347",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Imports appear after a const declaration in the translation suite",
+      "location": "src/test/use-chart-provider.translation.test.tsx:22-23",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "E2E measures the first canvas while the sampler selects the tallest canvas",
+      "location": "e2e/chart-live.spec.ts#samplePanes",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "ChartRoute's error-banner path has no unit test",
+      "location": "src/routes/chart-route.tsx",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Context provider nesting duplicated between the app shell and the test helper",
+      "location": "src/app/App.tsx:16-24",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "React namespace referenced via UMD global in a file that otherwise uses named imports",
+      "location": "src/chart/use-chart-provider.ts:52",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Teardown calls destroy() on a provider whose create() threw, which throws by contract",
+      "location": "src/chart/use-chart-provider.ts#teardown",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:03:07.500126",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 898227,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1154299,
+  "cached_tokens": 1011328,
+  "cache_write_tokens": null,
+  "completion_tokens": 225221,
+  "reasoning_tokens": 219751,
+  "duration_seconds": 1310.4100140421651,
+  "cost_usd": 0.085368421,
+  "cost_basis": "alias_pricing"
+}

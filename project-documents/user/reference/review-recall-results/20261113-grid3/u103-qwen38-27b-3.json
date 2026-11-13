@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Visible-range effect never re-runs when the first series is added",
+      "description": "The effect reads a ref to gate on series count, but that ref is not in the dependency array:\n\n```ts\nuseEffect(() => {\n  if (!mount.ready || seriesCountRef.current === 0) {\n    return\n  }\n  chart.setVisibleRange(range)\n}, [mount.ready, chart, range])\n```\n\nNone of `[mount.ready, chart, range]` changes when `seriesCountRef.current` transitions 0 \u2192 1: `chart` is a stable `useMemo` (deps `runGuarded` and `series` are both stable), `mount.ready` flips only on the mount transition, and `range` is Context state. Adding a series through `chart.addSeries` only mutates the ref \u2014 it causes no re-render, so this effect does **not** re-run.\n\nThe comment above the effect states this is \"the seam initiative 120 activates **the moment it adds the first series**.\" That is not what the code does: it activates only on the **next `range` change**. Concretely, in initiative 120 the likely flow (data layer adds the first series while `range` is still the unchanged `DEFAULT_RANGE`) will leave the chart on the library's default viewport \u2014 the user's selected range is not applied at data-arrival time, only if/when they later change it.\n\nThis is not an in-slice bug (the chart is empty by design here, so withholding the call is correct), but the comment contradicts the mechanism and the documented seam is broken. Before initiative 120 builds on this, either fix the mechanism (e.g., track the count in state, or trigger a re-run when the count crosses zero) or correct the comment to say the range applies on the next range change. The translation test (`use-chart-provider.translation.test.tsx`, \"applies the range once a series exists\") only passes because it changes `range` in the same test after `addSeries`, which masks the gap.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:335-345"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`use-chart-provider.ts` exceeds the line/function guidance",
+      "description": "The file is 366 lines and the mount `useEffect` is a single ~150-line function (the `teardown` closure already extracted), both beyond the project's \"~300 lines / ~50 lines \u2026 where practical\" guide. This is largely comment volume and the effect legitimately shares local closures (`provider`, `observer`, `disposers`, `teardown`) that are awkward to split. The ESLint suppression comment even acknowledges the file is \"~60% over\" as the reason for extracting the facade rather than inlining it. Noting for awareness; the split into `chart-facade.ts`/`chart-operations.ts` already does the reasonable amount of factoring.\n\n---\n\nUnverified (no runtime access): the Playwright pixel assertions in `e2e/chart-live.spec.ts` (main pane painted in the `--color-surface` color, and that the time-axis strip of an **empty** chart renders more than one color so `axisHasContrast` is `true`) depend on lightweight-charts v5's real rendering behavior. I confirmed the logic and that the tokens/values line up (`#161a1e` \u2192 `22,26,30,255`), but I could not run the browser to confirm the empty-chart axis actually paints contrasting chrome. These are designed to be run in CI via `pnpm test:e2e`; worth confirming they're green there.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Visible-range effect never re-runs when the first series is added",
+      "location": "src/chart/use-chart-provider.ts:335-345",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`use-chart-provider.ts` exceeds the line/function guidance",
+      "location": "src/chart/use-chart-provider.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:28:38.287455",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 100329,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 305556,
+  "cached_tokens": 219456,
+  "cache_write_tokens": null,
+  "completion_tokens": 26735,
+  "reasoning_tokens": 25506,
+  "duration_seconds": 221.6420524159912,
+  "cost_usd": 0.0904538,
+  "cost_basis": "alias_pricing"
+}

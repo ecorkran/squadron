@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Cutover cannot run unattended: its sudo commands are not in the sudoers rule",
+      "description": "`cutover_227_tick_backup.py` is documented as \"one command\" run by `manta` using `sudo` for root steps (docstring and `project-documents/user/runbooks/200-backup-and-restore.md`, \"Enrolment is one command\"). But `deploy/sudoers.d/manta-ops:11-29` grants `NOPASSWD` only for named `MT_UNITS`, `MT_RUN`, `MT_INSTALL`, `MT_READ`, and `MT_GIT`. Every privileged call this cutover issues is absent: `psql()` runs `sudo -u postgres env ... psql` (line 59), `setup_backup()` runs `sudo .../deploy/setup-backup.sh` (line 65), `conf_sums()` runs `sudo sha256sum` (line 79), step 3 runs `sudo .../scripts/provision_tick_cluster.sh`, and step 5 runs `sudo systemctl restart postgresql@17-tick` (not one of the named units). Also, `rclone`/`pg_lsclusters`/`sha256sum` as root need matching rules. Until these are added, the script fails at its first step (or prompts for a password `manta` may not have), so the entire cutover path is unexecutable as shipped. Add a `Cmnd_Alias` for the exact script/argument paths (keeping the least-privilege intent of the existing rule) and a test/guard that parses the alias against the commands `cutover_227_host.py` emits.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "scripts/cutover_227_host.py:59"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A stuck weekly run makes the advertised whole-script re-run impossible",
+      "description": "Recovery is documented as \"fix the cause, re-run the whole script\" and the same-day skip at lines 175-177 requires **both** `base/<today>` and the arm file to exist. An unarmed weekly run (`cron_weekly_backup.sh`) calls `backup_prod.sh --dest $BASE_DIR/$DATE_STAMP`; `scripts/backup_prod.sh:73-77` refuses when the destination exists and refuses leftovers `$DATE_STAMP.inprogress|verify|failed` (lines 88-95). A normal successful first run leaves `base/<today>` but no arm file until line 187; if any later step fails (e.g. offsite check), the re-run re-invokes weekly, which aborts with \"destination already exists\", and the cutover never reaches the arm step again. The failure table in the slice design (`project-documents/user/slices/227-slice...md:246`) claims \"remove a reported leftover, re-run\" \u2014 but a completed verified backup is not a leftover. Make the weekly step idempotent by detecting a verified same-day base, or skip/step around `backup_prod.sh` on re-run and create the arm file after verifying the base's presence. Add a regression test for \"base exists, arm absent\".",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:173"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Destructive offsite reconcile is armed before the offsite verification step",
+      "description": "`arm.touch()` enables `rclone sync --max-delete` and offsite `base/<date>` purges (`scripts/cron_weekly_backup.sh:164-178`) immediately after the weekly job's \"done\" line. The cutover's own offsite verification is only `step_offsite` (line 207), three steps later. If `step_offsite` fails (B2 mismatch, credentials, or a stuck push) \u2014 or simply if the weekly job was still running when it returned \u2014 the tick cluster is left permanently armed with an unverified offsite prefix, contrary to TD7's \"armed **after a watched reconcile**\" (`project-documents/user/slices/227-slice...md:209-211`; runbook 200: \"created by the 227 cutover after its first tick weekly run passed\" but also \"Nothing creates the file but a person: after watching the first reconcile by hand\"). Either arm only after step 11 passes, or leave it to the PM (and have `setup-backup.sh`/`step_production` not treat a missing arm as a cutover failure).",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:187"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cutover swallows a failed WAL push and production health evidence",
+      "description": "`run_health`, `step_weekly`, `step_metadata` and `step_offsite` invoke `shell()` (`scripts/cutover_227_host.py:53-57`) and ignore `CompletedProcess.returncode`. `run_health` then reads only the **last** line of `backup-health.log` \u2014 a stale line from a prior successful run passes the check even when the just-invoked health command crashed. `step_offsite` ignores a failed `tick_commands()[\"push\"]` and can still report PASS if the subsequent `rclone check` finds nothing new. `step_production` (line 224) reads production's health log with `read_text()` outside any `try`, so a missing/unreadable log raises `FileNotFoundError`; `run_steps` only catches `StepFailed` and `CalledProcessError` (line 274), so `main()` never writes the promised failure report. The project's Python rules require explicit handling at a process boundary; here failures are silently converted into false PASS or an unhandled traceback. Check each command's return code, capture a per-run log marker rather than the file's last line, and either catch `OSError`/`Exception` in `run_steps` (as the top-level boundary handler) or convert them to `StepFailed`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:158"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`setup-backup.sh --check` writes to disk in rehearsal mode, contradicting \"changes nothing\"",
+      "description": "The header promises \"`--check` changes nothing\" and `test_scratch_root_reports_missing_and_never_applies` asserts `not host[\"root\"].exists()`. But `--check --rehearse <dir>` executes `mkdir -p \"$REHEARSE\"` unconditionally before the check-mode flag is consulted, so a read-only audit creates a directory. The tests never assert `--rehearse` itself is absent (only `clusters/` and `cron.d` inside it), so this is untested. This matters for the periodic drift audit and for the task file's \"live read-only check\" runs. Guard the `mkdir` with `[ \"$CHECK\" -eq 0 ]` (apply mode needs it) and add a test asserting `--check --rehearse` leaves the rehearse path absent.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh:133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Generated cutover report violates the project's mandatory frontmatter",
+      "description": "`render_report()` emits `docType`, `slice`, `project`, `dateCreated`, `dateUpdated` but no `status:`. `project-documents/ai-project-guide/file-naming-conventions.md` requires `status: not_started | in_progress | complete | deferred | deprecated` in **all** markdown files' frontmatter (\"Universal Required Fields\"), and `AGENTS.md` reiterates \"All markdown files must include YAML frontmatter as specified in `file-naming-conventions.md`\". Every recent note (`2026-10-04-226-proof-archive-check.md`, `2026-10-04-226-proof-drop-proof.md`) carries `status: complete`. `test_failed_step_stops_later_steps_and_report_still_written` only asserts `report.startswith(\"---\\ndocType: notes\\n\")`, so the omission is untested. Add `status: complete` on PASS and `status: in_progress` (or a matching valid value) on FAIL, plus an assertion.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lifecycle \"read-only\" check with no timeout can hang the cutover and every drift audit",
+      "description": "`rclone backend lifecycle \":b2:$BUCKET\"` merges stderr into stdout with no `timeout`, no `--retries`, and no `--timeout`/`--contimeout`. The rest of this tier is deliberate about bounds (`sync_wal_offsite.sh` wraps every rclone call in `timeout \"${TIMEOUT_MIN}m\"`; `WAL_SWITCH_WAIT_S`, `PUSH_TIMEOUT`, statement timeouts). A hung B2 endpoint blocks `setup-backup.sh` step 3 once per cluster, and therefore both the cutover (steps 2, 4, 12) and the periodic `--check` audit, with no output. Also, because stderr is folded into `RULES`, a successful rclone call that logs a warning makes `jq -e 'type == \"array\"'` fail and the script reports `UNREADABLE` \u2014 a false alarm. Wrap the call with `timeout` and rclone's own timeouts, and capture stdout separately from stderr so warnings are logged rather than misparsed.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/lib/b2_lifecycle.sh:65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unused `MAIN`/`TICK` imports and test harness that never exercises `main()`",
+      "description": "`test_cutover_227.py` imports `MAIN` and `TICK` in `cutover_227_host.py:10` with no use; more importantly, unlike `test_cutover_921.py` (whose autouse `_no_side_effects` fixture patches `cutover_common.subprocess.run` and forbids any real subprocess), this new suite has no such guard. The `rendered` fixture legitimately launches `render_cron.sh`, but nothing prevents a future test from reaching `sudo`, `psql`, or `rclone`. No test exercises `main()` (user check, `cluster(TABLE_PATH, ...)` lookup, report path/`status`), `step_guards`, `step_check`, `step_apply`, `step_metadata`, `step_health_clean`, `step_offsite`, or `step_production`'s failure path \u2014 exactly the host-facing steps with the highest blast radius. The 921 suite's established pattern should be replicated here. This also loses the \"test-with\" coverage guarantee for the most safety-critical slice.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_cutover_227.py:1"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Legacy pre-227 fallback paths remain in production wrappers",
+      "description": "`backup_health_cron.sh:38`, `cron_nightly_metadata.sh:38-40`, and `cron_weekly_backup.sh:58-61` retain defaults (`MT_TIMESCALE_MAINTENANCE_URL`, `MT_BACKUP_S3_BUCKET`, the hardcoded `@192.168.1.144:`\u2192`127.0.0.1` rewrite) for the pre-227 cron file. Task 8.3 (`project-documents/user/tasks/227-tasks...md`, \"Remove the pre-227 absent forms\") is still unchecked, so this is intentional until after the cutover. Flagging only so it is not forgotten: those fallback values are a second source of truth for host facts that the cluster table now owns, and the hardcoded LAN address is a documented hallucination trap. Track 8.3 as the removal point.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/backup_health_cron.sh:38"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`production_changes` hardcodes the replication host instead of reading the table",
+      "description": "`strip_new_args()` hardcodes `--replication-host 127.0.0.1` and `test/unit/test_setup_backup.py:_NEW_MAIN_ARGS` (line ~697) hardcodes the same value, while `deploy/backup-clusters.conf` defines `17/main`'s replication host as a column. If that column changes, the render changes but the cutover's TD3 \"production unchanged\" comparison and the render test still strip the old literal and report a false diff. Both the helper and the test should derive the expected token from `BackupCluster.replication_host`. Low impact today (one row), but it violates \"one value, one source\".",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:86"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Cutover cannot run unattended: its sudo commands are not in the sudoers rule",
+      "location": "scripts/cutover_227_host.py:59",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A stuck weekly run makes the advertised whole-script re-run impossible",
+      "location": "scripts/cutover_227_tick_backup.py:173",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Destructive offsite reconcile is armed before the offsite verification step",
+      "location": "scripts/cutover_227_tick_backup.py:187",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Cutover swallows a failed WAL push and production health evidence",
+      "location": "scripts/cutover_227_tick_backup.py:158",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`setup-backup.sh --check` writes to disk in rehearsal mode, contradicting \"changes nothing\"",
+      "location": "deploy/setup-backup.sh:133",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Generated cutover report violates the project's mandatory frontmatter",
+      "location": "scripts/cutover_227_helpers.py:133",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Lifecycle \"read-only\" check with no timeout can hang the cutover and every drift audit",
+      "location": "deploy/lib/b2_lifecycle.sh:65",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Unused `MAIN`/`TICK` imports and test harness that never exercises `main()`",
+      "location": "test/unit/test_cutover_227.py:1",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Legacy pre-227 fallback paths remain in production wrappers",
+      "location": "scripts/backup_health_cron.sh:38",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`production_changes` hardcodes the replication host instead of reading the table",
+      "location": "scripts/cutover_227_helpers.py:86",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:53:38.846073",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 45,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 656058,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 2482159,
+  "cached_tokens": 2337152,
+  "cache_write_tokens": null,
+  "completion_tokens": 184425,
+  "reasoning_tokens": 179316,
+  "duration_seconds": 1722.2318843340036,
+  "cost_usd": 0.340079361,
+  "cost_basis": "alias_pricing"
+}

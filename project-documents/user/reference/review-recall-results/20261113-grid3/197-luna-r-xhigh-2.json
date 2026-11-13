@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Item resume can mark the original batch run as failed",
+      "description": "The item-resume runner reuses the original `run_id`, but `_run_pipeline` finalizes that run as failed whenever execution raises. A failed item retry therefore changes the completed batch run\u2019s status to `failed`, even though item resume is intended to update the item report without changing the batch\u2019s run state. This can also make the original run misleading in status and resume workflows. Avoid finalizing the original run as a separate failed pipeline execution during item resume.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py:263-276"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed report items can escape the report-load error boundary",
+      "description": "`BatchReport.load` casts `items` to a list of dictionaries without validating the JSON shape. For example, an `items` list containing a string reaches `BatchItemRecord.from_json`, where `data.get(...)` raises `AttributeError`; that exception is not converted to `BatchReportLoadError`. Since item resume relies on this loader for persisted JSON, validate the list and its elements or handle malformed shapes so they produce the documented load error instead of an uncaught exception.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:330-339"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Halted in-flight items lose branch and failing-step metadata",
+      "description": "When a `GitEnvironmentError` interrupts an item, `_finish_each_report` builds its record with an empty step-results list. If the item had already entered a slice branch, the resulting record omits that branch; it also omits the failing step. This conflicts with the report contract that flagged records identify the failing step and include the branch when one was entered. Preserve the in-flight item\u2019s execution context for the halt record.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:1488-1490"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Item resume can mark the original batch run as failed",
+      "location": "src/squadron/cli/commands/run.py:263-276",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Malformed report items can escape the report-load error boundary",
+      "location": "src/squadron/pipeline/batch_report.py:330-339",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Halted in-flight items lose branch and failing-step metadata",
+      "location": "src/squadron/pipeline/executor.py:1488-1490",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:59:15.821259",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 80,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 43048,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "xhigh",
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2773250,
+  "cached_tokens": 2490233,
+  "cache_write_tokens": null,
+  "completion_tokens": 73701,
+  "reasoning_tokens": 69794,
+  "duration_seconds": 809.1499831250403,
+  "cost_usd": 0.09005453,
+  "cost_basis": "alias_pricing"
+}

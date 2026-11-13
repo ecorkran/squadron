@@ -1,0 +1,495 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "A plain `sq run` of a mutating pipeline never takes the run lock",
+      "description": "`_locked()` is only applied to the `--resume` and implicit-resume branches, but the \"Fresh run\" branch at `run.py:1323` *does* use `_locked`. The gap is the `PROMPT_ONLY` resume path and, more importantly, `run.py:1231`/`run.py:1290` call `_locked(definition, ...)` where `definition` is the *resume* pipeline \u2014 that part is fine. The real gap: the fresh-run branch calls `_locked(definition, _run_pipeline_sdk(...))` correctly, but `_take_run_lock` is evaluated against `definition`, which for a fresh run is the loaded pipeline \u2014 OK. The actual defect is that the lock is taken *after* `load_pipeline`/`_assemble_params` but the run lock is never held for the `--prompt-only` execution paths (`_handle_prompt_only_init`, `_handle_prompt_only_next`, `_handle_step_done`), which call `asyncio.run(...)` directly. `slices-plan`/`tasks-plan`/`implement-plan` are executed in prompt-only mode by Amoeba-style callers, so two prompt-only runs in one checkout can still interleave cf state and race on `report.json`, which is exactly what D11 forbids. The D12 table's \"run lock\" rows and `test_run_lock_cli.py` only cover the SDK path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py:1231-1258"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`--decision retry` on a `not_ready` item runs the body, discarding the source's flag",
+      "description": "`_resume_locked` calls `_select_item`, which returns the freshly selected item *including* its `flag_reason`/`flag_kind` keys. `_open_dependencies` is checked, but the item's own `flag_reason` is not: `_execute_each_step` computes `reason, kind = _pre_flag(item, flagged)` on the rerun path and would flag it \u2014 but only because the rerun path re-runs `_pre_flag` against `item_rerun.item`. That part is consistent. The real defect is on the **dependency** path: `rerun.replace(BatchItemRecord.from_item(item, 0, [], reason, flag_kind=FlagKind.DEPENDENCY))` hard-codes `position=0` and overwrites any pre-existing `flag_reason` with the dependency reason, so a `not_ready` item that is also dependency-blocked is recorded with the wrong `flag_kind` and its `not_ready` reason is lost from the report. `from_item(..., flag_kind=...)` also drops `branch` and `final_verdict` because `step_results` is empty \u2014 the record loses the branch it was on, which D7 promises to record.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:151-165"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The batch report is written twice per item, and the two writes can disagree",
+      "description": "After each item, `_write_each_report(report, runs_dir, final=False)` rewrites both report files, and then the `finally` block calls `_finish_each_report`, which writes them again. That is two full serializations (Markdown YAML dump + JSON dump) per item, on the hot path of a batch that may have hundreds of items. Worse, on the halt path the `finally` writes a *third* time with the extra `not_run` records. The atomic write is correct, but the cost is O(n\u00b2) in the number of items for a single batch, and the \"write after every item\" requirement (D7) is met at 2\u20133\u00d7 the necessary cost.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:1590-1596"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`ItemRerun.replace` uses `next(...)` with no default and will raise `StopIteration` on an unmatched index",
+      "description": "`position = next(i for i, r in enumerate(records) if r.index == record.index)` raises a bare `StopIteration` when the record's index is not in the report. A `StopIteration` raised inside a coroutine is converted by asyncio into a confusing `RuntimeError: coroutine raised StopIteration`, and the item resume's `except OSError` / `except GitEnvironmentError` handlers do not catch it \u2014 so the failure escapes `resume_item` entirely and the CLI's `except typer.Exit` in `run_item.py` does not catch it either, producing a raw traceback and exit code 1 rather than a documented `ResumeExit.HALTED` (3). The same pattern appears in `item_resume._reconcile` (`item_resume.py:305`) and `item_resume._outcome` (`item_resume.py:170`).",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:340-346"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`resume_item` catches `OSError` as \"a report write failed\", but `OSError` also covers unrelated failures",
+      "description": "`except OSError as exc: return ResumeOutcome(ResumeExit.HALTED, f\"cannot write the batch report: {exc}\")` attributes *any* `OSError` raised anywhere in the locked resume path to a report write. `restore_target` runs `git` subprocesses (not `OSError`), but `dirty_paths`/`current_branch` and the cf subprocess call can raise `OSError` (e.g. `cwd` deleted, `cf` not executable). The message then names the wrong cause. The D12 table only promises the report-write `OSError` behaviour; the catch is broader than the documented failure and mislabels it.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:130-133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_locked` closes the coroutine on lock failure, but the lock-free path leaves an un-awaited coroutine on any other `typer.Exit`",
+      "description": "`_locked` handles `typer.Exit` raised by `_take_run_lock` by calling `run_coroutine.close()`. But `asyncio.run(run_coroutine)` inside the `with ExitStack()` can itself raise `typer.Exit` (e.g. `LazySessionConnectError` handling in `_run_pipeline_sdk` raises `typer.Exit(1)`), in which case the coroutine has already been scheduled by `asyncio.run` and the `except typer.Exit` branch is not reached \u2014 that is fine. The real risk is the reverse: `run_coroutine.close()` is called on a coroutine that was created but never started, which is correct, but the `except typer.Exit:` clause catches *any* `typer.Exit`, including one raised from inside `_take_run_lock` for an unrelated reason, and swallows the distinction. More importantly, the `ExitStack` is exited before `asyncio.run` on the failure path, but `run_coroutine.close()` on a coroutine that has already begun would raise `RuntimeError: cannot reuse already awaited coroutine` \u2014 currently unreachable, but the guard is fragile. A `try/except BaseException` around the whole body with an explicit `close()` in a `finally` when `asyncio.run` was never entered would be clearer.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py:937-951"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`pipeline_mutates` decides \"mutating\" from a hardcoded step-type list that omits `review`-adjacent mutation and is not derived from the step registry",
+      "description": "`_MUTATING_STEP_TYPES` is a `frozenset` of five step-type names hardcoded in `run_lock.py`, duplicating knowledge that lives in `squadron/pipeline/steps/`. Adding a new committing step type (e.g. a `pr` or `push` step) silently produces a pipeline that mutates git but takes no lock \u2014 the failure mode D11 exists to prevent, and it fails open rather than loudly. The step types are already an extensible registry (`register_step_type`), so the mutating set belongs beside it, or the check should be derived from what a step actually does.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py:42-50"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_step_mutates` inspects nested step configs with a shape assumption that does not match the real nested-step format",
+      "description": "Nested steps in the YAML are a *list of single-key dicts* (`- branch: { op: enter }`), and `unpack_inner_steps` is the module's own reader of that shape. `_step_mutates` instead iterates `raw.items()` of each nested dict \u2014 for `{\"branch\": {\"op\": \"enter\"}}` that yields `(\"branch\", {\"op\": \"enter\"})`, which happens to work, but for `{\"branch\": \"enter\"}` (the scalar shorthand `unpack_inner_steps` explicitly supports via `config = {\"mode\": raw_config}`) the inner config becomes `{\"mode\": \"enter\"}` and the step type is still read correctly \u2014 so the type is right but the *config* is wrong: `{\"mode\": \"enter\"}` has no `\"steps\"` key and no `\"commit_each_iteration\"`, so a nested `loop` under `each` written in the shorthand form would not be detected. The function duplicates parsing logic that `unpack_inner_steps` already owns; reusing it would be correct by construction.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py:52-73"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`BatchReport.load` catches `ValueError`, which swallows `ItemOutcome`/`FlagKind` parse errors into a generic \"malformed\" message",
+      "description": "`except (KeyError, TypeError, ValueError)` wraps the whole record-building block, so an unknown `outcome` value (`\"passsed\"`) or an unknown `flagKind` produces `batch report \u2026 is malformed: ValueError(\"'passsed' is not a valid ItemOutcome\")` rather than naming the offending item and field. For a file an external caller (Amoeba) is expected to read and act on, that is a weaker contract than the rest of the module, which names the exact problem. The D7 requirement is \"a message naming both versions\" for the version case only, but the same precision is applied elsewhere.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:325-337"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`BatchItemRecord.from_json` builds `unsaved_parts` from an unvalidated `cast` of arbitrary JSON",
+      "description": "`values[\"unsaved_parts\"] or []` is cast to `list[object]` without checking it is a list; if the JSON has `\"unsavedParts\": \"abc\"`, the iteration yields characters and the record gets `[\"a\",\"b\",\"c\"]`. The report file is an external boundary (D7's contract with Amoeba), and the Python rules require validation at trust boundaries. `from_json` also has no schema validation for `outcome`/`flagKind` beyond the enum coercion that raises `ValueError`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:170-178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_cf_slices_ready_to_implement` reads `item[\"dependencies\"]` with a bare `cast` and no runtime check",
+      "description": "`for dependency in cast(list[int], item[\"dependencies\"])` assumes the key exists and is a list of ints. `_slice_item` always sets it, so within this module it holds \u2014 but `order_by_dependencies` (a public function, exported and tested directly) does `cast(list[int], item.get(\"dependencies\", []))` and then iterates it, so a caller passing items without the key or with a non-list value gets a `TypeError` or an unhashable-dict `TypeError` inside the `set` comprehension. The public function's contract is not stated in terms of the item shape it requires.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sources.py:265-270"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`order_by_dependencies` is O(n\u00b2) and recomputes the inner scan over all indices for every placed item",
+      "description": "For each placed item the function loops over *all* indices to find dependents. With a plan of n slices this is O(n\u00b2) set operations per batch, on the path that runs before every item. A reverse-edge adjacency map would make it O(V+E). Plans are small today, but this is the batch's hot path and the fix is small and local.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sources.py:298-318"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_find_cycle` can loop forever if the \"unplaced\" set contains an item whose needs are already empty",
+      "description": "`following = min(needs[path[-1]])` raises `ValueError` on an empty set, and the `while True` loop has no bound. The function is only called when `len(ordered) < len(items)`, i.e. when the graph has a cycle among the unplaced items \u2014 but `needs` for an unplaced item can be empty if it was pushed onto `ready` and popped... no: popped items are placed. The invariant holds today, but the function has no defensive termination and the failure mode (an infinite loop in a batch source) is severe. The `min()` on an empty set would raise `ValueError` from `min`, which is caught upstream as a malformed report \u2014 masking the real fault.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sources.py:321-330"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The item-resume lock is taken on `cwd`, but the CLI never checks that `cwd` is the project the run belongs to",
+      "description": "`resume_item` takes the lock on `cwd` and later reads run state from `state_manager.runs_dir` (the user's global `~/.config/squadron/runs`), while `_git_precondition` reads the *target* from cf in `cwd`. If the operator runs `--resume` from a different checkout than the one that produced the run, the lock is taken on the wrong project and the git precondition operates on a different repository than the run's report. The validation never compares the run's project with the current one. D8's precondition promises \"the target, a clean tree\" \u2014 but of *which* project is never established.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:113-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`handle_item_resume` swallows the exit code of the pipeline runner and always reports `HALTED`",
+      "description": "`except typer.Exit as exc:` re-raises as `ResumeExit.HALTED` (3) regardless of `exc.exit_code`. `_run_pipeline_sdk` raises `typer.Exit(1)` for a classification failure, for a lost session, and for a pipeline validation error \u2014 all of which are \"nothing ran / refused\" conditions that D8's table maps to exit 2 (`REJECTED`), not 3 (`HALTED`, \"an environment fault or unknown git state ended it mid-item\"). The exit code is the machine-readable contract for Amoeba; a misclassified code makes an automated caller treat a usage error as an environment fault.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:96-104"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`run_item.handle_item_resume` reaches into `run.py`'s private functions, creating a circular import",
+      "description": "`run_item` imports `_apply_param_overrides` and `_run_pipeline_sdk` from `run` at call time, and `run` imports `check_item_flags` and `handle_item_resume` from `run_item` at module scope. The mutual dependency is papered over with a function-local import and two `pyright: ignore[reportPrivateUsage]` suppressions. A shared module (or a `run_core.py` holding the pipeline-running helpers) would remove the cycle and the suppressions.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:60-67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`check_item_flags` reports a usage error through `rprint` to stderr but exits 2, while the surrounding CLI uses exit 1 for usage errors",
+      "description": "Every other flag-combination rejection in `run()` (`--resume and --from`, `--explain and --resume`, \u2026) exits **1** with `rprint(...)` to stdout. `check_item_flags` exits **2** and writes to `file=sys.stderr`. The design says 2 means \"nothing ran\" for the *resume* contract, and reusing it for a CLI usage error couples two different conventions: Typer's own usage error is 2, so this is defensible, but it is inconsistent with the rest of the command and the reason is not documented in the code (the constant is named `USAGE_EXIT`, while `ResumeExit.REJECTED` is a *resume* code being reused for a *CLI* condition).",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:29-48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`ItemOutcome.NOT_RUN` records are appended directly to `report.records` rather than through `_add_record`",
+      "description": "`_finish_each_report` uses `_add_record(...)` for the in-flight item (so an item resume replaces rather than appends) but appends the unreached `not_run` records with a bare `report.records.extend(...)`. On the item-resume path there is only one item, so the unreached list is empty \u2014 but the asymmetry is exactly the kind that breaks when the paths are combined, and the helper that exists for this purpose is bypassed.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:1487-1489"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The run lock file is created inside `.git`, but `.git` may be a worktree's gitdir with a different layout than assumed",
+      "description": "`_git_dir` runs `git rev-parse --path-format=absolute --git-dir`, which for a linked worktree returns `<main>/.git/worktrees/<name>`. That directory exists and is writable, so the lock lands there \u2014 good, and the test `test_separate_worktrees_lock_independently` confirms it. But the lock file is created with `open(\"a\")` and never cleaned up; it accumulates in the git dir and is invisible to `git status` (correct) but also invisible to `git clean`, so it is never garbage-collected. This is acceptable (flock state lives in the file descriptor, not the file), and worth noting only because the file's existence is asserted by `test_a_fresh_run_takes_the_lock_and_runs` as if it were meaningful state.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py:104-113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`TaskEntry.completed`/`total` are read with `int(e[\"completed\"])` \u2014 a KeyError on cf output that omits them",
+      "description": "`list_tasks` now requires `completed` and `total` on every entry (`int(e[\"completed\"])`, `int(e[\"total\"])`), while `files` is still read defensively with `e.get(\"files\", [])`. An older `cf` build, or a slice with no task items, that omits these keys raises `KeyError` out of `list_tasks`, which the D2 \"all tasks checked\" rule depends on. `list_slices` uses `e.get(\"status\", \"\")` and `e.get(\"designFile\")` for the same reason. The two fields should degrade to `0` the way `files` does, or the omission should be an explicit, logged refusal.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/integrations/context_forge.py:180-184"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`BatchReport.write` writes the Markdown before the JSON, so a failure between them leaves the two out of sync",
+      "description": "`_write_atomic(target, self.render())` then `_write_atomic(self.json_path(runs_dir), ...)`. If the second write fails (ENOSPC), the Markdown has already been replaced with the new content while the JSON still holds the old records. The docstring promises \"a failed write leaves the previous report intact\" \u2014 true per file, but not for the pair, and the JSON is the file item resume reads. The atomicity guarantee is per-file, and the docstring reads as if it were per-report.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:296-305"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `exhausted` flag is set on the accept path as well as the exhaust path",
+      "description": "`_loop_exhaust_result` sets `exhausted=True` on both branches: the `accept_if`-met result (COMPLETED, `accepted=True`) and the `on_exhaust` result. `_flag_kind` checks `final.exhausted` *before* checking for a failed branch action, so an exhausted-and-accepted loop is classified `review_unresolved` rather than `accepted`. That matches the design (an accepted item is not flagged), but the name `exhausted` on an ACCEPTED step is misleading and the D7 text says `exhausted` means \"ran out of rounds without `until` met, whatever it did next\" \u2014 which contradicts the accepted branch, where `until` was *not* met but the item still passed. The docstring in `executor.py:189` and the flag semantics diverge.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:1017-1026"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `not_run` records are appended after the in-flight record, so the report's item order no longer matches the source order",
+      "description": "The in-flight item is recorded at its own position, then the unreached items are appended at the end of `report.records`. The Markdown report groups by outcome, so the rendered order is fine, but `report.json`'s `items` array is out of plan order after a halt, which a machine consumer (Amoeba) will read positionally.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:1487-1489"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`run_lock.py` imports `fcntl` twice \u2014 once for the availability probe, once for the lock",
+      "description": "`_open` does `import fcntl  # noqa: F401` to detect Windows, and `_acquire` imports it again. The probe could be a module-level `try: import fcntl except ImportError: fcntl = None`, which would also let the `# noqa: F401` suppression and the `pyright: ignore` go away. The current form works and the intent (import the module on Windows) is documented, so this is stylistic.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py:118-131"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A plain `sq run` of a mutating pipeline never takes the run lock",
+      "location": "src/squadron/cli/commands/run.py:1231-1258",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`--decision retry` on a `not_ready` item runs the body, discarding the source's flag",
+      "location": "src/squadron/pipeline/item_resume.py:151-165",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The batch report is written twice per item, and the two writes can disagree",
+      "location": "src/squadron/pipeline/executor.py:1590-1596",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`ItemRerun.replace` uses `next(...)` with no default and will raise `StopIteration` on an unmatched index",
+      "location": "src/squadron/pipeline/batch_report.py:340-346",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`resume_item` catches `OSError` as \"a report write failed\", but `OSError` also covers unrelated failures",
+      "location": "src/squadron/pipeline/item_resume.py:130-133",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`_locked` closes the coroutine on lock failure, but the lock-free path leaves an un-awaited coroutine on any other `typer.Exit`",
+      "location": "src/squadron/cli/commands/run.py:937-951",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`pipeline_mutates` decides \"mutating\" from a hardcoded step-type list that omits `review`-adjacent mutation and is not derived from the step registry",
+      "location": "src/squadron/pipeline/run_lock.py:42-50",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`_step_mutates` inspects nested step configs with a shape assumption that does not match the real nested-step format",
+      "location": "src/squadron/pipeline/run_lock.py:52-73",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`BatchReport.load` catches `ValueError`, which swallows `ItemOutcome`/`FlagKind` parse errors into a generic \"malformed\" message",
+      "location": "src/squadron/pipeline/batch_report.py:325-337",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`BatchItemRecord.from_json` builds `unsaved_parts` from an unvalidated `cast` of arbitrary JSON",
+      "location": "src/squadron/pipeline/batch_report.py:170-178",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`_cf_slices_ready_to_implement` reads `item[\"dependencies\"]` with a bare `cast` and no runtime check",
+      "location": "src/squadron/pipeline/sources.py:265-270",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`order_by_dependencies` is O(n\u00b2) and recomputes the inner scan over all indices for every placed item",
+      "location": "src/squadron/pipeline/sources.py:298-318",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`_find_cycle` can loop forever if the \"unplaced\" set contains an item whose needs are already empty",
+      "location": "src/squadron/pipeline/sources.py:321-330",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The item-resume lock is taken on `cwd`, but the CLI never checks that `cwd` is the project the run belongs to",
+      "location": "src/squadron/pipeline/item_resume.py:113-121",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`handle_item_resume` swallows the exit code of the pipeline runner and always reports `HALTED`",
+      "location": "src/squadron/cli/commands/run_item.py:96-104",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`run_item.handle_item_resume` reaches into `run.py`'s private functions, creating a circular import",
+      "location": "src/squadron/cli/commands/run_item.py:60-67",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`check_item_flags` reports a usage error through `rprint` to stderr but exits 2, while the surrounding CLI uses exit 1 for usage errors",
+      "location": "src/squadron/cli/commands/run_item.py:29-48",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`ItemOutcome.NOT_RUN` records are appended directly to `report.records` rather than through `_add_record`",
+      "location": "src/squadron/pipeline/executor.py:1487-1489",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The run lock file is created inside `.git`, but `.git` may be a worktree's gitdir with a different layout than assumed",
+      "location": "src/squadron/pipeline/run_lock.py:104-113",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`TaskEntry.completed`/`total` are read with `int(e[\"completed\"])` \u2014 a KeyError on cf output that omits them",
+      "location": "src/squadron/integrations/context_forge.py:180-184",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`BatchReport.write` writes the Markdown before the JSON, so a failure between them leaves the two out of sync",
+      "location": "src/squadron/pipeline/batch_report.py:296-305",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The `exhausted` flag is set on the accept path as well as the exhaust path",
+      "location": "src/squadron/pipeline/executor.py:1017-1026",
+      "location_verified": true
+    },
+    {
+      "id": "F023",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The `not_run` records are appended after the in-flight record, so the report's item order no longer matches the source order",
+      "location": "src/squadron/pipeline/executor.py:1487-1489",
+      "location_verified": true
+    },
+    {
+      "id": "F024",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`run_lock.py` imports `fcntl` twice \u2014 once for the availability probe, once for the lock",
+      "location": "src/squadron/pipeline/run_lock.py:118-131",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:57:10.027477",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 365138,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 24,
+    "in_fences": 0,
+    "in_section": 24,
+    "surviving": 24
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2096252,
+  "cached_tokens": 1799804,
+  "cache_write_tokens": null,
+  "completion_tokens": 99285,
+  "reasoning_tokens": 92624,
+  "duration_seconds": 644.0381174590439,
+  "cost_usd": 0.064617728,
+  "cost_basis": "alias_pricing"
+}

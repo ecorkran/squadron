@@ -1,0 +1,28 @@
+{
+ "case": "u103",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The range effect reads `seriesCountRef` but only re-runs when `mount.ready`, `chart` or `range` change, so adding the first series never applies the current range; the test hides this by calling `setRange` after `addSeries`."
+  ],
+  "F2": [
+   "KEEP",
+   "addSeries` with `data: []` still counts as a series, so the guard passes, `setVisibleRange` throws on the empty time scale and the hook shows a false error; `updateSeries` can also clear all data without changing the count."
+  ]
+ },
+ "wall_seconds": 33.4,
+ "duration_seconds": 33.38407041714527,
+ "cost_usd": 0.6977125,
+ "effort": "high",
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=253852, cached=176550, cache_write=77292, completion=2172, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The range effect reads `seriesCountRef` but only re-runs when `mount.ready`, `chart` or `range` change, so adding the first series never applies the current range; the test hides this by calling `setRange` after `addSeries`.\nF2: KEEP \u2014 `addSeries` with `data: []` still counts as a series, so the guard passes, `setVisibleRange` throws on the empty time scale and the hook shows a false error; `updateSeries` can also clear all data without changing the count.\nF1: KEEP \u2014 The range effect checks `seriesCountRef` but only re-runs when `mount.ready`, `chart` or `range` change, so adding the first series never applies the current range; the test hides this by calling `setRange` after `addSeries`.\nF2: KEEP \u2014 `addSeries` counts a series even when its `data` is `[]`, so the guard passes, `setVisibleRange` throws on the empty time scale and the hook shows a false error; `updateSeries` can also clear all data without changing the count."
+}

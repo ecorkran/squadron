@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "No load-tier test covers the Runner's subprocess/budget tick path",
+      "description": "The Python rules require \"at least one load test exercising a realistic configuration\" for \"any code on the simulation, network, concurrency, or environment-layer paths,\" and state CI must gate it, with load tests asserting \"latency, throughput, or resource bounds \u2014 not just functional correctness.\" The Runner is squarely a concurrency/environment path: `RunnerTenant.tick` (src/amoeba/runner/tenant.py:96) spawns detached children (`launch.py` `Popen` with `start_new_session`), polls them (`LaunchTracker.reap`), and issues bounded `sq`/`cf` subprocess calls gated by `TickBudget`. I confirmed `tests/load/` contains no Runner test \u2014 `test_crash_loop.py` drives `JOURNALING_TENANT`, not `RunnerTenant` \u2014 and no load test asserts the bounds this path should hold (start-to-ready under the Runner, per-tick time near `tick_deadline_seconds` + one `tick_call_timeout_seconds`, zombie count under repeated launches). The `tests/runner/` crash harness *does* exercise this machinery with real subprocesses and SIGKILL, so crash-safety is well covered; but it asserts end-state correctness, not resource/latency bounds, and it lives outside `tests/load/`, so a CI gate scoped to that directory would not pick up a Runner regression. Mitigating factor worth stating plainly: slice 122's `PRODUCTION_PLANNERS` is empty, so the \"realistic configuration\" is minimal this slice, and deferring the load test to 125 (dispatch planner) is defensible \u2014 but that deferral should be a recorded decision rather than an accident of where the tests landed.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/load/"
+    },
+    {
+      "severity": "PASS",
+      "title": "Crash-recovery end states verified against the real store and recovery code",
+      "description": "The four kill points in `tests/runner/test_crash_recovery.py` rest on behavior that I confirmed in the underlying modules rather than trusting the diff. `BETWEEN_BLOCK_AND_RESOLVE` depends on `finish.record` \u2192 `_block_once` (no second block when `store.blocked_state_for` is non-None) followed by `journal_resolve`; `block`'s transaction and `resolve`'s `rowcount != 1` guard (src/amoeba/store/blocking.py, src/amoeba/store/journal.py) make \"one block, entry resolved\" on re-entry true. `BEFORE_LAUNCH`'s `not_applied` depends on `SquadronRunIdObserver._not_found` returning `NotApplied` once `issued_at + grace` is past (src/amoeba/process/observers/sq_run_id.py), and `WHILE_RUNNING`/`AFTER_FINISH`'s \"left for the issuer\" depends on `reconcile`'s `InFlight` case leaving the entry unresolved. All four match the store's actual semantics, so the crash proof is sound, not merely self-consistent.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/finish.py:60"
+    },
+    {
+      "severity": "PASS",
+      "title": "The single broad except is a documented, mechanically-pinned process boundary",
+      "description": "`except Exception` here is the one place a tenant-internal error would otherwise reach the resident loop. It logs at ERROR via `logger.exception`, does not swallow (it calls `escalate(...)` to name the node/project), and only re-raises store/shape errors explicitly. `tests/runner/test_tenant.py::test_the_runner_package_has_exactly_one_broad_except` enforces count 1 across the package, and `test_a_store_failure_or_shape_error_propagates` confirms the re-raise path. This satisfies the \"documented top-level handler at a process boundary\" exception to the no-`except Exception` rule.\n\nA minor, non-blocking observation folded in for completeness: `decide.py` defines several related value types (`RunState`, `InFlightRun`, `LaunchRun`, `ProjectView`, `Planner`) plus the `decide` function in one module, and `observe.py` runs 326 lines \u2014 both slightly past the one-class-per-file / ~300-line guidance. They are cohesive to a single stage (the D1/D6 seams) and grouped deliberately, so this is \"practical\" overflow rather than a defect.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py:145"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No load-tier test covers the Runner's subprocess/budget tick path",
+      "location": "tests/load/",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Crash-recovery end states verified against the real store and recovery code",
+      "location": "src/amoeba/runner/finish.py:60",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The single broad except is a documented, mechanically-pinned process boundary",
+      "location": "src/amoeba/runner/tenant.py:145",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:20:08.317557",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 44,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 342590,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 16,
+  "prompt_tokens": 1556435,
+  "cached_tokens": 1376640,
+  "cache_write_tokens": null,
+  "completion_tokens": 88278,
+  "reasoning_tokens": 84919,
+  "duration_seconds": 915.8739543331321,
+  "cost_usd": 0.30619440000000003,
+  "cost_basis": "alias_pricing"
+}

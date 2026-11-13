@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Checkout resolution is copied from `validate frontmatter`",
+      "description": "`resolveTemplatePath` repeats the project lookup in `validateFrontmatterAction` (validate.ts:154-166): `resolveProjectWorktree`, `store.getById`, the \"Project not found\" and \"No projectPath configured\" UserErrors, then `resolveOperationPath`. Other commands (build, plan, task, slice, arch, check, prompt) carry the same block too. The copy is not identical: validate.ts adds `?? project.projectPath`, which is redundant because `resolveOperationPath` already falls back to `projectPath` (worktree-overlay.ts:24). CLAUDE.md prohibits duplicated logic. Extract one helper in `utils/project.ts` and call it from both validate commands.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:34-46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`'slice-design'` is defined a second time",
+      "description": "`SLICE_DESIGN_DOC_TYPE = 'slice-design'` duplicates a value that already exists as the schema key and docType value in `FRONTMATTER_SCHEMAS` (frontmatterSchema.ts:74-76) and in `FILENAME_SEGMENT_TO_DOCTYPE` (frontmatterSchema.ts:148). CLAUDE.md requires a value used in comparisons to be defined once. Export one constant from `frontmatterSchema.ts`, reference it there, and import it here.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:21"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The usage error bypasses the CLI error contract",
+      "description": "The no-files check throws `SliceDesignValidationError`. The same file uses `UserError` for its other two failures, and `ErrorCode` already defines `INVALID_ARGUMENT` for this case (utils/errors.ts:5; used at project.ts:416). Effects: in human mode the message gets an `Error:` prefix (errors.ts:66) instead of the clean UserError form, and in JSON mode `code` is `UNKNOWN` instead of `INVALID_ARGUMENT`. Use `new UserError('no files given. Usage: cf validate design <file...>', 'INVALID_ARGUMENT')`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:61-66"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Several exports have no consumer",
+      "description": "`requiredHeadings`, `documentHeadingKeys`, `missingHeadings`, and their types are exported from the browser-safe entry point. `SLICE_DESIGN_DOC_TYPE` is exported from node.ts:34. A search of `packages/` finds no users outside core's own schema and tests. Each export is public API to maintain. Remove the unused ones, or document the consumer they are meant for.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/index.ts:42-48"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Read errors are misclassified",
+      "description": "`validateFile` calls `parseFrontmatter` before its own read. That parser catches every error and returns `{ data: {} }` (frontmatterParser.ts:63-65). A read failure there becomes a `doctype` FAIL with exit 1, not \"cannot read file\" with exit 2. Preflight's R_OK check makes this a narrow race. The file is also read twice (line 102). Separately, `loadRequiredHeadings` (lines 52-61) tells the user to run `cf guides update` for every template read error, including EACCES, which that command does not fix. The `cause` is attached, but `handleError` prints only `err.message`, so the error code never reaches the user. Read each file once, and include the underlying error code in the message.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:95-105"
+    },
+    {
+      "severity": "NOTE",
+      "title": "An empty required key silently passes any heading",
+      "description": "A required template heading whose key normalizes to empty matches any same-level document heading. For example, `## (optional)` yields text `''` (lines 36-40), and `doc.text.startsWith('')` is always true. Nothing reports it. The current template has no such heading, so this is latent. CLAUDE.md prohibits silent passes. Throw in `requiredHeadings` when a key is empty, or pin the behavior with a test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:81"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Heading and fence detection only accept column 0",
+      "description": "`HEADING_PATTERN` rejects the up-to-three-space indent CommonMark allows, and the fence check at line 63 rejects indented and `~~~` fences. This matches the bash script's column-0 rules, so it is a parity choice. CLAUDE.md asks for lenient parsing, though. A heading inside an indented fence in a list item is counted as a document heading, which can produce a false PASS. Accept leading whitespace and `~~~`, or record the limitation. Add a test that uses an indented fence.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:22"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The native check and the guide script disagree on docType",
+      "description": "The native check accepts `docType: \"slice-design\"`, because `parseFrontmatter` strips quotes. The test \"accepts a quoted docType\" pins that. The guide script requires an exact unquoted line (`scripts/validate-slice-design:23,81-86`). The same file can pass `cf validate design` and fail the script. Choose one rule and make both follow it.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:96"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tests depend on live user documents",
+      "description": "`PASSING_DESIGNS` reads four slice documents from `project-documents/user/slices/`, and `sliceDesignFiles.test.ts:18-21` reads `214` the same way. The tests assert those files pass. Editing, archiving, or renaming one breaks the unit suite for an unrelated reason. Keep one real-world design, and copy the rest into `tests/fixtures/`. The `## Value`-removal regex is also duplicated between the CLI test (`brokenCopy`) and the core test (`withoutValueSection`). Move it into one shared fixture helper.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:44-53"
+    },
+    {
+      "severity": "NOTE",
+      "title": "New file names don't follow the TypeScript rule",
+      "description": "The three new source files use camelCase. The TypeScript rule in `.claude/rules/typescript.md` says kebab-case. The repo is mixed: `frontmatterFileValidator.ts` and `routedFixes.ts` are camelCase, while `setup-ide.ts` and `project-autoset.ts` are kebab-case. The new files match their neighbors, which is reasonable. Decide which convention the project wants and apply it consistently.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts"
+    },
+    {
+      "severity": "PASS",
+      "title": "The validator matches the guide script's semantics",
+      "description": "Read against the bash reference: the marker is the line after a heading. Keys are lowercased, with HTML comments, parentheticals, and `{placeholder}` suffixes removed. Matching is prefix-based at the same level. Fenced blocks are skipped. The docType failure message is identical. CRLF is handled. The four fixture designs declare `docType: slice-design` and contain the required headings the tests reference.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Checkout resolution is copied from `validate frontmatter`",
+      "location": "packages/cli/src/commands/validateDesign.ts:34-46",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`'slice-design'` is defined a second time",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:21",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The usage error bypasses the CLI error contract",
+      "location": "packages/cli/src/commands/validateDesign.ts:61-66",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Several exports have no consumer",
+      "location": "packages/core/src/index.ts:42-48",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Read errors are misclassified",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:95-105",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "An empty required key silently passes any heading",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:81",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Heading and fence detection only accept column 0",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:22",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The native check and the guide script disagree on docType",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:96",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests depend on live user documents",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:44-53",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "New file names don't follow the TypeScript rule",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The validator matches the guide script's semantics",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:17:27.040667",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 33,
+  "prompt_tokens": 1573652,
+  "cached_tokens": 1364877,
+  "cache_write_tokens": 208753,
+  "completion_tokens": 62389,
+  "reasoning_tokens": null,
+  "duration_seconds": 274.74269745801575,
+  "cost_usd": 0.40516647,
+  "cost_basis": "provider"
+}

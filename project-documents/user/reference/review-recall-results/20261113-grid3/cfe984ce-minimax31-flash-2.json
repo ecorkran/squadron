@@ -1,0 +1,369 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Missing-heading output is not prefix-stable: `## Value` also satisfies `## Value Proposition`",
+      "description": "`missingHeadings` matches with `doc.text.startsWith(key.text)`, and `headingKey` strips parentheticals but not trailing free text. A document containing `## Value Proposition` satisfies the template's required `## Value`, because `\"value proposition\".startsWith(\"value\")` is true. The same holds for `## Overview of Scope` vs `## Overview`, or `## Technical Scope Notes` vs `## Technical Scope`. The bash script this ports has the identical prefix rule, so it is a faithful port \u2014 but the prefix rule was intended only for the `{placeholder}` case (`# Slice Design: {slice-name}` \u2192 `# Slice Design: Store Foundation`). Because `headingKey` truncates at `{` and nothing else, the \"prefix\" allowance leaks into every other required heading. The fix is to prefix-match only when the template key was truncated at a `{` placeholder, and require exact (normalized) equality otherwise. No test covers a required heading whose document text is a longer word with the required heading as a prefix, so this false-pass is invisible to the suite.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:75-80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`requiredHeadings` only detects the marker on the immediately following line, so a blank line between heading and marker silently drops the requirement",
+      "description": "The scan compares `lines[i + 1].trim() === REQUIRED_MARKER`, i.e. the marker must be the very next line. A template (or a user document that itself carries the marker) that has a blank line between the heading and `<!-- required -->` yields no required heading for that section \u2014 and if that is the only marked heading, the command exits 2 with \"template declares no required headings\" even though the template clearly marks it. The bash script has the same adjacency rule (`prev` line tracking), so this is a faithful port; still, the failure mode (an entire template rejected as having no requirements) deserves either a clearer message or a more forgiving scan that tolerates blank lines between the heading and its marker. No test covers a marker separated from its heading by a blank line.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:47-57"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The docType failure message is duplicated as a literal in the CLI, violating the project's single-source rule",
+      "description": "`DOC_TYPE_FAILURE_MESSAGE` is imported from core and used in `printHumanOutput`, but the same sentence is re-typed verbatim in `packages/core/src/schema/sliceDesignFiles.ts` as the constant's own value, and the CLI's own error text (\"no files given. Usage: cf validate design <file...>\") restates usage that Commander already prints. The project rule is explicit: \"Never scatter comparison values across code \u2026 Changing a value should require editing exactly one place.\" The message constant is the right shape; the duplication is that the human-output branch reconstructs the message from `DesignFailureReason.DocType` + the constant while the file layer separately owns the wording. If a second failure reason is ever added, the CLI needs a per-reason message map \u2014 the current `if (reason === DocType)` branch is the seam where that map should already live.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:47-49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`validateFile` reads the file twice per document and re-reads it after `parseFrontmatter` already read it",
+      "description": "`parseFrontmatter(file)` reads the whole file to extract the frontmatter, and `validateFile` then reads it again with `readFile(file, 'utf-8')` to extract the headings. Every file is therefore read twice from disk. The preflight adds a `stat` and an `access` per file on top of that. For a validation command run over a directory of designs this is wasteful but not harmful; the cleaner shape is a single read whose text is passed to both the frontmatter parser and the heading scanner. Note that `parseFrontmatter` currently has no text-input variant, so this needs either a small overload in `frontmatterParser.ts` or a local frontmatter extraction. No test would catch this \u2014 it is invisible to correctness tests.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:96-113"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `docType` check uses `parseFrontmatter`, which never throws and reports `found: false` for a malformed block \u2014 the failure is indistinguishable from a missing `docType`",
+      "description": "`parseFrontmatter` swallows every error and returns `{ found: false, data: {} }` when the frontmatter block is unterminated or the file cannot be read. A document with a truncated frontmatter block therefore reports `reason: 'doctype'` \u2014 \"frontmatter must declare 'docType: slice-design'\" \u2014 rather than \"frontmatter is malformed\". This is lenient in the right direction (a broken block fails rather than passes) and matches the bash script's awk, which also treats an unterminated block as \"no docType\". It is worth a note only because the message names a missing key when the real problem may be an unparseable block. The `reason` union has no value for \"unparseable frontmatter\", so adding one would be an additive change.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:99-102"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`preflight` and `validateFile` both guard file access, but the guards report different messages for the same condition",
+      "description": "`preflight` throws `cannot read file: <path>` for an `access` failure and `no such file: <path>` for `ENOENT`; `validateFile` throws the same `cannot read file: <path>` for a `readFile` failure. The two agree today, which is good, but the messages are written out twice rather than derived from one place. The project rule about defining a value once applies to user-visible strings as well. Low severity because the texts currently match exactly.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:78-95"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The design document states the human output shows `FAIL` before the missing-heading lines, but the implementation prints `FAIL` then the reason \u2014 a divergence from the doc's own example",
+      "description": "`project-documents/user/slices/214-slice.native-slice-design-validation.md` (API Contracts) shows the expected human output as a `FAIL` line followed by `missing:` lines, and the implementation matches. However, the same design's prose at \"Data Flow\" step 4 describes the docType case as \"fails with the frontmatter message\", without stating that the `FAIL <path>` line is still printed first \u2014 and the JSON contract in the design shows `missing: []` for the doctype case with `reason: \"doctype\"`, which the implementation matches. On inspection both contracts hold; the drift is only in the design's example ordering versus the docType example, which is not spelled out. Verified against `printHumanOutput` and the CLI test `prints the frontmatter message when docType is absent` \u2014 no functional drift found.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:52-62"
+    },
+    {
+      "severity": "PASS",
+      "title": "Pure validator separated from the node-only file layer",
+      "description": "The pure module has no fs imports and is exported from the browser-safe `@context-forge/core` entry (`packages/core/src/index.ts`), while the fs-dependent module is exported only from `@context-forge/core/node` (`packages/core/src/node.ts`). This mirrors the existing `frontmatterSchema.ts` / `frontmatterFileValidator.ts` split and respects the browser-safety boundary documented in `packages/core/src/node.ts`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts"
+    },
+    {
+      "severity": "PASS",
+      "title": "Typed error instead of string matching for the failure reason",
+      "description": "`DesignFailureReason` is a const object with a derived union type, and the CLI compares `result.reason === DesignFailureReason.DocType` rather than a bare string. Adding a reason will not compile-break the consumer. This is the discriminated-union pattern the TypeScript rules call for, applied at a real boundary.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:30-40"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exit-code contract implemented and tested end to end",
+      "description": "The exit-2 cases are exercised in both human and `--json` mode across three shapes (no arguments, a nonexistent path, a valid file preceding a missing one), and each asserts that stdout is empty \u2014 the \"exit 2 never comes with partial results\" guarantee from the design is genuinely pinned, not assumed. The `process.exit` mock throws, so the exit path is observable.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:172-199"
+    },
+    {
+      "severity": "PASS",
+      "title": "No `any`, no unsafe assertions; strict-mode compatible",
+      "description": "Every boundary is typed: `DesignValidationResult`, `ValidateDesignOpts`, `ValidateDesignJson`. The `DesignFailureReason` union is used for the optional `reason` field rather than `string`. `packages/core/tsconfig.json` has `\"strict\": true`, and the new code uses no `any` and no `as` casts, satisfying the TypeScript rules.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:1-107"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tests use the real production artifacts",
+      "description": "The template is the real `project-documents/ai-project-guide/project-guides/templates/slice-design.md` and the document is the real `214-slice.native-slice-design-validation.md`, so a change to the template's marker format surfaces as a test failure rather than a silent pass. This directly satisfies the project rule that a parser's fixture must include the format the parser will actually consume.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/sliceDesignFiles.test.ts:44-58"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The command test mocks only the project store and exercises the real validator",
+      "description": "`vi.mock('@context-forge/core/node')` replaces only `FileProjectStore` and spreads the rest of the real module, so `validateSliceDesignFiles` runs for real against fixture checkouts. The mock uses a plain class rather than `vi.fn()` specifically because `restoreAllMocks()` would strip a `vi.fn()` implementation \u2014 a real, correctly-diagnosed trap, and the comment records it.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:26-39"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The core unit tests cover the leniency dimensions the design enumerates",
+      "description": "Case differences, extra whitespace, HTML comments, parentheticals, `{placeholder}` prefix matching, level mismatch, fenced code blocks, and CRLF are each covered by a named test. The one dimension not covered is the false-positive prefix case described in the first finding.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/sliceDesignValidator.test.ts:57-78"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`SLICE_DESIGN_TEMPLATE_RELATIVE_PATH` is defined once and exported through the guides barrel",
+      "description": "The template's location relative to the guide root is a single constant, exported via `packages/core/src/guides/index.ts`, and the CLI composes it with `GUIDE_RELATIVE_PATH` rather than re-deriving the path string. This matches the design's \"cf hard-codes no section list\" and \"the location is defined once\" requirement.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/guides/types.ts:314-315"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`resolveTemplatePath` resolves the template from the invoking checkout, worktree-aware",
+      "description": "`resolveProjectWorktree` returns a `worktreeId` when CWD is inside a registered worktree, and `resolveOperationPath` prefers that worktree's `worktreePath`. The command test `reads the template from the invoking worktree's guide` verifies the template comes from the worktree's own guide copy, with a second worktree registered so the resolution cannot pass by having only one candidate.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:32-46"
+    },
+    {
+      "severity": "NOTE",
+      "title": "README command table not updated for the new subcommand",
+      "description": "`README.md` lists `cf validate` with its one-line description but does not enumerate subcommands, so `cf validate frontmatter` is not listed there either. The addition is consistent with the existing granularity; the machine-readable `cf help --json` catalog picks up the new subcommand automatically through `buildCommandCatalog`. No action strictly required, but the design's \"Development Approach\" step 5 mentions updating CLI command reference docs if they list `cf validate` subcommands \u2014 verified that no such doc does.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "README.md:355"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Missing-heading output is not prefix-stable: `## Value` also satisfies `## Value Proposition`",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:75-80",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`requiredHeadings` only detects the marker on the immediately following line, so a blank line between heading and marker silently drops the requirement",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:47-57",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The docType failure message is duplicated as a literal in the CLI, violating the project's single-source rule",
+      "location": "packages/cli/src/commands/validateDesign.ts:47-49",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`validateFile` reads the file twice per document and re-reads it after `parseFrontmatter` already read it",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:96-113",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `docType` check uses `parseFrontmatter`, which never throws and reports `found: false` for a malformed block \u2014 the failure is indistinguishable from a missing `docType`",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:99-102",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`preflight` and `validateFile` both guard file access, but the guards report different messages for the same condition",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:78-95",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The design document states the human output shows `FAIL` before the missing-heading lines, but the implementation prints `FAIL` then the reason \u2014 a divergence from the doc's own example",
+      "location": "packages/cli/src/commands/validateDesign.ts:52-62",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Pure validator separated from the node-only file layer",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Typed error instead of string matching for the failure reason",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:30-40",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Exit-code contract implemented and tested end to end",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:172-199",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "No `any`, no unsafe assertions; strict-mode compatible",
+      "location": "packages/cli/src/commands/validateDesign.ts:1-107",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests use the real production artifacts",
+      "location": "packages/core/tests/schema/sliceDesignFiles.test.ts:44-58",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The command test mocks only the project store and exercises the real validator",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:26-39",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The core unit tests cover the leniency dimensions the design enumerates",
+      "location": "packages/core/tests/schema/sliceDesignValidator.test.ts:57-78",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`SLICE_DESIGN_TEMPLATE_RELATIVE_PATH` is defined once and exported through the guides barrel",
+      "location": "packages/core/src/guides/types.ts:314-315",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`resolveTemplatePath` resolves the template from the invoking checkout, worktree-aware",
+      "location": "packages/cli/src/commands/validateDesign.ts:32-46",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "README command table not updated for the new subcommand",
+      "location": "README.md:355",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:45:06.653860",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 44,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 224507,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 17,
+    "in_fences": 0,
+    "in_section": 17,
+    "surviving": 17
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 834759,
+  "cached_tokens": 705920,
+  "cache_write_tokens": null,
+  "completion_tokens": 61196,
+  "reasoning_tokens": 54729,
+  "duration_seconds": 359.70652495813556,
+  "cost_usd": 0.032963165,
+  "cost_basis": "alias_pricing"
+}

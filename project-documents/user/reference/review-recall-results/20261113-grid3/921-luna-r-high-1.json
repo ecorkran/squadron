@@ -1,0 +1,153 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The bounded firing waits for the entire pass before checking its journal",
+      "description": "`run([\"mt-run\", ...])` is synchronous. The `mt-run` wrapper starts the unit and then waits for it to stop (`deploy/mt-run:127-129`), so `wait_for_unit_or_line` cannot observe the trailing-complete marker while the pass is running. The cutover therefore cannot stop the minute unit at that marker as intended; it waits for the full, potentially unbounded backfill instead.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:356"
+    },
+    {
+      "severity": "FAIL",
+      "title": "A failed verification can be reported as a successful cutover",
+      "description": "`_repair` records a nonzero exit code but still returns the output, and the final acceptance check only looks for `FAIL` and `[WAIT]`. For example, `--verify` can exit nonzero with a scan-refused diagnostic and neither marker; this check then treats the cutover as successful. Check the subprocess return code and require an explicit successful verification result before reporting completion.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:273"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The sudoers installer rule runs a checkout script as root",
+      "description": "`MT_INSTALL` permits root execution of `install-production.sh` from the operator checkout. If the operator can modify that checkout, they can alter the script and have the altered code run as root. Do not authorize a root-run script from a user-writable path; use a root-owned, integrity-controlled copy or another mechanism that validates the executable before privilege elevation.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The mt-run sudo rule grants more root access than the cutover needs",
+      "description": "`/usr/local/bin/mt-run *` allows every wrapper mode and argument, not just the pass commands used by the cutover. Other arguments are forwarded to the production CLI, which runs as root when invoked through this rule. Narrow the allowed command arguments to the intended operations.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:8"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The sudoers fragment does not authorize the repair command",
+      "description": "The cutover\u2019s `_repair` invokes `/opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py ...` with `sudo` (`scripts/cutover_921_minute_sessions.py:96`), but this fragment grants no permission for that command. With this fragment as the intended restricted grant, the cutover will be denied at its first repair invocation unless another sudoers rule separately authorizes it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:13"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The bounded firing waits for the entire pass before checking its journal",
+      "location": "scripts/cutover_common.py:356",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A failed verification can be reported as a successful cutover",
+      "location": "scripts/cutover_921_minute_sessions.py:273",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The sudoers installer rule runs a checkout script as root",
+      "location": "deploy/sudoers.d/manta-ops:9",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The mt-run sudo rule grants more root access than the cutover needs",
+      "location": "deploy/sudoers.d/manta-ops:8",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The sudoers fragment does not authorize the repair command",
+      "location": "deploy/sudoers.d/manta-ops:13",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:02:24.975068",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 21076,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 16,
+  "prompt_tokens": 1539616,
+  "cached_tokens": 1410024,
+  "cache_write_tokens": null,
+  "completion_tokens": 43031,
+  "reasoning_tokens": 40471,
+  "duration_seconds": 446.63154895883054,
+  "cost_usd": 0.048574940000000004,
+  "cost_basis": "alias_pricing"
+}

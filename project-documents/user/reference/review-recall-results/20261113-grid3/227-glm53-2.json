@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "rclone stderr is merged into the JSON that is parsed as the rule list",
+      "description": "`RULES=$(RCLONE_B2_ACCOUNT=\u2026 rclone backend lifecycle \":b2:$BUCKET\" 2>&1)` captures stderr together with stdout so the failure text can be printed on a real failure (good), but it also means a successful `rclone` run that emits any warning line to stderr will fail the `jq -e 'type == \"array\"'` gate and be reported as `UNREADABLE lifecycle (not a JSON rule list: \u2026)` \u2014 a false \"cannot read\" on a healthy bucket. The message does include the offending text, so the failure is diagnosable, and the whole item is read-only either way; worth considering capturing stdout and stderr separately (e.g. `2 > >(cat >&2)`-style split or a temp file) if rclone ever gets chatty.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/lib/b2_lifecycle.sh"
+    },
+    {
+      "severity": "NOTE",
+      "title": "run_lib's fallback error line names `env`, not the library that failed",
+      "description": "When a prefixed library call fails without printing a DRIFT/MISSING/PENDING line, `report \"MISSING ${prefix:+$prefix }$(basename \"$1\") exited $rc\"` evaluates `basename` of `env` (the first remaining argument after `shift`, since the call is `run_lib \"$C\" env PGCLUSTER=\u2026 pg_settings.sh \u2026`), producing e.g. `MISSING 17/tick env exited 1` instead of naming `pg_settings.sh`. The pre-227 call had the same shape (empty prefix, `MISSING env exited \u2026`), so this is carried-over cosmetic drift in the failure path, not a regression; fixing it would mean resolving the last `$1` or passing the library path explicitly.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh#run_lib"
+    },
+    {
+      "severity": "NOTE",
+      "title": "tick advisory-lock guard is check-then-act with an inherent race window",
+      "description": "`tick_locks_held()` is re-checked immediately before `systemctl restart postgresql@17-tick`, but a tick ingestion run can acquire its advisory lock between the check and the restart; the window is small and the same check-then-restart shape is what the slice design (TD6) specifies, and recovery is \"fix the cause, re-run\" \u2014 but it is a TOCTOU by construction, worth remembering if tick runs ever become continuous rather than timer-fired.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#step_restart"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test coverage is exemplary and follows the project's conventions",
+      "description": "The suite runs the pure helpers against the real rendered cron file (produced by invoking `render_cron.sh` for real) and the real pre-227 installed-file fixture; host calls are replaced at module level; the setup-backup tests stub `pg_lsclusters` with the real tool's observed output shape and stub `rclone` to prove the lifecycle check never issues a mutating call; the provisioner tests extract and execute the script's own `hba_content()` rather than re-spelling it. Edge cases (malformed table, missing pgdata, pending restart on production, held lock, WAL timeout, unreadable rules, same-day re-run) are all parametrized or explicit. No gaps found on the critical paths reviewed.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_cutover_227.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "rclone stderr is merged into the JSON that is parsed as the rule list",
+      "location": "deploy/lib/b2_lifecycle.sh",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "run_lib's fallback error line names `env`, not the library that failed",
+      "location": "deploy/setup-backup.sh#run_lib",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "tick advisory-lock guard is check-then-act with an inherent race window",
+      "location": "scripts/cutover_227_tick_backup.py#step_restart",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test coverage is exemplary and follows the project's conventions",
+      "location": "test/unit/test_cutover_227.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:52:25.935159",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 197930,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 943717,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1403980,
+  "cached_tokens": 1198336,
+  "cache_write_tokens": null,
+  "completion_tokens": 58653,
+  "reasoning_tokens": 55104,
+  "duration_seconds": 948.5303448750637,
+  "cost_usd": 0.85754216,
+  "cost_basis": "alias_pricing"
+}

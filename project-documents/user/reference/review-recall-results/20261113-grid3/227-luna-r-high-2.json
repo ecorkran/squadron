@@ -1,0 +1,99 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Do not arm reconciliation after an unarmed weekly run",
+      "description": "`step_weekly` accepts any log line starting with `=== weekly backup done`, then creates the arm file. But `cron_weekly_backup.sh` deliberately prints a successful \u201cdone (unarmed)\u201d line and exits without running the destructive offsite reconcile when the arm file is absent. This cutover therefore arms future automatic reconciles without first observing one, bypassing the documented safety gate. Require a watched reconcile before creating the arm file; add a test that an unarmed completion does not arm it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:188"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Check the WAL push command\u2019s exit status",
+      "description": "`step_offsite` ignores the `CompletedProcess` returned by `shell` for the push job and proceeds to `rclone check`. If the push fails while the remote already matches the local files, the checks can pass and the cutover can report success despite the failed push. Check and record the push\u2019s return code, and fail the step when it is nonzero.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:209"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Do not arm reconciliation after an unarmed weekly run",
+      "location": "scripts/cutover_227_tick_backup.py:188",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Check the WAL push command\u2019s exit status",
+      "location": "scripts/cutover_227_tick_backup.py:209",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:37:41.503462",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 17541,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 761878,
+  "cached_tokens": 668452,
+  "cache_write_tokens": null,
+  "completion_tokens": 25064,
+  "reasoning_tokens": 24005,
+  "duration_seconds": 263.4986630419735,
+  "cost_usd": 0.02855912,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The `over` failure names the wrong family and counts the wrong product",
+      "description": "`over_failures()` reports `f\"{row.product} {row.label}: {over} sessions over\"` for every accounting row whose `cross_tier` has a non-zero `over` count \u2014 including the **statistics** family, whose cross-tier result is the same `traded_vs_cleared` check over the tick tier or bars, not over statistics itself. `named` is keyed only by `product` (`scripts/cutover_304_evidence.py:246-249` collects `named.setdefault(product, []).extend(...)` from every coverage document), so the same session names are attached to every row of that product and cannot be attributed to the family that produced them. The result is a message such as `ES statistics: 2 sessions over in traded_vs_cleared: <ES bar session names>` \u2014 the count and the names can belong to different families, and the statistics row can be credited with a defect that belongs to `bar_1m`. The module's own docstring says \"an `over` session is a defect (305 D5): fail, naming what coverage names\", but the naming is not faithful. Key `named` by `(product, family)` (or schema) and only report the row whose family produced the verdict.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py:118-129"
+    },
+    {
+      "severity": "FAIL",
+      "title": "A `missing`/`pending` statistics session inside an exhausted request is counted as accounted for, but an equivalent one elsewhere is not \u2014 the label check ignores the request's schema range",
+      "description": "`_label()` decides that a session is \"acquisition failed\" when `request.start <= day < request.end` and the request's `(product, schema)` matches the family being reported. The range test uses the **request's** start/end, which for a multi-session request spans the whole bought range; but the failure label is only meaningful for the days the exhausted request actually failed. A retry-exhausted request covering a month therefore silences *every* `missing`/`pending`/`edge_unknown` session inside that month, including sessions that were never requested for that product/schema family (e.g. a statistics `missing` session inside a bars request's range when the exhausted request is for `ohlcv-1m`). The exit rule then passes on sessions the provider never delivered. The label must be derived from the units that failed (the `unit_ids` of the session) rather than from the request's range.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:238-249"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`not_caught_up_report` returns an empty report when `caught_up` is `None`, hiding sessions that were never judged",
+      "description": "The report is skipped unless `caught_up is False` (`if caught_up is not False: return report`). `caught_up` is `None` when the family has no wanted range (`manta_trading/data/tick/tick_status.py:130-137`). Skipping is harmless in that case, but the same `None` also reaches here when `accounting.row_for(...)` returns a row for a family whose `caught_up` the accounting document reports as `null` for a *different* reason (no sessions in scope) while the coverage document still lists sessions. The code cannot distinguish \"nothing to judge\" from \"not judged\", and silently drops the D6 item 3 output. The project rule \"never use silent fallback values\" applies: this path should either treat `None` as an explicit stop with a named reason, or the report should be driven by the coverage sessions alone (the coverage document already says which sessions exist) with `caught_up` used only as a filter for the *complete* ones.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:265-268"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`product_of_symbols` parses a comma-joined string but the CLI renders symbols in a way that can produce empty entries",
+      "description": "`product_of_symbols` splits on `\",\"` and strips each entry, but it does not reject an empty symbol list: `symbols=\"\"` parses to `(\"\",)` and simply fails to match, which is fine, while `symbols=\"ES.FUT,\"` parses to `(\"ES.FUT\", \"\")` and also fails to match \u2014 also fine. The real risk is the opposite: `debug requests --json` renders `symbols` via `_cell` (`manta_trading/cli/commands/tick_debug_cmds.py:84-86`) which joins a list with `\",\"`; a request whose `symbols` column is an empty array renders as `\"\"` and raises `CutoverError` \u2014 correct. But the matching is **exact set equality** against `entry.symbols`. A request bought with a single outright (`ESZ6`) rather than the parent (`ES.FUT`) raises \"match no universe product\", stopping the whole cutover. The debug request rows carry the symbols the *planner* used, which come from the universe (`entry.symbols`), so in practice this holds \u2014 but the failure mode is a hard stop on a row the code does not need to interpret. Consider matching on the request's `schema`/`stype_in`/shape, or restricting the product lookup to the rows actually used (`bar_job_dirs` and `retry_exhausted_requests`).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:281-292"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_family_evidence` reads `caught_up` from the accounting row but the coverage document's sessions may cover a different range than the accounting family",
+      "description": "The accounting document's `caught_up` is judged over the family's *own* wanted range (`family_scope`), while the coverage command is invoked with the history want's full range (`coverage_reads()` uses `want.start`/`want.end`). These are the same range for the history families today, but the two are derived from different sources (`family_wants` in `tick_status_scope` versus `TICK_UNIVERSE.history` here), and the code silently assumes they agree. If they ever diverge, `not_caught_up_report` will list sessions the accounting never judged (or skip sessions it did). The report should be driven by the coverage document's own sessions and use `caught_up` only as the \"list nothing\" switch, with the ranges asserted equal.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py:225-250"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `--estimate` path prints a ceiling command derived from the estimate but never checks that the ceilings it prints are installable",
+      "description": "`_estimate_only` computes `ceiling_command(planned, trailing)` and prints it, but `ceiling_command` rounds `planned` and `planned + trailing` up to the next `5`. If `planned + trailing` already exceeds the *currently configured* 30-day cap, the printed cap will be larger than what the provider allows \u2014 the script never compares the printed figures against the configured ceilings, so the operator is handed a command that may silently raise the cap rather than confirm it. The estimate path deliberately skips ceiling checks (`check_ceilings=False`), which is documented, but the printed command should at least state whether it raises the configured ceilings or leaves them unchanged.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:255-274"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`judge()` fetches the whole `debug requests` table to find resubmit origins, with no bound",
+      "description": "`judge()` calls `evidence.mt_json([\"data\", \"tick\", \"debug\", \"requests\"])[\"rows\"]`, which reads *every* `tick_request` row (the read has no cap: `manta_trading/data/tick/debug_reads.py:9`, \"no cap: the whole 2020+ manifest is a few thousand rows\"). With the 2010-2026 history now wanted for two products, that is thousands of rows read and parsed to answer a question about a handful of requests. The command supports `--start`/`--end` filters; the query should be narrowed to the ranges named by the estimate's resubmit requests.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:169-180"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`resubmit_origins` matches a resubmit to its original by `(schema, start, end)` only, so a request for a different product with the same range collides",
+      "description": "The key is `(schema, range_start, range_end)`; the docstring acknowledges that \"Several rows can share a range (ES and GC)\" and takes the earliest. But the earliest is then used to decide whether the resubmit belongs to *this* cutover: `made < since` refuses. With ES and GC sharing the same range and the same schema (they do \u2014 both products now want `statistics` and `ohlcv-1m` over the same `_HISTORY_WANTS` range), the GC row's timestamp can make an ES resubmit look older than it is and wrongly refuse the purchase, or (in the other direction) let an old ES request through. The key needs the product (or the request's `symbols`) to disambiguate; the estimate's request entries carry no product, so the match must be narrowed another way.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:139-166"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`check_dataset_edge` takes the minimum edge across products, so one lagging product blocks the whole cutover even when its family is not wanted",
+      "description": "The check computes `min(...)` over all products' `edge_available_end` and compares it to `latest_want_end()` (the greatest want end over the whole universe). The universe's wants are now the same fixed range for every product and family, so a single lagging product blocks the cutover for all products. That is arguably the intent (\"the dataset reaches it\"), but the message names only the aggregate edge and not which product is short, and `_edge_of` raises on the *first* product with a missing edge rather than naming all of them. The operator gets \"dataset edge ... is before the latest want end\" with no indication of which product is behind.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:100-127"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`run_gates` runs `status --json` through `mt_run` and then re-parses it, duplicating the JSON handling of `mt_json`",
+      "description": "`run_gates` calls `evidence.mt_run([\"data\", \"tick\", \"status\", \"--json\"])` directly and hands the `CompletedProcess` to `check_dataset_edge`, which re-implements the exit-code check, the JSON parse and the error messages that `evidence.mt_json` already owns (`scripts/cutover_304_evidence.py:50-67`). Two code paths now decide what \"the command failed\" means, and the gate path is the one that runs first \u2014 if `mt_json` is later tightened (e.g. to log the raw payload), the gate path silently keeps the older behaviour. `check_dataset_edge` should take the parsed document, and the caller should use `mt_json`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:129-136"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The accounting module re-implements the cross-tier count tuple it reads",
+      "description": "`CROSS_TIER_COUNTS` restates the four `VolumeClass` values as strings rather than deriving them from the enum it already imports (`VolumeClass` is imported for `VolumeClass.OVER.value` in `over_sessions`). The project rule \"never scatter comparison values across code\" applies: the tuple should be built from `VolumeClass` so a new class cannot be silently omitted from the parsed counts (which would make `_cross_tier` raise a `KeyError` turned into a `CutoverError` naming the wrong thing).",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py:26-31"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`purchase_verdicts.py` imports `subprocess` only to catch `CalledProcessError` from a caller-supplied callable",
+      "description": "`check_gate_issue` takes a `view` callable and catches `subprocess.CalledProcessError`/`OSError` from it. The dependency on `subprocess` in this module is therefore real but indirect; the exception types are part of the contract with `cutover_304_first_purchase._view_issue`. This is acceptable, but worth documenting in the `view` parameter's docstring so a future caller that raises something else does not get an unhandled exception past the gate.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:48-56"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `over` failure names the wrong family and counts the wrong product",
+      "location": "scripts/purchase_accounting.py:118-129",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A `missing`/`pending` statistics session inside an exhausted request is counted as accounted for, but an equivalent one elsewhere is not \u2014 the label check ignores the request's schema range",
+      "location": "scripts/purchase_verdicts.py:238-249",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`not_caught_up_report` returns an empty report when `caught_up` is `None`, hiding sessions that were never judged",
+      "location": "scripts/purchase_verdicts.py:265-268",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`product_of_symbols` parses a comma-joined string but the CLI renders symbols in a way that can produce empty entries",
+      "location": "scripts/cutover_304_checks.py:281-292",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`_family_evidence` reads `caught_up` from the accounting row but the coverage document's sessions may cover a different range than the accounting family",
+      "location": "scripts/cutover_304_evidence.py:225-250",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `--estimate` path prints a ceiling command derived from the estimate but never checks that the ceilings it prints are installable",
+      "location": "scripts/cutover_304_first_purchase.py:255-274",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`judge()` fetches the whole `debug requests` table to find resubmit origins, with no bound",
+      "location": "scripts/cutover_304_first_purchase.py:169-180",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`resubmit_origins` matches a resubmit to its original by `(schema, start, end)` only, so a request for a different product with the same range collides",
+      "location": "scripts/cutover_304_checks.py:139-166",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`check_dataset_edge` takes the minimum edge across products, so one lagging product blocks the whole cutover even when its family is not wanted",
+      "location": "scripts/purchase_verdicts.py:100-127",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`run_gates` runs `status --json` through `mt_run` and then re-parses it, duplicating the JSON handling of `mt_json`",
+      "location": "scripts/cutover_304_first_purchase.py:129-136",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The accounting module re-implements the cross-tier count tuple it reads",
+      "location": "scripts/purchase_accounting.py:26-31",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`purchase_verdicts.py` imports `subprocess` only to catch `CalledProcessError` from a caller-supplied callable",
+      "location": "scripts/purchase_verdicts.py:48-56",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:42:00.677528",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 39993,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1392737,
+  "cached_tokens": 1152384,
+  "cache_write_tokens": null,
+  "completion_tokens": 14148,
+  "reasoning_tokens": 9759,
+  "duration_seconds": 160.44661741610616,
+  "cost_usd": 0.030337563,
+  "cost_basis": "alias_pricing"
+}

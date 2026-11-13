@@ -1,0 +1,117 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "`caught_up` uses \"tier configured\" as its wanted flag while the status scope and the renderer's \"n/a\" text use \"wanted range present\"",
+      "description": "Description: In `_product_status`, `caught_up` is computed with `wanted=wanted_start is not None` (i.e. the tier is configured), but the actual `wanted` range can still be `None` when `entry.end` is unset and no `tick_dataset_edge` row exists, so `_scope` evaluates no wanted sessions. The renderer (`tick_status_render.py:101`) prints \"caught up: n/a (no wanted range)\" only when `caught_up is None`, so in that configuration the operator would see \"caught up: no\" with an all-zero bucket instead of the documented n/a state (the `caught_up` docstring in `tick_status.py` says \"n/a when the product has no wanted range\"). Today this is unreachable because `TICK_UNIVERSE` has `tier=None`; it will become reachable the moment slice 226 sets a tier with an open-ended range, and the two definitions could drift silently. Aligning `caught_up` with the same `wanted is not None` used to build `wanted` would make the \"wanted\" concept one value instead of two. No test currently covers the tier-set path at all, so the divergence has no guard.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:207"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`calendar_sessions` duplicates the error-mapping of `product_session_days`",
+      "description": "Description: The new `calendar_sessions` in `tick_status_build.py` opens a `TradingCalendar`, calls `sessions_between`, maps `OperationalError`/`CalendarNotFoundError`/`OutOfPopulatedRangeError` to `TickCalendarError`, and closes the calendar \u2014 the same body as the existing `product_session_days` in `tick_calendar.py`, which differs only in that it derives the calendar id from the product and maps to `session_days`' touched-day set. Two spellings of \"the calendar failed\" now live in the package; if the exception set grows (e.g. a new calendar failure mode), the copies can diverge. The duplication is defensible \u2014 `calendar_sessions` returns `Session` objects, not days, and the callers have different needs \u2014 but it's worth collapsing into one shared helper in `tick_calendar.py` when slice 231 (GC) adds a second product and the pattern repeats.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:69"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Read-verb exit-code behavior is well covered, including the documented 1-vs-4 asymmetry",
+      "description": "Description: The new CLI tests exercise the full matrix end to end: happy-path text and `--json` payloads for both verbs (JSON asserted equal to `build_coverage(...).to_dict()`), the mismatch \u2192 exit 3 path by deleting one primary-key row, preflight refusals (unknown `--product`, `end == start`) \u2192 exit 1, and an unreachable tick database \u2192 exit 4 for both verbs (verifying the `TickDatabaseUnreachable` override in `run_mapped` rather than the preflight path). Pure classification logic is unit-tested per-bucket with parametrization, and `raw_counts` is tested for rows crossing midnight and out-of-range rows. I list this only as the positive half of the review; the one gap is the one noted in the first finding (no tier-set path), not a defect in what is tested.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/integration/data/test_tick_status_cli.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`caught_up` uses \"tier configured\" as its wanted flag while the status scope and the renderer's \"n/a\" text use \"wanted range present\"",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:207",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`calendar_sessions` duplicates the error-mapping of `product_session_days`",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:69",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Read-verb exit-code behavior is well covered, including the documented 1-vs-4 asymmetry",
+      "location": "test/integration/data/test_tick_status_cli.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T08:59:20.100168",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 159733,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1405893,
+  "cached_tokens": 1072832,
+  "cache_write_tokens": null,
+  "completion_tokens": 45686,
+  "reasoning_tokens": 42246,
+  "duration_seconds": 261.73768645804375,
+  "cost_usd": 0.23408544000000003,
+  "cost_basis": "alias_pricing"
+}

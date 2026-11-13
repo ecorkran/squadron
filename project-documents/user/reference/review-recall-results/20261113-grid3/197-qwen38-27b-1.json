@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`pipeline_mutates` does not inspect `fan_out`'s `inner` step, so that shape skips the run lock",
+      "description": "`_step_mutates` only recurses into `config.get(\"steps\")` (the `each`/`loop` body shape). A `fan_out` step nests its body under `config[\"inner\"]` (a single-key dict), which is never scanned. If a user-authored pipeline has `fan_out: { inner: { branch: {...} } }` (or `implement`/`devlog`/`commit`-producing inner), `pipeline_mutates` returns `False`, so `_take_run_lock` never acquires the lock even though the fan-out branches mutate git/cf state concurrently. This is a false-negative in the D11 safety gate's own stated scope (\"whether any step, **nested steps included**, commits or moves cf state\"). No shipped pipeline uses `fan_out` (confirmed against `src/squadron/data/pipelines/*.yaml`), so it is latent, but the detector should treat `inner` as a nesting point it walks, matching how `fan_out.py`/`_execute_fan_out_step` actually run the inner step. There is also no test covering a mutating `fan_out` inner.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py:53-68"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A per-item report write failure aborts a batch with an uncaught `OSError`",
+      "description": "The new `await _write_each_report(report, runs_dir, final=False)` after each item is not wrapped in `try/except OSError`. `_write_atomic` logs at ERROR and re-raises, so a disk-full / permission error mid-batch now propagates out of the `each` loop and out of `execute_pipeline` as a raw traceback in the regular (non-item-resume) run path. This is acceptable under fail-fast and is observable (the ERROR log), but it is a coarser failure surface than the cleanly-reported git faults elsewhere in the same step; consider converting a report-write fault into a flagged/halted run state rather than an unhandled exception. This extends pre-existing behavior (the final write was already unguarded on the success path) rather than introducing a new crash on the happy path.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:_execute_each_step"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Item-resume maps the runner's `typer.Exit` (classification failure) to `HALTED` (3)",
+      "description": "`handle_item_resume` catches any `typer.Exit` raised by `_run_pipeline_sdk` and re-raises as `ResumeExit.HALTED`. `GitEnvironmentError` is correctly re-raised by the runner for the item path (verified at `run.py:398`), but `ClassificationError` and `LazySessionConnectError` are converted to `typer.Exit(1)` *inside* `_run_pipeline_sdk` before this catch, so both end up reported as `HALTED` (\"an environment fault or unknown git state ended it mid-item\"). A classification failure is closer to `REJECTED` (\"nothing ran\"). This is a minor exit-code-precision issue for automated callers (D8 treats the code as a contract); it does not lose data, since the body never ran.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:handle_item_resume"
+    },
+    {
+      "severity": "PASS",
+      "title": "`report.json` round-trip, reserved-param enforcement, and dependency ordering are consistent and well-tested",
+      "description": "Verified against the tests: `to_json`/`from_json` round-trip with `StrEnum` values serialized by their value (`json.dumps` on a `StrEnum` subclass yields the value string; `from_json` re-coerces via `FlagKind(str(...))`). `BatchReport.load` validates `schemaVersion` and wraps all parse failures in `BatchReportLoadError` with the path named. `reserved_param_error` is the single source for the two control keys and is enforced at all three param entry points (`_apply_param_overrides`, `validate_pipeline`, `item_params`). `order_by_dependencies`/`_find_cycle` terminate on a finite unplaced set and always return a real cycle path; the `not_run`/dependency pre-flag bookkeeping in `_execute_each_step` is consistent with `_pre_flag`/`_flag_kind`. Atomic write-then-replace plus the `list_runs` filter on `REPORT_JSON_SUFFIX` keep report files from being misread as run state.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`pipeline_mutates` does not inspect `fan_out`'s `inner` step, so that shape skips the run lock",
+      "location": "src/squadron/pipeline/run_lock.py:53-68",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A per-item report write failure aborts a batch with an uncaught `OSError`",
+      "location": "src/squadron/pipeline/executor.py:_execute_each_step",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Item-resume maps the runner's `typer.Exit` (classification failure) to `HALTED` (3)",
+      "location": "src/squadron/cli/commands/run_item.py:handle_item_resume",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`report.json` round-trip, reserved-param enforcement, and dependency ordering are consistent and well-tested",
+      "location": "src/squadron/pipeline/batch_report.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:26:28.017002",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 28,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 377109,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 2337487,
+  "cached_tokens": 1886912,
+  "cache_write_tokens": null,
+  "completion_tokens": 97398,
+  "reasoning_tokens": 94567,
+  "duration_seconds": 596.9837409169413,
+  "cost_usd": 0.4167592,
+  "cost_basis": "alias_pricing"
+}

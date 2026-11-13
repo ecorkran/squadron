@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Mount effect never fires when the container element appears after the first effect run",
+      "description": "The mount effect's dependency array is `[containerRef, setMountOutcome, runGuarded]` \u00e2\u0080\u0094 all stable identities \u00e2\u0080\u0094 and it reads `containerRef.current` exactly once per run, returning early when null. A `useRef` object's identity never changes, so if `.current` is null when the effect first runs (container rendered conditionally, behind a Suspense boundary, or shown after data loads), no dependency ever changes and the effect never re-runs: the chart is never created even though the element later exists. This is latent today (`ChartRoute` renders the section unconditionally; the `withContainer={false}` lifecycle test covers only the null path and never asserts recovery), but the hook is the documented seam initiative 120 consumes, and the `@param containerRef` doc (\"nothing happens while null\") implies resumption once non-null. Either document the \"container must exist at mount\" requirement explicitly, or bind via a state-callback ref (`const [el, setEl] = useState<HTMLElement | null>(null)` with the effect keyed on `el`) so a late container attaches.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts#useChartProvider"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`error` is documented as \"the first error\" and \"ready xor failed\", but the code keeps the latest error and deliberately pairs `ready: true` with an error",
+      "description": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation, or null\", but `setOperationError` in the hook does `setMount(current => ({ ...current, error: failure }))` \u00e2\u0080\u0094 every new failure replaces the previous one, so only the *most recent* error survives until unmount. The errors suite's \"keeps the first error rather than being reset by a later success\" test only proves a *successful* later call doesn't clear it; two consecutive throws would replace. Similarly, the `MountState` doc (src/chart/chart-operations.ts:84) and the hook's state comment (\"They are never independent \u00e2\u0080\u0094 a chart is ready xor failed\") are contradicted by the intentional post-mount funnel, which sets an operation error while `ready` stays `true` \u00e2\u0080\u0094 the resize-throw test asserts exactly that pairing. These docs are the contract 120 reads; fix the wording (\"most recent error\"; operation errors are independent of `ready`) or change the code to match the docs.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/chart-operations.ts:77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Range-translation comment promises activation \"the moment [initiative 120] adds the first series\", but adding a series cannot re-run the effect",
+      "description": "The effect's dependencies are `[mount.ready, chart, range]`; `seriesCountRef` is a ref, and `chart.addSeries()` mutates it through the facade without any state commit, so nothing re-renders and the effect does not re-run when a series is added. `setVisibleRange` fires only on the *next* range change (or a `ready` flip) after the count becomes non-zero \u00e2\u0080\u0094 the translation test exercises precisely that path (add series, then `setRange`). The comment (and the slice outcomes doc, which repeats \"activating on the first `addSeries`\") promises behavior the code does not deliver: if 120 adds data while the default range is already in Context, nothing is applied until the range value changes. Either soften the comment to state the real trigger, or mirror the count into state if that activation is actually wanted.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:337"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Smoke spec comment points to the wrong spec for the \"/\" chart assertions",
+      "description": "\"The chart itself is asserted in chart-render.spec.ts\" \u00e2\u0080\u0094 `chart-render.spec.ts` covers the internal `/__chart-harness` route; the product chart at \"/\" is asserted by `chart-live.spec.ts`. A one-word fix that keeps a maintainer from reading the wrong spec.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "e2e/smoke.spec.ts:9-10"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Mount-failure log message attributes every mount-sequence failure to `create`",
+      "description": "The single `catch` wraps the whole mount sequence \u00e2\u0080\u0094 `create`, the initial `resize`, observer setup, and both `subscribe*` calls \u00e2\u0080\u0094 but logs `'[useChartProvider] provider create failed'`. A subscribe or initial-resize throw (both forced in the errors suite) is labeled \"create failed\" in the console, sending a debugger to the wrong operation. Reword to \"mount sequence failed\" or include the stage.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Imports placed after a module-level const in the translation suite",
+      "description": "`const LINE_SERIES` is declared between the `../state/defaults.ts` import and the two `./support/*` imports. Hoisting makes it legal, but it breaks the project's sorted-imports convention (external \u00e2\u0086\u0092 internal \u00e2\u0086\u0092 sibling) and the layout every sibling suite uses; it reads as an accidental insertion. The same file also has a single ~180-character `getBoundingClientRect` arrow line, unlike the wrapped style of the other three hook suites.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.translation.test.tsx:14-23"
+    },
+    {
+      "severity": "PASS",
+      "title": "Post-mount error funneling is correct and tested across every forced failure path",
+      "description": "The suite forces resize-in-observer, subscribe-throw mid-mount, initial-resize throw, create throw, and the teardown race, asserting in each case that `error` is set, `ready` follows the contract, nothing escapes as an unhandled exception, disposers and observer are cleaned exactly once, and no double-destroy occurs. The funnel/teardown construction in the hook satisfies CLAUDE.md's exception rules by design (logged at error level *and* surfaced as state, never swallowed), and the TIMING NOTE about arming `mockImplementationOnce` before `render()` documents a real footgun for future contributors.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.errors.test.tsx"
+    },
+    {
+      "severity": "PASS",
+      "title": "Harness gating is statically foldable and the e2e/dev/prod mode wiring is consistent",
+      "description": "Direct `===` comparisons on `import.meta.env.MODE` (deliberately not `.includes()`) let Vite constant-fold the gate, so production DCEs the branch and the harness route/component tree-shake out (verified by bundle grep per the slice outcomes); `playwright.config.ts` builds *and* previews with `--mode e2e` so `chart-render.spec.ts` keeps its target; and the `development` inclusion is a documented, PM-approved deviation. Config and code tell one story.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "src/routes/router.ts"
+    },
+    {
+      "severity": "PASS",
+      "title": "The live-chart e2e replaces the variance scan with the right assertions for an empty chart",
+      "description": "A non-blank-pixel scan is false by construction on a uniform empty pane, so asserting instead that the pane is painted in the `--color-surface` token color (proving both render and token-driven styling in a single check), plus canvas-layer count, axis-strip contrast, and container-relative sizing \u00e2\u0080\u0094 and re-asserting painted/theme state after a viewport resize \u00e2\u0080\u0094 is honest equivalent coverage, with the reasoning recorded in-file. The harness spec, whose chart has candles, correctly keeps the variance scan.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "e2e/chart-live.spec.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mount effect never fires when the container element appears after the first effect run",
+      "location": "src/chart/use-chart-provider.ts#useChartProvider",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`error` is documented as \"the first error\" and \"ready xor failed\", but the code keeps the latest error and deliberately pairs `ready: true` with an error",
+      "location": "src/chart/chart-operations.ts:77",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Range-translation comment promises activation \"the moment [initiative 120] adds the first series\", but adding a series cannot re-run the effect",
+      "location": "src/chart/use-chart-provider.ts:337",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Smoke spec comment points to the wrong spec for the \"/\" chart assertions",
+      "location": "e2e/smoke.spec.ts:9-10",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Mount-failure log message attributes every mount-sequence failure to `create`",
+      "location": "src/chart/use-chart-provider.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Imports placed after a module-level const in the translation suite",
+      "location": "src/test/use-chart-provider.translation.test.tsx:14-23",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Post-mount error funneling is correct and tested across every forced failure path",
+      "location": "src/test/use-chart-provider.errors.test.tsx",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Harness gating is statically foldable and the e2e/dev/prod mode wiring is consistent",
+      "location": "src/routes/router.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The live-chart e2e replaces the variance scan with the right assertions for an empty chart",
+      "location": "e2e/chart-live.spec.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:41:06.062988",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 19,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 554590,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 943717,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1181640,
+  "cached_tokens": 970304,
+  "cache_write_tokens": null,
+  "completion_tokens": 134116,
+  "reasoning_tokens": 131476,
+  "duration_seconds": 1947.305740749929,
+  "cost_usd": 1.1382598400000001,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A skipped commit is reported as a successful fix",
+      "description": "`commitPathsIfChanged` returns `null` when Git sees no change for the target paths, including when a changed file is ignored. This code treats that outcome as success: it keeps the fix log and `fixed` count, and does not defer or roll back the write. A fix in a non-invoking checkout can therefore remain uncommitted while the result reports it as fixed. Handle the `null` result explicitly\u2014for example, by restoring and deferring the fix\u2014and add coverage for an ignored target file.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:225-227"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A skipped commit is reported as a successful fix",
+      "location": "packages/core/src/introspection/routedFixes.ts:225-227",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:15:35.473951",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 10099,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 1053073,
+  "cached_tokens": 999392,
+  "cache_write_tokens": null,
+  "completion_tokens": 20050,
+  "reasoning_tokens": 18769,
+  "duration_seconds": 245.70785195799544,
+  "cost_usd": 0.02538702,
+  "cost_basis": "alias_pricing"
+}

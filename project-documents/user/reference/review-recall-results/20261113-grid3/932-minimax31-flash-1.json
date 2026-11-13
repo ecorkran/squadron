@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "One-shot SDK dispatch drops the pipeline's `cwd`, so config reads resolve against the wrong project",
+      "description": "The new config lookup uses `config_cwd = cwd or \".\"`, but `cwd` is then deliberately *not* passed to the SDK agent (`cwd=None if is_sdk else cwd`). For an SDK dispatch, `cwd` is the pipeline's working directory (the project under run), so `get_typed_config(\"pipeline.user_settings\", bool, cwd=config_cwd)` reads the project-level `.squadron.toml` correctly \u2014 however `open_pipeline_session()` in `src/squadron/pipeline/sdk_session.py:455-461` reads the same two keys with `cwd=str(Path.cwd())`, i.e. the *process* working directory, not the pipeline's `cwd`. Two different resolutions of \"the project's config\" for the same run means `sq run --cwd <other-project>` (or any pipeline invoked with an explicit `cwd`) can get a different `pipeline.auto_memory` / `pipeline.user_settings` on the session path than on the one-shot path. `execute_pipeline` accepts an explicit `cwd` (`src/squadron/pipeline/executor.py:337`, `effective_cwd = cwd or os.getcwd()`), so this is reachable. The session builder should take the run's cwd as a parameter rather than reaching for `Path.cwd()`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py:142-153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`env` is now always set on `ClaudeAgentOptions`, replacing the SDK's default environment inheritance semantics",
+      "description": "`kwargs[\"env\"] = settings[\"env\"]` is set unconditionally, and `sdk_settings_options` returns `{}` when `auto_memory` is true. Depending on the SDK's handling of an explicit empty `env`, this can either be a no-op or replace the CLI's inherited environment. The previous code only set `env` in the narrow `setting_sources == []` case, merging with any existing entries. The same pattern now applies to every SDK agent created through this provider (including `sq serve`, reviews, PR composer, summary one-shot), all of which get `env={}` or `env={\"CLAUDE_CODE_DISABLE_AUTO_MEMORY\": \"1\"}`. This deserves an explicit test that a non-empty base environment (e.g. `PATH`, `ANTHROPIC_API_KEY`) still reaches the CLI subprocess; the current tests only assert the presence/absence of the auto-memory variable.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/provider.py:81-90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`setting_sources` is left unset for `sq serve` agents, contradicting the stated policy that no automated path may leave it unset",
+      "description": "The module docstring of `src/squadron/providers/sdk/settings.py` states \"no automated path may leave `setting_sources` unset\", and `describe_setting_sources` renders the unset case as the special string `\"cli default\"` for exactly this reason. But `ClaudeSDKProvider.create_agent` still leaves `setting_sources` absent when `config.setting_sources is None`, and `sq serve` callers (per the comment in the diff) are exactly those callers. The policy is therefore documented as absolute but implemented as a per-call-site exception, with the exception encoded as a magic string rather than a named policy branch. Either the docstring should be narrowed to name the `sq serve` exception, or the serve path should pass an explicit list.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/provider.py:89-90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `describe_run_settings` telemetry reports `auto_memory` from the config, not from what the provider actually sent",
+      "description": "`describe_run_settings(config, is_sdk=...)` reports `config.auto_memory` directly, while `setting_sources` is derived from `config.setting_sources`. In the SDK provider, the actual environment is computed inside `sdk_settings_options` from `config.auto_memory` \u2014 so the two agree today. But the session path in `src/squadron/pipeline/actions/dispatch.py:369-375` reads `session.auto_memory` from `base_options.env` (i.e. what was sent) while the one-shot path reads the config value (i.e. what was requested). Two paths recording the same field by different means can drift \u2014 and the session path's version is the one that reflects reality. Deriving the one-shot value from the built options (or from a shared helper) would keep the two records on one rule.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/core/models.py:126-131"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`describe_system_prompt` misreports a preset run whose `instructions` is an empty string",
+      "description": "`describe_system_prompt` returns `PRESET` when `config.instructions` is falsy, including `\"\"`. For the SDK provider, `use_default_system_prompt=True` with `instructions=\"\"` produces `{\"type\": \"preset\", \"preset\": \"claude_code\"}` with no `append` \u2014 so `PRESET` is correct there. But for a non-SDK provider, `instructions=\"\"` with `use_default_system_prompt=False` produces `kwargs[\"system_prompt\"] = \"\"` (an *empty* system prompt), and `describe_system_prompt` returns `EMPTY` \u2014 also correct. The inconsistency is that `describe_system_prompt` keys on the *instruction* rather than on what was actually sent, so a config with `use_default_system_prompt=True, instructions=\"X\"` is `PRESET_APPEND` even for a provider that ignores `use_default_system_prompt` entirely. Since `use_default_system_prompt` is only meaningful for the SDK provider, the function silently reports a mode the non-SDK provider never used. `describe_system_prompt` has no `is_sdk` parameter while its sibling `describe_setting_sources` does \u2014 an asymmetry that makes the two-record contract harder to hold.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/core/models.py:102-105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`dispatch_artifact` appends the agent's final text to *every* failure branch, including \"no slice param in scope\"",
+      "description": "The final text is appended after `_dispatch_artifact_post_condition_error` returns, so it is attached to failures that have nothing to do with the agent's words \u2014 e.g. `\"no 'slice' param in scope\"`, `\"run start time unavailable\"`, or a corrupt run-state file. The appended text in those cases is noise that makes the real cause harder to read, and for the run-state-error branch it embeds an agent response into a state-loading diagnostic. The comment says \"so every failure branch carries it\", which reads as intentional, but the failure modes that do not concern the agent's output are exactly the ones where it should not appear.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/events/builtin/dispatch_artifact.py:143-149"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The background idle timeout is read from config on every waiting dispatch and can raise an uncaught `ValueError`",
+      "description": "`_background_idle_timeout_s` calls `get_typed_config(\"pipeline.background_idle_timeout_s\", int, ...)`, which raises `ValueError` on a type mismatch (e.g. a hand-edited `.squadron.toml` with `pipeline.background_idle_timeout_s = \"abc\"`). The call sits inside `_collect_turns`, outside the `try` block in `dispatch()` that maps SDK exceptions to provider errors, so a `ValueError` escapes as an unexpected exception type. `dispatch.py`'s `DispatchAction.execute` catches broad `Exception`, so the pipeline survives, but the error surfaces as a raw `ValueError` rather than a `ProviderError`, and the background agents that were still running are never stopped. A negative or zero timeout would also be accepted by the config layer and passed straight to `asyncio.timeout`, which treats `None` as \"no timeout\" but a non-positive value as an immediate expiry.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:308-314"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`frame_summary_for_seed` remains exported but is now only used internally",
+      "description": "`__all__` still lists `frame_summary_for_seed`, and the summary action no longer calls it (the diff removed that call). It is still referenced by `_seeded_options` and by one test. The public export is now a near-vestige of the pre-slice API and could be narrowed to a private helper.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:55"
+    },
+    {
+      "severity": "PASS",
+      "title": "Settings policy and turn bookkeeping are correctly centralized",
+      "description": "`PIPELINE_SETTING_SOURCES`, `REVIEW_SETTING_SOURCES`, `USER_SETTING_SOURCE` and `AUTO_MEMORY_DISABLE_ENV` are defined once and referenced from the dispatch action, the session builder, the review templates and the provider \u2014 satisfying the project rule against scattered comparison values. `sdk_turns.py` keeps all background-task bookkeeping free of I/O, and the `WAITED_TASK_TYPES` constant documents why the SDK's private constant was redeclared rather than imported.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/settings.py:1-65"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "One-shot SDK dispatch drops the pipeline's `cwd`, so config reads resolve against the wrong project",
+      "location": "src/squadron/pipeline/actions/dispatch.py:142-153",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`env` is now always set on `ClaudeAgentOptions`, replacing the SDK's default environment inheritance semantics",
+      "location": "src/squadron/providers/sdk/provider.py:81-90",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`setting_sources` is left unset for `sq serve` agents, contradicting the stated policy that no automated path may leave it unset",
+      "location": "src/squadron/providers/sdk/provider.py:89-90",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `describe_run_settings` telemetry reports `auto_memory` from the config, not from what the provider actually sent",
+      "location": "src/squadron/core/models.py:126-131",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`describe_system_prompt` misreports a preset run whose `instructions` is an empty string",
+      "location": "src/squadron/core/models.py:102-105",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`dispatch_artifact` appends the agent's final text to *every* failure branch, including \"no slice param in scope\"",
+      "location": "src/squadron/events/builtin/dispatch_artifact.py:143-149",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The background idle timeout is read from config on every waiting dispatch and can raise an uncaught `ValueError`",
+      "location": "src/squadron/pipeline/sdk_session.py:308-314",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`frame_summary_for_seed` remains exported but is now only used internally",
+      "location": "src/squadron/pipeline/sdk_session.py:55",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Settings policy and turn bookkeeping are correctly centralized",
+      "location": "src/squadron/providers/sdk/settings.py:1-65",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:14:47.436077",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 134092,
+  "failed_tool_calls": 5,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1510417,
+  "cached_tokens": 1300352,
+  "cache_write_tokens": null,
+  "completion_tokens": 35515,
+  "reasoning_tokens": 31941,
+  "duration_seconds": 136.5090286671184,
+  "cost_usd": 0.035511838999999996,
+  "cost_basis": "alias_pricing"
+}

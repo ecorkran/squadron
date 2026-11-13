@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Ceiling-sized response construction and serialization run on the event loop",
+      "description": "The database reads correctly run through `run_in_executor`, but `CandlesResponse.build(...)` and `timeseries_response(...)` execute on the coroutine after the executor returns. For a ceiling-sized response \u2014 the case this slice's own load tier measured at 34.80 MB for 75,000 candles (four nested Pydantic models per row, ~300k model constructions, plus `model_dump(mode=\"json\")` and `orjson.dumps`) \u2014 this is hundreds of milliseconds to seconds of pure CPU inside an `async def`, with no executor hop. `get_trades` has the same shape, and `bars.py` shares the pattern (pre-existing, so this is systemic rather than new in kind).\n\nThe project's async rule is explicit: synchronous code inside an awaitable must be <1 ms worst case, and CPU-bound work must use `run_in_executor`. A handful of concurrent ceiling-sized Kalshi requests will serialize the loop and stall every other endpoint, including `/health` \u2014 the exact pool-starvation shape slice 185 D8a was fixing when it scoped the checkout. Notably, the load tier's concurrency assertion (`test_concurrent_market_detail_requests`) deliberately uses the tiny market-detail response, so loop starvation under concurrent ceiling-sized responses is unmeasured; the module docstring's own reasoning (\"`statement_timeout` bounds a statement, not a request\") applies equally to the loop.\n\nMoving the model build and encoding into the same executor call (or a second hop) costs nothing in pool terms \u2014 the connection is already released before serialization \u2014 and would satisfy both the D8a connection-scope goal and the async rule.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#get_candlesticks"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`TradeRecord.from_row` maps columns positionally, so a `TRADE_COLUMNS` change can silently mismap",
+      "description": "`from_row` hardcodes `values[0]` through `values[7]` against the projection order of `TRADE_VALUE_COLUMNS` (`TRADE_COLUMNS` minus `market_ticker`, defined in a different module). The candle path is deliberately derived \u2014 `zip(row.values, CANDLE_COLUMNS, strict=True)` \u2014 and the model module's docstring claims \"a column added there is served here without an edit.\" That property holds for candles only. For trades, a column inserted mid-list in `TRADE_COLUMNS` shifts every subsequent field into the wrong model field (pydantic will often coerce, e.g. a string into a UUID/Decimal slot fails, but adjacent same-typed fields such as `yes_price_dollars`/`no_price_dollars` would swap silently), and an appended column is silently dropped from the wire.\n\nNo test pins the mapping: the unit tests construct `TradeRow` by hand with eight literals, and the integration check only asserts `len(r.values) == len(TRADE_COLUMNS) - 1`, which passes for any column count. Either derive the field mapping from `TRADE_COLUMNS` the way the candle path does, or add a test that asserts the served field names against `TRADE_VALUE_COLUMNS` order.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_admit_rows` and `_not_found` are duplicated across the two Kalshi route modules",
+      "description": "`_admit_rows` here is a near-verbatim copy of `kalshi_catalog._admit_rows` \u2014 same comparison, same status code, same number formatting; only the trailing advice differs (\"narrow the filter\" vs \"narrow start/end\"). `_not_found` likewise re-spells the catalog's `_not_found(resource, ticker)` with the resource hardcoded to \"Market\". The project's DRY rule applies; a shared routes-level helper taking the remedy text as a parameter would keep the 422 contract (both numbers live, identical formatting) in one place, so a future change to the refusal shape cannot land in one module and not the other.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#_admit_rows"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tape_facts` re-spells the `sync_state` invariant check and message from `trade_status`",
+      "description": "The `watermark is None or live_floor is None` guard and its `RuntimeError` message are duplicated verbatim from `trade_status.read_trade_status` (which additionally checks `lag`). `effective_tape_floor` was promoted to public in this very slice precisely so the CLI and API \"can never disagree\" \u2014 the same one-spelling argument applies to the invariant that guards the row it reads. Extract the row read (or at least the invariant) into one place. Also note `tape_facts` silently discards the fourth column (`lag`) \u2014 harmless today, but the two check bodies are now free to drift.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#tape_facts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_CANDLE_OBJECTS` values are never read",
+      "description": "The dict's comment says it declares \"which model each nested candle object uses\", but only its *keys* are consumed (`{name: {} for name in _CANDLE_OBJECTS}`); `from_row` constructs `CandleBidAsk`/`CandlePrice` directly. Adding an entry to this mapping would change nothing about what is served. Either make it load-bearing (construct each nested object via `_CANDLE_OBJECTS[name](**nested[name])`) or reduce it to a tuple of object names so it cannot imply behavior it does not have.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#_CANDLE_OBJECTS"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`CANDLES_CEILING_RESPONSE_MB` is defined but never used or asserted",
+      "description": "The candles ceiling test prints the measured size but never compares it to this constant, so as code it is dead. The docstring says the figure is \"recorded here rather than asserted\", but a loose band assertion (say 20\u201350 MB) would catch a serialization regression that nothing else can: if `Decimal` handling regressed and prices leaked to floats, the payload would shrink dramatically while `count` stayed 75,000 and both ceiling tests stayed green. Otherwise, move the figure into prose and delete the constant.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py#CANDLES_CEILING_RESPONSE_MB"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Load-test client/measure/report helpers duplicated between test_187 and test_188",
+      "description": "`_client`, `_measure`, and `_report` are near-copies of `test_187_api_nfr.py`'s helpers (this `_client` adds a `cursor_factory` parameter), and the duplication has already diverged in signature. `test_187`'s own docstring records the project's precedent: when a second consumer appears, the shared thing moves to `conftest.py` (`prod_shaped_db` did exactly that). The same move would keep the ASGI-client-with-real-lifespan pattern \u2014 the subtle part, and the part most worth spelling once \u2014 in one place.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py#_client"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dense-fixture width asserted as a literal `450`",
+      "description": "The test asserts `body[\"count\"] == 450` while `test/load/conftest.py` defines `KALSHI_MARKET_COUNT = 450`, and the test already imports three other constants from that conftest. The project rule is explicit that comparison values are defined once and referenced everywhere; import `KALSHI_MARKET_COUNT` so resizing the fixture cannot leave the assertion behind.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py#test_markets_list_scoped_to_the_dense_event"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`test/kalshi_support` now sits outside every static prod-URL guard",
+      "description": "This slice moves `ensure_timescaledb`/`apply_kalshi_track` out of `test/integration/` into a package shared by the integration and load tiers. The per-tier ratchets scan only `test/unit`, `test/integration`, and `test/load`; nothing scans `test/kalshi_support`. The moved code itself is clean \u2014 it takes URLs as parameters and never reads the environment \u2014 and the runtime scrub in `test/conftest.py` (`pytest_configure` removes the production variable unless opted in) is the fail-closed backstop. But by the project's own rule (\"the absence of a guard in a tier is not evidence of safety\"), this shared package is now the one place a new `os.environ` read would be invisible to every static check that future contributors will assume covers them. Consider adding it to one of the guards' scan sets.\n\n---\n\nOverall this is a high-quality slice: every query is parameterized or built with `sql.Identifier`/`sql.SQL` from module-local literals, the count-then-fetch admission guard refuses loudly rather than truncating, the window semantics are shared rather than re-derived, and the three test tiers (unit with a recording fake pool, integration against a real migrated database, load with measured bounds and a no-fetch proof) cover the critical paths the slice claims. The two CONCERNs are the loop-blocking serialization at the measured ceiling and the positional trade mapping; neither blocks correctness today, but both are worth addressing before the pattern spreads to the next route family.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "test/kalshi_support/schema.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Ceiling-sized response construction and serialization run on the event loop",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#get_candlesticks",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`TradeRecord.from_row` maps columns positionally, so a `TRADE_COLUMNS` change can silently mismap",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_admit_rows` and `_not_found` are duplicated across the two Kalshi route modules",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#_admit_rows",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`tape_facts` re-spells the `sync_state` invariant check and message from `trade_status`",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#tape_facts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_CANDLE_OBJECTS` values are never read",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#_CANDLE_OBJECTS",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`CANDLES_CEILING_RESPONSE_MB` is defined but never used or asserted",
+      "location": "test/load/test_188_kalshi_api_nfr.py#CANDLES_CEILING_RESPONSE_MB",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Load-test client/measure/report helpers duplicated between test_187 and test_188",
+      "location": "test/load/test_188_kalshi_api_nfr.py#_client",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Dense-fixture width asserted as a literal `450`",
+      "location": "test/load/test_188_kalshi_api_nfr.py#test_markets_list_scoped_to_the_dense_event",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`test/kalshi_support` now sits outside every static prod-URL guard",
+      "location": "test/kalshi_support/schema.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:14:38.829788",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 299685,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 943717,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1419726,
+  "cached_tokens": 1245824,
+  "cache_write_tokens": null,
+  "completion_tokens": 77536,
+  "reasoning_tokens": 74605,
+  "duration_seconds": 899.6341013750061,
+  "cost_usd": 0.90853544,
+  "cost_basis": "alias_pricing"
+}

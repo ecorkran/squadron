@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Coverage counts trades from unrelated request shapes",
+      "description": "`raw_counts` scans `tick_trade` using only the requested time range and session intervals; it does not restrict rows to the product/request shape used by `ledger_totals`. If another product or request has trades during those sessions, they appear as raw rows with no corresponding shape-filtered ledger entry, producing false mismatches and an incorrect nonzero exit from `coverage`. Scope the raw scan to the relevant current units or instruments, and test coverage with unrelated trades in the same interval.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:167-171"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Open-ended status can report caught up without a known range end",
+      "description": "When a product has a configured tier and start but neither a configured end nor an observed dataset edge, `_wanted_end` returns `None` and `_scope` has no wanted range to inspect. However, `caught_up` is still called with `wanted=True`; with no held sessions it returns `True` vacuously. That reports the product as caught up without establishing the range to which \u201ccaught up\u201d applies. Make the result indeterminate in this case, or otherwise avoid reporting \u201cyes\u201d until the wanted end is known.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:217"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New database read paths lack a load test",
+      "description": "The new status path queries the database and production calendar, while coverage also scans raw tick data. The required load-test tier rule calls for a realistic load test for code on network/environment paths; the existing `test/load/test_225_tick_ingest_nfr.py` exercises ingest, not these new read paths. Add a bounded load test for status and coverage, including the range-bounded raw scan.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:147-187"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Coverage counts trades from unrelated request shapes",
+      "location": "src/manta_trading/data/tick/status_reads.py:167-171",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Open-ended status can report caught up without a known range end",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:217",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New database read paths lack a load test",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:147-187",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:04:46.036186",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 16263,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 1207764,
+  "cached_tokens": 1071352,
+  "cache_write_tokens": null,
+  "completion_tokens": 80482,
+  "reasoning_tokens": 14560,
+  "duration_seconds": 588.8831760408357,
+  "cost_usd": 0.06459572,
+  "cost_basis": "alias_pricing"
+}

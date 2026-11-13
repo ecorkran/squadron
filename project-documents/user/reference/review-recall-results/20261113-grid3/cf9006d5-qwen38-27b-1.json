@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "In-process manifest prune has no path-containment guard (port dropped it)",
+      "description": "The new `InstallManifest.finish()` prune loop computes `const file = path.join(this.targetRoot, rel)` for each stale `rel` read from the on-disk manifest (`oldLines.map(pathField)`), then `fs.rmSync(file)` when the file's CRC matches. `rel` is attacker/ user-controllable text: the module doc and the config key both treat `.context-forge/<target>.manifest` as a user-editable, guide-readable file, and a `pathField` value containing `..` (or an absolute path) makes `path.join` resolve outside `targetRoot`, so `isFile` + CRC-match + `rmSync` will delete a file outside the checkout. The pre-port cf `pruneStaleFiles` explicitly guarded this with `escapesLexically` / `isWithin` (realpath containment) and reported it as `reason: 'containment'` instead of deleting; that guard was not carried into the port. This is reachable in normal cf flow: worktree manifests are written by cf during worktree installs, so a user who edits a worktree manifest to add a `../<something>.md` entry gets that file deleted on the next `cf setup-ide`. Recommend adding the same lexical + realpath containment check before the `rmSync` and treating a violation as a \"kept, warn\" entry.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/manifest.ts#finish"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`INSTALL_PATHS` list duplicated between source and test harness",
+      "description": "The top-level install-paths list (`CLAUDE.md`, `CLAUDE.md.pre-context-forge`, `AGENTS.md`, `AGENTS.md.pre-context-forge`, `.claude`, `.cursor`, `.github`, `.agents`, `MANIFEST_DIR`, `LINT_WRITE_PATHS`) is re-declared in `packages/cli/tests/ideInstall/harness.ts` under a different name but with identical semantics, because the snapshot's `installEntries()` walks exactly that list. The two copies are a manual-sync contract: adding a new top-level write target in `paths.ts`/`installer.ts` without mirroring it in `harness.ts` will silently stop showing up in snapshots and stop being compared by `dryRun.reportChanges`'s `before`/`after` sets, so a stale-file regression in that new path would not be caught. Consider exporting a single canonical list from `paths.ts` and having the harness import it.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts#INSTALL_PATHS"
+    },
+    {
+      "severity": "PASS",
+      "title": "Verification summary",
+      "description": "Confirmed against source: (a) all re-exports from `setup-ide.ts` (`TARGETS`, `MANAGED_MARKERS`, `normalizeTarget`, `setupIdeAction`, `isManagedInstall`) still satisfy `init.ts` and the command registration; `worktreePropagation.ts` now only exports `propagationTargets` and no caller still imports the removed `propagateToWorktrees`/`pruneStaleFiles`/`sweepGeneratedPrompts`. (b) The new `SetupIdeRun` shape (`{ guideDir }`) is consistent with `installWorktrees` and the two worktree-loop tests; per-checkout `rules.exclude` is read through `ConfigManager(root)` for the main root and each worktree, which matches the bash `read_rules_exclude` contract and the new \"reads rules.exclude for each worktree root\" test. (c) `dryRunInstall` copies the install paths into a fresh `mkdtemp` sandbox, runs `installTarget` with `targetRoot: sandbox`, and cleans up in `finally`; the \"removes the dry-run sandbox when the install aborts\" test exercises the abort path (missing rules dir) and asserts no leftover. (d) `checkLintConfigs` runs inside `installTarget` after `manifest.finish()`, so lint-written files are not in the manifest and are not pruned \u2014 consistent with the test `test_lint_python_write_lint_writes_baseline` which runs `agents` (the target with the least output) and asserts `ruff.toml` content. (e) The `#40` getApplyTo fix (single `**` instead of `**\\n**`) and the `#38` missing-final-newline preservation are mirrored by updated unit tests and by the regenerated snapshots; the `MANAGED_MARKERS` docstring in `ideTargets.ts` now correctly describes cf-installer-as-writer. (f) `parseRulesExclude` is exported from `@context-forge/core/node` and used consistently in the validator and in the CLI's `readRulesExclude`. The one behavioral regression worth fixing before merge is the manifest-prune containment drop noted above.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "In-process manifest prune has no path-containment guard (port dropped it)",
+      "location": "packages/cli/src/ideInstall/manifest.ts#finish",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`INSTALL_PATHS` list duplicated between source and test harness",
+      "location": "packages/cli/src/ideInstall/dryRun.ts#INSTALL_PATHS",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Verification summary",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:52:27.297074",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 55,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 341601,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2047321,
+  "cached_tokens": 1691251,
+  "cache_write_tokens": null,
+  "completion_tokens": 87406,
+  "reasoning_tokens": 84009,
+  "duration_seconds": 1009.7975000829902,
+  "cost_usd": 0.36231255,
+  "cost_basis": "alias_pricing"
+}

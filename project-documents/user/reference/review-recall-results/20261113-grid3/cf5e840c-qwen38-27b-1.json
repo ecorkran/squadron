@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Stray backup test file `CoreServiceFactory.test.ts-E` committed with stale one-arg calls",
+      "description": "A second copy of `CoreServiceFactory.test.ts` \u2014 an editor backup (the `-E` suffix is the classic Emacs `~`-style swap; `.gitignore` does not cover it) \u2014 was added to the tree. It is byte-identical to the pre-change test file and calls `createContextPipeline(FIXTURE_PROJECT_PATH)` / `createContextPipeline(checkout)` with the old single-argument signature (lines 29, 35, 59, 99, 119, 141), which no longer typechecks against `CoreServiceFactory.ts:29-33`. It is harmless at runtime only because `packages/core/vitest.config.ts` includes `tests/**/*.{test,spec}.{js,mjs,cjs,ts,...}` and the `-E` name matches nothing \u2014 but it is a duplicate of a live test with an API signature that predates this change. If anyone renames it, or a broader tsconfig/`tsc` invocation over `tests/` is introduced, it fails. Delete the file; it adds nothing.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": "architectural-decacy",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slice 261's \"README line documenting adoption.state\" cannot be verified in this review",
+      "description": "The slice design (Technical Scope) and task list include \"README: one line documenting `adoption.state` and the override.\" The review scope excludes `*.md`, so I could not confirm whether that line was added (e.g., to `packages/core/README.md` or the root README). No code in this diff references it, so this is a documentation-completeness check for the slice checklist, not a code defect \u2014 worth a one-line verification before merge.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "PASS",
+      "title": "Adoption resolver decision order, write semantics, and guide-check ordering are correct",
+      "description": "Verified against the slice design (D1\u2013D9) and the underlying modules: eligibility short-circuits before any I/O for non-concept, non-explicit instructions (line 122-124), so Phases 1\u20137 builds pay nothing; `decide()` reads state \u2192 planning artifacts \u2192 source volume only as far as needed (lines 37-50), with the threshold constant `BROWNFIELD_MIN_SOURCE_LINES` defined once in `adoptionOutcome.ts:10`; the guide check (`assertGuideSupportsAdoption`, lines 84-94) runs strictly before `persistInProgress` (lines 97-110), so a missing profile never leaves the state written; only a fresh `brownfield` outcome under `persist` writes `in_progress` (line 129-131); `read-only` never writes. `renderFacts` (lines 113-127) reports the stored state plus the `stateSetByBuild` notice, matching `adoptionFacts.ts`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:36-137"
+    },
+    {
+      "severity": "PASS",
+      "title": "Error handling: AdoptionError fails the build with no silent fallback; other errors keep the stub",
+      "description": "`generateContextFromProject` rethrows `AdoptionError` (line 122-123) exactly like `PermissivenessFragmentError`, while any other resolver/engine error still becomes the logged error stub \u2014 the same contract D9 specifies. Each `AdoptionError` message carries its remedy (guide update + decline command; failed write names `.context-forge.toml` and the `--it brownfield-adoption` escape; the walk names the path and the override), and the catch in `persistInProgress` narrows `unknown` properly and preserves the cause. Tests cover the rethrow, the error-stub contrast, the write-failure case (read-only file, `skipIf` on win32/root), and the guide-check-before-write ordering.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:119-124"
+    },
+    {
+      "severity": "PASS",
+      "title": "Pipeline integration, section placement, and required option propagate correctly",
+      "description": "Adoption runs before `mapProjectToEnhancedContext` so profile filtering keys on the swapped instruction (verified: the `brownfield-adoption` profile zeroes disallowed artifact fields while keeping the allowed ones, per `ContextProfileParser.getProfileForInstruction`); `adoptionFacts` is set only when selected. The engine inserts the facts section at order 3.4, between the instruction prompt (3) and the permissiveness fragment (3.5), and the engine test asserts that ordering plus byte-identical output for empty/whitespace/undefined facts. `createContextPipeline` makes the option required (CoreServiceFactory.ts:29-33); every in-repo caller was updated \u2014 `cf build` and `context_build` pass `persist` (build.ts:84, contextTools.ts:202-205), `template_preview` passes `read-only` (contextTools.ts:267-271), and all test callers pass it explicitly. No remaining one-argument callers in source (the stale electron build was already excluded per the slice's Special Considerations; the one-arg calls that remain exist only in the stray `-E` file noted above).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:143-157"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test coverage and hygiene match the slice's requirements",
+      "description": "Coverage maps to the slice's Functional/Technical Requirements: resolver unit tests (selection table, read-only mode, guide checks, failed write), a 13-case pipeline integration suite (empty, scaffold, brownfield + state persist, shallow-clone fact, monorepo subdirectory scoping in both directions, planned, resume, all three overrides, non-concept phase, explicit instruction, missing profile, read-only preview), engine ordering tests, integrator data-flow tests, CLI/MCP wiring assertions, and the CLI-vs-MCP byte-identity parity test. Tests use dedicated temp directories and throwaway `CONTEXT_FORGE_DATA_DIR` values (restored in `afterEach`), mock boundaries rather than business logic (only `measureSourceVolume` is spied, to prove the walk is skipped), and the integration helper asserts non-stub output. No production-URL or shared-state hazards.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:1"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": "architectural-decacy",
+      "summary": "Stray backup test file `CoreServiceFactory.test.ts-E` committed with stale one-arg calls",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Slice 261's \"README line documenting adoption.state\" cannot be verified in this review",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Adoption resolver decision order, write semantics, and guide-check ordering are correct",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:36-137",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Error handling: AdoptionError fails the build with no silent fallback; other errors keep the stub",
+      "location": "packages/core/src/services/ContextIntegrator.ts:119-124",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Pipeline integration, section placement, and required option propagate correctly",
+      "location": "packages/core/src/services/ContextIntegrator.ts:143-157",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test coverage and hygiene match the slice's requirements",
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:1",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:40:45.200477",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 64,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 231533,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1323705,
+  "cached_tokens": 1092096,
+  "cache_write_tokens": null,
+  "completion_tokens": 58132,
+  "reasoning_tokens": 58938,
+  "duration_seconds": 682.8765074592084,
+  "cost_usd": 0.23808136000000002,
+  "cost_basis": "alias_pricing"
+}

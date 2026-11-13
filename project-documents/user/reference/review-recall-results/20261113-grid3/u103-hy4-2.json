@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Adding a series never activates the visible-range translation seam",
+      "description": "The effect at `src/chart/use-chart-provider.ts:340-345` is gated on `seriesCountRef.current === 0`, but `seriesCountRef` is a **ref** (`useRef(0)` at line 72). `chart.addSeries` increments it through `series.onAdded()` (`src/chart/chart-facade.ts:46-53`), which mutates `seriesCountRef.current` without any state update \u2014 so React does not re-render. The effect's dependencies `[mount.ready, chart, range]` are all stable at that point: `chart` is `useMemo`'d on stable `runGuarded`/`series`, `mount.ready` is already `true`, and `range` keeps the same object identity from `SymbolTimeframeProvider`'s `useState` (`src/state/symbol-timeframe-context.tsx`). Consequently the comment at lines 337-338 (\"initiative 120 activates the moment it adds the first series\") is false: the range is only applied on a *subsequent* `setRange` call. The concrete consequence for initiative 120 is that a chart populated with data opens on the library's default viewport, never the configured `DEFAULT_RANGE`.\n\n`src/test/use-chart-provider.translation.test.tsx:126-135` (\"applies the range once a series exists\") masks this: it calls `addSeries` **and then** `setRange(NEXT_RANGE)`, so it passes because `range` changed, not because the series was added. A regression test that adds a series only and asserts `setVisibleRange` was called would fail today. Fix by making the series count state (or re-running the effect from the facade via a state-owned series count), and add that test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:326-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `error` / `ready` contract is contradicted by the implementation and its tests",
+      "description": "Three public statements about the state contract are inaccurate:\n\n- `src/chart/chart-operations.ts:77` documents `error` as \"**The first** error from any provider operation\", but `setOperationError` (`src/chart/use-chart-provider.ts:97-99`) does `setMount((current) => ({ ...current, error: failure }))` on every failure, so `error` is the **most recent** error.\n- `src/chart/chart-operations.ts:85-87` and `src/chart/use-chart-provider.ts:84-88` both assert \"a chart is ready xor failed\" and \"They are never independent\". A post-mount operation failure produces `{ ready: true, error: Error }` \u2014 both truthy. `src/test/use-chart-provider.errors.test.tsx:229-230` explicitly asserts exactly that state (`after.ready === 'true'` with `after.error === 'resize exploded'`).\n- `src/test/use-chart-provider.errors.test.tsx:232` is named \"keeps the **first** error rather than being reset by a later success\", but it only verifies that a later *successful* resize does not clear the error; it never triggers a second failure, so the \"first error\" claim is untested.\n\nEither make the state sticky (ignore a later error when one is already set) and update the tests, or correct the doc comments to describe a \"latest error / ready is mount-only\" model. As written, a consumer of `UseChartProviderResult` cannot rely on the documented invariant.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/chart-operations.ts:74-90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Live-chart e2e asserts exact canvas pixels with no wait for paint and a brittle parser",
+      "description": "The core assertions `expect(sample.mainPanePixel).toBe(hexToRgba(sample.surfaceToken))` at lines 141 and 168 read a pixel immediately after `await expect(canvas).toBeVisible()` / an `expect.poll` on width. `toBeVisible()` guarantees attachment and layout, **not** that lightweight-charts has painted; `getImageData` on an unpainted canvas returns `0,0,0,0` and fails. This is worst at lines 160-169: right after `setViewportSize`, the library may re-create or re-paint its canvas layers asynchronously, and `samplePanes` does not poll. Contrast with the resize test's own `expect.poll` \u2014 the pixel assertions need the same treatment.\n\nSupporting brittleness in the same file: `hexToRgba` (lines 96-103) assumes exactly `#rrggbb` plus alpha `255` (`replace('#','')` removes only one `#`, and `parseInt` of a 3-digit/`rgb()`/`oklch()` token yields `NaN,NaN,NaN,255`), which conflicts with the project's lenient-parsing rule and will fail cryptically if `--color-surface` is ever restated in another CSS color format. `distinctColors` (lines 59-72) samples every 37th pixel, so `axisHasContrast` can miss sparse time-axis ticks entirely. Finally, the `expect.poll` callback at lines 159-163 returns `before!.width` when `box === null`, so a vanished canvas never satisfies `toBeLessThan(before!.width)` and the test burns the full timeout instead of failing clearly.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "e2e/chart-live.spec.ts:96-169"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New e2e/config comments contradict the code and point at the wrong spec",
+      "description": "- `e2e/smoke.spec.ts:10` says \"The chart itself is asserted in `chart-render.spec.ts`\". `e2e/chart-render.spec.ts:4-6` is the slice-102 **harness** test for `/__chart-harness`; the live product chart at `/` is asserted in the newly added `e2e/chart-live.spec.ts`. A maintainer following this comment reads the wrong file.\n- `playwright.config.ts:4-6` still claims \"Specs run against the PRODUCTION build ... so e2e exercises the same artifact `pnpm build` ships.\" This directly contradicts the new `webServer` comment at lines 36-45 (\"Built in `e2e` mode, **not** the default `production`\"). With the mode gate in `src/routes/router.ts:45`, the e2e artifact is deliberately *different* from `pnpm build` \u2014 it contains the harness route. The header should be updated to say so, or it will mislead the next person who changes the build command.\n- `src/chart/use-chart-provider.ts:14-17` still narrates \"This file is built up across tasks 8/10/12/14 ... seams below exist from the start so later tasks extend one path\", and line 186 says \"subscriptions join here in task 12\" even though both subscriptions are already registered at lines 287-300. These are task-log artefacts in a finished file, not descriptions of the code; `src/chart/chart-facade.ts` and `chart-operations.ts` carry the same \"task 14\" phrasing.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "e2e/smoke.spec.ts:1-12"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`resetChartSpy` claims to prevent once-implementation bleed but covers only four spies",
+      "description": "The comment at lines 248-249 states \"a `mockImplementationOnce` from a prior test must not bleed into the next one\", but the implementation only calls `mockImplementation(...)` for `subscribeCrosshairMove`, `subscribeVisibleRangeChange`, `getVisibleRange`, and `getCapability`. `mockClear()` in the loop at lines 238-241 clears call history only; it preserves implementations and does not drain queued once-implementations. The suites arm `mockImplementationOnce` on `create` (`src/test/use-chart-provider.lifecycle.test.tsx:89,104`, `translation.test.tsx:186`), `resize` (`errors.test.tsx:196,220,238`, `resize.test.tsx:134`), `destroy` (`errors.test.tsx:105`), and both `subscribe*` spies. Any test where the expected call does not happen \u2014 e.g. an early assertion failure or a code change that skips a call \u2014 leaks a throwing `once` implementation into the next test's first call, and `beforeEach` will not repair it. Use `mockReset()` (or `vi.restoreAllMocks()` in `afterEach`) for the whole spy set, and restore `globalThis.ResizeObserver` (assigned unconditionally at line 210) so the helper has no persistent global side effect.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/test/support/chart-provider-spy.ts:237-254"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "File-wide `react-hooks/refs` suppression on the largest source file",
+      "description": "The new override disables `react-hooks/refs` for all of `src/chart/use-chart-provider.ts`, which is 366 lines against the project's ~300-line guide (`CLAUDE.md` \u2192 Code Structure). The slice design records this as a PM-approved overrun with a false-positive justification, and the current code does appear correct (nothing reads `.current` during render). The problem is scoping: a file-level `off` means every future edit to the ref-heaviest file in the repo gets no protection from a React Compiler rule, including genuinely unsafe additions. A narrow, documented `// eslint-disable-next-line react-hooks/refs` on the single `buildChartOperations(runGuarded, series)` call at `src/chart/use-chart-provider.ts:156-159` would keep the rule enforced for the rest of the file. Also worth noting: the ROI justification says inlining the facade was rejected to keep the file over budget, yet the file is still 366 lines \u2014 the size problem was not actually solved by the extraction, only the lint rule was removed.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "eslint.config.js:55-79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor convention drift in new code",
+      "description": "`src/routes/router.ts:11-13` imports `./routes`, `./chart-route`, and `./chart-harness` without extensions, while `src/routes/chart-route.tsx`, `src/chart/use-chart-provider.ts`, and the new state imports in `src/app/App.tsx:11-13` use explicit `.ts`/`.tsx` \u2014 the convention stated in `project-documents/user/tasks/103-tasks.provider-react-integration.md` (\"Relative imports carry the explicit `.ts`/`.tsx` extension\"). `src/app/App.tsx` now mixes both styles in one import block. Separately, the new exported components `ChartRoute` (`src/routes/chart-route.tsx:57`) and `App` (`src/app/App.tsx:14`) have no explicit return type, which the TypeScript rules require for exported functions; `ChartContexts` (`src/test/support/render-with-contexts.tsx:21`) does annotate one, so the codebase is inconsistent here too. Pre-existing files share these habits, so this is low priority, but the new files are the place to establish the convention.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/routes/router.ts:11-13"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Adding a series never activates the visible-range translation seam",
+      "location": "src/chart/use-chart-provider.ts:326-345",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The `error` / `ready` contract is contradicted by the implementation and its tests",
+      "location": "src/chart/chart-operations.ts:74-90",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Live-chart e2e asserts exact canvas pixels with no wait for paint and a brittle parser",
+      "location": "e2e/chart-live.spec.ts:96-169",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "New e2e/config comments contradict the code and point at the wrong spec",
+      "location": "e2e/smoke.spec.ts:1-12",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`resetChartSpy` claims to prevent once-implementation bleed but covers only four spies",
+      "location": "src/test/support/chart-provider-spy.ts:237-254",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "File-wide `react-hooks/refs` suppression on the largest source file",
+      "location": "eslint.config.js:55-79",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Minor convention drift in new code",
+      "location": "src/routes/router.ts:11-13",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:03:25.617840",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 26,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 543638,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 1291118,
+  "cached_tokens": 1225536,
+  "cache_write_tokens": null,
+  "completion_tokens": 138055,
+  "reasoning_tokens": 133879,
+  "duration_seconds": 1330.9321919579525,
+  "cost_usd": 0.2256527,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,153 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Node event callbacks corrupt the error exit code",
+      "description": "`packages/cli/src/index.ts:171-172` registers `handleError` directly as the `uncaughtException` and `unhandledRejection` listener. Node invokes these listeners with a second metadata argument\u2014an origin string for `uncaughtException` and the rejected promise for `unhandledRejection`. The new `exitCode` parameter therefore receives that metadata, and `process.exit(exitCode)` can throw `ERR_INVALID_ARG_TYPE` instead of terminating with the intended code. Register wrapper listeners such as `(err) => handleError(err)` or use event-specific handlers.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/errors.ts:46-73"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Worktree resolution is discarded, allowing a false clean result",
+      "description": "Only `id` is retained from `resolveProjectWorktree`; the resolved `worktreeId` is discarded and `project.projectPath` is always used. When invoked from a registered worktree, the no-path mode scans the main worktree instead. More seriously, explicit paths are resolved relative to the worktree CWD but checked for containment against the main project\u2019s document root, causing them to be silently skipped. The command can therefore report zero files checked and exit successfully without validating the worktree contents. Use the resolved worktree path, such as through `resolveOperationPath(project, worktreeId)`, and add worktree-specific tests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:90-103"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commander-generated invocation errors do not use exit code 2",
+      "description": "Only errors reaching the `frontmatter` action are passed to `handleError(err, 2)`. Missing or unknown `validate` subcommands are handled by Commander before that action runs and use Commander\u2019s default failure exit code, normally 1. This violates the documented 0/1/2 contract and makes invocation failures indistinguishable from validation findings for shell consumers. Configure the command tree to exit 2 for these errors and cover missing/unknown subcommands in tests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:160-182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Missing projectPath is emitted as an unknown JSON error",
+      "description": "The missing-`projectPath` error is a known configuration failure, but the `UserError` is constructed without an error code. Consequently, JSON mode reports `\"code\":\"UNKNOWN\"` through `packages/cli/src/utils/errors.ts:48-54`, preventing machine consumers from distinguishing this condition from an unexpected failure. Use the existing `MISSING_CONFIG` error code.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:93-98"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The wrong-docType test never exercises an invalid literal",
+      "description": "The test is titled \u201ca wrong docType literal is still caught,\u201d but every registered literal is expected to validate cleanly, and the unknown literal is also expected to pass. Because the validator selects the schema using `data.docType`, a registered schema\u2019s singleton `docType.values` constraint cannot encounter a mismatched value through this API. The test therefore provides false confidence about the behavior it claims to cover. Either exercise a genuinely invalid value against an independently selected schema or rename/document the test to accurately describe the current lookup-based behavior.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:368-391"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Node event callbacks corrupt the error exit code",
+      "location": "packages/cli/src/utils/errors.ts:46-73",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Worktree resolution is discarded, allowing a false clean result",
+      "location": "packages/cli/src/commands/validate.ts:90-103",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Commander-generated invocation errors do not use exit code 2",
+      "location": "packages/cli/src/commands/validate.ts:160-182",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Missing projectPath is emitted as an unknown JSON error",
+      "location": "packages/cli/src/commands/validate.ts:93-98",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The wrong-docType test never exercises an invalid literal",
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:368-391",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:27:54.344542",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 385316,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 878042,
+  "cached_tokens": 670336,
+  "cache_write_tokens": null,
+  "completion_tokens": 96017,
+  "reasoning_tokens": 91165,
+  "duration_seconds": 459.69458562508225,
+  "cost_usd": 0.049075402000000004,
+  "cost_basis": "alias_pricing"
+}

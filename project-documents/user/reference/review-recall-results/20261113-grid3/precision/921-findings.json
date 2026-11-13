@@ -1,0 +1,142 @@
+[
+ {
+  "ref": "luna-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Truncated-day scan misses sessions with no in-session bars",
+  "location": "src/manta_trading/data/gaps/repair_921.py:273-289",
+  "description": "The inner join includes only bars within each session, and the `HAVING` clause can only report sessions that have such a bar. If a previous firing deleted a gap row after receiving only a midnight spillover bar\u2014or no in-session bars\u2014the session is omitted from this index. The coarse coverage index can still mark that UTC day covered, so `uncovered_days` will not restore the missing gap and the session can remain uncollected. Consider detecting sessions with no qualifying in-session bars as well as sessions whose newest bar is at the open."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "FAIL",
+  "title": "Journal monitoring starts only after the pass exits",
+  "location": "scripts/cutover_common.py:356-360",
+  "description": "`run()` uses blocking `subprocess.run()`, while `deploy/mt-run` waits until the service finishes. Consequently, `wait_for_unit_or_line()` cannot observe trailing completion and stop backfill while the pass runs. Start the service non-blockingly before polling. Add a test exercising the wrapper\u2019s blocking behavior rather than mocking it away."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "FAIL",
+  "title": "Passwordless root execution trusts an operator-controlled script",
+  "location": "deploy/sudoers.d/manta-ops:9",
+  "description": "The rule authorizes root execution of an installer inside the operator\u2019s checkout. The operator can replace that script and execute arbitrary commands as root; restricting arguments to `--ref` does not protect the script contents. Install the privileged entry point in a root-owned location with non-writable parent directories."
+ },
+ {
+  "ref": "sol-high/1/2",
+  "severity": "FAIL",
+  "title": "Truncation index misses the spillover-only sessions being repaired",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:300-302",
+  "description": "The newly reused `build_truncated_day_index()` inner-joins bars within `[session_open, session_close)` and only returns sessions whose newest bar equals the open. A session containing only the described 00:00 UTC spillover bar has no matching rows and is omitted. Meanwhile, the day-level coverage index considers that date covered, so no replacement gap is seeded.\n\nExtend detection to covered dates with no in-session bars, and test the real SQL behavior with a spillover-only fixture rather than supplying a mocked truncation index."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "FAIL",
+  "title": "The minute firing is not stopped until `mt-run` returns",
+  "location": "scripts/cutover_common.py:356-357",
+  "description": "`run()` calls `subprocess.run` synchronously, and `mt-run minute` follows the systemd unit until it exits. The journal polling that detects `TRAILING_COMPLETE` therefore starts only after the firing has finished; an unbounded backfill can keep the cutover waiting for hours or longer instead of stopping the service at the trailing-phase marker. Start the unit without blocking, or otherwise monitor the journal while the launcher is running."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "FAIL",
+  "title": "The repair subprocess is not authorized by the supplied sudoers rules",
+  "location": "scripts/cutover_921_minute_sessions.py:96-99",
+  "description": "`_repair()` invokes the production Python interpreter directly with `sudo`, but `deploy/sudoers.d/manta-ops` permits root commands only through the listed systemctl, `mt-run`, installer, and `cat` aliases (lines 7\u201313). Under the documented operator invocation, the repair check/apply/verify commands will be denied, so the cutover cannot complete with these permissions installed. Permit the narrowly scoped repair invocation or route it through an already-authorized command."
+ },
+ {
+  "ref": "luna-r-xhigh/1/2",
+  "severity": "FAIL",
+  "title": "A failed verification can be counted as successful",
+  "location": "scripts/cutover_921_minute_sessions.py:103-105",
+  "description": "`_repair()` records a nonzero return code but returns only the captured text. The cutover later determines acceptance by searching for `FAIL` and `[WAIT]`; for example, `--verify` can exit with `scan refused` before printing either marker, and that output can therefore satisfy the acceptance checks. Preserve and check the subprocess exit status, and fail closed when verification does not exit successfully."
+ },
+ {
+  "ref": "luna-r-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "The sudoers rule grants broader access than the cutover needs",
+  "location": "deploy/sudoers.d/manta-ops:8",
+  "description": "`MT_RUN` allows any arguments to `/usr/local/bin/mt-run`, and that wrapper sends non-wrapper verbs to the production `mt` CLI. This gives the operator passwordless root execution of arbitrary CLI commands, not just the minute and daily pass commands used by this cutover. Restrict the permitted arguments to the required operations."
+ },
+ {
+  "ref": "luna-r-xhigh/1/4",
+  "severity": "CONCERN",
+  "title": "The changed acquisition path lacks a realistic load test",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:298-312",
+  "description": "The daemon now performs a universe-wide truncated-session scan and adds a session-bounds database query for each fetched chunk. The added unit tests exercise behavior with mocks, while the load test in this change set measures the separate session-mass health query; none exercises this network/database acquisition path with a realistic universe or asserts latency/resource bounds. The review rules require a gated load test for changes on these paths."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "CONCERN",
+  "title": "The truncated-day index cannot see an empty session \u2014 the exact shape #22 leaves behind",
+  "location": "src/manta_trading/data/gaps/repair_921.py#build_truncated_day_index",
+  "description": "`build_truncated_day_index` INNER-JOINs `minute_ohlcv` on the session window and requires `max(m.time) <= ts.session_open_utc`; `find_truncated_days` uses the same shape with `bars.newest IS NOT NULL`. A session with **no** bars inside `[session_open_utc, session_close_utc)` therefore produces no row and is never reported as truncated.\n\nThat is precisely the #22 shape: `minute_sessions.py`'s own docstring says the 2026-09-10 failure deleted \"the row for D's session \u2026 with no session bars behind it\", and the spillover bar (EODHD's D-1 20:00 ET bar dated D 00:00 UTC) falls *before* session D's open, so it is outside D's window. Consequences:\n\n- `scripts/repair_921_minute_sessions.py#run_verify` computes `residual` from this index, so the `[PASS] truncated symbol-days in the last 5 sessions: 0 (bar: 0)` line is a **false PASS** for empty sessions (only the separate mass bar would still catch them).\n- `minute.py#_build_truncated_index` feeds the same index in as `uncovered_days`, so the new trailing seeding cannot re-seed an empty session either \u2014 and the coverage index reports day D as covered (the spillover bar is inside day D), so nothing else re-seeds it either.\n- `minute.py`'s comment \"The repair's index sees exactly those days\" (about the 4,278 symbols) is therefore inaccurate, and `minute_sessions.py`'s claim that the daemon and the repair \"agree on what a truncated session is\" is false for the empty case.\n\nEither widen the truncation signature to include \"no bars in the session window\" (and make the residual bar count those), or state explicitly that empty sessions are out of the index's scope and add a separate acceptance bar for them."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "CONCERN",
+  "title": "`last_successful_finish` is not normalized against `-infinity`",
+  "location": "src/manta_trading/data/gaps/repair_921.py#cagg_freshness_for_session",
+  "description": "The new probe reads `stats.last_successful_finish` raw. `src/manta_trading/market/maintenance/cagg_freshness.py` documents this exact hazard: \"last_successful_finish is '-infinity' for a policy that has been created but has never completed a run. psycopg cannot load that into a datetime \u2014 it raises DataError mid-fetch\", and normalizes it with `nullif(s.last_successful_finish, '-infinity'::timestamptz)`.\n\nThe new query omits that normalization, so on a policy that has run but never *succeeded*, psycopg raises `DataError` inside `--verify` \u2014 an unhandled exception out of `run_verify`, not the intended `[WAIT]`. It also uses an INNER JOIN to `job_stats`, so a policy with no stats row yields `last_refresh = None` \u2192 `stale = True` \u2192 `[WAIT]` forever with no diagnosis, and the cutover then loops (see the firing finding below). Reuse `cagg_freshness`'s normalization and its `scheduled`/`last_run_status` signals rather than re-reading the catalog with a weaker query."
+ },
+ {
+  "ref": "minimax31-flash/1/2",
+  "severity": "CONCERN",
+  "title": "The freshness probe scans raw `minute_ohlcv` with no statement timeout",
+  "location": "src/manta_trading/data/gaps/repair_921.py#cagg_freshness_for_session",
+  "description": "`SELECT max(created_at) FROM minute_ohlcv WHERE time >= %s AND time <= %s` has no symbol predicate, so it must read every row of one session's worth of bars (~2M rows across the universe) and fetch `created_at` from the heap (no index covers it). This is the raw 4.4-billion-row hypertable the repo documents as the \u00a7166/\u00a7167 latency cliff, and the read carries no `statement_timeout` \u2014 unlike its sibling `fetch_session_mass`, which sets `HEALTH_MINUTE_SESSION_STATEMENT_TIMEOUT` and reads the cagg instead. `scripts/repair_921_minute_sessions.py` connects with a bare `psycopg.connect(url)`, so nothing bounds the statement. Add an explicit timeout and a bounded predicate, or derive the freshness from a cagg-side signal."
+ },
+ {
+  "ref": "minimax31-flash/1/3",
+  "severity": "CONCERN",
+  "title": "A `[WAIT]` verdict drives further billable firings, with no budget re-check",
+  "location": "scripts/cutover_921_minute_sessions.py#main",
+  "description": "The firing loop treats \"not all bars met\" as \"fire again\":\n\n```python\nverify_text = _verify_when_fresh()\nif \"FAIL\" not in verify_text and \"[WAIT]\" not in verify_text:\n    ... break\n```\n\nA stale cagg yields `[WAIT]` with no `FAIL`, so the loop **fires again** \u2014 up to `MAX_MINUTE_FIRINGS` (6) times. Each trailing firing is ~13,083 \u00d7 5 = ~65k credits (the script's own `MIN_CREDITS_TO_START` comment), so a WAIT can spend ~390k credits, and `_refuse_without_budget()` is checked **once**, before the loop. The whole point of #22's cagg gate is that the verdict is *indeterminate*, not that the fix failed; an indeterminate verdict should end (or extend the wait), not buy another firing. Distinguish \"the data is not there yet\" from \"the data is not coming\" before spending."
+ },
+ {
+  "ref": "minimax31-flash/1/4",
+  "severity": "CONCERN",
+  "title": "Every `[WAIT]` poll re-runs the universe-wide before-image",
+  "location": "scripts/repair_921_minute_sessions.py#run_verify",
+  "description": "`_verify_when_fresh` polls `--verify` up to `VERIFY_WAIT_POLLS + 1` = 6 times per firing, and `run_verify` ends with `run_check(conn, symbols)`, which walks all ~13k symbols issuing two queries each (`count_row_shapes`, `find_straddling_gap_start`). The repair module's own docstring measures the per-symbol probe at 0.5\u20130.9 s against production. A single `--verify` is therefore not cheap, and the new poll loop multiplies it by up to 6 per firing (plus a final acceptance call) \u2014 the opposite of the bounded-run goal #22 introduced. Split the cheap acceptance measurements from the expensive universe report, or make the poll use a verify mode that only runs the judged-session checks."
+ },
+ {
+  "ref": "minimax31-flash/1/5",
+  "severity": "CONCERN",
+  "title": "`MT_RUN = /usr/local/bin/mt-run *` grants root execution of the whole production CLI",
+  "location": "deploy/sudoers.d/manta-ops:10",
+  "description": "The header claims the rule is \"Exactly the commands those scripts issue, nothing wider\", but `mt-run`'s own `run_production_mt` branch execs `/opt/manta-trading/.venv/bin/mt \"$@\"` as the invoking user (root, under sudo) with every `MT_*` variable sourced from `/etc/manta-trading.env`. `sudo /usr/local/bin/mt-run data migrate apply --track kalshi` is therefore root-equivalent DDL against production. The cutover only needs `mt-run minute` and `mt-run daily`; name those two explicitly (or scope the alias to the pass kinds) instead of `*`."
+ },
+ {
+  "ref": "minimax31-flash/1/6",
+  "severity": "CONCERN",
+  "title": "`MT_UNITS = ... systemctl start/stop mt-*` is wider than the stated intent",
+  "location": "deploy/sudoers.d/manta-ops:9",
+  "description": "`mt-*` matches every `mt-` unit on the host: `mt-serve.service` (the serving application), `mt-health.service`, `mt-kalshi-pass.service`, and any unit added later. The scripts only issue `stop/start` on `mt-minute-pass.timer` and `mt-daily-pass.timer`, and `stop mt-minute-pass.service`. Listing the four unit names explicitly keeps the rule's blast radius equal to its stated scope."
+ },
+ {
+  "ref": "minimax31-flash/1/7",
+  "severity": "CONCERN",
+  "title": "The sudoers rule names a path the code does not compute, and nothing installs the rule",
+  "location": "deploy/sudoers.d/manta-ops:11",
+  "description": "`cutover_common.install()` now resolves the installer as `Path(__file__).resolve().parents[1] / \"deploy/install-production.sh\"` \u2014 \"Absolute so the sudoers rule \u2026 can name it\" \u2014 but the rule names `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh`. Those coincide only when the script is run from exactly that checkout; from any other clone (or the worktree this slice was reviewed in) `sudo <computed path> \u2026` does not match the rule and sudo denies it, with an opaque error from `install()`. Separately, `deploy/install-production.sh` installs the units, the journald drop-in and `mt-run`, but **not** `deploy/sudoers.d/manta-ops` \u2014 the file's install step is a manual comment. Either derive the rule's path from the same source the code uses, or have the installer write it, so the two cannot disagree."
+ },
+ {
+  "ref": "minimax31-flash/1/8",
+  "severity": "CONCERN",
+  "title": "The new import blocks are not in isort order",
+  "location": "scripts/cutover_921_minute_sessions.py:44",
+  "description": "The repo's ruff config selects `[\"E\", \"F\", \"W\", \"I\", \"UP\", \"BLE\", \"ASYNC\", \"B\"]`. The `from cutover_common import (...)` block was sorted before this change (`CutoverError` \u2014 a class \u2014 first, then the functions alphabetically); the new block is `NOTES_DIR, fire_unit_until, start_log, CutoverError, fire_unit, \u2026`, which is neither constant-then-class-then-function nor alphabetical, so ruff's `I001` fires. The same edit pattern appears in `scripts/repair_921_minute_sessions.py` (`cagg_freshness_for_session` placed before `CheckReport`/`RepairScanTimeout`), and `src/manta_trading/data/acquisition/daemon/minute.py` now lists `data.gaps.repair_921` before `data.gaps.minute_coverage`. Sort the names per ruff's `order-by-type` grouping."
+ },
+ {
+  "ref": "minimax31-flash/1/9",
+  "severity": "CONCERN",
+  "title": "The cutover's control flow is driven by substrings of printed text",
+  "location": "scripts/cutover_921_minute_sessions.py#_verify_when_fresh",
+  "description": "`\"[WAIT]\" in text` and `\"FAIL\" not in text` are the only signals separating \"accept\", \"fire again\", and \"give up\" \u2014 exactly the \"NEVER use user-accessible labels as logical structure\" pattern the project guidelines forbid, and fragile in both directions (`FAIL` can appear in any printed line; `[WAIT]` is a label the repair script prints, not a contract). The repair script already has an exit-code vocabulary (`EXIT_OK = 0`, `EXIT_REFUSED = 2`); give WAIT its own exit code and branch on the return code, keeping the printed text for humans only. Note this also currently makes \"the cagg is stale\" indistinguishable from \"the scan was refused\" (both exit 2)."
+ },
+ {
+  "ref": "minimax31-flash/1/10",
+  "severity": "CONCERN",
+  "title": "The minute timer's \"staggered 30 minutes behind the daily pass\" is now false",
+  "location": "deploy/systemd/mt-minute-pass.timer:3",
+  "description": "The `Description=` line and the comment above `OnCalendar` both state the minute pass is staggered 30 minutes behind `mt-daily-pass.timer` (00:35/12:35). With the firing moved to 04:05, only the 13:05 firing is 30 minutes behind (12:35); the 04:05 firing is 3 h 30 min behind the daily 00:35. The rationale for the original staggering (\"so the two passes never start simultaneously \u2026 both compete for the same provider quota bucket\") still applies to 13:05 but the comment now describes a schedule that no longer exists. `deploy/systemd/mt-kalshi-pass.timer` was updated consistently for this change; this one was not."
+ }
+]

@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A swallowed read error is reported as a doctype failure (exit 1), not exit 2",
+      "description": "`validateFile` calls `parseFrontmatter(file)` at line 95 and never checks `frontmatter.found`. That parser has a blanket catch that converts *any* read failure into `{ found: false, data: {} }` (`packages/core/src/introspection/parsers/frontmatterParser.ts:63-64`). So if a file disappears, changes permissions, or errors on read after `preflight` (`:72-86`) succeeded, the early return at `:96-98` emits `{ pass: false, missing: [], reason: 'doctype' }` instead of an error. The CLI then prints `FAIL <file>` plus the frontmatter message and exits 1 \u2014 exactly the \"partial results alongside an error\" and wrong-exit-code case the file header (`:1-8`) and slice 214's success criteria say must be exit 2 with empty stdout. The `readFile` catch at `:102-105` cannot help: it is unreachable on this path. The same file is also read twice (`:95`, `:102`), which widens that race; a legitimate no-frontmatter document also returns `found: false`, so checking `found` alone cannot separate it from an I/O failure. Read the file once with explicit error handling and parse frontmatter from that text, then add a fault-injection regression test for a read failure after preflight (the existing `sliceDesignFiles.test.ts` only covers failures caught by preflight).",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:91-105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--json` error mode is derived from raw argv, so the command's `-j` alias emits plain-text errors",
+      "description": "`withJsonOption` (`packages/cli/src/options.ts`) registers `-j, --json`, but `handleError` at `:104` decides its output format from a module-level flag (`packages/cli/src/utils/errors.ts:32-38,47`) that is set only by `packages/cli/src/index.ts:178` via `process.argv.includes('--json')`. `cf validate design -j missing.md` therefore produces JSON results on stdout for successful runs but a human `Error: ...` line on stderr for exit-2 failures, contradicting the structured-error contract in `docs/AGENT-INTEGRATION.md:16` that makes this command a machine gate. `CF_JSON=1` hides the problem, which is why it only shows up for flag-driven use. There are now two sources of truth for \"is this a JSON invocation\" (parsed `opts.json` vs. global argv sniffing); derive the error mode from the parsed option (or detect `-j` as well) so the alias behaves identically.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:98-104"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The machine-readable failure path is never asserted by the new command tests",
+      "description": "The `run()` helper (`:127-131`) registers `registerValidateCommand` on a bare `Command` and never imports `packages/cli/src/index.ts`, so `setJsonMode()` is never called and `handleError` always takes its plain-text branch in this suite. The six `--json` exit-2 cases (`:205-211`) assert only `cf exited 2`, empty stdout and empty `console.log`; no test asserts that stderr carries `{ \"error\": true, ... }`, and the one error-message assertion (`:216-222`) runs without `--json`. Consequently neither the documented JSON error payload nor the post-preflight I/O failure mode from the first finding has any regression coverage, even though `--json` is the primary agent/CI interface for this command. Add a case that enables JSON error mode (as the real entrypoint does) and pins the stderr payload for `--json` and `-j` failures, plus a case that fails a read after preflight.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:198-222"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A swallowed read error is reported as a doctype failure (exit 1), not exit 2",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:91-105",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`--json` error mode is derived from raw argv, so the command's `-j` alias emits plain-text errors",
+      "location": "packages/cli/src/commands/validateDesign.ts:98-104",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The machine-readable failure path is never asserted by the new command tests",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:198-222",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:28:52.428577",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 83,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 401423,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 1136608,
+  "cached_tokens": 999808,
+  "cache_write_tokens": null,
+  "completion_tokens": 101027,
+  "reasoning_tokens": 97596,
+  "duration_seconds": 959.9085588750895,
+  "cost_usd": 0.204325318,
+  "cost_basis": "alias_pricing"
+}

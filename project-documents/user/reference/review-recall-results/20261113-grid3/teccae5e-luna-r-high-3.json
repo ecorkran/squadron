@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Validate the source-bar stamping enum type",
+      "description": "`source_bar_stamping` is checked only for membership in a set of `StrEnum` values. Because `StrEnum` compares equal to its string value, a plain string such as `\"period_start\"` passes validation. This creates equal `Market` instances that canonicalize differently: the canonical encoder encodes the enum and the plain string differently. Validate that the value is a `TimeMeaning` before accepting it, and add a regression test for the string input and canonical identity.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py#Market.__post_init__"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Align constructor annotations with the iterable contract",
+      "description": "The `Market` docstring and normalizers accept any iterable for `session_calendars` and `adjustment_bases`, but the dataclass constructor annotations require a tuple and a frozenset. Callers passing lists, sets, or generators therefore violate the declared API and fail strict type checking despite being supported at runtime. The tests exercise this through a helper whose `Any` overrides mask the mismatch. Expose a constructor type contract that accepts the documented iterables while retaining the normalized stored types.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py#Market"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Validate the source-bar stamping enum type",
+      "location": "src/manta_trading_engine/core_model/markets.py#Market.__post_init__",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Align constructor annotations with the iterable contract",
+      "location": "src/manta_trading_engine/core_model/markets.py#Market",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:27:37.692248",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 4924,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 145955,
+  "cached_tokens": 120280,
+  "cache_write_tokens": null,
+  "completion_tokens": 5062,
+  "reasoning_tokens": 4321,
+  "duration_seconds": 56.2346161250025,
+  "cost_usd": 0.0063013,
+  "cost_basis": "alias_pricing"
+}

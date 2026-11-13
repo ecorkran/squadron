@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Runner's concurrency machinery has no load test with latency/resource bounds",
+      "description": "The slice introduces real concurrency/process-boundary machinery: `RunnerTenant.tick` spends a single per-tick `TickBudget` across every project (with carry-over), `RunObserver` polls in-flight runs on an interval, `LaunchTracker.reap` polls/reaps detached `Popen` children every tick, and `probe_link`/`LinkProbes` spawn `cf` subprocesses. Per the Python rules, \"any code on the \u2026 concurrency \u2026 paths requires at least one load test exercising a realistic configuration\" that \"assert on latency, throughput, or resource bounds,\" and \"CI must gate load tests for slices touching these paths.\" The existing `tests/load/` tests do not exercise this: `test_crash_loop.py` drives `host_harness.start_host` with a throwaway `JOURNALING_TENANT` (no Runner), and the feed/inbox load tests that use `run_with_kills` start the real CLI (which now registers the Runner) but with no in-flight runs or CF links, so the Runner idles. The hot path \u2014 polling many in-flight runs, budget exhaustion across projects, child reaping \u2014 is only covered by functional/integration tests (`tests/runner/test_crash_recovery.py`, `test_end_to_end.py`) with no load bounds. A reasonable load test for slice 122 would drive the Runner against the stub `sq` with many `sq_run` entries and/or many CF links and assert tick latency, that no subprocess call begins after the deadline under load, and that reaped/leaked child handles stay bounded. (Partial deferral to slice 125 is defensible since `PRODUCTION_PLANNERS` is empty until then, but the observe/poll/budget/reap path is live now and is exactly what the rule targets.)",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`raise_expected_faults` takes a write lock for already-open fault kinds",
+      "description": "`raise_expected_faults` calls `store.raise_project_escalation` unconditionally for every fault, then separately tracks `wrote`. For a kind that is already open, the store performs a `BEGIN IMMEDIATE` + `SELECT` and returns the existing row without inserting (its documented no-op). In the common recurring case (e.g. `sq` down \u2192 `RUN_OBSERVATION_FAILED` every tick per in-flight run), this is a per-tick immediate write-lock per already-open fault kind even though nothing changes. A `continue` when `fault.kind.value in already_open` (before the store call) would skip the redundant transaction and also simplify the `wrote` bookkeeping to `wrote = True` on the actual write. Minor, single-process, but it's wasted work on a per-tick hot path and the design comment itself calls out the \"writes nothing\" behavior.\n\nI verified the load-test claim against `tests/load/*` and `tests/host_harness.py`/`load_harness.py` (only `run_with_kills`\u2192`start_background` reaches the Runner, and only idle), and confirmed the redundant-lock behavior in `src/amoeba/store/project_escalations.py:raise_project_escalation`. No FAIL-level or correctness issues were found.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py#raise_expected_faults"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Runner's concurrency machinery has no load test with latency/resource bounds",
+      "location": "src/amoeba/runner/tenant.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`raise_expected_faults` takes a write lock for already-open fault kinds",
+      "location": "src/amoeba/runner/faults.py#raise_expected_faults",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:05:28.577558",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 61,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 504110,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 1995792,
+  "cached_tokens": 1864878,
+  "cache_write_tokens": null,
+  "completion_tokens": 131299,
+  "reasoning_tokens": 127801,
+  "duration_seconds": 1563.89475004212,
+  "cost_usd": 0.41352106,
+  "cost_basis": "alias_pricing"
+}

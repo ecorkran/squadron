@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Shared RunObserver state is pruned per project tick",
+      "description": "`RunnerTenant` creates one `RunObserver` and passes it to every `ProjectTick` (`src/amoeba/runner/tenant.py:74`, `src/amoeba/runner/tenant.py:133`). At the start of `observe()`, however, the observer treats the current project's entries as the complete live set:\n\n```python\nlive = {entry.id for entry in entries}\nself._last_poll = {k: v for k, v in self._last_poll.items() if k in live}\nself._overdue &= live\nself._faulted = {k: v for k, v in self._faulted.items() if k in live}\n```\n\nWith multiple hosted projects, ticking project A therefore discards poll cadence, overdue-launch state, and standing faults for project B. On B's next tick, a run that was just polled can be polled again, an overdue launch can stop recurring until it is rediscovered, and a standing observation fault can be treated as recovered and its escalation closed. The tenant-level `test_a_project_the_budget_did_not_reach_goes_first_next_tick` checks ordering, but no test asserts that observer state survives interleaved projects. Key the state by project (or give each project its own observer) and add a multi-project regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:108-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A CUT_OFF tick can still launch all planned runs and reports the wrong result",
+      "description": "`_act()` checks `budget.allows_call()` only before each `Popen`, and `TickBudget` bounds when a call may *start*, not how long it runs (`src/amoeba/runner/budget.py:27-31`). A clock that crosses the deadline during the preceding poll/probe/store stages does not prevent a launch that was already planned: the first launch can start before the deadline, the next launch is refused and `CUT_OFF` returned, or \u2014 with one action \u2014 the tick launches it and then returns `COMPLETE` even though the deadline has passed. This contradicts the documented `CUT_OFF when the budget ran out` contract (`src/amoeba/runner/tick.py:88`) and the tick-level `test_a_cut_off_tick_closes_nothing` only covers a deadline of zero, where no calls happen at all. Check the budget at the stage boundary too (before deciding/acting), and add a test where the deadline expires after observation but before `_act()`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py:161-168"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Store failures are swallowed by the runner's broad catch and converted into an escalation",
+      "description": "The re-raise tuple `STORE_FAILURES` (`src/amoeba/runner/faults.py:51-56`) covers only `StoreBusyError`, `StoreCorruptError`, `StorePermissionError`, `StoreSchemaError`, and `sqlite3.Error`. The store's own base class is `StoreError`, and it also raises `StoreIntegrityError`, `NodeNotFoundError`, `InvalidTransitionError`, and `UnknownVocabularyValueError` (`src/amoeba/store/models.py:139-190`). Those are caught by `except Exception`, logged, and passed to `escalate()`, which itself performs more store writes. A broken/corrupt/raced store is therefore reported as a per-project `unexpected_fault`, the process keeps running, and the escalation write can fail again. The docstring claims \"a store failure ... re-raises and the process exits\"; the tests only parametrize `StoreBusyError` and `UpstreamShapeError`. Re-raise `StoreError` (and preferably the whole typed store hierarchy) alongside `UpstreamShapeError`, and add a regression test for e.g. `StoreIntegrityError`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py:142-149"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Escalation payloads can persist untrusted stderr tails verbatim",
+      "description": "`LaunchFailed.tail` comes from up to 4 KiB of the detached child's stderr (`src/amoeba/runner/launch.py:98-109`) or from `_still_overdue`'s fault detail (`src/amoeba/runner/observe.py:251-270`). `_record_launch_failed` puts that raw text into `context` and `PAYLOAD_STDERR_TAIL`, and `finish._block_once` \u2192 `Store.block()` \u2192 `_write_block()` stores it verbatim in the `blocked_states.context` and `messages.payload` columns. Those values are externally visible through `inspect` and the feed, yet `JournalEntry`'s own contract says \"Callers must not place secrets in them\" (`src/amoeba/store/journal_models.py:96-103`) and `ProjectEscalationOperations` repeats the warning. A provider that prints credentials to stderr therefore leaks them into durable, operator-visible records \u2014 including the environment that `launch()` deliberately says is never logged. Redact/bound secrets before persisting external output, or document and enforce a sanitization boundary with tests that inject credential-shaped stderr.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/amoeba/runner/finish.py:96-116"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`validate_settings` omits documented startup invariants",
+      "description": "`ProcessSettings` documents `tick_call_timeout_seconds` as \"Larger than `tick_deadline_seconds` so one call that starts just inside the deadline still has room to finish\" (`src/amoeba/process/settings.py:74-77`), and `--sq-timeout` as the bound on the Runner's `sq` probe. `validate_settings()` checks only three positivity constraints plus `tick_call_timeout < shutdown_grace`; it does not check `tick_call_timeout > tick_deadline`, `shutdown_grace > 0`, `sq_timeout > 0`, or `launch_grace >= 0`. Because `settings_flags.py` exposes all of these as `type=float` with no validation, `amoeba start --tick-deadline 10 --tick-call-timeout 1` boots successfully with a budget that contradicts the design, and a zero/negative `sq_timeout` makes the start-up probe time out. Validate the full documented invariant set at the factory boundary and parametrize tests for each violated relation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/factory.py:38-52"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Runner's simulation/concurrency paths have no dedicated load test",
+      "description": "The Python rules require \"any code on the simulation, network, concurrency, or environment-layer paths\" to have at least one load test asserting latency/throughput/resource bounds, gated in CI. This change adds a resident-process tenant that performs per-tick subprocess polling, `cf` probes, detached `Popen` launches, and a `TickBudget` deadline, and `.github/workflows/ci.yml` already gates `pytest tests/load`. Yet `tests/load/` contains no runner or `TickBudget` test: the files are `test_cf_watch_load.py`, `test_crash_loop.py`, `test_feed_and_detection_load.py`, `test_harness_smoke.py`, `test_inbox_concurrent.py`, `test_recovery_scale.py`, `test_serve_load.py`, `test_verdict_concurrent.py`, and none reference `runner`, `Runner`, `TickBudget`, or `tick_deadline`. `tests/runner/test_budget_coverage.py` is a unit test with injected clocks, so it cannot detect event-loop starvation, per-tick latency growth with many projects/runs, or child-process resource leakage. Add a `tests/load/test_runner_load.py` that drives a realistic multi-project/many-run configuration through `RunnerTenant.tick` and asserts a per-tick bound plus no leaked `Popen` handles.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/load"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New CLI harness injects a stub that breaks existing version-label assertions",
+      "description": "`cli_environment()` now prepends `write_sq_stub(...)` to `PATH` for every CLI test. The `sq` stub's generated script does not handle `sq --version`: it falls through to `mode = os.environ[MODE_ENV]` and, when `SQ_STUB_MODE` is unset (the default for the CLI harness), raises `KeyError` and exits non-zero. `capture_sq_version_label()` then records `VERSION_UNAVAILABLE` (`src/amoeba/process/version_label.py:34-38`) instead of the fake label. `tests/cli/test_detection_end_to_end.py:129-130` explicitly expects `FAKE_SQ_LABEL` from `DetectionE2E`'s own fake `sq`, but that fake is now shadowed by the stub placed in `cli_environment()` before `DetectionE2E.__init__` prepends `fake_bin`. Several other CLI tests that start the process also inherit a nonfunctional `sq --version`. Either teach the stub to answer `--version` (and set a stable label), or make `DetectionE2E` and other harnesses override `PATH` after composing `cli_environment()` so their fake wins; add an assertion that the start-up label is the expected one.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/cli_harness.py:45-55"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test helper imports a private helper from another test module",
+      "description": "`from runner.test_probes import _link  # pyright: ignore[reportPrivateUsage]` reaches into another test module's private `_link()` helper. The same helper is defined anew in `tests/runner/test_probes.py:203-210`, so the link-submission recipe now has two homes and one test file has a static dependency on another test's collection/module. This is fragile under pytest's `-p`/parallel collection and violates the DRY/shared-fixture conventions. Move `_link()` into `tests/runner/tick_support.py` (or a shared `conftest.py` fixture) and import it from both test modules.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/runner/test_budget_coverage.py:18"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stale docstring contradicts the completed escalation implementation",
+      "description": "The module docstring still says \"Escalation writes join this module in a later task.\" The same file now defines `raise_expected_faults()` (`line 120`) and `escalate()` (`line 152`), both of which perform escalation writes. This is misleading for maintainers reading the process-boundary contract. Remove the stale sentence and replace it with a one-line description of the two escalation paths (expected project-scoped fault vs unexpected node/project fault).",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py:4"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Shared RunObserver state is pruned per project tick",
+      "location": "src/amoeba/runner/observe.py:108-111",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A CUT_OFF tick can still launch all planned runs and reports the wrong result",
+      "location": "src/amoeba/runner/tick.py:161-168",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Store failures are swallowed by the runner's broad catch and converted into an escalation",
+      "location": "src/amoeba/runner/tenant.py:142-149",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Escalation payloads can persist untrusted stderr tails verbatim",
+      "location": "src/amoeba/runner/finish.py:96-116",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`validate_settings` omits documented startup invariants",
+      "location": "src/amoeba/runner/factory.py:38-52",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Runner's simulation/concurrency paths have no dedicated load test",
+      "location": "tests/load",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New CLI harness injects a stub that breaks existing version-label assertions",
+      "location": "tests/cli_harness.py:45-55",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Test helper imports a private helper from another test module",
+      "location": "tests/runner/test_budget_coverage.py:18",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Stale docstring contradicts the completed escalation implementation",
+      "location": "src/amoeba/runner/faults.py:4",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:24:01.500094",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 43,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 434142,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2840316,
+  "cached_tokens": 2482496,
+  "cache_write_tokens": null,
+  "completion_tokens": 114117,
+  "reasoning_tokens": 109056,
+  "duration_seconds": 1206.3852794999257,
+  "cost_usd": 0.34398960600000006,
+  "cost_basis": "alias_pricing"
+}

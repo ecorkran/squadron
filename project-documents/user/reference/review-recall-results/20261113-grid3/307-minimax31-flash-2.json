@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The purchase path judges an estimate-only verdict as if it were a real purchase verdict",
+      "description": "`judge_estimate` raises unless `summary[\"verdict\"] == \"allowed\"`, but the summary it is given comes from `mt data tick pass --estimate-only --json` (`ESTIMATE_ARGS` in `scripts/cutover_304_first_purchase.py`). In `src/manta_trading/data/tick/spend_guard.py` (`evaluate_spend`, the `if estimate_only: status = VerdictStatus.ESTIMATE_ONLY` branch) an estimate-only run's status is `estimate_only`, and `plan_summary` (`src/manta_trading/data/tick/purchase_plan.py`) copies that value straight into `\"verdict\"`. `_steps` calls `judge(fetch_estimate(), start)` with `check_ceilings=True`, so the run reaches the `summary[\"verdict\"] != VERDICT_ALLOWED` branch and raises `estimate: verdict estimate_only: [...]` for every plan with requests \u2014 the buy step is unreachable. The new `--estimate` path only works because `check_ceilings=False` returns `Estimate.BUY` *before* the verdict check; the real path needs the same treatment (an `estimate_only` verdict is not a refusal). Note this behaviour predates the diff (the old `judge_estimate(fetch_estimate())` had the same check), but the diff is the change that introduced a working `--estimate` mode next to a broken purchase mode, so it is the moment to reconcile the two.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py#judge_estimate"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The printed ceiling command ignores the unheld provider jobs the 30-day cap counts",
+      "description": "`ceiling_values` derives the 30-day ceiling as `_round_up(planned + trailing)`, but the spend guard's 30-day rule is `trailing_total + unheld_total + planned_new <= cap_30d` (`src/manta_trading/data/tick/spend_guard.py`, `evaluate_spend`). The estimate summary carries the missing term as `\"unheld_jobs\"` (each with `cost_usd`), and `plan_summary` never folds it into `trailing_30d_usd`. A PM who runs the printed `sudo deploy/set-tick-spend-ceilings.sh --per-pass X --cap-30d Y` therefore sets a cap that the pass will still refuse, and the printed command is the script's only remedy. The command should add the unheld jobs' costs to the 30-day figure (and say so).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py#ceiling_values"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`requested_at` is compared against an aware `since` without a timezone check",
+      "description": "`resubmit_origins` parses `row[\"requested_at\"]` with `datetime.fromisoformat` and `_check_resubmit` compares it with `since`, which is aware (`datetime.now(UTC).isoformat(...)`). The codebase already handles this exact hazard elsewhere: `purchase_verdicts._edge_of` explicitly rejects a naive instant (\"not a UTC instant\"). `debug requests` renders `requested_at` through `tick_debug_cmds._cell`; if the column comes back without an offset (or with a non-UTC offset), the comparison either raises `TypeError` (naive vs aware \u2014 uncaught by `main`'s `except (KeyError, ValueError)`) or silently shifts the instant. The same applies to `since` itself. A `tzinfo is None` guard, as in `_edge_of`, would make the failure explicit.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py#resubmit_origins"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`EXIT_USAGE` is defined but never used",
+      "description": "The module defines `EXIT_USAGE = 2` next to the other exit constants, but `main` returns argparse's own code (`int(exc.code or 0)`) and never references it. Either use it in the argparse `SystemExit` branch or drop it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#EXIT_USAGE"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A half-written state directory silently rewrites the cutover's start instant",
+      "description": "`record_start_and_baselines` reuses the recorded start only when *both* the start and the baseline file exist; if either is missing it recomputes and overwrites both. The start instant is what the resubmit check (`_check_resubmit`) compares against, so a deleted baseline file silently moves the cutover's origin and can turn an accepted resubmit into a refusal (or the reverse). The two files should be written together (or a missing pair should be an explicit stop).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#record_start_and_baselines"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Over-sessions are attributed to whichever family has an over count, not to the family they came from",
+      "description": "`over_sessions` reads every `over` verdict in a statistics coverage document without filtering on the verdict's `family`, so the list mixes the tick-tier and `bar_1m` families. `_family_evidence` then stores that mixed list per product and `over_failures` prints the whole list for every family row whose `over` count is non-zero. The failure text can therefore name sessions belonging to a different family than the one it reports. `volume_verdict_dict` (`src/manta_trading/data/tick/tick_coverage.py`) already carries `family`, so the split is available.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py#over_sessions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Exit codes are duplicated as literals next to the canonical module",
+      "description": "`cutover_304_evidence.py` keeps `EXIT_OK, EXIT_PARTIAL = 0, 3` as literals, while the new `scripts/purchase_verdicts.py` imports the same two codes from `manta_trading.cli.commands.tick_exit`. The canonical values now exist in two places in `scripts/`, which the project's \"one value, one source\" rule forbids; the evidence script should import them like the new module does.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py#EXIT_OK"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Coverage now reads the bar family over the whole 2010\u20132026 range for both products",
+      "description": "Deriving the coverage reads from `TICK_UNIVERSE` is the right structural change, but the new shared `_HISTORY_WANTS` gives both products an `ohlcv-1m` want from 2010-06-08 to 2026-12-01, so the cutover now runs four `coverage` reads over sixteen years \u2014 two of them over the bar family, whose raw-count proof (`raw_bar_totals` over `tick_ohlcv_1m`, `src/manta_trading/data/tick/tick_coverage.py`) is far heavier than the 2024-only bar read it replaces. On the production host this is a long, single-threaded evidence step; worth confirming it stays inside the operator's window or splitting the ranges.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py#coverage_reads"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Any failed-retryable unit in the whole manifest fails the cutover",
+      "description": "`retryable_failures` reports every request with a `FAILED_RETRYABLE` unit, with no reference to the cutover's start instant or to the requests in this purchase. A unit left retryable by an earlier, unrelated pass therefore fails the exit rule for a purchase that never touched it. The evidence collector does have the start instant (`collect(start, ...)`); passing it through would scope the rule to this cutover.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py#retryable_failures"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The shared history want relies on the planner dropping covered days to avoid buying 304's bars twice",
+      "description": "The comment claims \"the planner drops covered days, so one want over the whole range does not buy them twice\", but I could not verify the covering rule: `_classify` in `src/manta_trading/data/tick/planner.py` skips a day only when its `DayKey` is in `inputs.covered`, and `covered_keys` (`src/manta_trading/data/tick/manifest_reads.py`) was not inspected. If coverage is counted from ingested units rather than from requested ones, slice 304's ES bars for 2024 that were bought but not yet ingested would be re-bought under the widened 2010\u20132026 want \u2014 a double spend on the one item the slice is about. Worth confirming before the cutover runs.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/universe.py#_HISTORY_WANTS"
+    },
+    {
+      "severity": "NOTE",
+      "title": "One unmatched symbol set now aborts the whole evidence collection",
+      "description": "`bar_job_dirs` calls `product_of_symbols` for every `ohlcv-1m` request row, and a symbols string that matches no universe entry raises `CutoverError`. Previously an unrecognised job directory was simply archived; now one unexpected row stops the evidence step before the report is written. Failing explicitly is the project's rule, but the blast radius changed from \"one directory\" to \"the whole evidence run\".",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py#product_of_symbols"
+    },
+    {
+      "severity": "PASS",
+      "title": "Enums, dataclasses and single-source constants are used throughout the new modules",
+      "description": "`FamilyRow` and `ExhaustedRequest` are frozen dataclasses with typed fields; every comparison value is taken from its one definition (`VolumeClass`, `TRADED_VS_CLEARED`, `TickSessionStatus`, `TickSchema`, `FetchStatus`, `STATISTICS_PUBLICATION_SESSIONS`, `ISSUE_CLOSED`), and the exit codes come from `manta_trading.cli.commands.tick_exit`. Missing keys raise `CutoverError` rather than defaulting, which matches the project's \"never use silent fallback values\" rule. The new tests exercise the real renderer shapes (`_cell`, `_product_payload`, `coverage_to_dict`), which is the right way to pin the parsing.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The purchase path judges an estimate-only verdict as if it were a real purchase verdict",
+      "location": "scripts/cutover_304_checks.py#judge_estimate",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The printed ceiling command ignores the unheld provider jobs the 30-day cap counts",
+      "location": "scripts/cutover_304_checks.py#ceiling_values",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`requested_at` is compared against an aware `since` without a timezone check",
+      "location": "scripts/cutover_304_checks.py#resubmit_origins",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`EXIT_USAGE` is defined but never used",
+      "location": "scripts/cutover_304_first_purchase.py#EXIT_USAGE",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A half-written state directory silently rewrites the cutover's start instant",
+      "location": "scripts/cutover_304_first_purchase.py#record_start_and_baselines",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Over-sessions are attributed to whichever family has an over count, not to the family they came from",
+      "location": "scripts/purchase_accounting.py#over_sessions",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Exit codes are duplicated as literals next to the canonical module",
+      "location": "scripts/cutover_304_evidence.py#EXIT_OK",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Coverage now reads the bar family over the whole 2010\u20132026 range for both products",
+      "location": "scripts/cutover_304_evidence.py#coverage_reads",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Any failed-retryable unit in the whole manifest fails the cutover",
+      "location": "scripts/purchase_verdicts.py#retryable_failures",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The shared history want relies on the planner dropping covered days to avoid buying 304's bars twice",
+      "location": "src/manta_trading/data/tick/universe.py#_HISTORY_WANTS",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "One unmatched symbol set now aborts the whole evidence collection",
+      "location": "scripts/cutover_304_checks.py#product_of_symbols",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Enums, dataclasses and single-source constants are used throughout the new modules",
+      "location": "scripts/purchase_verdicts.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:57:05.860709",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 27,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 215064,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1701648,
+  "cached_tokens": 1493120,
+  "cache_write_tokens": null,
+  "completion_tokens": 58172,
+  "reasoning_tokens": 54315,
+  "duration_seconds": 385.3520723329857,
+  "cost_usd": 0.043543040000000005,
+  "cost_basis": "alias_pricing"
+}

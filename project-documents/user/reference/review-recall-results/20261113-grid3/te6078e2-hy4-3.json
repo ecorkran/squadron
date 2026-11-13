@@ -1,0 +1,117 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Strict pyright will reject bare `np.ndarray` annotations in new confidence tests",
+      "description": "Description: `tests/core_model/test_confidence.py:69` and `tests/core_model/test_confidence.py:73` annotate helpers as bare `np.ndarray`, while NumPy's `ndarray` is generic and the rest of the suite uses parameterized forms such as `NDArray[np.float64]` / `NDArray[np.bool_]` in `tests/core_model/test_labels.py:49-52`. The configured `[tool.pyright]` block in `pyproject.toml` enables `typeCheckingMode = \"strict\"`, and `.github/workflows/ci.yml:33` runs `uv run pyright`; the Additional Rules make zero strict-pyright errors a merge blocker. These annotations should trigger `reportMissingTypeArgument` and fail CI. Use `NDArray[np.float64]` and `NDArray[np.bool_]`, or fully parameterized `np.ndarray[...]`, for these helper return types.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_confidence.py:69-74"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "SignalEvent can raise AttributeError instead of InvalidSignalError for a malformed Timestamp meaning",
+      "description": "Description: `src/manta_trading_engine/core_model/signals.py:76-80` assumes `self.time.meaning.value` is available when building the error message. However, `src/manta_trading_engine/core_model/timestamps.py:55-58` only type-annotates `meaning` and range-checks `ns`; it does not validate that `meaning` is a `TimeMeaning` at runtime. A caller can construct `Timestamp(100, \"available_at\")` or `Timestamp(100, None)` and then pass it to `SignalEvent`; the `is not TimeMeaning.AVAILABLE_AT` branch is taken and `.value` raises `AttributeError`, violating D5's contract that anything other than `AVAILABLE_AT` raises `InvalidSignalError`. The rejection cases in `tests/core_model/test_signals.py:80-88` cover valid enum alternatives and a float `ns`, but not a non-enum `meaning`. Validate `time.meaning` as a `TimeMeaning` before comparing, and add a regression test for a string/`None` meaning.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/signals.py:76-80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Supported iterable/set inputs are published with tuple/frozenset-only type contracts",
+      "description": "Description: `SignalSequence`'s docstring says the constructor accepts any iterable of events, but `src/manta_trading_engine/core_model/signals.py:102` declares `events: tuple[SignalEvent, ...]`; the positive test at `tests/core_model/test_signals.py:122` therefore needs a `pyright: ignore` to pass a list. The same mismatch appears in `Declarations`: `src/manta_trading_engine/core_model/declarations.py:188-189` declares tuple-only fields while `tests/core_model/test_declarations.py:192` passes lists with a type ignore, and in `LabelVocabulary`: `src/manta_trading_engine/core_model/labels.py:50` declares `frozenset[int]` while the comment at `src/manta_trading_engine/core_model/labels.py:55` and test at `tests/core_model/test_labels.py:66` explicitly support a `set`. These are valid runtime inputs, not invalid-input probes, so the public annotations should accept `Iterable[...]` / `set[int] | frozenset[int]` and normalize internally, or the docs/runtime behavior should be tightened to match the static contract.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/signals.py#SignalSequence"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Strict pyright will reject bare `np.ndarray` annotations in new confidence tests",
+      "location": "tests/core_model/test_confidence.py:69-74",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "SignalEvent can raise AttributeError instead of InvalidSignalError for a malformed Timestamp meaning",
+      "location": "src/manta_trading_engine/core_model/signals.py:76-80",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Supported iterable/set inputs are published with tuple/frozenset-only type contracts",
+      "location": "src/manta_trading_engine/core_model/signals.py#SignalSequence",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:43:55.880494",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 486672,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1536152,
+  "cached_tokens": 1394816,
+  "cache_write_tokens": null,
+  "completion_tokens": 122148,
+  "reasoning_tokens": 119793,
+  "duration_seconds": 1395.4729477500077,
+  "cost_usd": 0.24091324800000002,
+  "cost_basis": "alias_pricing"
+}

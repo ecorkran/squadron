@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`sq --version` probe breaks the CLI start path under the test stub",
+      "description": "The new stub `sq` answers *every* command that is not `runs wait` or `run` with the prune path, which requires `SQ_STUB_MODE` in the environment and exits 1 with \"stub sq: unexpected arguments\" when the mode is absent. `standard_tenants()` calls `capture_sq_version_label()` at start-up (`src/amoeba/process/version_label.py:71`), which runs `sq --version`. Under `cli_environment()` (`tests/cli_harness.py:57`) `SQ_STUB_MODE` is never set, so this call now exits non-zero and the version label becomes `VERSION_UNAVAILABLE` rather than a real label. The label is stored on every review-detection record, so detection rows written under the CLI harness now carry `unavailable` instead of the stub's version. The version label is documented as opaque provenance, so this does not change control flow, but it is a silent degradation introduced by the stub change and is not asserted anywhere. The stub should handle `--version` explicitly (as `tests/detection_e2e_harness.py:102` already does for its own fake `sq`), or `SQ_STUB_MODE` should have a default in `cli_environment()`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "tests/sq_stub.py:150-160"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Observer state is shared across projects, so one project's entries can be evicted by another's",
+      "description": "`RunObserver.observe()` prunes its bookkeeping dictionaries against `live`, which is the set of entry ids *for the project being ticked*:\n```python\nlive = {entry.id for entry in entries}\nself._last_poll = {k: v for k, v in self._last_poll.items() if k in live}\nself._overdue &= live\nself._faulted = {k: v for k, v in self._faulted.items() if k in live}\n```\nThe observer is a single instance shared by every project (`src/amoeba/runner/tenant.py:88`), but `observe()` is called once per project per tick (`src/amoeba/runner/tick.py:97`). Ticking project B therefore wipes project A's `_last_poll`, `_overdue` and `_faulted` entries. The consequences are real: A's overdue-launch fault stops recurring (so its `launch_overdue` escalation is closed by `_close_recovered`, `src/amoeba/runner/tick.py:196`), A's runs are re-polled on every tick instead of honouring `run_poll_interval_seconds`, and A's standing poll faults are forgotten, so a fault that stands is reported as recovered. The pruning should be scoped to the project that owns each entry (e.g. key the dictionaries by `(project_id, entry_id)`), or the observer should be per-project.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:108-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_within_grace` raises `ValueError` on a naive `issued_at`, aborting the whole project tick",
+      "description": "```python\nissued_at = entry.issued_at\nif issued_at is None or issued_at.tzinfo is None:\n    raise ValueError(f\"entry {entry.id} has no timezone-aware issued_at\")\n```\nThis raises out of `observe()` into `ProjectTick.run()`, and the Runner tenant's broad catch turns it into an \"unexpected fault\" escalation for the whole project \u2014 the node is not blocked and no run is observed, so every remaining in-flight run for that project is skipped for that tick. The recovery observer handles exactly this case correctly and explicitly, returning `Unknown` with a reason rather than raising (`src/amoeba/process/observers/sq_run_id.py:127-136`). The Runner should treat a naive or missing `issued_at` the same way: an expected fault recorded in `TickFaults` (or a project-scoped escalation), not an exception that aborts the tick.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:287-291"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Runner's process-boundary paths have no load test",
+      "description": "The Python rules require that code on the simulation, network, concurrency, or environment-layer paths has at least one load test exercising a realistic configuration, and CI must gate load tests for slices touching those paths (`tests/load` is a separate CI step, `.github/workflows/ci.yml`). This slice adds a tenant that launches detached subprocesses, polls them, and reaps children \u2014 precisely the concurrency/process-boundary class the rule names. The new `tests/runner/test_crash_recovery.py` covers crash *correctness* but is not a load test: it asserts functional end states, not latency, throughput, or resource bounds, and runs a single node. No file under `tests/load/` references the Runner (`grep` for `runner|Runner|sq run|launch` in `tests/load` returns only unrelated matches), so the Runner's launch/poll/reap cycle is never exercised under repetition. The existing `tests/load/test_crash_loop.py` uses the pre-Runner `JOURNALING_TENANT` stand-in and so does not cover this path.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/load/test_crash_loop.py:70"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `sq` outcome exit-code table is duplicated between the store-facing contract and the test stub",
+      "description": "`tests/sq_stub.py` keeps its own `STUB_EXIT_CODES` mapping and `src/amoeba/process/sq_outcome.py:40` keeps `OUTCOME_EXIT_CODES`. The duplication is deliberate and documented (the stub \"is a separate program\"), and it is the right call for a test double \u2014 but it is a second place where the outcome vocabulary can drift, and the project rule \"Never scatter comparison values across code\" applies to the production side. Since the stub is a separate program, this is informational only; the production table remains the single source.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/sq_stub.py:85-95"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`PARAM_CHECKOUT` is defined in two modules with the same name",
+      "description": "`PARAM_CHECKOUT` is defined in `amoeba.store.journal_models` (as `PARAM_CHECKOUT`) and re-exported, while `src/amoeba/runner/launch.py:132` defines its own `PARAM_PIPELINE` and `PARAM_PARAMS` constants for the sibling journal keys that *are* exported by the store (`PARAM_RUN_ID` is). The three keys describe one journal-parameter vocabulary split across two owners. `PARAM_PIPELINE`/`PARAM_PARAMS` are already duplicated by `src/amoeba/process/observers/sq_runs.py:42-43`, so this is a pre-existing pattern rather than a new inconsistency \u2014 but the store already owns `PARAM_RUN_ID` and `PARAM_CHECKOUT`, and adding the remaining two there would give the Runner one import rather than three.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/amoeba/store/journal_models.py:65-70"
+    },
+    {
+      "severity": "PASS",
+      "title": "The Runner's subprocess calls are all budget-guarded, and the guard is mechanically tested",
+      "description": "I verified each call site against `TickBudget.allows_call()`: the poll (`src/amoeba/runner/observe.py:160`), the `cf` probe (`src/amoeba/runner/probes.py:139`), and the `Popen` (`src/amoeba/runner/tick.py:176`). `tests/runner/test_budget_coverage.py` wraps all three with a guard that fails the test if a call begins after the deadline, which is the mechanical enforcement the D10 claim requires.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py:106-118"
+    },
+    {
+      "severity": "PASS",
+      "title": "The broad exception handler is confined, documented, and re-raises store failures",
+      "description": "The single `except Exception` in the package is at the documented process boundary, carries an inline justification for the `BLE001` suppression, logs via `logger.exception`, and re-raises `STORE_FAILURES` and `UpstreamShapeError` so the process exits rather than running blind. `tests/runner/test_tenant.py:190` asserts the package contains exactly one such handler, and `src/amoeba/store/models.py:162-198` confirms `StoreBusyError`, `StoreCorruptError`, `StorePermissionError` and `StoreSchemaError` are distinct exception types covered by that tuple.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py:138-147"
+    },
+    {
+      "severity": "PASS",
+      "title": "Journal-before-side-effect ordering holds on the launch path",
+      "description": "`_launch()` calls `build_argv()` for validation *before* `journal_issue()`, then journals, then launches \u2014 and `finish.record()` resolves the entry when the launch fails, so a failed launch does not leave a dangling entry. `tests/runner/test_tick.py:43` asserts the entry is committed before the `Popen` call by counting unresolved entries at call time, and `tests/runner/test_crash_recovery.py:47` proves the \"killed before launch\" case resolves as `NOT_APPLIED` by recovery without any relaunch.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py:165-189"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq --version` probe breaks the CLI start path under the test stub",
+      "location": "tests/sq_stub.py:150-160",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Observer state is shared across projects, so one project's entries can be evicted by another's",
+      "location": "src/amoeba/runner/observe.py:108-111",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`_within_grace` raises `ValueError` on a naive `issued_at`, aborting the whole project tick",
+      "location": "src/amoeba/runner/observe.py:287-291",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The Runner's process-boundary paths have no load test",
+      "location": "tests/load/test_crash_loop.py:70",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The `sq` outcome exit-code table is duplicated between the store-facing contract and the test stub",
+      "location": "tests/sq_stub.py:85-95",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`PARAM_CHECKOUT` is defined in two modules with the same name",
+      "location": "src/amoeba/store/journal_models.py:65-70",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The Runner's subprocess calls are all budget-guarded, and the guard is mechanically tested",
+      "location": "src/amoeba/runner/tenant.py:106-118",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The broad exception handler is confined, documented, and re-raises store failures",
+      "location": "src/amoeba/runner/tenant.py:138-147",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Journal-before-side-effect ordering holds on the launch path",
+      "location": "src/amoeba/runner/tick.py:165-189",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:33:50.303220",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 542106,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2037146,
+  "cached_tokens": 1782528,
+  "cache_write_tokens": null,
+  "completion_tokens": 138858,
+  "reasoning_tokens": 134540,
+  "duration_seconds": 533.6505899578333,
+  "cost_usd": 0.073231446,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,135 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Adding the first series does not retrigger visible-range translation",
+      "description": "The effect depends only on `mount.ready`, `chart`, and `range`, while series presence is tracked by mutating `seriesCountRef.current` in `buildChartOperations.addSeries`. A successful `addSeries` does not update React state or otherwise invalidate the effect. Consequently, if the range changes while the chart is empty and a series is added later\u2014the expected asynchronous-data flow\u2014the effect has already run and skipped the range, and it will not run again. The current range is therefore never sent to the provider.\n\nThe `applies the range once a series exists` test in `src/test/use-chart-provider.translation.test.tsx` masks this by changing the range only after adding the series. Promote series readiness or a series revision into React state and include it in the effect dependencies, or explicitly apply the current range after a successful first-series addition. Add a regression test with the reverse ordering: range first, series second.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:340-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Later failures replace the documented first error",
+      "description": "`setOperationError` unconditionally assigns the latest failure, although the public contract in `src/chart/chart-operations.ts:77` says `error` contains the \u201cfirst error from any provider operation.\u201d If two operations fail, the second masks the original diagnostic. Preserve the existing error with `current.error ?? failure`, or change the public contract if the latest-error behavior is intentional. The existing test only verifies that a later successful operation does not clear the error; it should force two failures and verify the required behavior.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:97-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mount-stage failures are always logged as create failures",
+      "description": "The catch covers the entire mount sequence, including initial resize, `ResizeObserver` construction and observation, and both subscription registrations. Nevertheless, every failure is logged as `provider create failed`, which can send developers toward the wrong stage. Log a generic `provider mount failed` message or introduce stage-specific errors for create, resize, observer setup, and subscription setup.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:302-304"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exported React components omit explicit return types",
+      "description": "The TypeScript convention requires explicit return types on exported functions, but `ChartRoute` has none. The same issue exists in `src/app/App.tsx#App` and `src/routes/routes.tsx#RootLayout`. Add explicit `ReactElement` or equivalent return annotations to these exported components.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/routes/chart-route.tsx#ChartRoute"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Adding the first series does not retrigger visible-range translation",
+      "location": "src/chart/use-chart-provider.ts:340-345",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Later failures replace the documented first error",
+      "location": "src/chart/use-chart-provider.ts:97-99",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Mount-stage failures are always logged as create failures",
+      "location": "src/chart/use-chart-provider.ts:302-304",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Exported React components omit explicit return types",
+      "location": "src/routes/chart-route.tsx#ChartRoute",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T08:54:36.205788",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 846768,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1315833,
+  "cached_tokens": 1129408,
+  "cache_write_tokens": null,
+  "completion_tokens": 205343,
+  "reasoning_tokens": 202684,
+  "duration_seconds": 1181.0231489168946,
+  "cost_usd": 0.083490631,
+  "cost_basis": "alias_pricing"
+}

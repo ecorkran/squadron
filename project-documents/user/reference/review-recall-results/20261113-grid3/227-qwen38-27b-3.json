@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "run_steps honors the \"report is still written\" contract only for two exception types",
+      "description": "The module docstring promises \"the first failure stops the run and the report is still written to `project-documents/user/notes/<date>-227-cutover.md`.\" `run_steps` (cutover_227_tick_backup.py) catches only `(StepFailed, subprocess.CalledProcessError)`. All *logical* failures go through `require()` \u2192 `StepFailed`, so those are fine. But the steps also perform unguarded I/O and parsing that raise other types: `step_check`/`main` call `CRON_FILE.read_text()`, and `step_production` reads `ctx.main.backup_root / \"backup-health.log\"` with no `exists()` guard (unlike the tick-side reads in `run_health`/`step_weekly`, which do guard). A `FileNotFoundError`/`PermissionError` there \u2014 or a `ValueError` from an `int()` parse in `tick_locks_held`/`health_flags` \u2014 propagates out of `run_steps` to `main()` *before* `report.write_text(...)`, so the run aborts with a bare traceback and **no cutover report**, contrary to the documented guarantee. For a one-shot production backup cutover whose only durable record is that report, the catch scope should cover the step bodies broadly (e.g. catch `Exception` and record it, or add the I/O/`ValueError` families) so the report is always written.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#run_steps"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`assert flags is not None` in run_health is unreachable and disappears under -O",
+      "description": "`run_health` calls `require(flags is not None, step, ...)` immediately before `assert flags is not None`. `require` raises `StepFailed` when `flags` is `None`, so the `assert` can never actually fire in a normal run \u2014 it is dead code. Its only observable effect is under `python -O`/`pytest -O`, where the assert is compiled out and `run_health` would then `return None` against a `tuple[int, int]` annotation (the `require` still prevents that, so no live bug, but the type contract becomes unsound). Delete the assert; `require` already enforces the invariant and is the thing `run_steps` actually catches.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#run_health"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Production-diff guard re-spells the replication host and bucket as literals",
+      "description": "`strip_new_args`/`production_changes` hardcode `\" --replication-host 127.0.0.1\"` and `f\" --remote {bucket_remote} \"`, even though the parsed table row already exposes `ctx.main.replication_host` (and `ctx` carries `main`). The cutover reads `ctx.main.url_key` and `ctx.bucket_remote` but not `replication_host`, so the value is defined in `deploy/backup-clusters.conf` (the single source) yet re-spelled here. If the 17/main `replication_host` ever changes, `strip_new_args` will fail to strip the new value and `step_apply`'s \"production lines changed beyond the new arguments\" guard will report a spurious diff. Passing the host from the parsed row keeps the guard consistent with the table.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py#strip_new_args"
+    },
+    {
+      "severity": "PASS",
+      "title": "Render substitution is patsub-replacement-safe and the production-preservation invariant is verified",
+      "description": "I verified the two invariants this change depends on. (1) Every `${x//pat/rep}` in `render_cron.sh` quotes `rep`, and `test_ampersand_survives_substitution` asserts each rendered job still ends in `2>&1` \u2014 so the bash 5.2 `&`-in-replacement pitfall the comment warns about is genuinely covered, not just commented. (2) `test_production_lines_gain_only_the_new_arguments` strips exactly the three new argument pairs from the rendered 17/main + host blocks and compares line-for-line against the pre-227 fixture, and `test_production_blocks_never_name_tick` confirms no tick path leaks into production's lines \u2014 the TD3 \"production never moves\" guarantee is mechanically enforced, not asserted in prose. The `@CLUSTER_BLOCKS@`-exactly-one-line guard and the unfilled-`@PLACEHOLDER@`/unescaped-`%` refusals also hold, so a bad render cannot reach `/etc/cron.d`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "deploy/lib/render_cron.sh"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "run_steps honors the \"report is still written\" contract only for two exception types",
+      "location": "scripts/cutover_227_tick_backup.py#run_steps",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`assert flags is not None` in run_health is unreachable and disappears under -O",
+      "location": "scripts/cutover_227_tick_backup.py#run_health",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Production-diff guard re-spells the replication host and bucket as literals",
+      "location": "scripts/cutover_227_helpers.py#strip_new_args",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Render substitution is patsub-replacement-safe and the production-preservation invariant is verified",
+      "location": "deploy/lib/render_cron.sh",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:46:10.462768",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 20,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 369606,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 653401,
+  "cached_tokens": 548128,
+  "cache_write_tokens": null,
+  "completion_tokens": 105836,
+  "reasoning_tokens": 103806,
+  "duration_seconds": 1273.830711999908,
+  "cost_usd": 0.28551112,
+  "cost_basis": "alias_pricing"
+}

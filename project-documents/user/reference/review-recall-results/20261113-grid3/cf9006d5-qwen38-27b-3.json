@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Manifest-driven stale-file pruning lost its path-containment guard",
+      "description": "This diff deletes `pruneStaleFiles` from `worktreePropagation.ts` \u2014 the only pruner that contained deletions to the worktree. It did so explicitly: `escapesLexically(relPath)` rejected absolute paths, drive letters, and `..` segments, and a realpath check (`isWithin`) guarded against symlinked install directories, with a doc comment stating \"manifest paths come from a user-editable file\" and a full test suite (`worktreePrune.test.ts`, also deleted) covering `../outside.md` entries. With the copy-and-prune fallback gone, `InstallManifest.finish()` is now the *only* pruning path \u2014 including for worktrees, which previously got the containment-checked pruner. In `finish()`, stale candidates are `pathField(oldLines)` joined straight into the root with no lexical or realpath check:\n\n```ts\nconst file = path.join(this.targetRoot, rel);\nif (rel === '' || !isFile(file)) continue;\nif (oldLines.includes(`${cksumField(fs.readFileSync(file))} ${rel}`)) {\n  fs.rmSync(file);\n  this.removeEmptyInstallDirs(rel);\n```\n\nA hand-edited `.context-forge/<target>.manifest` line such as `<crc> <size> ../../sibling/file` (the CRC is trivially computable from the published `cksum`) resolves outside the checkout and is deleted, and `removeEmptyInstallDirs` then rmdirs upward from the joined path. Exploitability is low \u2014 the manifest is in the victim's own checkout and the CRC must match \u2014 but this was a trust boundary the codebase itself called out, defended, and tested, and the diff removes the defense without a comment recording the decision. The root checkout had this exposure before the diff (it always used `finish()`); worktrees are newly exposed. Add a `..`/absolute filter on `rel` (and ideally the realpath check) before `fs.rmSync`, or document in `manifest.ts` that manifest contents are now trusted input and why.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/manifest.ts#finish"
+    },
+    {
+      "severity": "NOTE",
+      "title": "realGuide.test.ts is environment-dependent on a repo-local guide checkout",
+      "description": "`INSTALLED_GUIDE = path.join(REPO_ROOT, 'project-documents', 'ai-project-guide', 'project-guides')` and `makeProject(tmp, INSTALLED_GUIDE)` does `fs.cpSync` on it; any checkout without the guide installed (fresh clone where the submodule/tarball isn't populated, a CI runner without that step) fails the suite with an ENOENT from the harness, not a skip. I verified the directory exists in this working tree, so the test passes here, but I cannot verify CI provisions it. Note the diff just *removed* a test with the identical property (`readManifest(REPO_ROOT, 'claude')` in `manifest.test.ts`); if repo-local guides are not guaranteed in CI, consider skipping this smoke test when the directory is absent, or confirm the pipeline installs the guide before `pnpm test`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/ideInstall/realGuide.test.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Non-string rules.exclude surfaces as a generic Error with no remediation hint",
+      "description": "`ConfigManager.get()` does not run the key's validator, so a hand-edited TOML with `rules.exclude = 5` reaches `readRulesExclude`, which throws a plain `Error` (\"rules.exclude resolved to a number, expected a string\"). It propagates out of `installCheckout` as an uncaught (non-exit-1) error and `handleError` prints `Error: ...` with no `cf config` pointer, unlike every other user-facing failure in this command. The message is adequate; consider a `UserError` naming the key and file location for consistency with the command's other config guidance.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts#readRulesExclude"
+    },
+    {
+      "severity": "PASS",
+      "title": "Bash-script bridge removed cleanly; new in-process flow is pinned by tests",
+      "description": "Verified: no remaining references anywhere in `packages/` to `guideScript.ts` exports, `propagateToWorktrees`, `pruneStaleFiles`, `sweepGeneratedPrompts`, `readManifest`, `parseManifestLine`, `manifestTempPath`, `ManifestEntry`, `propagateDirs`, or `generatedPromptDirs`. The new flow is consistent end to end: `setupIdeAction` \u2192 `installIde` in-process (root and each worktree from the main checkout's `guideDir`, each with its own `rules.exclude` via `new ConfigManager(wtPath)`), `dryRun` sandboxed and removed in `finally`, failing worktrees recorded and the loop continuing, other exceptions propagating \u2014 and each of those behaviors is pinned in `setup-ide.test.ts` (including the \"bug propagates and stops the loop\" case) and `flags.test.ts` (sandbox cleanup on abort, project tree byte-identical after dry run). The #38/#40 \"ported as is\" quirks are now fixed with the old behavior explicitly documented as superseded, snapshots regenerated consistently, and `parseRulesExclude` centralized in core with the validator and both readers going through it. No `any` introduced; error handling follows the ported InstallAbort / filesystem-error / rethrow split.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Manifest-driven stale-file pruning lost its path-containment guard",
+      "location": "packages/cli/src/ideInstall/manifest.ts#finish",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "realGuide.test.ts is environment-dependent on a repo-local guide checkout",
+      "location": "packages/cli/tests/ideInstall/realGuide.test.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Non-string rules.exclude surfaces as a generic Error with no remediation hint",
+      "location": "packages/cli/src/commands/setup-ide.ts#readRulesExclude",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Bash-script bridge removed cleanly; new in-process flow is pinned by tests",
+      "location": "packages/cli/src/commands/setup-ide.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:41:40.880858",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 41,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 239770,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1784891,
+  "cached_tokens": 1561620,
+  "cache_write_tokens": null,
+  "completion_tokens": 63551,
+  "reasoning_tokens": 60549,
+  "duration_seconds": 669.7224617910106,
+  "cost_usd": 0.27147824,
+  "cost_basis": "alias_pricing"
+}

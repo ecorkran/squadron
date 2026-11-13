@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Lint configs are written without the ownership check every other install write goes through",
+      "description": "`LintCheck.writeOrSuggest` and the ruff branch at `lint.ts:151` call `fs.writeFileSync` directly against `ctx.targetRoot`. Every other file the installer writes goes through `ctx.manifest.installFile`, which refuses to overwrite a file the guide does not own (`manifest.ts:130-176`) and backs the file up first. The lint path bypasses both: a pre-existing user-authored `ruff.toml` is never overwritten (the code checks `isFile` first), but a file the user created *after* a previous install is silently clobbered by the write path in the `python()` branch \u2014 `writeOrSuggest` is only reached when the config is absent, so the risk is bounded, yet `analysis_options.yaml` and `eslint.config.mjs` are written with `fs.writeFileSync` and no backup, and the written files are explicitly \"not in the manifest and never pruned\" (`lint.ts:10-11`). This means a user who edits a generated `eslint.config.mjs` loses the edit on the next `--write-lint` run with no warning and no backup, unlike `CLAUDE.md`, which is backed up to `<name>.pre-context-forge`. The AGENTS.md convention (\"Fail explicitly\", \"never use cheap hacks\") and the installer's own ownership model argue for routing these writes through the same backup/ownership path, or at minimum backing them up.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts:79-84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`rules.exclude` is read per checkout, but the key's scope is `Shared` \u2014 the per-worktree read contradicts the config semantics",
+      "description": "`readRulesExclude(root)` constructs `new ConfigManager(root)` per root, so each worktree gets its own value from `<worktree>/.context-forge.toml`, falling back to the user config. But `rules.exclude` is declared `scope: ConfigScope.Shared` in `packages/core/src/config/ConfigKeys.ts:167`, and `ConfigManager.get` for a shared key reads the project file then the *user* file \u2014 there is no per-checkout resolution beyond that. The docstring \"a worktree can carry its own\" is therefore true only because a shared key may still be written into a worktree's `.context-forge.toml`. The comment in `installWorktrees` (\"each with its own root and its own rules.exclude\") and the test `reads rules.exclude for each worktree root` codify behavior that the config key's declared scope does not describe. Either the key should be `Personal`/per-checkout or the per-worktree read should be documented as an intentional extension in `ConfigKeys.ts`, so the two places do not drift.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:76-82"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A failing root install aborts before worktrees, but a failing worktree install is reported only after all worktrees run \u2014 with no distinction between \"failed\" and \"aborted\"",
+      "description": "`installWorktrees` treats any non-zero `exitCode` as a worktree failure and continues. `installIde` returns `exitCode: 1` for `InstallAbort` *and* for filesystem errors (`installer.ts:88-96`), but the two mean different things: an `InstallAbort` (e.g. \"rules source directory not found\") will abort identically in every worktree, since they all share the guide directory. The loop will therefore run N identical failing installs and report N failures, when the root cause is one shared precondition. The old code had the same shape for worktrees but the root was a separate process whose exit code was surfaced distinctly. Consider checking the shared precondition (guide present, rules dir present) once before the loop, and distinguishing abort-vs-error in the worktree report.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:186-197"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The dry-run sandbox copies entire top-level directories, so unrelated project files are copied and diffed",
+      "description": "`copyInstallPaths` copies `.claude`, `.cursor`, `.github`, `.agents` and `.context-forge` recursively into a temp sandbox with `verbatimSymlinks: true`. The `.claude` directory in a real project can contain `settings.local.json`, `worktrees/` (excluded via the `filter`), history, and caches; `.github` can contain workflows, issue templates, and Actions directories. All of that is copied on every dry run, then walked by `listInstallFiles` on both roots and compared byte-for-byte (`sameContent` reads every file in full). On a large repository this makes `--dry-run` slow and memory-hungry, and the diff is reported over paths the installer never touches. The `DRY_RUN_SKIP_PATH` filter only excludes `.claude/worktrees`. Narrowing the copied set to the paths the installer actually writes (as `harness.ts` `INSTALL_PATHS` approximates) would keep the preview accurate and cheap.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:37-48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dry-run diff output is not sorted consistently with the \"byte order\" claim in its own doc comment",
+      "description": "`reportChanges` claims each group is \"in byte order\", and `listInstallFiles` does sort by `byteOrder`. But the three groups are emitted in the order added / modified / removed, and within each group the entries inherit `after`/`before` order \u2014 which is byte order. That part is consistent. The actual drift is in the *file* comment on `dryRun.ts:1-5`: \"install into a sandbox copy of the project's install paths, then report what would be added, changed and removed\" \u2014 but the sandbox install also writes a manifest into the sandbox (`.context-forge/<target>.manifest`), and `INSTALL_PATHS` includes `MANIFEST_DIR`, so the manifest shows up as an \"added\" file in every fresh dry run (visible in `test_flags_dry_run_fresh.snap`: `+ .context-forge/claude.manifest`). A user reading \"Preview the files setup-ide would add\" sees a manifest they never asked about. This is arguably correct, but the dry-run report and the CLI's `--dry-run` help text (\"Preview the files setup-ide would add, change, or remove\") do not mention it.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:83-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`installWorktrees` installs into worktrees without the overwrite prompt the root gets",
+      "description": "The root install asks before overwriting unmanaged marker files. Worktree installs do not: `installCheckout` is called directly for each worktree, so a worktree containing an unmanaged `CLAUDE.md` is overwritten without asking. In the old code this was safe because propagation only *copied* the root's already-installed output into worktrees. Now each worktree runs a full install, which can overwrite user content in that worktree. The `InstallManifest.installFile` ownership check limits this to files the manifest claims, but for a worktree with no manifest (or a stale one), the first install can legitimately claim ownership of a user file. The root's prompt-and-backup treatment should apply per worktree, or the asymmetry should be documented.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:179-197"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`MANAGED_MARKER_END` and `GENERATED_MARKER` are exported from `ideTargets.ts` but the module comment no longer describes them",
+      "description": "The module header says the file \"holds the per-target descriptors and every marker literal\", which is accurate, but `MANAGED_MARKER_END` is only consumed by `ideInstall/managedSection.ts` and `GENERATED_MARKER` only by `ideInstall/targets/copilot.ts`. Both are now installer-internal, while `ideTargets.ts` is otherwise the command-layer vocabulary. Not wrong, but the layering (installer importing from `commands/`) is worth a deliberate decision rather than an accident of where the literal first lived.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/ideTargets.ts:1-8"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`ConfigManager.get` returns `string | boolean | number`, so the `typeof value !== 'string'` guard in `readRulesExclude` is defensive but unreachable",
+      "description": "`rules.exclude` is declared `type: 'string'` with `default: ''`, and `ConfigManager.get` returns `def.default` when unset, so the value is always a string for this key. The guard throws a plain `Error` (not `UserError`), so it would surface as `Error: rules.exclude resolved to a number...` rather than a user-facing message. It is cheap insurance against a future type change on the key; fine to keep, but consider `UserError` so the failure mode is a clean message rather than a generic one.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:77-80"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `getApplyTo` behavior change is a deliberate deviation from bash, correctly documented and re-pinned",
+      "description": "The `**\\n**` double-default is now `**`, changing generated `applyTo:` values and the CRC in the manifest (visible in the updated snapshots `test_targets_copilot_fresh.snap` and `test_targets_copilot_prompts.snap`). The comment cites #40 and the test was renamed from \"pins #40\" to \"gives the default once\", which correctly signals an intentional fix rather than a rewritten test. This changes the content of already-installed `.github/instructions/*.instructions.md` files, so the next install will report those as modified \u2014 worth a CHANGELOG entry given the repo's versioning rules treat a changed artifact as user-facing.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/frontmatter.ts:59-89"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`replaceBlock` drops the final newline using a `slice(0, -1)` on the merged text",
+      "description": "The fix for #38 is correct for the \"original had no trailing newline\" case, but the guard is `original === '' || original.endsWith('\\n')`. An `original` that is empty yields `merged` (block content), which ends with `\\n` \u2014 correct. An `original` ending in `\\n` yields `merged` unchanged \u2014 correct. The `slice` branch therefore only fires when the original genuinely lacked a final newline. The logic is right; it is just worth noting that `merged` is guaranteed non-empty in that branch (the block always contributes at least the BEGIN marker), so the `slice` cannot produce an empty string.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/managedSection.ts:123-128"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `any` ban and strict typing are respected throughout",
+      "description": "No `any`, no `as` assertions beyond the two pre-existing `as string | boolean | number` casts in `ConfigManager`, and no empty catch blocks in the new code. `Record<Language, () => void>` and `Record<Target, ...>` are used to make an incomplete mapping a compile error, which matches the project's \"define it once\" rule. The new files are all well under the 300-line guideline (`lint.ts` is 239 lines, `dryRun.ts` is 124).",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts:1-239"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Lint configs are written without the ownership check every other install write goes through",
+      "location": "packages/cli/src/ideInstall/lint.ts:79-84",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`rules.exclude` is read per checkout, but the key's scope is `Shared` \u2014 the per-worktree read contradicts the config semantics",
+      "location": "packages/cli/src/commands/setup-ide.ts:76-82",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A failing root install aborts before worktrees, but a failing worktree install is reported only after all worktrees run \u2014 with no distinction between \"failed\" and \"aborted\"",
+      "location": "packages/cli/src/commands/setup-ide.ts:186-197",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "The dry-run sandbox copies entire top-level directories, so unrelated project files are copied and diffed",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:37-48",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Dry-run diff output is not sorted consistently with the \"byte order\" claim in its own doc comment",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:83-99",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`installWorktrees` installs into worktrees without the overwrite prompt the root gets",
+      "location": "packages/cli/src/commands/setup-ide.ts:179-197",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`MANAGED_MARKER_END` and `GENERATED_MARKER` are exported from `ideTargets.ts` but the module comment no longer describes them",
+      "location": "packages/cli/src/commands/ideTargets.ts:1-8",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`ConfigManager.get` returns `string | boolean | number`, so the `typeof value !== 'string'` guard in `readRulesExclude` is defensive but unreachable",
+      "location": "packages/cli/src/commands/setup-ide.ts:77-80",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The `getApplyTo` behavior change is a deliberate deviation from bash, correctly documented and re-pinned",
+      "location": "packages/cli/src/ideInstall/frontmatter.ts:59-89",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`replaceBlock` drops the final newline using a `slice(0, -1)` on the merged text",
+      "location": "packages/cli/src/ideInstall/managedSection.ts:123-128",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The `any` ban and strict typing are respected throughout",
+      "location": "packages/cli/src/ideInstall/lint.ts:1-239",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:11:31.098102",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 31,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 197558,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1835055,
+  "cached_tokens": 1617664,
+  "cache_write_tokens": null,
+  "completion_tokens": 53709,
+  "reasoning_tokens": 49257,
+  "duration_seconds": 360.54495974979363,
+  "cost_usd": 0.043740673,
+  "cost_basis": "alias_pricing"
+}

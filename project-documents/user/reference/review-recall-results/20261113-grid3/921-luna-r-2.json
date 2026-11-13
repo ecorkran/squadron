@@ -1,0 +1,117 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The sudoers installer rule permits root execution of a user-writable script",
+      "description": "`MT_INSTALL` authorizes root to run the installer from `/home/manta/source/repos/manta/trading-data`, the operator\u2019s checkout. Because that checkout is writable by the `manta` account, the account can modify the authorized script and then invoke it through `sudo` to execute arbitrary code as root. The installer must be installed from a root-owned, non-writable location, or this sudoers grant must be removed or otherwise constrained.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The bounded cutover firing still waits for the entire minute pass",
+      "description": "`fire_unit_until` calls `mt-run minute` synchronously before it starts polling the journal. But `deploy/mt-run`\u2019s `start_and_stream` waits in a loop until the systemd unit is no longer active. Consequently, the cutover cannot stop the unit when the trailing-completion line appears; it waits for the unbounded backfill to finish first. Start the unit in a way that returns control promptly, then poll for the marker and stop it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py#fire_unit_until"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Sessions with only an out-of-session spillover bar are not marked for reseeding",
+      "description": "The truncation scan only returns a day when it finds at least one bar inside that session (`bars.newest IS NOT NULL`) and that bar is at or before the open. The reported failure case has only a midnight spillover bar, outside the session interval, so this scan excludes the session entirely. The same truncated-day detection is used by the universe index builder. Since the cagg can still mark that calendar day covered by the spillover bar, the daemon\u2019s new uncovered-day seeding will not necessarily recreate the missing session\u2019s gap. Include sessions with no in-session bars when determining which covered days require repair.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py#find_truncated_days"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The sudoers installer rule permits root execution of a user-writable script",
+      "location": "deploy/sudoers.d/manta-ops:9",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The bounded cutover firing still waits for the entire minute pass",
+      "location": "scripts/cutover_common.py#fire_unit_until",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Sessions with only an out-of-session spillover bar are not marked for reseeding",
+      "location": "src/manta_trading/data/gaps/repair_921.py#find_truncated_days",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:21:58.982201",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 3702,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 559902,
+  "cached_tokens": 470293,
+  "cache_write_tokens": null,
+  "completion_tokens": 7994,
+  "reasoning_tokens": 6839,
+  "duration_seconds": 90.00893833301961,
+  "cost_usd": 0.01766083,
+  "cost_basis": "alias_pricing"
+}

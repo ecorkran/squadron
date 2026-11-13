@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`relative()` can produce paths outside the checkout, which then get passed to git pathspecs",
+      "description": "`fixRelPath` computes `relative(viewRoot(view), finding.fixAction!.filePath)`. If a finding's `filePath` is not under the view root (e.g. a rule that emits a path from another checkout, or an absolute path that resolves outside), `relative()` yields a `../\u2026` path. That value is then used as a git pathspec in `checkoutReadiness` (`git status --porcelain -- <relPath>`), in `commitPathsIfChanged` (`git add -A -- <paths>`, `git commit -- <paths>`), and in `restorePathsToHead`. Git rejects pathspecs that escape the repository, so the failure surfaces as a raw git error rather than a `FILE_DIRTY`/`NOT_A_CHECKOUT` deferral \u2014 and in `commitViewWrites` it is caught by the generic commit-failure handler, which then calls `restorePathsToHead` with the same out-of-tree path. The routing code should validate that each computed relative path stays inside the view root and defer such findings explicitly rather than letting them reach git.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:59-61"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`checkoutReadiness` dereferences `realpathSync` on a path git may have resolved to a symlinked root",
+      "description": "`realpathSync(topLevel) !== realpathSync(checkoutPath)` compares the resolved git top level with the resolved checkout path. `checkoutPath` is the raw registered `worktreePath`, which is normally absolute, but `realpathSync` throws if the path does not exist \u2014 the `existsSync` guard at the top covers the directory itself, yet `topLevel` comes from git and `checkoutPath` is checked before git runs, so a checkout removed between the two calls would throw an uncaught `ENOENT` rather than returning `NOT_A_CHECKOUT`. More importantly, `resolveInvokingCheckout` (packages/core/src/introspection/routedFixes.ts:80-92) does the same `realpathSync(topLevel)` with no guard at all, so a `git rev-parse` that returns a top level which was removed in the same window crashes the fix run with a raw `ENOENT` instead of the intended `UserError`. Both should be wrapped so the documented error/defer reason is what the caller sees.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/git/checkoutReadiness.ts:44"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A commit that succeeds but produces no commit silently reports the fixes as applied",
+      "description": "`commitViewWrites` treats `commitPathsIfChanged` returning `null` as success with no commit: `commit` is `undefined`, `restored` is `false`, and no deferral is recorded. `null` is returned when `git status --porcelain` reports nothing for the paths \u2014 which happens when the fix wrote a file whose content is unchanged, or when the path is gitignored. In that case the fix log still reports the write as applied and `fixed` stays incremented, but nothing was committed in the non-invoking checkout, and the CLI prints the group with the note `uncommitted` (packages/cli/src/output/fixReport.ts:78-84). The user is told a fix was applied to another checkout while no commit exists there and the other checkout's copy of the file was never updated. A `null` commit outcome should be surfaced (deferred, or explicitly reported) rather than passing silently.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:221-228"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`git add -A` on the fix paths can stage unrelated deletions and re-creations in a non-invoking checkout",
+      "description": "`commitPathsIfChanged` uses `git add -A -- <paths>`. With a pathspec, `-A` stages additions, modifications *and deletions* under those paths. If a fix's target path was deleted in the non-invoking checkout between the readiness probe and the write, `add -A` records a deletion and the commit removes the file \u2014 a destructive outcome the readiness check did not authorize. The pathspec does keep unrelated staged files out of the commit (which the tests verify), but within the target path itself the behavior is broader than \"stage the change this fix made\". `git add --` (without `-A`) plus an explicit untracked-file add, or a `git add -A` scoped only to files the fix actually created, would be the narrower behavior.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts:171"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`console.error` is used for commit/restore failures in a library module",
+      "description": "`routedFixes.ts` lives in `@context-forge/core` and writes directly to `console.error` when a commit or a restore fails. This bypasses the CLI's structured error handling (`packages/cli/src/utils/errors.ts`), so in `--json` mode the failure text is emitted as unstructured stderr noise instead of the documented JSON error shape, and MCP's `workflow_check` returns a successful JSON result while the failure detail only appears on the server's stderr. The failure is already carried in `DeferredFix.detail` / `ConsistencyFixResult.fixErrors`, so the console write is redundant duplication of the reason for logging; the caller (CLI/MCP) should surface it.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:229"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `--fix` single-slice path never prompts, unlike the all-slices path",
+      "description": "`confirm` is computed as `singleSlice === null && explicitFix && !opts.yes`, so `cf check --slice 250 --fix` (without `--yes`) applies writes with no preview and no confirmation, while `cf check --fix` prompts. Before this change the single-slice path also applied without a prompt (it used `checker.fix` per view), so this is not a regression \u2014 but the new code makes the asymmetry explicit and now routes single-slice fixes through the same plan/apply machinery, including writes into non-invoking checkouts and commits there. A single-slice `--fix` can therefore now commit into another checkout with no preview, while the equivalent all-slices invocation shows a plan and asks first. The prompt rule should be stated once and applied to both scopes.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/check.ts:177-182"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`plannedFixCount` counts findings, not distinct file writes, so the prompt count can exceed the number of writes",
+      "description": "`plannedFixCount` sums `entry.result.findings.length`, and the prompt reads `Apply N fix(es) as planned?`. Several findings can target the same file (e.g. a plan-status frontmatter fix and a plan-checkbox fix on the same plan), so N can exceed the number of file updates actually performed. The output is not wrong \u2014 the findings are genuinely distinct fixes \u2014 but \"fix(es)\" reads as \"writes\" next to the `Fixed N finding(s)` summary. Either the wording should say \"finding(s)\" or the count should be documented as findings.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/cli/src/output/fixReport.ts:98-100"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The CLI and MCP packages import test helpers across package boundaries",
+      "description": "`packages/cli/tests/commands/check-worktree-fix.test.ts` and `packages/mcp-server/tests/workflowCheckRouting.test.ts` import `../../../core/tests/helpers/gitWorktreeFixture.js`. The helper lives under `packages/core/tests/`, which is excluded from the core package's published `files`/build output, so these cross-package relative imports depend on the monorepo layout rather than on a published API. It works in-repo but couples three packages' test suites to one another's directory structure. Moving the fixture into a shared test-support package (or a workspace-level `test-utils`) would keep the dependency explicit.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/check-worktree-fix.test.ts:16"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fix routing is genuinely pure at the ownership layer and covered by real-git tests",
+      "description": "`resolveFixOwner` correctly encodes the documented precedence (single view \u2192 unique range claimant \u2192 primary view \u2192 `null`), deliberately ignores `rangeOverride` (which is advisory, not ownership), and is exported from the browser-safe barrel while `routedFixes.ts` (which touches fs and git) is exported only from `core/node.ts`. The new test files cover the critical paths with real git worktrees rather than mocked `child_process`, including the commit-hook rejection and restore-failure paths.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/fixOwnership.ts:35-53"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`relative()` can produce paths outside the checkout, which then get passed to git pathspecs",
+      "location": "packages/core/src/introspection/routedFixes.ts:59-61",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`checkoutReadiness` dereferences `realpathSync` on a path git may have resolved to a symlinked root",
+      "location": "packages/core/src/git/checkoutReadiness.ts:44",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A commit that succeeds but produces no commit silently reports the fixes as applied",
+      "location": "packages/core/src/introspection/routedFixes.ts:221-228",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`git add -A` on the fix paths can stage unrelated deletions and re-creations in a non-invoking checkout",
+      "location": "packages/core/src/guides/gitExec.ts:171",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`console.error` is used for commit/restore failures in a library module",
+      "location": "packages/core/src/introspection/routedFixes.ts:229",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The `--fix` single-slice path never prompts, unlike the all-slices path",
+      "location": "packages/cli/src/commands/check.ts:177-182",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`plannedFixCount` counts findings, not distinct file writes, so the prompt count can exceed the number of writes",
+      "location": "packages/cli/src/output/fixReport.ts:98-100",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The CLI and MCP packages import test helpers across package boundaries",
+      "location": "packages/cli/tests/commands/check-worktree-fix.test.ts:16",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Fix routing is genuinely pure at the ownership layer and covered by real-git tests",
+      "location": "packages/core/src/introspection/fixOwnership.ts:35-53",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:19:44.047644",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 310268,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1595149,
+  "cached_tokens": 1387648,
+  "cache_write_tokens": null,
+  "completion_tokens": 80609,
+  "reasoning_tokens": 77320,
+  "duration_seconds": 363.3914528749883,
+  "cost_usd": 0.04945881099999999,
+  "cost_basis": "alias_pricing"
+}

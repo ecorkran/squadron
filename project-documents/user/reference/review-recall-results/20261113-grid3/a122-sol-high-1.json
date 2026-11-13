@@ -1,0 +1,111 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Observing one project discards other projects\u2019 polling state",
+      "description": "`RunnerTenant` shares one observer across projects, but these lines prune its caches against only the current project\u2019s entries. Observing A, B, then A therefore polls A twice even at the same clock time\u2014confirmed by an isolated diagnostic. This defeats the polling interval and discards standing faults and overdue-launch state. Keep caches per project, or prune against all hosted entries. Add a multi-project regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:108-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unconfirmed launches lose standing poll faults between retries",
+      "description": "After an unconfirmed launch receives `PollFailure`, subsequent ticks before the next poll return `_still_overdue()` without replaying `_faulted`. A diagnostic confirmed the state changes from `FAULT` to `LAUNCHING` with no recurring fault, despite no successful observation. Consequently, `ProjectTick._close_recovered()` closes the escalation prematurely. Replay standing poll faults here, as the confirmed-run path does.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:192-193"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Launch budget check precedes blocking journal and file operations",
+      "description": "The budget is checked in `_act()`, but `journal_issue()` commits a SQLite transaction and `launch()` opens both logs before `Popen`. If those operations consume the remaining budget\u2014or stop is requested during them\u2014the subprocess still starts. This violates the deadline and shutdown contract. Recheck immediately before spawning, with an explicit safe resolution or continuation policy for an already-journaled command that is not spawned. Add coverage that advances the clock or requests stop during journal issuance.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py:176-187"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Observing one project discards other projects\u2019 polling state",
+      "location": "src/amoeba/runner/observe.py:108-111",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unconfirmed launches lose standing poll faults between retries",
+      "location": "src/amoeba/runner/observe.py:192-193",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Launch budget check precedes blocking journal and file operations",
+      "location": "src/amoeba/runner/tick.py:176-187",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:16:13.757790",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 118610,
+  "cached_tokens": 118272,
+  "cache_write_tokens": null,
+  "completion_tokens": 859,
+  "reasoning_tokens": 448,
+  "duration_seconds": 129.96947108302265,
+  "cost_usd": null,
+  "cost_basis": null
+}

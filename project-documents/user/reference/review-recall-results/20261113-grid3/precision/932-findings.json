@@ -1,0 +1,93 @@
+[
+ {
+  "ref": "luna-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Background-task cleanup can delay dispatch return",
+  "location": "src/squadron/pipeline/sdk_session.py:333-336",
+  "description": "After the configured idle timeout, each `stop_task` call is awaited sequentially. The SDK\u2019s control request has a 60-second timeout, so if multiple stop requests stall, dispatch can take up to roughly 60 seconds per task before returning its partial response. Consider bounding cleanup with a shared deadline or otherwise limiting its total wait."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "FAIL",
+  "title": "Disable the idle timer once background work completes",
+  "location": "src/squadron/pipeline/sdk_session.py:297-301",
+  "description": "The timeout remains fixed throughout `_read_turn()`, even after a task notification clears the last active background agent. A slow foreground continuation can therefore time out, returning partial text as success without consuming its result.\n\nReproduced with a completion notification followed by a delayed parent answer: dispatch returned `\"Waiting\\nWorking\"` instead of including `\"DONE\"`, and stopped zero tasks. Reevaluate `turns.waiting` before each read and disable the timeout when background work finishes. Add a regression test covering this transition."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "CONCERN",
+  "title": "Guard model switching on unusable sessions",
+  "location": "src/squadron/pipeline/sdk_session.py:418-435",
+  "description": "The new unusable-session guard does not cover `set_model()`. However, `_dispatch_via_session()` calls `set_model()` before `dispatch()`, and reconnect resets `current_model` to `None`. After a failed reconnect, subsequent batch items therefore contact the dead client before reaching the guard.\n\nVerified with a real disconnected SDK client: this produces `CLIConnectionError: Not connected. Call connect() first.`, losing the recorded reconnect cause. Guard `set_model()` too, and test with a client that rejects calls while disconnected rather than an unconditional `AsyncMock`."
+ },
+ {
+  "ref": "sol-high/1/2",
+  "severity": "CONCERN",
+  "title": "Add load coverage for persistent-session dispatch",
+  "location": "tests/pipeline/test_sdk_session.py",
+  "description": "The added tests exercise short scripted sequences, but no load test covers the new stream-consumption and background-task lifecycle. Existing `tests/load/` coverage concerns grep and worktrees, not SDK sessions.\n\nThe Python rules require realistic load coverage for concurrency/network paths. Add a CI-gated test exercising repeated dispatches and concurrent task notifications, with latency or resource-bound assertions."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Boolean TOML values pass integer config validation",
+  "location": "src/squadron/config/manager.py:135",
+  "description": "`bool` is a subclass of `int`, so the integer check accepts a TOML value such as `pipeline.background_idle_timeout_s = true`. That value is then used as a one-second timeout, which can stop background agents unexpectedly instead of rejecting the invalid setting. Exclude booleans when validating integer config values."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Missing required load test for SDK dispatch waiting",
+  "location": "src/squadron/pipeline/sdk_session.py:215",
+  "description": "The new dispatch path reads a network stream, waits for background-agent signals, and calls the SDK to stop tasks on timeout. The added tests exercise these paths with `ScriptedClient`, but there is no corresponding `tests/load/` test for this network/concurrency behavior. The project\u2019s Python rules require a load test for such paths; add one that exercises a realistic session configuration and asserts resource or latency bounds."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "CONCERN",
+  "title": "One-shot SDK dispatch drops the pipeline's `cwd`, so config reads resolve against the wrong project",
+  "location": "src/squadron/pipeline/actions/dispatch.py:142-153",
+  "description": "The new config lookup uses `config_cwd = cwd or \".\"`, but `cwd` is then deliberately *not* passed to the SDK agent (`cwd=None if is_sdk else cwd`). For an SDK dispatch, `cwd` is the pipeline's working directory (the project under run), so `get_typed_config(\"pipeline.user_settings\", bool, cwd=config_cwd)` reads the project-level `.squadron.toml` correctly \u2014 however `open_pipeline_session()` in `src/squadron/pipeline/sdk_session.py:455-461` reads the same two keys with `cwd=str(Path.cwd())`, i.e. the *process* working directory, not the pipeline's `cwd`. Two different resolutions of \"the project's config\" for the same run means `sq run --cwd <other-project>` (or any pipeline invoked with an explicit `cwd`) can get a different `pipeline.auto_memory` / `pipeline.user_settings` on the session path than on the one-shot path. `execute_pipeline` accepts an explicit `cwd` (`src/squadron/pipeline/executor.py:337`, `effective_cwd = cwd or os.getcwd()`), so this is reachable. The session builder should take the run's cwd as a parameter rather than reaching for `Path.cwd()`."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "CONCERN",
+  "title": "`env` is now always set on `ClaudeAgentOptions`, replacing the SDK's default environment inheritance semantics",
+  "location": "src/squadron/providers/sdk/provider.py:81-90",
+  "description": "`kwargs[\"env\"] = settings[\"env\"]` is set unconditionally, and `sdk_settings_options` returns `{}` when `auto_memory` is true. Depending on the SDK's handling of an explicit empty `env`, this can either be a no-op or replace the CLI's inherited environment. The previous code only set `env` in the narrow `setting_sources == []` case, merging with any existing entries. The same pattern now applies to every SDK agent created through this provider (including `sq serve`, reviews, PR composer, summary one-shot), all of which get `env={}` or `env={\"CLAUDE_CODE_DISABLE_AUTO_MEMORY\": \"1\"}`. This deserves an explicit test that a non-empty base environment (e.g. `PATH`, `ANTHROPIC_API_KEY`) still reaches the CLI subprocess; the current tests only assert the presence/absence of the auto-memory variable."
+ },
+ {
+  "ref": "minimax31-flash/1/2",
+  "severity": "CONCERN",
+  "title": "`setting_sources` is left unset for `sq serve` agents, contradicting the stated policy that no automated path may leave it unset",
+  "location": "src/squadron/providers/sdk/provider.py:89-90",
+  "description": "The module docstring of `src/squadron/providers/sdk/settings.py` states \"no automated path may leave `setting_sources` unset\", and `describe_setting_sources` renders the unset case as the special string `\"cli default\"` for exactly this reason. But `ClaudeSDKProvider.create_agent` still leaves `setting_sources` absent when `config.setting_sources is None`, and `sq serve` callers (per the comment in the diff) are exactly those callers. The policy is therefore documented as absolute but implemented as a per-call-site exception, with the exception encoded as a magic string rather than a named policy branch. Either the docstring should be narrowed to name the `sq serve` exception, or the serve path should pass an explicit list."
+ },
+ {
+  "ref": "minimax31-flash/1/3",
+  "severity": "CONCERN",
+  "title": "The `describe_run_settings` telemetry reports `auto_memory` from the config, not from what the provider actually sent",
+  "location": "src/squadron/core/models.py:126-131",
+  "description": "`describe_run_settings(config, is_sdk=...)` reports `config.auto_memory` directly, while `setting_sources` is derived from `config.setting_sources`. In the SDK provider, the actual environment is computed inside `sdk_settings_options` from `config.auto_memory` \u2014 so the two agree today. But the session path in `src/squadron/pipeline/actions/dispatch.py:369-375` reads `session.auto_memory` from `base_options.env` (i.e. what was sent) while the one-shot path reads the config value (i.e. what was requested). Two paths recording the same field by different means can drift \u2014 and the session path's version is the one that reflects reality. Deriving the one-shot value from the built options (or from a shared helper) would keep the two records on one rule."
+ },
+ {
+  "ref": "minimax31-flash/1/4",
+  "severity": "CONCERN",
+  "title": "`describe_system_prompt` misreports a preset run whose `instructions` is an empty string",
+  "location": "src/squadron/core/models.py:102-105",
+  "description": "`describe_system_prompt` returns `PRESET` when `config.instructions` is falsy, including `\"\"`. For the SDK provider, `use_default_system_prompt=True` with `instructions=\"\"` produces `{\"type\": \"preset\", \"preset\": \"claude_code\"}` with no `append` \u2014 so `PRESET` is correct there. But for a non-SDK provider, `instructions=\"\"` with `use_default_system_prompt=False` produces `kwargs[\"system_prompt\"] = \"\"` (an *empty* system prompt), and `describe_system_prompt` returns `EMPTY` \u2014 also correct. The inconsistency is that `describe_system_prompt` keys on the *instruction* rather than on what was actually sent, so a config with `use_default_system_prompt=True, instructions=\"X\"` is `PRESET_APPEND` even for a provider that ignores `use_default_system_prompt` entirely. Since `use_default_system_prompt` is only meaningful for the SDK provider, the function silently reports a mode the non-SDK provider never used. `describe_system_prompt` has no `is_sdk` parameter while its sibling `describe_setting_sources` does \u2014 an asymmetry that makes the two-record contract harder to hold."
+ },
+ {
+  "ref": "minimax31-flash/1/5",
+  "severity": "CONCERN",
+  "title": "`dispatch_artifact` appends the agent's final text to *every* failure branch, including \"no slice param in scope\"",
+  "location": "src/squadron/events/builtin/dispatch_artifact.py:143-149",
+  "description": "The final text is appended after `_dispatch_artifact_post_condition_error` returns, so it is attached to failures that have nothing to do with the agent's words \u2014 e.g. `\"no 'slice' param in scope\"`, `\"run start time unavailable\"`, or a corrupt run-state file. The appended text in those cases is noise that makes the real cause harder to read, and for the run-state-error branch it embeds an agent response into a state-loading diagnostic. The comment says \"so every failure branch carries it\", which reads as intentional, but the failure modes that do not concern the agent's output are exactly the ones where it should not appear."
+ },
+ {
+  "ref": "minimax31-flash/1/6",
+  "severity": "CONCERN",
+  "title": "The background idle timeout is read from config on every waiting dispatch and can raise an uncaught `ValueError`",
+  "location": "src/squadron/pipeline/sdk_session.py:308-314",
+  "description": "`_background_idle_timeout_s` calls `get_typed_config(\"pipeline.background_idle_timeout_s\", int, ...)`, which raises `ValueError` on a type mismatch (e.g. a hand-edited `.squadron.toml` with `pipeline.background_idle_timeout_s = \"abc\"`). The call sits inside `_collect_turns`, outside the `try` block in `dispatch()` that maps SDK exceptions to provider errors, so a `ValueError` escapes as an unexpected exception type. `dispatch.py`'s `DispatchAction.execute` catches broad `Exception`, so the pipeline survives, but the error surfaces as a raw `ValueError` rather than a `ProviderError`, and the background agents that were still running are never stopped. A negative or zero timeout would also be accepted by the config layer and passed straight to `asyncio.timeout`, which treats `None` as \"no timeout\" but a non-positive value as an immediate expiry."
+ }
+]

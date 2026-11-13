@@ -1,0 +1,117 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "TradeRecord.from_row maps row values by bare positional index",
+      "description": "`from_row` reads `values[0]`..`values[7]` against the implicit order of `TRADE_VALUE_COLUMNS` (derived from `TRADE_COLUMNS` minus `market_ticker`). Unlike the candle path, which zips against `CANDLE_COLUMNS` with `strict=True`, nothing here ties the positional unpack to the column list: reordering or inserting a column in `trade_repository.TRADE_COLUMNS` would shift every field silently (or raise `IndexError`) rather than fail at the construction site. The integration test `test_value_count_matches_the_repository_mapping` only checks arity, not order, so a reorder would pass it. Consider deriving the field names from `TRADE_VALUE_COLUMNS` and constructing via keyword (or a `zip(..., strict=True)` assertion) so the mapping is checked the way the candle path is. Low risk today since `TRADE_COLUMNS` is stable and parity-tested, hence NOTE not CONCERN.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Load test reaches into the pool's private `_pool` to install the recording cursor",
+      "description": "`_client` mutates `cursor_factory` on the pool's live connections via `pool._pool` (with a `SLF001` noqa) after setting it on one checked-out connection. Two gaps: connections the pool creates *after* this point (a re-open, or a discarded broken connection) will not be recording, so the \"no fetch ran\" assertion could silently weaken to \"no fetch ran on the connections we happened to see\"; and `probe.cursor_factory = cursor_factory` on a returned-then-reused connection is the same trick twice with different mechanisms. It works against the current pool implementation and the comment justifies why pool construction itself is left untouched, but the assertion's strength depends on an internal that psycopg_pool does not guarantee across versions. A comment noting the \"min_size connections pre-opened\" assumption, or an explicit `min_size`/`max_size` assertion here, would pin it. Informational \u2014 the noqa and rationale are already documented in the docstring.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:120-130"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Recording cursor statement filter is text-based, not statement-structure-based",
+      "description": "The assertion \"no row fetch ran\" is implemented as `\"kalshi.trades\" in s` and `\"count(*)\" not in s`. A future legitimate statement touching `kalshi.trades` without `count(*)` in its rendered text (e.g. an `EXPLAIN`, or a comment containing the table name in a guard query) would be misclassified as a fetch. Given the module docstring explains why `pg_stat_statements` was rejected, this is a reasonable trade-off; just worth knowing the test asserts on rendered text, not on statement semantics. No action required.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py#test_over_ceiling_is_refused_without_fetching_rows"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "TradeRecord.from_row maps row values by bare positional index",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Load test reaches into the pool's private `_pool` to install the recording cursor",
+      "location": "test/load/test_188_kalshi_api_nfr.py:120-130",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Recording cursor statement filter is text-based, not statement-structure-based",
+      "location": "test/load/test_188_kalshi_api_nfr.py#test_over_ceiling_is_refused_without_fetching_rows",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:07:04.790883",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 19086,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 943717,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 625554,
+  "cached_tokens": 562752,
+  "cache_write_tokens": null,
+  "completion_tokens": 5893,
+  "reasoning_tokens": 4471,
+  "duration_seconds": 95.0493916659616,
+  "cost_usd": 0.26016752,
+  "cost_basis": "alias_pricing"
+}

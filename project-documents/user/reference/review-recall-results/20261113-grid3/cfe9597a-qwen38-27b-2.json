@@ -1,0 +1,117 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "Worktree-aware project resolution is deliberately ignored",
+      "description": "Description: `validateFrontmatterAction` destructures only `id` from `resolveProjectWorktree` and validates `project.projectPath`, so when invoked from inside a registered cf worktree (CWD resolution returns a `worktreeId`), the command still validates the main checkout's documents. Other mutating commands (`arch.ts:53`, `future.ts:63`, `plan.ts:43`, `slice.ts:36`, `task.ts`) route through `resolveOperationPath(project, worktreeId)`. This is an informed, documented choice \u2014 slice design 923 (D4) says \"resolves the project like every other `cf` command,\" and the closest sibling `cf check` (check.ts) behaves identically \u2014 but for the command's stated primary use case (a pre-commit gate, squadron slice 172), a hook run inside a worktree would validate the wrong tree's `project-documents/`. Worth a follow-up decision once worktree-based gating is actually in use.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:86-99"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Secondary branches of the new command lack tests",
+      "description": "Description: The critical paths are well covered (exit 0/1/2, JSON shape incl. `fixLog`/`fixErrors`, path forwarding, date-stamp arg, unfixable-finding pass-through). Not covered: (1) the `No projectPath configured` UserError branch (validate.ts:94-96); (2) the mixed `--fix` outcome \u2014 some findings fixed, others unfixable \u2014 which is the only case combining a non-empty `fixLog` with `remaining.length > 0`, and it's what would catch a wrong \"Fixed X of Y\" count or an exit-code slip (only all-fixed and all-unfixable are tested); (3) `--json` on the invocation-error path (stderr JSON with `code: PROJECT_NOT_FOUND`, exit 2). Given the command is a scripted gate, adding at least (2) would be worthwhile.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate.test.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`SEVERITY_ICON` typed wider than the severity union",
+      "description": "Description: `SEVERITY_ICON` is `Record<string, string>` although `FrontmatterFinding['severity']` is the closed union `'warning' | 'error'`. Typing it as `Record<FrontmatterFinding['severity'], string>` (plus the existing `?? '?'` fallback for safety) would let the compiler catch a future severity typo. Minor, and consistent with the identical pattern in check.ts:24 \u2014 fixing both together would keep them aligned.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:15"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Worktree-aware project resolution is deliberately ignored",
+      "location": "packages/cli/src/commands/validate.ts:86-99",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Secondary branches of the new command lack tests",
+      "location": "packages/cli/tests/commands/validate.test.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`SEVERITY_ICON` typed wider than the severity union",
+      "location": "packages/cli/src/commands/validate.ts:15",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:05:52.366264",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 41,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 219113,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 898577,
+  "cached_tokens": 758144,
+  "cache_write_tokens": null,
+  "completion_tokens": 55168,
+  "reasoning_tokens": 52467,
+  "duration_seconds": 718.1152214580216,
+  "cost_usd": 0.19298072,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,75 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Validate enum values before accepting them",
+      "description": "`TimeMeaning` is a `StrEnum`, so the plain string `\"period_start\"` compares equal to `TimeMeaning.PERIOD_START` and passes this membership check. The `Market` then stores a `str` where callers expect a `TimeMeaning`, which can break code that relies on enum identity or type. The lookup methods have the same issue: `calendar_id_for(\"regular\")` and `require_adjustment_basis(\"raw\")` accept plain strings as valid enum arguments. Validate the enum types explicitly and cover these cases in tests.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:94-98"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Validate enum values before accepting them",
+      "location": "src/manta_trading_engine/core_model/markets.py:94-98",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:34:31.699407",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": "xhigh",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 65578,
+  "cached_tokens": 64000,
+  "cache_write_tokens": null,
+  "completion_tokens": 310,
+  "reasoning_tokens": 145,
+  "duration_seconds": 51.41875325003639,
+  "cost_usd": null,
+  "cost_basis": null
+}

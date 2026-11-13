@@ -1,0 +1,79 @@
+[
+ {
+  "ref": "luna-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Large response construction blocks the event loop",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:125-126",
+  "description": "Building up to 75,000 Pydantic records and encoding the response runs synchronously in the async handler. That work can block the event loop while other requests wait; the trades handler does the same at lines 168\u2013174. The load tests measure ceiling-sized response latency, but their concurrency test covers market-detail requests rather than concurrent time-series responses. Move the CPU-heavy build/encoding off the event loop or otherwise bound that work."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "FAIL",
+  "title": "Explicit midnight timestamps become whole-day bounds",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+  "description": "Pydantic parses `\"2026-06-01T00:00:00Z\"` as a `date` with this date-first union. Consequently, `resolve_window()` expands an explicit midnight `end` to `23:59:59.999999`, returning almost an extra day. Reproduced using the actual window resolver. Both endpoints are affected. Preserve the distinction between date-only and datetime inputs, and add midnight-bound regression tests."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "FAIL",
+  "title": "Response construction blocks the event loop",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:123-126",
+  "description": "Only database reads run in the executor; model construction and serialization execute synchronously inside the async handler. An isolated benchmark of the actual candle models at 75,000 rows measured approximately **803 ms** for construction and **350 ms** for `model_dump()` alone\u2014far beyond the required 1 ms bound. Other requests cannot progress on that event loop during this work. Move construction and encoding off-loop after releasing the connection. Apply the same fix to trades and test event-loop responsiveness under large concurrent responses."
+ },
+ {
+  "ref": "sol-high/1/2",
+  "severity": "CONCERN",
+  "title": "Concurrent inserts can bypass the row ceiling",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:160-167",
+  "description": "Count and fetch are separate statements without a repeatable-read snapshot. The inspected pool configuration does not establish stronger isolation, so concurrent collection commits can increase the fetched result after admission. `_admit_rows()` checks only the earlier count; neither fetch has a limit or subsequent size check. Both endpoints can therefore return more than the configured ceiling, potentially by an entire inserted batch. Use a consistent snapshot for count/fetch and add a concurrent-insert regression test."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Count and fetch can observe different database snapshots",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:112-119",
+  "description": "The count is used to enforce the response-row ceiling, but the subsequent fetch runs as a separate statement under the pool\u2019s default `READ COMMITTED` isolation. A concurrent insert committed between those statements can be included in the fetch without being included in the count, so the endpoint may return more than `max_rows` (the same pattern appears in the trades route at lines 160-163). Use a consistent snapshot for the count and fetch, or otherwise re-check the limit before returning rows."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Trade watermark is documented as the newest stored trade",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188-194",
+  "description": "The `tape_complete_through` description says it is the created time of the newest stored trade. The route actually supplies the persisted sync watermark, which represents how far collection is complete and can be later than the last trade. This description is exposed in the API schema and can lead clients to treat a coverage timestamp as trade activity."
+ },
+ {
+  "ref": "luna-r-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "Filtered status incorrectly promises that no trades are stored",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:194-201",
+  "description": "The description says `tape_filtered: true` means no trades are stored for the market. The collection filter prevents matching trades from being stored on the write path, but does not remove trades stored before the filter was applied. Thus a filtered market can still return historical trades. Describe this as a collection-policy status, not a guarantee that the tape is empty."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "CONCERN",
+  "title": "`tape_complete_through` is documented as the newest stored trade but carries the tape watermark",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradesResponse",
+  "description": "The field's `description` says *\"Created time of the newest stored trade.\"* But the value is `sync_state['trades'].watermark_ts`, read by `serve_timeseries.tape_facts` \u2014 and the schema comment on that column states the opposite explicitly: *\"the tape is complete through this instant (end of the last fully walked window) - NOT the newest stored trade\"* (`migrations/kalshi.py`, `kalshi_006_trades`). The watermark is the far edge of the last fully walked window, so it is later than (and not derivable from) the newest stored trade. A client that reads the description literally and uses the field as \"data ends here\" will misreport tape gaps. The candle path gets this right \u2014 `complete_through` says *\"Requested and stored through this instant \u2014 not 'the newest stored candle'\"* \u2014 so the two sibling fields document their values inconsistently. Note the load fixture sets `watermark_ts = newest`, which hides the difference in the only end-to-end test that exercises it."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "CONCERN",
+  "title": "`TradeRecord.from_row` maps stored columns by positional index while the candle path derives from the shared column map",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row",
+  "description": "`TradeRecord.from_row` reads `values[0]`..`values[7]` positionally, so its correctness depends on the *order* of `TRADE_COLUMNS` in `trade_repository.py` never changing. If a column is inserted or reordered there, the API will keep returning HTTP 200 with every field silently shifted onto the wrong key \u2014 no exception, no test failure. The candle path in the same file avoids this by zipping against `CANDLE_COLUMNS` (`zip(row.values, CANDLE_COLUMNS, strict=True)`), and the module docstring claims both directions are driven by that mapping; the trade path is the outlier. The existing test only asserts the *count* (`len(r.values) == len(TRADE_COLUMNS) - 1`), never the mapping, so nothing would catch the drift. Deriving the trade mapping from `TRADE_COLUMNS` the same way the candle mapping is derived would remove the positional coupling."
+ },
+ {
+  "ref": "minimax31-flash/1/2",
+  "severity": "CONCERN",
+  "title": "The shared row ceiling is enforced by two copies of `_admit_rows`",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#_admit_rows",
+  "description": "`kalshi_timeseries.py` adds its own `_admit_rows(count, max_rows)` \u2014 identical logic to the one already in `kalshi_catalog.py`, differing only in the tail of the message (\"narrow start/end\" vs \"narrow the filter\"). The project rule is explicit that comparison values and their enforcement should exist once, and `constants.py` in this same diff argues that \"a second setting with the same number would be two things to keep in step\"; the enforcement helper now has the same problem. If the ceiling's refusal semantics ever change (say, a different status code or a `Retry-After`), one copy will be updated and the other will not. A single shared helper in `api_server/routes/` (or `deps.py`) parameterized by the advice text would keep the two route families in step."
+ },
+ {
+  "ref": "minimax31-flash/1/3",
+  "severity": "CONCERN",
+  "title": "The route unit test hardcodes the ceiling instead of importing it",
+  "location": "test/unit/api_server/test_kalshi_timeseries.py",
+  "description": "`CEILING = 75_000` in the new unit test duplicates `API_MAX_BARS_PER_REQUEST` (currently 75 000 in `constants.py`). The route under test reads the ceiling from `get_max_bars`, so if the constant moves, the test's `dependency_overrides[get_max_bars] = lambda: CEILING` would keep admitting 75 000 while the application enforces something else \u2014 the fake count of 132 552 would then be under the real ceiling and the \"over the ceiling\" test would stop exercising the refusal at all (it would fail loudly only because the error message quotes the *route's* ceiling while the test asserts its own copy, which is a coincidental failure rather than a designed one). The sibling load test in this same diff does the right thing (`from manta_trading.constants import API_MAX_BARS_PER_REQUEST`), so the two halves of the slice disagree about the same value."
+ }
+]

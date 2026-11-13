@@ -1,0 +1,128 @@
+[
+ {
+  "ref": "luna-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Per-worktree locks allow concurrent writes to the same run report",
+  "location": "src/squadron/pipeline/run_lock.py:4-6",
+  "description": "The lock is stored in each worktree\u2019s Git directory, so separate worktrees can run concurrently. But run state and reports default to the shared `~/.config/squadron/runs` directory (`src/squadron/pipeline/state.py:165-178`). Two item resumes for the same run from different worktrees can therefore both load and rewrite the same report, losing one update despite each holding its checkout\u2019s lock. Coordinate locks by shared run/report identity, or otherwise prevent concurrent resumes of the same run."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "FAIL",
+  "title": "Design-batch resumes reject artifacts created by the original run",
+  "location": "src/squadron/pipeline/item_resume.py:286-302",
+  "description": "A `slices-plan` item that created its design but exhausted review rounds is no longer selected by `cf.undesigned_slices`. Consequently, both retry and accept reject it instead of resolving its review. Reproduced with an open slice having a design file. The planning-batch test masks this by continuing to report the slice as undesigned. Resume selection must accommodate artifacts produced by the original attempt."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "FAIL",
+  "title": "Item resume mutates unregistered worktrees before checking registration",
+  "location": "src/squadron/pipeline/item_resume.py:230-241",
+  "description": "Unlike `enter_slice_branch`, this precondition never calls the worktree-registration guard. It can therefore use the primary checkout\u2019s integration target in an unregistered worktree. `restore_target` can stage and commit leftovers before checkout fails\u2014or switch to the wrong target if available. Verify registration before any restoration, source evaluation, or reconciliation."
+ },
+ {
+  "ref": "sol-high/1/2",
+  "severity": "CONCERN",
+  "title": "Implementation-completion requirements incorrectly block planning retries",
+  "location": "src/squadron/pipeline/item_resume.py:153-156",
+  "description": "Every resume requires dependencies to have CF status `complete`, including `tasks-plan` resumes. A dependency can have an acceptable design and tasks without being implemented; fresh planning runs permit this, but an item retry becomes flagged without running. The existing planning-resume tests contain no dependencies. Apply dependency readiness appropriate to the pipeline\u2019s phase."
+ },
+ {
+  "ref": "sol-high/1/3",
+  "severity": "CONCERN",
+  "title": "New resume paths perform blocking I/O on the event loop",
+  "location": "src/squadron/pipeline/item_resume.py:146-155",
+  "description": "Validation, git restoration, dependency queries, and report writes execute synchronously inside the coroutine. Git subprocesses can block for 30 seconds, while `ContextForgeClient._run` has no timeout. The new implementation source likewise calls synchronous CF methods directly. Move blocking work off-loop, bound subprocess duration, and test timeout observability and event-loop responsiveness."
+ },
+ {
+  "ref": "sol-high/1/4",
+  "severity": "CONCERN",
+  "title": "Malformed report items escape the documented validation error",
+  "location": "src/squadron/pipeline/batch_report.py:330-340",
+  "description": "The `cast` does not validate JSON structure. A report containing `\"items\": [null]` raises `AttributeError` from `BatchItemRecord.from_json`, bypassing `BatchReportLoadError` and the controlled resume rejection. Reproduced directly against the loader. Validate the report and item shapes with Pydantic, including required fields and identity metadata, and add malformed-shape tests."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Item-resume failures mark the original batch run as failed",
+  "location": "src/squadron/cli/commands/run.py:268",
+  "description": "When item resume reuses the batch `run_id`, an exception from the resumed pipeline reaches `_run_pipeline`\u2019s `except BaseException` handler, which finalizes that existing run as `FAILED` before re-raising. For example, a mid-item `GitEnvironmentError` is then reported as `HALTED`, but the original batch run\u2019s status has already changed. This contradicts the item-resume contract that the batch run remains completed and can mislead callers inspecting run state."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Malformed report item shapes escape the load-error contract",
+  "location": "src/squadron/pipeline/batch_report.py:331-339",
+  "description": "`BatchReport.load` casts `report[\"items\"]` to a list of dictionaries without validating either shape. If `items` is a string or contains a non-object entry, `BatchItemRecord.from_json` calls `.get()` on that value and raises `AttributeError`, which is not caught here. The CLI then gets an unexpected exception instead of the documented `BatchReportLoadError` and `REJECTED` result for a malformed report."
+ },
+ {
+  "ref": "luna-r-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "Mutating fan-out pipelines can bypass the project run lock",
+  "location": "src/squadron/pipeline/run_lock.py:53-68",
+  "description": "`_step_mutates` only traverses nested steps in a `steps` list, but fan-out stores its nested step under `inner`. The executor runs that inner step, and fan-out validation does not restrict it to non-mutating types; a mutating inner step can therefore be run without the lock. Concurrent invocations could then interleave git/Context Forge mutations despite the run-lock guarantee."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "FAIL",
+  "title": "`cf list tasks` entries missing `completed`/`total` raise `KeyError`, breaking every source",
+  "location": "src/squadron/integrations/context_forge.py:183-184",
+  "description": "`list_tasks` now does `int(e[\"completed\"])` / `int(e[\"total\"])` with no default, so any `cf` version whose `list tasks --json` output omits those keys raises an uncaught `KeyError` \u2014 not a `ContextForgeError`. This is a hard boundary: `list_tasks` is called by `_cf_slices_needing_tasks` (sources.py:202) and `_cf_slices_ready_to_implement` (sources.py:254), so both the planning batches and the new `implement-plan` batch fail with a traceback instead of a clean error. The surrounding code in this file consistently uses `e.get(\"files\", [])` / `e.get(\"designFile\")` / `e.get(\"status\", \"\")` for exactly this reason. The prior `TaskEntry` fields had defaults (`files` defaulted to `[]`), and the new fields should behave the same way (`e.get(\"completed\", 0)`), or the client should raise a `ContextForgeError` naming the field. Note also the design doc (197-slice, \"Interfaces Required\") lists `completed`/`total` as required cf fields, so the reader cannot assume them \u2014 a defensive `.get` is the right call either way."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "FAIL",
+  "title": "`TaskEntry.completed`/`total` are never populated for the \"all tasks checked\" readiness check",
+  "location": "src/squadron/pipeline/sources.py:262-266",
+  "description": "`_not_ready_reason` relies on `task.total > 0 and task.completed == task.total` to flag \"all tasks checked but slice not marked complete\" (design D2's last row, and success criterion 2). `TaskEntry` now carries those fields and `list_tasks` reads them, but the check is only reachable if cf actually emits them \u2014 and the client reads them with `e[\"completed\"]` (see previous finding), so a cf build without those keys crashes the source rather than flagging the item. The two findings compound: the readiness rule that is the stated purpose of the new `completed`/`total` fields has no safe path through the client. The unit test `test_each_not_ready_row` passes `(5, 5)` straight into a stub client, so it never exercises `ContextForgeClient.list_tasks` with a real cf payload \u2014 the production shape is untested."
+ },
+ {
+  "ref": "minimax31-flash/1/2",
+  "severity": "CONCERN",
+  "title": "A batch that halts leaves the report's `not_run` records un-flagged, so `count()` and `summary_line()` under-report",
+  "location": "src/squadron/pipeline/executor.py:1494-1496",
+  "description": "`BatchItemRecord.not_run` sets `outcome=NOT_RUN` but leaves `flag_kind=None`. `BatchReport.count()` counts by outcome only, so `counts` is right, but `render_line()` renders a `not_run` item with no kind \u2014 while the Markdown frontmatter carries a `not_run` count. More importantly, `_check_record` in item_resume.py accepts `not_run` records for `--decision retry`, and `_outcome` maps a non-PASSED/ACCEPTED outcome to `ResumeExit.FLAGGED` (exit 1). So a `not_run` item that is retried and succeeds resolves, but a `not_run` item that is retried and halts is recorded as `flagged`/`step_failed` with `decision=retry`, losing the information that it never ran in the original batch. That is arguably intended. The real gap is narrower: `not_run` records are created only for items *after* the in-flight one (`items[position + 1:]`), so the `not_run` set is correct, but the in-flight item is recorded via `from_item(..., flag_kind=FlagKind.STEP_FAILED)` even when the halt was a `GitStateUnknownError` from a *previous* item's branch conflict \u2014 the reason text is right but the kind is always `step_failed`, never `branch_conflict`, even when the halt reason is a merge conflict. Success criterion 10 expects a conflicting catch-up to flag the item `branch_conflict`; that path goes through `_flag_kind` (which does classify `BranchFailure.CONFLICT`) for ordinary item failures, but the halt path in `_finish_each_report` hardcodes `STEP_FAILED`. Two sources of truth for the same classification."
+ },
+ {
+  "ref": "minimax31-flash/1/3",
+  "severity": "CONCERN",
+  "title": "The `each` step writes the report after every item, doubling the write cost of a large batch",
+  "location": "src/squadron/pipeline/executor.py:1601-1603",
+  "description": "`_write_each_report(report, runs_dir, final=False)` runs after *every* item and rewrites both the Markdown and the JSON file through a temp file and a rename. Each write serialises the entire report (all records) twice. For a plan with hundreds of slices this is O(n\u00b2) bytes written and O(n) fsync-ish renames, on the hot path of the batch. The design calls for per-item writes (D7), so the behaviour is intended, but the report grows linearly while the writes grow quadratically \u2014 a mitigation would be to write the JSON incrementally or to write per-item but only re-serialise the changed portion. Worth noting the write is already correctly off the event loop (`asyncio.to_thread`), so this is a throughput concern rather than a loop-blocking bug."
+ },
+ {
+  "ref": "minimax31-flash/1/4",
+  "severity": "CONCERN",
+  "title": "`_locked` closes the coroutine but the resume path never takes the lock through it",
+  "location": "src/squadron/cli/commands/run.py:944-957",
+  "description": "`_locked` wraps `asyncio.run` and takes the project lock around it for mutating pipelines \u2014 good. But the item-resume path (`handle_item_resume` \u2192 `resume_item`) takes the lock itself inside `item_resume.resume_item`, on a *different* lock acquisition from the same `run_lock.project_run_lock`. Two acquisition sites for the same lock is a duplication risk: the exit codes differ (`run.py` exits 2 on lock failure, `item_resume` returns `ResumeExit.REJECTED`, also 2), but the error handling differs \u2014 `run.py` prints a red message and exits 2, `item_resume` returns an outcome that `run_item._print` renders. The lock's own docstring and `run_lock.py` are clean, but the \"who takes the lock\" decision is now spread across two modules. This is consistent with the design (D11 says the lock is taken by item resume *and* by `sq run`), so it is not a defect \u2014 but a single `take_lock_or_exit` helper shared by both would remove the risk of the two paths drifting."
+ },
+ {
+  "ref": "minimax31-flash/1/5",
+  "severity": "CONCERN",
+  "title": "`run_item.handle_item_resume` imports private functions from `run.py`, creating a circular import",
+  "location": "src/squadron/cli/commands/run_item.py:63-68",
+  "description": "`run_item.py` imports `_apply_param_overrides` and `_run_pipeline_sdk` from `run.py` inside the function body, and `run.py` imports `check_item_flags` and `handle_item_resume` from `run_item.py` at module level. The deferred import avoids an import-time cycle, but it means the two CLI command modules are mutually dependent and the `pyright: ignore[reportPrivateUsage]` comments are papering over the resulting type errors. The cleaner arrangement is to move `_apply_param_overrides` and `_run_pipeline_sdk` into a shared module (e.g. `run_common.py`) that both import, or to pass them into `handle_item_resume` as parameters from `run.py`, which already holds them."
+ },
+ {
+  "ref": "minimax31-flash/1/6",
+  "severity": "CONCERN",
+  "title": "`_apply_param_overrides` raises `typer.BadParameter` inside the item-resume path, where the exit code contract is 2 (REJECTED) not 1",
+  "location": "src/squadron/cli/commands/run.py:115-117",
+  "description": "`check_item_flags` raises `typer.Exit(USAGE_EXIT)` where `USAGE_EXIT = int(ResumeExit.REJECTED)` = 2, matching the D8 table. But a reserved `-p` key on an item resume goes through `_apply_param_overrides`, which raises `typer.BadParameter` \u2014 Typer renders that as a usage error with exit code 2 as well, so the code coincidentally matches. However the *message* differs from the reserved-key message the other paths produce, and the test `test_a_reserved_p_key_on_an_item_resume_exits_2` only asserts the exit code, not the message. The D8 contract says a refusal names the fact that refused it; the reserved-key refusal currently produces Typer's generic \"Invalid value for '--param'\" rendering rather than `'accept_decision' is reserved; use --decision accept`. The dedicated `item_params` check in `item_resume.py:283-285` produces the right message, but it is unreachable for `-p` keys because `_apply_param_overrides` rejects them first. The two reserved-key guards should produce one message."
+ },
+ {
+  "ref": "minimax31-flash/1/7",
+  "severity": "CONCERN",
+  "title": "`_outcome` uses `next(...)` without a default, so a missing record raises `StopIteration` inside a coroutine",
+  "location": "src/squadron/pipeline/item_resume.py:169",
+  "description": "`_outcome` does `record = next(r for r in run.report.records if r.index == index)`. `StopIteration` raised inside an `async def` is converted by the runtime into a `RuntimeError: coroutine raised StopIteration`, which is not caught by `resume_item`'s handlers (`_Stop`, `GitEnvironmentError`, `OSError`) and escapes to the CLI as an unhandled traceback rather than a clean exit code. The path is reachable only if the report is mutated between validation and outcome (e.g. the body replaced a record whose `index` differs from `request.index`), but the function has no guard and the failure mode is opaque. A `next(..., None)` plus an explicit `_Stop(REJECTED, ...)` would be the fail-fast behaviour the guidelines require."
+ },
+ {
+  "ref": "minimax31-flash/1/8",
+  "severity": "CONCERN",
+  "title": "`_write_atomic` leaves the temp file behind when the rename fails",
+  "location": "src/squadron/pipeline/batch_report.py:355-370",
+  "description": "`tempfile.NamedTemporaryFile(..., delete=False)` creates the temp file; if `temp.replace(target)` raises `OSError`, the `except OSError` block logs and re-raises, but the temp file is never removed. Every failed report write therefore leaves a `.{name}.{random}` file in the runs directory. The runs directory is also globbed by `StateManager.list_runs` for `*.json` \u2014 the temp file is named `.{target.name}.XXXX` where target is e.g. `run.slices.report.json`, so the temp file is `.run.slices.report.json.abc123` and does *not* end in `.json`, so `list_runs` will not pick it up. But `BatchReport.load` globs nothing, so the residue is inert clutter rather than a correctness bug \u2014 still, it accumulates in the user's config directory on every failed write. A `finally` that unlinks the temp file when the replace failed would be correct."
+ }
+]

@@ -1,0 +1,189 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Numeric coercion honors the documented D7 contract without raising",
+      "description": "`as_real` accepts any `numbers.Real` except `bool`, rejects NaN/infinity, and converts `Integral`-too-large-for-float into `None` by catching exactly `OverflowError` with an inline comment justifying the swallow (contract value, not an error path) \u2014 this resolves the archived task-review CONCERN that `bind_parameters` would escape with an uncaught `OverflowError` for `10**400`. `as_integer` mirrors it by delegating the float path to `as_real`, so both coercions agree on the same scalars except `Decimal`, which the design explicitly rejects for both, and which is pinned by `test_as_integer_returns_none`/`test_as_real_returns_none`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py:66-95"
+    },
+    {
+      "severity": "PASS",
+      "title": "`InvalidParametersError` is now copy/pickle-safe",
+      "description": "Passing `issues` to `super().__init__` (not the formatted message) keeps `self.args` a tuple of `ParameterIssue`, so `copy.copy`, `copy.deepcopy` and pickle all rebuild via `__init__(issues)` instead of iterating a string. `ParameterIssue` is a frozen slotted dataclass and pickles cleanly, and `test_parameters_error_survives_copy_and_pickle` verifies all three round trips, fixing the archived code-review CONCERN that copy/pickle raised `AttributeError`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/errors.py:99-109"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`OutputDeclaration.__value__` is an undocumented runtime protocol",
+      "description": "`_output_tuple` checks `isinstance(item, OutputDeclaration.__value__)`. For a PEP 604 alias this is the tuple of member types (`(SeriesOutput, LabelOutput, SignalOutput)`), so `isinstance` accepts any member \u2014 functionally correct, but `__value__` is a private `types.UnionType` attribute read at runtime, not an API the language guarantees. `test_declarations_reject` pins the behavior, so a future Python that changes `__value__` fails loudly rather than silently; a named module-level constant (`_OUTPUT_TYPES = (SeriesOutput, LabelOutput, SignalOutput)`) would read more clearly.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py:235"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Three \"no element loops\" guards have different scopes; the shared one is the weakest",
+      "description": "The loop-forbidding rule for this slice lives in three places: `test_import_boundary.py`'s `ELEMENT_LOOP_NODES` (includes `ast.GeneratorExp`), `test_confidence.py`'s copy (comprehensions, no `GeneratorExp`), and `test_labels.py`'s copy (comprehensions, no `GeneratorExp`). A generator expression over array elements would pass the two per-file guards but is caught only by the boundary-test guard, which no longer covers `confidence.py`/`labels.py`. The per-module guards also don't use the shared helper, duplicating node tuples and the walk logic. Narrow one of the three to array-element semantics or route all three through the shared `_loop_lines` helper with a documented node set.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/core_model/test_import_boundary.py:186-202"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unused `ParameterIssue` import in the test module",
+      "description": "`ParameterIssue` is imported but only appears as the type of a local (`issues[0]`) through `catch` \u2014 nothing in the file references the name, so `ruff` (`F` selected) would flag it as F401. The per-task check reportedly passed, so either the import is used in a part I cannot see or it should be dropped; worth confirming against the local ruff run.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "tests/core_model/test_declarations.py:16"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`bind_parameters` precedence: unknown keys named after declared parameters report `unknown_parameter`, and details are shared across issues",
+      "description": "Because unknown keys are reported as `repr(key)`, a non-`str` key whose `repr` collides with a declared name (e.g. `f\"window\"` with a `_StrSubclass(\"window\")`-style str subclass, since `str` keys are excluded only when not exact...) \u2014 actually only a non-`str` key whose `repr` is `\"'window'\"`... concretely: `{\"window\"}`-like collisions require a non-str object repring to `\"window\"` is impossible, but `repr` of `str` subclasses is not used since they pass the `str` check. More realistically: a declared name that is itself the `repr` of another key (e.g. declared `window`, supplied key `'window'` as a `str` subclass is treated as declared \u2014 fine; declared `'window'`? not allowed by `NAME_PATTERN`). The residual case: a supplied key that is `str` and undeclared but whose name equals the `repr` of another supplied key \u2014 both become `unknown_parameter` with one shared issue name, losing one key. Edge of edges; the D8 wording (\"a key that is not a `str` ... named by the key's `repr`\") makes this behavior spec-conformant, so flagging it only as a documented quirk, not a defect. No action required beyond awareness.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py:205-214"
+    },
+    {
+      "severity": "PASS",
+      "title": "Design intent is consistently documented where behavior would otherwise look arbitrary",
+      "description": "The non-obvious choices are explained at the point of use: the exact-type `Timestamp.ns` check guards `np.fromiter(dtype=np.int64)` truncation with a comment; `_require_time_order` compares neighbours instead of subtracting to avoid int64 wrap; `LabelVocabulary`'s `pyright: ignore[reportUnnecessaryIsInstance]` marks a deliberate exact-set-or-frozenset check; and `Display`'s docstring states why the type is rejected by `canonicalize`. The D10 \"no canonical type\" rule is mechanically enforced by `test_labels_signals_declarations_define_no_canonical_type`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/signals.py:78-90"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Numeric coercion honors the documented D7 contract without raising",
+      "location": "src/manta_trading_engine/core_model/value_checks.py:66-95",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`InvalidParametersError` is now copy/pickle-safe",
+      "location": "src/manta_trading_engine/core_model/errors.py:99-109",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`OutputDeclaration.__value__` is an undocumented runtime protocol",
+      "location": "src/manta_trading_engine/core_model/declarations.py:235",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Three \"no element loops\" guards have different scopes; the shared one is the weakest",
+      "location": "tests/core_model/test_import_boundary.py:186-202",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Unused `ParameterIssue` import in the test module",
+      "location": "tests/core_model/test_declarations.py:16",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`bind_parameters` precedence: unknown keys named after declared parameters report `unknown_parameter`, and details are shared across issues",
+      "location": "src/manta_trading_engine/core_model/declarations.py:205-214",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Design intent is consistently documented where behavior would otherwise look arbitrary",
+      "location": "src/manta_trading_engine/core_model/signals.py:78-90",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:05:07.869743",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 530684,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 1047788,
+  "cached_tokens": 874688,
+  "cache_write_tokens": null,
+  "completion_tokens": 144486,
+  "reasoning_tokens": 141230,
+  "duration_seconds": 475.0884687921498,
+  "cost_usd": 0.40314760000000005,
+  "cost_basis": "alias_pricing"
+}

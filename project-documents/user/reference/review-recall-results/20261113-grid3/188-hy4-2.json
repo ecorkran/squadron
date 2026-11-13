@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "CPU-bound response build and serialization run on the event loop",
+      "description": "Description: In `src/manta_trading/api_server/routes/kalshi_timeseries.py:122-125` and `:165-173`, the DB read is correctly offloaded with `run_in_executor`, but `_admit_rows`, `CandlesResponse.build`/`TradesResponse.build`, and `timeseries_response` run synchronously inside the `async def` handlers. `CandlesResponse.build` constructs Pydantic records for up to `API_MAX_BARS_PER_REQUEST` rows (`src/manta_trading/constants.py:1285`), and `src/manta_trading/api_server/serialization.py:38-44` performs `model_dump(mode=\"json\")` plus `orjson.dumps` or `msgpack.packb`; `test/load/test_188_kalshi_api_nfr.py:126-136` records a 34.80 MB ceiling-sized candle response. The Python rules require CPU-bound synchronous work in awaitable functions to be offloaded. This can block all I/O on the loop during large Kalshi responses; move model construction and serialization into the executor/thread path or stream a pre-encoded response.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:122-173"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Load-test tier is opt-in and documented as not CI-gated",
+      "description": "Description: The new load-test module documents at `test/load/test_188_kalshi_api_nfr.py:37-46` that it runs only with `MT_RUN_LOAD_TESTS=1`, that CI wiring is deferred to slice 907, and that \u201cNothing here is enforced by CI today\u201d; the module-level `pytestmark` at `:80-87` enforces the skip. The Additional Review Rules require CI to gate load tests for code on simulation, network, concurrency, or environment-layer paths. These tests explicitly cover the pool-concurrency and 75,000-row request paths, so a normal local/CI `pytest` can pass without exercising them. Add a CI job or an always-running load-tier subset that executes these tests on the dedicated test cluster.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:37-50"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Load-tier prod-URL guard is skipped and not multiline-aware",
+      "description": "Description: `test/load/test_167_data_status_nfr.py:214-235` implements `test_load_tier_never_references_prod_db_url` as a per-line scan over `splitlines()`; it only fails when a single line contains both the production URL variable and an environment-read marker. That misses the documented multiline case `os.environ.get(\\n \"VAR\")`, while the shared `test/_prod_url_guard.py` module already provides a multiline-aware regex via `prod_url_readers`/`assert_ratchet`. The guard is also in a load-test module skipped unless `MT_RUN_LOAD_TESTS=1`, so the mechanical guard does not run in ordinary pytest runs. `test/load/test_188_kalshi_api_nfr.py:48-50` nevertheless claims this guard \u201cenforces it mechanically.\u201d Use the shared multiline-aware ratchet in an unskipped load-tier guard.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_167_data_status_nfr.py:214"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Public time-series model documentation contradicts storage semantics",
+      "description": "Description: `TradesResponse.tape_complete_through` says \u201cCreated time of the newest stored trade\u201d at `src/manta_trading/api_server/models/kalshi_timeseries.py:189-193`, but `src/manta_trading/data/kalshi/serve_timeseries.py:123-143` assigns it from `sync_state.watermark_ts`. The schema comments in `src/manta_trading/market/schema/migrations/kalshi.py#KALSHI_MIGRATIONS` and the `read_trade_status`/`effective_tape_floor` docs in `src/manta_trading/data/kalshi/trade_status.py` define that watermark as \u201ccomplete through this instant,\u201d explicitly not the newest stored trade. The same module also says \u201cfourteen flat stored columns\u201d at `src/manta_trading/api_server/models/kalshi_timeseries.py:1-9`, and `src/manta_trading/data/kalshi/serve_timeseries.py:70-75` says \u201cfourteen value columns,\u201d while `CANDLE_COLUMNS` includes fourteen nested fields plus `volume_fp` and `open_interest_fp`. Fix the model descriptions/docstrings to state the watermark semantics and the sixteen value columns.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:189-193"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Wire-model mapping restates repository maps and can silently drop new columns",
+      "description": "Description: The module docstring at `src/manta_trading/api_server/models/kalshi_timeseries.py:1-9` says a column added to `CANDLE_COLUMNS` is served without an edit, but `_CANDLE_OBJECTS` values are unused and `CandleRecord.from_row` hardcodes nested constructors and flat keys at `:58-96`; a new flat column would be collected into `flat` but ignored by `return cls`, and a new nested object would raise `KeyError`. `TradeRecord.from_row` at `:162-175` likewise hardcodes positional `values[0]` through `values[7]`, while `src/manta_trading/data/kalshi/serve_timeseries.py:37-43` derives `TRADE_VALUE_COLUMNS` from the repository mapping in `src/manta_trading/data/kalshi/trade_repository.py:42-52`. This duplicates mapping logic and weakens the \u201cone value, one source\u201d convention; derive constructors from the shared column maps and add parity tests for both wire models.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:58-96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Factory classmethods do not use `Self`",
+      "description": "Description: The Python rules require `typing.Self` for factory/fluent classmethod return types. The new factories at `src/manta_trading/api_server/models/kalshi_timeseries.py:75-99` (`CandleRecord.from_row`), `:134-147` (`CandlesResponse.build`), `:162-175` (`TradeRecord.from_row`), and `:205-224` (`TradesResponse.build`) all annotate concrete class names instead of `Self`. On the project\u2019s Python 3.12 target (`pyproject.toml`, `requires-python = \">=3.12,<3.13\"`), use `from typing import Self` and annotate these classmethods as `-> Self` so subclass-preserving factory contracts remain correct under strict type checking.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:75-224"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "CPU-bound response build and serialization run on the event loop",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:122-173",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Load-test tier is opt-in and documented as not CI-gated",
+      "location": "test/load/test_188_kalshi_api_nfr.py:37-50",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Load-tier prod-URL guard is skipped and not multiline-aware",
+      "location": "test/load/test_167_data_status_nfr.py:214",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Public time-series model documentation contradicts storage semantics",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:189-193",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Wire-model mapping restates repository maps and can silently drop new columns",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:58-96",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Factory classmethods do not use `Self`",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:75-224",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:42:07.041568",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 212703,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1647324,
+  "cached_tokens": 1341120,
+  "cache_write_tokens": null,
+  "completion_tokens": 54914,
+  "reasoning_tokens": 52392,
+  "duration_seconds": 610.1455482500605,
+  "cost_usd": 0.22449308799999998,
+  "cost_basis": "alias_pricing"
+}

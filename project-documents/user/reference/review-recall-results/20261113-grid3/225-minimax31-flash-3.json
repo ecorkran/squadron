@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The raw side of the coverage proof is not filtered by the product's shape, while the ledger side is",
+      "description": "`ledger_totals` scopes the ledger rows to the product's request shape (`_SHAPE_WHERE`: `r.dataset`, `r.symbols`, `r.stype_in`, tier schema, `COVERAGE_PREDICATE`), but `raw_counts` scans `tick_trade` with **no product filter at all** \u2014 only a `ts_event` window:\n\n```sql\nSELECT t.instrument_id, s.session_date, count(*) FROM tick_trade t\nJOIN unnest(...) AS s(session_date, open_ns, close_ns)\n  ON t.ts_event BETWEEN s.open_ns AND s.close_ns\nWHERE t.ts_event BETWEEN %s AND %s GROUP BY 1, 2\n```\n\n`_session_row` then builds the instrument set from the union of the ledger and raw keys (`{i for i, d in (*ledger, *raw) if d == day}`), so any `tick_trade` row whose instrument has no ledger row for that session becomes a pair `(instrument, 0, raw_count)` and is reported as a mismatch \u2014 a false \"raw-count mismatch\" (exit 3) for data that is perfectly consistent.\n\nToday the universe holds one product (`ES`), so the two sides coincide by accident. The moment a second product exists \u2014 `FUTURES_PRODUCT_CALENDAR` is explicitly extended with `GC` in slice 231 \u2014 the ES and GC sessions overlap in wall-clock time, so `coverage --product GC` will count ES's rows as GC's raw count and report a mismatch on every session. The check should compare like with like: either scope the raw scan to the shape's instruments (the ledger's instrument set, or the definitions of the shape) or state explicitly that `tick_trade` is single-product.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:150-170"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Calendar bounds can exceed the populated span, turning a valid query into exit 4",
+      "description": "`TradingCalendar.sessions_between` refuses a bound outside the populated span (`_require_populated` \u2192 `OutOfPopulatedRangeError`), and `calendar_sessions` converts that into `TickCalendarError` \u2192 exit 4 (\"calendar unavailable\"). Both new callers compute bounds that can exceed that span:\n\n- `build_coverage` uses `utc_midnight(end)` where `end` is the *exclusive* end. For the last populated session date `D`, `end = D + 1` gives `00:00 of D+1`, while the span's `last_close` is `21:00 of D` \u2014 so `coverage --start D --end D+1` (the natural request for the newest day) fails with exit 4. The same holds for `utc_midnight(start - 1 day)` at the *first* populated session, whose open is the previous evening: `00:00` of that evening is before `first_open`.\n- `_scope` (tick_status_build.py:161-190) builds `utc_midnight(d + timedelta(days=1))` for every held unit day, so `status` fails the moment the manifest holds a unit on the last populated session date.\n\nNeither failure is distinguishable from a real outage by the operator, and both are avoidable by clamping the bounds to the populated span (or by querying the span first and clamping).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py:95-115"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`READ_EPILOG` does not match the exit-code mapping it documents",
+      "description": "The epilog says exit 1 is \"preflight (a setting, \u2026)\" and exit 4 is \"the tick or production (calendar) database is unreachable\". The calendar *setting* being unset is not exit 1: `tick_calendar.calendar_url` raises `TickCalendarError` (not a `TickPreflightError`), and `exit_code_for` maps `TickCalendarError` to `EXIT_STORAGE` (4). So a missing calendar URL \u2014 a setting, exactly what the epilog files under exit 1 \u2014 exits 4. The tick DB URL unset *does* exit 1 (`database_url` raises `TickPreflightError`).\n\nThe same wording problem exists in `INGEST_EPILOG` (\"EXIT_STORAGE storage (tick database or calendar)\"), where an unreachable tick database exits 1, because `_connect` now raises `TickDatabaseUnreachable` (a `TickPreflightError` subclass) and only the two new read verbs pass it in `run_mapped`'s `storage` tuple. `TickDatabaseUnreachable`'s own docstring (\"A preflight refusal for the writers\") documents the writers' behaviour, so the epilogs are the stale part.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:37-43"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The one `tick_trade` scan has no statement timeout",
+      "description": "`_connect` sets `connect_timeout` but no `statement_timeout`, and the read verbs reuse that connection for `raw_counts` \u2014 a full scan of a hypertable over the requested range, joined against the session array. A wide `--start/--end` range therefore has no time bound at all, while the SQL rules require a `statement_timeout` for long-running queries. A per-statement timeout on the read connection (or a bounded range) would make the failure mode explicit rather than an unbounded wait.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/store_context.py:158-170"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The same rows are read twice per product, and the dataset edge is read per product",
+      "description": "`shape_units` is fetched in `_scope` and again inside `session_verdicts` for the same product, and `dataset_edge(conn, CME_DATASET)` \u2014 a row keyed by dataset, not by product \u2014 is fetched once per product in `_product_status`. With one product this is invisible; with the universe's second entry it becomes three redundant queries per product. Fetching the units and the edge once per `build_status` call and passing them down would remove the duplication.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:99-108"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The read callback is typed with `Any` instead of the project's connection alias",
+      "description": "`_read` declares `read: Callable[[Any, str], Coroutine[Any, Any, T]]` and the inner `read(conn: Any, url: str)` in `tick_coverage` follows suit, although the tick package already defines `Conn = psycopg.AsyncConnection[Any]` in `manifest_reads.py` and uses it for every other read. The looser annotation means a signature change on `Conn` would not be caught here, and the parameter is untyped at the boundary where the connection is handed to the callback.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:159-165"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tick_coverage` reaches into `tick_status_build` for four shared helpers",
+      "description": "`build_coverage` imports `calendar_sessions`, `jsonable`, `session_verdicts` and `shape_of` from `tick_status_build`, so the coverage feature depends on the status feature's module even though the shared items are generic (a calendar helper, a JSON serialiser, a shape builder). `jsonable` in particular has nothing to do with status. Moving the shared three or four helpers into a small common module would let `status` and `coverage` evolve independently, which the \"no degraded output\" contract of each implies they should.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py:25-32"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The degraded count is attached to the last bucket row by index",
+      "description": "`lines[-1] += f\"   (degraded {p.degraded})\"` appends the degraded count to whatever line happens to be last, which is the final row of `_BUCKET_ROWS`. Reordering or adding a bucket silently moves the count onto an unrelated line. Building the bucket lines and the trailing note as separate elements (or appending the degraded count as its own line) removes the positional coupling.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:88-92"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The raw side of the coverage proof is not filtered by the product's shape, while the ledger side is",
+      "location": "src/manta_trading/data/tick/status_reads.py:150-170",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Calendar bounds can exceed the populated span, turning a valid query into exit 4",
+      "location": "src/manta_trading/data/tick/tick_coverage.py:95-115",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`READ_EPILOG` does not match the exit-code mapping it documents",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:37-43",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "The one `tick_trade` scan has no statement timeout",
+      "location": "src/manta_trading/data/tick/store_context.py:158-170",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "The same rows are read twice per product, and the dataset edge is read per product",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:99-108",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "The read callback is typed with `Any` instead of the project's connection alias",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:159-165",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`tick_coverage` reaches into `tick_status_build` for four shared helpers",
+      "location": "src/manta_trading/data/tick/tick_coverage.py:25-32",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The degraded count is attached to the last bucket row by index",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:88-92",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:02:49.811072",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 218163,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1116043,
+  "cached_tokens": 973056,
+  "cache_write_tokens": null,
+  "completion_tokens": 58570,
+  "reasoning_tokens": 55414,
+  "duration_seconds": 337.9109190420713,
+  "cost_usd": 0.035106417,
+  "cost_basis": "alias_pricing"
+}

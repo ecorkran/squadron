@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Range translation never fires for the range change that triggers it",
+      "description": "The visible-range effect is gated on `seriesCountRef.current === 0` and keyed on `[mount.ready, chart, range]`. Because the series count is a **ref**, adding a series does not change any dependency, so the effect body does not re-run when the count transitions 0 \u2192 1. The effect only re-runs when `range`, `chart`, or `mount.ready` change. In the common path where a consumer adds series and the range is *already* at its intended value, `setVisibleRange` is never called \u2014 the chart keeps its default viewport. The existing test at `src/test/use-chart-provider.translation.test.tsx:135-144` masks this by always changing the range *after* adding the series, which forces the effect to re-run. The suite therefore proves the seam works only in the one ordering that happens to work, and the test name (\"applies the range once a series exists\") overstates what is verified. The gate needs to be observable (e.g. a state counter, or a dependency that changes when the series count changes) rather than a ref read inside the effect body.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:340-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The hook's series count can drift from the provider's actual series",
+      "description": "The facade increments `seriesCountRef` only when `addSeries` succeeds, and decrements only when `removeSeries` succeeds. The counter is therefore a **local** bookkeeping value that is never reconciled with the provider. Two concrete drift paths exist: (a) `removeSeries` for an id that was never added still decrements the count (clamped at 0 by `Math.max`, but a remove of an unknown id after a successful add still drops the count to 0 while the series remains on the chart); (b) `provider.removeSeries` throws for an unknown id *before* `series.onRemoved()` runs \u2014 fine \u2014 but the reverse asymmetry is unguarded: removing a valid id twice decrements twice. Because this count gates the visible-range translation, any drift silently disables or spuriously enables viewport control. The provider already owns a series registry (`src/chart/providers/handle-registry.ts`), so the count should be derived from a source the provider controls, or the facade should track the ids it has actually minted and decrement only on ids it knows about.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/chart-facade.ts:54-70"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The e2e suite no longer exercises the artifact `pnpm build` ships",
+      "description": "`playwright.config.ts` now builds with `--mode e2e` and previews with `--mode e2e`, but the file's own header comment (lines 6-8) still claims \"Specs run against the PRODUCTION build ... so e2e exercises the same artifact `pnpm build` ships.\" That claim is now false: `pnpm build` produces a `production`-mode artifact with the harness route tree-shaken out, while the e2e suite runs against a different `e2e`-mode artifact. This is an intentional and well-reasoned change (the harness route must exist for `chart-render.spec.ts`), but it creates a **coverage gap that no automated check guards**: nothing in CI or the test suite asserts that the *product* route `/` behaves correctly in the actual production artifact. The only proof of production behavior is the manual `grep -l \"__chart-harness\" dist/assets/*.js` walkthrough recorded in the slice document. At minimum, the stale header comment should be corrected to describe the e2e-mode artifact; ideally a build-time assertion that the harness is absent from a production bundle should be added to the test suite, since the slice document itself records that a previous `includes()`-based gate silently shipped the harness to production and was caught *only* by a manual grep.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "playwright.config.ts:36-45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`react-hooks/refs` is disabled for the whole hook file rather than for the offending construct",
+      "description": "The rule `react-hooks/refs` is turned off for the entire `src/chart/use-chart-provider.ts` file. The comment explains that the rule flags arguments that *transitively* close over a ref, and that the alternative was inlining the facade back into the hook and exceeding the ~300-line guide. But the file has since been split (`chart-facade.ts`, `chart-operations.ts`) precisely to satisfy that guide \u2014 the suppression comment still refers to \"keeping the file ~60% over the project's ~300-line guide,\" which is stale. The concrete construction that triggers the rule (`buildChartOperations(runGuarded, series)` called inside `useMemo`) could be moved behind a thin hook-local wrapper, or the `series` counter could be threaded through a ref-backed object created outside the memo, restoring the rule for the file. Disabling a correctness-oriented lint rule across an entire 366-line lifecycle file for a single call site leaves the file's other ref accesses (there are several: `providerRef`, `disposedRef`, `seriesCountRef`) unchecked by that rule.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "eslint.config.js:75-78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`useChartProviderResult.error` is documented as \"the first error\" but holds the most recent",
+      "description": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation, or null.\" The implementation in `src/chart/use-chart-provider.ts:97-99` uses `setMount((current) => ({ ...current, error: failure }))`, which **overwrites** the previous error on every new failure \u2014 so it holds the *most recent* error, not the first. The test at `src/test/use-chart-provider.errors.test.tsx:227-246` (\"keeps the first error rather than being reset by a later success\") only asserts that a *successful* operation does not clear the error, so the overwrite-on-new-failure behavior is never exercised and the docstring's contract is untested. Either the docstring or the implementation should be corrected; the current state means a caller cannot tell the first failure from the latest, and the `MountState` comment at `chart-operations.ts:85` (\"a chart is ready xor failed\") does not describe the post-mount case where both are simultaneously set.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/chart-operations.ts:77"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`subscribe*` operations in the facade return a disposer that is never tracked by the hook",
+      "description": "The facade forwards `subscribeCrosshairMove` / `subscribeVisibleRangeChange` through `runGuarded`, returning the `Unsubscribe` to the caller. The hook's own mount-time subscriptions retain their disposers in the `disposers` array, but disposers obtained through the public facade are not tracked anywhere \u2014 a caller who forgets to dispose leaks a subscription for the chart's lifetime. This is acceptable as a contract (the disposer is returned, so the caller owns it) and the slice explicitly scopes payload-consuming UI to initiative 120, but it is worth noting that the facade's `subscribe*` members are the one place where the \"hook owns the lifecycle\" invariant does not extend to cleanup.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/chart-facade.ts:95-98"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The measured-rect fixture is duplicated across four test suites",
+      "description": "`MEASURED` and a `measuredRect()` builder are copy-pasted into `use-chart-provider.errors.test.tsx:30-38`, `use-chart-provider.facade.test.tsx:33-42`, `use-chart-provider.resize.test.tsx:30-33`, and `use-chart-provider.translation.test.tsx:38-48`, each with slightly different formatting (the resize suite inlines the rect object rather than using a named helper). The project convention explicitly calls out DRY and the slice's own `render-with-contexts.tsx` exists precisely to centralize shared test setup. A single `src/test/support/chart-measurement.ts` (or an addition to the existing support directory) would remove the duplication and the formatting drift.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.resize.test.tsx:30-33"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Import ordering and a mid-file import violate the stated convention",
+      "description": "The project's React/TypeScript rules specify sorting imports external \u2192 internal \u2192 sibling \u2192 styles. In `use-chart-provider.translation.test.tsx`, the imports at lines 22-23 (`./support/chart-provider-spy.ts` and `./support/render-with-contexts.tsx`) appear *after* the `const LINE_SERIES` declaration at line 15, i.e. an import statement sits in the middle of the module body. ES modules hoist imports, so this works, but it is unusual and diverges from the convention followed by every other test file in the suite. The same file also mixes `import type { type IndicatorDescriptor }` \u2014 a redundant `type` modifier inside a type-only import.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.translation.test.tsx:22-23"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The e2e live-chart spec asserts pixel equality against a hex-parsed token",
+      "description": "`hexToRgba` parses `#rrggbb` by hand with `parseInt` on fixed slices, and `samplePanes` compares the canvas pixel to `hexToRgba(sample.surfaceToken)`. The token is read from `getComputedStyle(document.documentElement).getPropertyValue('--color-surface')`, which in a browser returns the *specified* value (`#161a1e`), so the comparison currently works. However, `parseInt` on a non-hex or short-hex value silently yields `NaN` rather than failing loudly, and any future token expressed as `rgb()` (a very common form once a theme is generated) would make the assertion compare `\"NaN,NaN,NaN,255\"` against a real pixel and fail with a confusing message. A guarded parse that throws on an unexpected format \u2014 consistent with the project's \"never use silent fallback values\" principle \u2014 would make the failure self-explanatory.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "e2e/chart-live.spec.ts:104-110"
+    },
+    {
+      "severity": "PASS",
+      "title": "The guarded error funnel, teardown ordering, and StrictMode handling are correct",
+      "description": "The mount sequence computes its outcome first and commits `ready`/`error` in a single `setMount` call, so there is no window where a stale `ready` is paired with a fresh `error`, and no half-initialized \"ready\" chart. Teardown runs `unsubscribe \u2192 disconnect \u2192 destroy \u2192 null ref` with the `disposed` flag set first, closing the queued-callback window. Each disposer is pushed in its own `disposers.push(...)` call, avoiding the `push(a(), b())` argument-evaluation trap that the slice document records as a previously-caught defect. The StrictMode double-invoke is handled by constructing a fresh provider per mount and resetting `seriesCountRef` to 0. The `react-hooks/refs` false-positive analysis in `eslint.config.js` is a plausible and well-documented trade-off. The test coverage across the five new suites is thorough and behavior-oriented: ordering assertions (`disconnects before destroying`), teardown-race assertions, `expectTypeOf` generic preservation, and the \"lifecycle methods are NOT exposed\" surface check are all valuable and correctly structured using the Arrange-Act-Assert pattern with independent tests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:167-325"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Range translation never fires for the range change that triggers it",
+      "location": "src/chart/use-chart-provider.ts:340-345",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The hook's series count can drift from the provider's actual series",
+      "location": "src/chart/chart-facade.ts:54-70",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "The e2e suite no longer exercises the artifact `pnpm build` ships",
+      "location": "playwright.config.ts:36-45",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "`react-hooks/refs` is disabled for the whole hook file rather than for the offending construct",
+      "location": "eslint.config.js:75-78",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`useChartProviderResult.error` is documented as \"the first error\" but holds the most recent",
+      "location": "src/chart/chart-operations.ts:77",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`subscribe*` operations in the facade return a disposer that is never tracked by the hook",
+      "location": "src/chart/chart-facade.ts:95-98",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The measured-rect fixture is duplicated across four test suites",
+      "location": "src/test/use-chart-provider.resize.test.tsx:30-33",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Import ordering and a mid-file import violate the stated convention",
+      "location": "src/test/use-chart-provider.translation.test.tsx:22-23",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The e2e live-chart spec asserts pixel equality against a hex-parsed token",
+      "location": "e2e/chart-live.spec.ts:104-110",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The guarded error funnel, teardown ordering, and StrictMode handling are correct",
+      "location": "src/chart/use-chart-provider.ts:167-325",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:40:06.557568",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 956748,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1284375,
+  "cached_tokens": 1104384,
+  "cache_write_tokens": null,
+  "completion_tokens": 234066,
+  "reasoning_tokens": 229151,
+  "duration_seconds": 909.916255292017,
+  "cost_usd": 0.091449813,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Remove the stray `-E` backup test file",
+      "description": "The diff adds `packages/core/tests/services/CoreServiceFactory.test.ts-E:1-146`, an editor-style duplicate of `packages/core/tests/services/CoreServiceFactory.test.ts`. It still calls `createContextPipeline(FIXTURE_PROJECT_PATH)` and `createContextPipeline(checkout)` at `packages/core/tests/services/CoreServiceFactory.test.ts-E:29,35,59,99,119,141` without the now-required `{ adoptionStateWrites }` options object. The Vitest include pattern at `packages/core/vitest.config.ts:5` does not match `.ts-E`, so this is dead duplicate code that would fail if renamed or picked up by tooling; remove it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`context_build` advertises idempotence while first brownfield build mutates state",
+      "description": "`packages/mcp-server/src/tools/contextTools.ts:155` still declares `idempotentHint: true`, but the `context_build` handler passes `'persist'` at `packages/mcp-server/src/tools/contextTools.ts:202-204`. On a first brownfield detection, `packages/core/src/adoption/adoptionResolver.ts:128-129` writes `adoption.state = in_progress`, and `packages/core/src/adoption/adoptionFacts.ts:92` adds the one-time state-set notice; the next identical call sees `in_progress` and emits different Adoption Facts. This breaks the idempotence contract both by mutating `.context-forge.toml` and by changing output on repeated calls; set `idempotentHint` to false or separate the state-writing operation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:155"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`template_preview` is still not side-effect free",
+      "description": "`packages/mcp-server/src/tools/contextTools.ts:228` advertises `readOnlyHint: true`, and the tool description at `packages/mcp-server/src/tools/contextTools.ts:225-227` says it triggers no side effects. The new `'read-only'` pipeline option at `packages/mcp-server/src/tools/contextTools.ts:267-270` only prevents adoption-state writes; `generateContext` still calls `ensureGuideForProject` at `packages/mcp-server/src/tools/contextTools.ts:92`, whose `GuideManager.ensureCheckout` `not_initialized` branch at `packages/core/src/guides/GuideManager.ts:211-214` can initialize a guide submodule and mutate the checkout. The added test at `packages/mcp-server/tests/contextTools.test.ts:368-378` checks only the pipeline option, not the tool\u2019s full read-only contract; either remove auto-init for previews or change the annotation/description.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:228"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New wiring expands positional APIs instead of named options",
+      "description": "`packages/core/src/services/ContextIntegrator.ts:86-94` now has seven positional constructor parameters, and `generateContext` at `packages/mcp-server/src/tools/contextTools.ts:58-63` has five. The TypeScript rules prefer named parameters for functions taking three or more arguments; the seven-argument call at `packages/core/src/services/CoreServiceFactory.ts:43-51` and the null-heavy test construction at `packages/core/tests/services/ContextIntegrator.test.ts:384` show how easy this is to misorder. Use options objects such as `{ engine, enableNewEngine, resolvers }` and `{ projectId, adoptionStateWrites, overrides, additionalInstructions, worktreeId }` to make the new wiring self-documenting.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:86-94"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Centralize the new mode and state comparison values",
+      "description": "`packages/core/src/adoption/adoptionResolver.ts:26` defines `AdoptionStateWrites` as raw string literals and line 128 compares against `'persist'`; callers repeat `'persist'`/`'read-only'` at `packages/cli/src/commands/build.ts:84` and `packages/mcp-server/src/tools/contextTools.ts:204,270`. Adoption state values are also scattered through `packages/core/src/adoption/adoptionOutcome.ts#decideOutcome`, `packages/core/src/adoption/adoptionResolver.ts:91,107,128-129`, and `packages/core/src/adoption/adoptionFacts.ts:92`, even though `ADOPTION_STATES` exists at `packages/core/src/config/ConfigKeys.ts:27`. AGENTS.md says comparison values must be defined once, and the TypeScript guide prefers `as const` objects; define named constants or a const object and use them in conditionals, call sites, and tests.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:26"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New section key breaks existing kebab-case naming",
+      "description": "`packages/core/src/services/ContextTemplateEngine.ts:113-119` adds `key: 'adoptionFacts'`, while the surrounding section identifiers in the same `buildTemplate` method use kebab-case or single words (`project-intro`, `project-info`, `context-init`, `permissiveness`, `additional-notes`, `current-events`, `tools-section`). Rename the key to `adoption-facts` so section identifiers remain consistent and future tooling can rely on one naming shape.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextTemplateEngine.ts:115"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Integration runner injects the entire environment into the CLI process",
+      "description": "`packages/cli/tests/integration/build.integration.test.ts:96` runs the built CLI with `env: { ...process.env, CONTEXT_FORGE_DATA_DIR: dataDir }`. The testing rules say never inject a whole `.env`/all environment variables into a test process and instead pass an explicit named list; similar spreads appear at `packages/mcp-server/tests/serverLifecycle.test.ts:98` and `packages/cli/tests/integration/guidesVersionFlag.integration.test.ts:33`. Use an explicit allowlist such as `PATH`, `HOME`, `CONTEXT_FORGE_DATA_DIR`, and any required `CF_*` flags so credentials present in the parent process are not handed to spawned commands.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/integration/build.integration.test.ts:96"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Remove the stray `-E` backup test file",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:29",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`context_build` advertises idempotence while first brownfield build mutates state",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:155",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`template_preview` is still not side-effect free",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:228",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "New wiring expands positional APIs instead of named options",
+      "location": "packages/core/src/services/ContextIntegrator.ts:86-94",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Centralize the new mode and state comparison values",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:26",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "New section key breaks existing kebab-case naming",
+      "location": "packages/core/src/services/ContextTemplateEngine.ts:115",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Integration runner injects the entire environment into the CLI process",
+      "location": "packages/cli/tests/integration/build.integration.test.ts:96",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:56:44.704254",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 71,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 679340,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2731653,
+  "cached_tokens": 2368320,
+  "cache_write_tokens": null,
+  "completion_tokens": 163200,
+  "reasoning_tokens": 158804,
+  "duration_seconds": 1675.0397337921895,
+  "cost_usd": 0.40524458100000005,
+  "cost_basis": "alias_pricing"
+}

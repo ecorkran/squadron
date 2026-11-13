@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Validation ignores the resolved worktree",
+      "description": "`resolveProjectWorktree` can return a `worktreeId`, but this action discards it and always validates against `project.projectPath`. When run from a separate registered worktree, explicit paths are resolved from that worktree\u2019s CWD but are outside the main project\u2019s document root, so they are silently skipped; a run without paths scans the main checkout instead. This can make a validation gate report clean without checking the worktree\u2019s changes. Resolve and validate the worktree path, or reject that context explicitly, and add coverage for worktree invocations.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts#validateFrontmatterAction"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A later date backfill can undo the fix run\u2019s timestamp",
+      "description": "Fixes are applied in finding order. For a document missing both a fixable field such as `status` and `dateUpdated`, the first write stamps `dateUpdated` with the run date. The later `dateUpdated` finding writes the original `dateCreated` value; the writer intentionally skips stamping when the field being updated is `dateUpdated`. The command can therefore exit successfully after modifying the document while leaving a stale `dateUpdated`. Apply date backfills before other fixes, or otherwise ensure a document changed by the run retains the run\u2019s date; add a regression test for multiple findings on one file.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:113-133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Every action error is reported as an invocation error",
+      "description": "The action catch calls `handleError(err, 2)` for every error, not just project-resolution or configuration errors. Unexpected failures\u2014for example, a storage read error\u2014therefore receive exit code 2, although the documented contract reserves 2 for invocation errors. Distinguish expected invocation errors from operational failures and test both exit-code paths.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts#registerValidateCommand"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The docType test does not test the rejection it claims",
+      "description": "The test is named as though a wrong `docType` is caught, but its `devlog` and `gate-evidence` values are valid registered types, and it expects an unregistered type to produce no findings. The validator selects a schema using `data.docType` and skips validating that field\u2019s values, so these assertions do not demonstrate rejection of a mismatch. Rename the test to describe the pass-through behavior, or add a meaningful mismatch case if rejection is intended.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:371-397"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Validation ignores the resolved worktree",
+      "location": "packages/cli/src/commands/validate.ts#validateFrontmatterAction",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A later date backfill can undo the fix run\u2019s timestamp",
+      "location": "packages/cli/src/commands/validate.ts:113-133",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Every action error is reported as an invocation error",
+      "location": "packages/cli/src/commands/validate.ts#registerValidateCommand",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The docType test does not test the rejection it claims",
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:371-397",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:20:39.360736",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 48,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 33820,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "xhigh",
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 503753,
+  "cached_tokens": 447792,
+  "cache_write_tokens": null,
+  "completion_tokens": 30562,
+  "reasoning_tokens": 28278,
+  "duration_seconds": 302.9317910000682,
+  "cost_usd": 0.02535502,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Coverage's raw-count proof is not scoped to the product's shape, so other shapes' rows read as mismatches",
+      "description": "The two sides of the proof are scoped differently. `ledger_totals` filters by request shape (`r.dataset`, `r.symbols`, `r.stype_in`, `r.schema = ANY(tiers)`) plus `COVERAGE_PREDICATE`, but `raw_counts` counts **every** `tick_trade` row falling in the session windows \u2014 no instrument, unit, or shape predicate. `_session_row` (src/manta_trading/data/tick/tick_coverage.py) builds `pairs` from the union of ledger and raw keys, so a row ingested under any other request shape yields `(instrument, 0, N)` \u2192 `Mismatch` \u2192 `EXIT_PARTIAL` from `tick_coverage` (src/manta_trading/cli/commands/tick_store_cmds.py), contradicting the module docstring's claim that a mismatch is \"evidence of an out-of-band edit or a defect\". This is reachable today: `adopt` accepts a job with arbitrary symbols (e.g., a continuous or raw-symbol ES job bought out-of-band) and `ingest` loads verified tier units regardless of shape, landing rows in `tick_trade` that the ES.FUT ledger never counts. It becomes routine the moment slice 231 adds GC to the universe (the universe and `FUTURES_PRODUCT_CALENDAR` comments anticipate this): CME metals sessions substantially overlap ES session windows, so every GC trade inside an ES session would be reported as an ES mismatch and `mt data tick coverage` would exit 3 on healthy data. Either scope the scan to instruments the shape's current units cover (e.g., join `tick_trade.unit_id` to current units of the shape), or state and mechanically guard the single-shape assumption the proof currently rests on.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py#raw_counts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Populated-range edges: coverage widens the calendar query a day before `start` unnecessarily, and `_scope`'s upper bound can exceed the calendar span",
+      "description": "`build_coverage` calls `calendar_sessions` with `utc_midnight(start - timedelta(days=1))`. `TradingCalendar.sessions_between` requires **both** bounds inside the populated span (`_require_populated` in src/manta_trading/data/base/trading_calendar.py), and the extra day is unnecessary: `_fetch_sessions` selects sessions with `close >= start`, and a session dated `start` always closes on `start`, so it is included with a `midnight(start)` bound. The widening only adds a failure mode \u2014 `coverage --start <first populated session date>` exits 4 (`TickCalendarError` \u2192 storage) even though the requested range is populated. Symmetrically, `_scope` (src/manta_trading/data/tick/tick_status_build.py) legitimately needs `midnight(held_day + 1)` to catch sessions opening at 22:00 on a held day, but that bound exceeds `last_close` when the newest held day is the calendar's last populated day, making `status` exit 4 instead of reporting. Both are edge cases (the calendar horizon normally extends ahead of ingested days); clamping the bounds to the populated span, or at least documenting the boundary behavior, would remove the surprise.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py#build_coverage"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`calendar_sessions` duplicates the calendar-failure scaffolding of `tick_calendar.product_session_days`",
+      "description": "The construct-`TradingCalendar` / `sessions_between` / map-`(OperationalError, CalendarNotFoundError, OutOfPopulatedRangeError)`-to-`TickCalendarError` / `finally: close()` scaffolding is reproduced almost line-for-line from `product_session_days` (src/manta_trading/data/tick/tick_calendar.py), including the identical message shapes and the `psycopg` import that exists only for the exception tuple. Only the inputs differ (calendar_id vs product, sessions vs touched days). A shared context manager (e.g., `with_calendar(url, calendar_id)` in `tick_calendar.py`) would keep the failure mapping in one place, since a future calendar-failure type must currently be added to both or the verbs will exit differently.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py#calendar_sessions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_session_row` rescans every ledger/raw key once per session \u2014 quadratic in range length",
+      "description": "`instruments = sorted({i for i, d in (*ledger, *raw) if d == day})` materializes and unpacks the full key tuples of both dictionaries for every session in the range. Work is O(sessions \u00d7 total keys), and total ledger keys themselves grow with sessions, so a multi-year audit range (e.g., 1,250 sessions \u00d7 ~50 instruments \u2248 60k keys) costs ~75M tuple unpackings \u2014 tens of seconds of pure-Python scanning plus per-session allocation churn. Grouping the dictionaries by day once (or iterating keys a single time into a per-day structure) makes it linear. Irrelevant at the days-to-months ranges coverage is typically run over, but the command takes an unbounded `--start/--end`.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py#_session_row"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `Settings`/`setup_logging` patch pair and its justification comment are copy-pasted across three test modules",
+      "description": "The same two-line patch (`manta_trading.cli.app.Settings`, `manta_trading.cli.app.setup_logging`) plus the same three-line comment about CliRunner's closed stream and logging handlers now exists in `_app_patches` here, the `no_key` fixture in test/integration/data/test_tick_ingest_cli.py, and the `settings` fixture in test/unit/cli/commands/test_data_tick_ingest.py. The comment itself says \"as every CLI test does\", which is the signal it should be a shared helper (a `contextmanager` in a cli-test support module or conftest fixture), so the workaround and its non-obvious rationale evolve in one place rather than drifting across copies.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "test/integration/data/test_tick_status_cli.py#_app_patches"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Coverage's raw-count proof is not scoped to the product's shape, so other shapes' rows read as mismatches",
+      "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Populated-range edges: coverage widens the calendar query a day before `start` unnecessarily, and `_scope`'s upper bound can exceed the calendar span",
+      "location": "src/manta_trading/data/tick/tick_coverage.py#build_coverage",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`calendar_sessions` duplicates the calendar-failure scaffolding of `tick_calendar.product_session_days`",
+      "location": "src/manta_trading/data/tick/tick_status_build.py#calendar_sessions",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`_session_row` rescans every ledger/raw key once per session \u2014 quadratic in range length",
+      "location": "src/manta_trading/data/tick/tick_coverage.py#_session_row",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The `Settings`/`setup_logging` patch pair and its justification comment are copy-pasted across three test modules",
+      "location": "test/integration/data/test_tick_status_cli.py#_app_patches",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T08:59:38.010408",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 151843,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 943717,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 950792,
+  "cached_tokens": 738112,
+  "cache_write_tokens": null,
+  "completion_tokens": 40080,
+  "reasoning_tokens": 37857,
+  "duration_seconds": 279.6632564160973,
+  "cost_usd": 0.6660131200000001,
+  "cost_basis": "alias_pricing"
+}

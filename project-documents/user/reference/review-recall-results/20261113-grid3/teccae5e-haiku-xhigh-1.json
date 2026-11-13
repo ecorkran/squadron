@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`source_bar_stamping` accepts a raw string, not only the enum",
+      "description": "`Market.__post_init__` validates `source_bar_stamping` with a membership test (`not in SOURCE_BAR_STAMPINGS`) and no instance check. `TimeMeaning` is a `StrEnum`, so the plain string `\"period_start\"` hashes and compares equal to `TimeMeaning.PERIOD_START`, and it passes. I reasoned this from the MRO (`str` precedes `Enum`), not by running it. The other enum fields use `_require_instance`: `session_mode` at markets.py:64-66 and `continuity_kind` at markets.py:102-104. The existing test \"non-enum continuity\" rejects a raw string, so this field is inconsistent with its neighbours.\n\nThe canonical bytes are the same for the string and the enum, so the hash is unaffected. The damage is to identity checks on the stored value. `period_end.py:82` tests `start.meaning is TimeMeaning.PERIOD_START`, and `test_markets.py:161` asserts `is meaning`. A market built with a raw string would fail those checks silently. Slice 102 line 120 says any non-`TimeMeaning` value raises `InvalidMarketError`. No test covers a raw string.\n\nFix: add `_require_instance(self.source_bar_stamping, TimeMeaning, \"market.source_bar_stamping\")` before the membership check, and add a parametrized rejection test with `\"period_start\"`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:94-98"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Collection fields raise `TypeError` for `UNKNOWN`, and their annotations contradict the docstring",
+      "description": "`_normalize_calendars` calls `tuple(refs)` (markets.py:144), and `_normalize_bases` calls `frozenset(bases)` (markets.py:161), before any type check. `Unknown` defines no `__iter__`, so `UNKNOWN` or any non-iterable raises a raw `TypeError` instead of `InvalidMarketError`. Slice 102 D6 (line 157) says market attributes may not be `UNKNOWN`, and D8 says Core Model errors are typed. No test covers `UNKNOWN` or a non-iterable for these two fields.\n\nThe `Market` docstring (markets.py:74-75) says these fields \"accept any iterable.\" The field annotations at markets.py:83 and :85 declare `tuple[...]` and `frozenset[...]`, so a strict-pyright caller passing a list gets a type error.\n\nFix: check `isinstance(refs, Iterable)` before converting and raise `InvalidMarketError` otherwise. Align the annotation with the accepted input, either by widening it or by changing the docstring.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:141-161"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplicated validation helpers across `markets.py` and `instruments.py`",
+      "description": "`_require_instance` in `instruments.py:80-86` matches `_require_instance` in `markets.py:132-138` line for line, except for the exception class. `Instrument.__post_init__` (instruments.py:69-75) also re-implements `_require_nonempty_str` (markets.py:123-129) inline. `instruments.py` already imports `Market` from `markets.py`, so it can reuse the helpers. Project rules say not to duplicate logic.\n\nFix: move the helpers into one shared validation module that takes the error class as a parameter, or import them from `markets.py`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/instruments.py:80-86"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two test-quality issues: no-op `replace` calls and duplicated `make_market`",
+      "description": "`test_calendars_are_referenced_by_id_only` asserts that a date string is absent from the canonical bytes of `replace(EQUITY_FIXTURE)`. `replace` with no changes just copies the value, so the assertion adds nothing beyond `_normalize_calendars`, which already rejects non-ref values (markets.py:146). `test_changing_nothing_keeps_the_hash` (test_instruments.py:257-259) has the same no-op copy.\n\n`make_market` is also defined twice, at test_instruments.py:43 and test_markets.py:36, with different defaults. The `test_markets.py` version includes the EXTENDED ref and SPLIT_DIVIDEND basis, and the other does not. Consolidate them into one builder, for example in `tests/core_model/conftest.py`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_instruments.py:262-264"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two test files are over the ~300-line target",
+      "description": "`test_canonical_golden.py` is 360 lines and `test_calendars.py` is 423. Both are in the \"Over\" band (under 450), so this is a note, not a split. Natural split for `test_canonical_golden.py`: move the market and instrument golden rows (around lines 277-350) into their own golden file. For `test_calendars.py`, the session tables could move apart from the lookup tests. Add a task note naming the sizes and the split.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "tests/core_model/test_canonical_golden.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fixture calendar literals and fixture markets match the design",
+      "description": "I checked the `EQUITY_EXTENDED_FIXTURE` literals by arithmetic. 04:00 EDT is 08:00 UTC, which is 19,800 s before the RTH open at 13:30 UTC, matching the 5.5-hour difference. The Nov 2 session shifts to 09:00 UTC after the DST change. The Nov 5 early close at 17:00 EST is 22:00 UTC. Coverage bounds match the RTH calendar. The uniformity test's equity and Globex open instants also check out: 09:30 EDT is 13:30 UTC, and 17:00 CDT is 22:00 UTC. The fixture markets and instruments match the slice 102 table at lines 243-251.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/fixtures/calendars.py:66-112"
+    },
+    {
+      "severity": "PASS",
+      "title": "Decimal canonical form normalizes trailing zeros",
+      "description": "`_decimal_plain_digits` strips trailing zeros from the digit tuple and never uses `normalize()`. `Decimal(\"1\")` and `Decimal(\"1.00\")` are equal and hash-equal, and they produce identical canonical bytes (`{\"$dec\":\"1\"}`). Equal instruments therefore also have equal canonical hashes.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/canonical.py:89-110"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`source_bar_stamping` accepts a raw string, not only the enum",
+      "location": "src/manta_trading_engine/core_model/markets.py:94-98",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Collection fields raise `TypeError` for `UNKNOWN`, and their annotations contradict the docstring",
+      "location": "src/manta_trading_engine/core_model/markets.py:141-161",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Duplicated validation helpers across `markets.py` and `instruments.py`",
+      "location": "src/manta_trading_engine/core_model/instruments.py:80-86",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Two test-quality issues: no-op `replace` calls and duplicated `make_market`",
+      "location": "tests/core_model/test_instruments.py:262-264",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Two test files are over the ~300-line target",
+      "location": "tests/core_model/test_canonical_golden.py",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fixture calendar literals and fixture markets match the design",
+      "location": "src/manta_trading_engine/core_model/fixtures/calendars.py:66-112",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Decimal canonical form normalizes trailing zeros",
+      "location": "src/manta_trading_engine/core_model/canonical.py:89-110",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:21:27.394147",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 27,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 28,
+  "prompt_tokens": 1115557,
+  "cached_tokens": 874039,
+  "cache_write_tokens": 241504,
+  "completion_tokens": 57334,
+  "reasoning_tokens": null,
+  "duration_seconds": 238.4563889580313,
+  "cost_usd": 0.38828797000000004,
+  "cost_basis": "provider"
+}

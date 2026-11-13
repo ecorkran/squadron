@@ -1,0 +1,261 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`fire_unit_until` cannot stop the unit early: `subprocess.run` blocks on `mt-run`, which only exits when the unit ends",
+      "description": "Description: `fire_unit_until` calls `run([\"mt-run\", *mt_run_args], sudo=True, check=False, stream=True)`, and `run()` is `subprocess.run(...)` \u2014 it blocks until the child exits. The installed wrapper (`deploy/mt-run`, `start_and_stream`, installed to `/usr/local/bin/mt-run` by `install-production.sh:183`) does `systemctl start --no-block` and then `while is_running \"${unit}\"; do sleep 2; done` \u2014 it exits only when the unit is inactive. So in production the cutover thread sits inside `subprocess.run` for the *entire* pass (trailing + unbounded backfill), exactly the ten-hour wait this diff exists to remove; `wait_for_unit_or_line` is only reached after the unit has already ended, where `reached and unit_active(unit)` is always False and no stop is ever issued. `fire_unit_until` degenerates to `fire_unit`. The unit test that claims to cover this (`TestBoundedFiringAndRecord.test_the_minute_firing_stops_once_the_trailing_phase_completes` in `test/unit/test_cutover_921.py`) patches `cutover_common.run` to return instantly, so it exercises the poll/stop logic against a control flow that never occurs in production \u2014 the external boundary's real behavior (mt-run blocks until the unit ends) is not modeled, which is the false-confidence trap AGENTS.md warns about. Related: the printed claim \"Ctrl-C only detaches, the script keeps waiting\" is also false in practice \u2014 the cutover, `sudo`, and `mt-run` share one process group, so Ctrl-C raises `KeyboardInterrupt` in the cutover (the `finally` releases timers, but the script dies rather than \"keeps waiting\"); the unit keeps running unattended. A viable fix: start the unit with a non-blocking command the operator is already granted (`sudo systemctl start mt-*` is in `MT_UNITS`) and poll the journal from the script, or give `mt-run` a detach-and-return mode; either way the waiting must happen in the cutover process, not inside a blocking `subprocess.run`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py#fire_unit_until"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New sudoers grant `mt-run *` is far wider than the cutover scripts issue, contradicting the file's own \"nothing wider\" header",
+      "description": "Description: The file header promises \"Exactly the commands those scripts issue, nothing wider\". The scripts issue `mt-run minute`, `mt-run daily`, `mt-run kalshi`, and `mt-run data kalshi status --json` \u2014 but `Cmnd_Alias MT_RUN = /usr/local/bin/mt-run *` grants the operator *every* `mt` CLI subcommand with the production environment: the wrapper's pass-through branch (`run_production_mt` in `deploy/mt-run`) execs the production `mt` binary with `/etc/manta-trading.env` sourced, including destructive maintenance that takes its DB URLs from that ambient file (`data caggs repair` \u2192 drop_chunks/refresh, `data rechunk`, `data migrate apply`, \u2026). That is precisely the \"maintenance tooling with ambient-URL targeting\" posture the production-protection rules in sql.md push back against, and it is not exercised by any script this diff names. `MT_READ` has the same shape at lower severity: `cat /etc/manta-trading.env` hands the operator every production secret (EODHD keys, application and maintenance DB URLs), while the actual need (in shared `cutover_common.verify_migrate_target`) is only a host/port/dbname comparison. Recommend enumerating the specific `mt-run` invocations and replacing the env-file read with a root-side helper that returns only URL identities. (Minor: `MT_UNITS`'s `mt-*` globs are broader than the four named units, and `install()` in `cutover_common.py` resolves its own path while `MT_INSTALL` hardcodes `/home/manta/source/repos/manta/trading-data` \u2014 a relocated checkout fails with permission denied, which is acceptable only if the mismatch is documented in the sudoers header.)",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:9,14"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Bar-timestamp parsing is duplicated between `bar_timestamp` and `_bar_to_row` and can diverge",
+      "description": "Description: `bar_timestamp` \"mirrors `_bar_to_row`\" (minute.py) for the epoch/ISO timestamp, but `_bar_to_row` additionally skips bars with missing/malformed prices (documented to actually occur: EODHD null prices, 2026-08-14). A response that contains exactly one bar inside a judged session, where that bar has a valid timestamp but an unusable price, will be counted as session-coverage by `judge_chunk_by_sessions` while `_insert_minute_bars` skips the row \u2014 the chunk is judged SUCCESS, `_advance_minute_gap` deletes the gap row, and the session is stored empty: the same silent-truncation failure #22 removes, reintroduced in rarer form. AGENTS.md forbids duplicated logic; the old third copy (`_latest_bar_dt`) was deleted in this diff, which is good, but the remaining pair should share one parser \u2014 ideally the chunk is judged on the rows that were actually inserted, not the raw provider bars.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py#bar_timestamp"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`CaggFreshness.stale` omits the cagg policy's 4-hour end_offset",
+      "description": "Description: The probe reports fresh when `last_successful_finish >= newest_bar_written`, but `minute_4hour_ohlcv`'s refresh policy (migration 035/053) materializes only buckets fully inside `[R - 3d, R - 4h]`, so a refresh that finished shortly after a bar was written has not necessarily materialized that bar's bucket. The sibling `cagg_freshness._resolve_threshold` treats `end_offset` as load-bearing for exactly this reason. For the judged sessions in practice (NYSE closes at 17:00/20:00 UTC, judged at the next firing + 3h) the last bucket is always closed long before judging, so this is not a live misjudgment today \u2014 but the property \"fresh \u21d2 every session bar is materialized\" does not hold by construction, and a calendar with a close within ~4h of a firing would break it. Worth a comment or a `+ end_offset` margin so the assumption is explicit.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py#CaggFreshness"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`--verify`'s WAIT state exits with code 2 (EXIT_REFUSED), conflating \"not judgeable yet\" with \"refused/failed\"",
+      "description": "Description: `run_verify` now returns `False` on `[WAIT]`, and `main` maps any False to `EXIT_REFUSED` (2). The cutover script copes by scanning the text, but a human or CI consumer of `repair_921_minute_sessions.py --verify` gets exit 2 indistinguishable from a genuine refusal or failure. WAIT is an \"again in an hour\" state, not a verdict; a distinct exit code (or at least documented code) would keep the three states separable.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/repair_921_minute_sessions.py#run_verify"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`mt-minute-pass.timer` still claims the minute pass is \"staggered 30 minutes behind\" the daily pass",
+      "description": "Description: Both OnCalendar times moved to 04:05/13:05, and the 04:05 placement's real reason is documented on the constant (`MINUTE_PASS_FIRING_TIMES_UTC`: the first firing must sit *after* EODHD publishes the day, ~03:00+ UTC). The unit's `[Unit] Description` and the `[Timer]` comment still assert \"staggered 30 minutes behind mt-daily-pass.timer\" \u2014 true only for 13:05 vs 12:35 (04:05 is 3h30m after 00:35). An operator reading the timer file gets the wrong mental model of why 04:05 was chosen; the same diff already updated the cross-reference in `mt-kalshi-pass.timer`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "deploy/systemd/mt-minute-pass.timer:2,6-7"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two of the diff's import blocks are now unsorted under the repo's ruff-I (ASCII) convention",
+      "description": "Description: Pre-existing blocks in these files follow case-sensitive ASCII order (`CutoverError, fire_unit, \u2026`; `CheckReport, RepairScanTimeout, build_truncated_day_index, \u2026`). The diff inserts `NOTES_DIR, fire_unit_until, start_log` *before* `CutoverError` in `scripts/cutover_921_minute_sessions.py` and `cagg_freshness_for_session` *before* `CheckReport` in `scripts/repair_921_minute_sessions.py` \u2014 `ruff check --select I` would reorder both. CI runs no lint job (the workflow is tag-only publishing), so nothing enforces it; fix at the next touch to keep the mechanical rule real.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:46"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Standing per-cycle daemon logic now lives in a one-time slice-named repair module",
+      "description": "Description: `minute.py` now calls `build_truncated_day_index` (and the cutover/verify paths call `cagg_freshness_for_session`) on **every** minute cycle, but both live in `repair_921.py`, whose docstring frames it as the one-time 2026-07-16 truncation repair. When that repair script is retired, the daemon still imports \"repair_921\" for permanent functionality, and the module will hold logic that is not repair-specific. Consider moving the truncated-day index and the cagg-freshness probe into `minute_coverage`/`compute_missing_ranges` (or a standing `truncation` module) while the slice is still fresh.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`start_log` runs before `preflight` validates the working directory, and same-minute reruns clobber the record",
+      "description": "Description: `main` opens `NOTES_DIR / \"921-cutover-\u2026Z.log\"` (relative: `project-documents/user/notes`) before `preflight` refuses non-checkout-root execution \u2014 a wrong-CWD run creates a stray directory tree and log somewhere else, then dies. Also the filename is minute-granularity and `start_log` uses `write_text` (truncate): two runs started in the same minute would overwrite the first run's narration \u2014 the record this feature was added to preserve. Opening the log after the CWD check, and refusing/numbering on an existing path, would close both.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:226"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Load-test tier for the new per-cycle DB work is unverified",
+      "description": "Description: The python rules require at least one load test for code on the network/concurrency paths, and this diff adds per-cycle work to the minute pass: a universe-wide truncation scan under a 600s `statement_timeout` on a pooled connection (once per cycle, ~8s measured \u2014 fine in isolation) plus one `fetch_session_bounds` round trip per chunk (~13k+ extra indexed queries per pass). I could not confirm a `tests/load/` entry exercising `run_minute_cycle` with these additions at production scale; please verify one exists or add one, since unit tests here cannot show pool pressure (max_size=4) or the scan's interaction with the 300s session timeout it temporarily overrides.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "PASS",
+      "title": "Timer/constant drift guard and session-judgement logic verified consistent",
+      "description": "Description: Verified against the underlying files: `MINUTE_PASS_FIRING_TIMES_UTC = (time(4,5), time(13,5))` matches both `OnCalendar` lines in `deploy/systemd/mt-minute-pass.timer`, and `TestMinutePassTimerMatchesTheConstant` asserts set equality in both directions, so a future schedule move fails CI. `collecting_firing_finished_at`'s 07:05 boundary math checks out for both the 20:00 and 17:00 closes, and the updated `test_data_health.py` cases pin it. `sessions_without_bars`' `(open, close]` predicate matches `find_truncated_days`' `newest <= open` signature (agreement asserted by existing tests), the spillover case from the incident is covered end-to-end in `TestChunkJudgedBySessions`, and the truncated-day index is correctly scoped to the trailing phase only (`test_only_the_trailing_phase_receives_the_index`). The UTC reformatting in `check_minute_session_mass` is correct for any connection timezone since psycopg returns tz-aware values.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "test/unit/deploy/test_units.py:226"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`fire_unit_until` cannot stop the unit early: `subprocess.run` blocks on `mt-run`, which only exits when the unit ends",
+      "location": "scripts/cutover_common.py#fire_unit_until",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "New sudoers grant `mt-run *` is far wider than the cutover scripts issue, contradicting the file's own \"nothing wider\" header",
+      "location": "deploy/sudoers.d/manta-ops:9,14",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Bar-timestamp parsing is duplicated between `bar_timestamp` and `_bar_to_row` and can diverge",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py#bar_timestamp",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`CaggFreshness.stale` omits the cagg policy's 4-hour end_offset",
+      "location": "src/manta_trading/data/gaps/repair_921.py#CaggFreshness",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`--verify`'s WAIT state exits with code 2 (EXIT_REFUSED), conflating \"not judgeable yet\" with \"refused/failed\"",
+      "location": "scripts/repair_921_minute_sessions.py#run_verify",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`mt-minute-pass.timer` still claims the minute pass is \"staggered 30 minutes behind\" the daily pass",
+      "location": "deploy/systemd/mt-minute-pass.timer:2,6-7",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Two of the diff's import blocks are now unsorted under the repo's ruff-I (ASCII) convention",
+      "location": "scripts/cutover_921_minute_sessions.py:46",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Standing per-cycle daemon logic now lives in a one-time slice-named repair module",
+      "location": "src/manta_trading/data/gaps/repair_921.py",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`start_log` runs before `preflight` validates the working directory, and same-minute reruns clobber the record",
+      "location": "scripts/cutover_921_minute_sessions.py:226",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Load-test tier for the new per-cycle DB work is unverified",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Timer/constant drift guard and session-judgement logic verified consistent",
+      "location": "test/unit/deploy/test_units.py:226",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:03:23.542257",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 46,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 504397,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1920637,
+  "cached_tokens": 1494336,
+  "cache_write_tokens": null,
+  "completion_tokens": 140247,
+  "reasoning_tokens": 134786,
+  "duration_seconds": 517.77828516718,
+  "cost_usd": 0.48557244000000005,
+  "cost_basis": "alias_pricing"
+}

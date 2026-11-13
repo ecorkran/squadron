@@ -1,0 +1,58 @@
+{
+ "case": "197",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/6",
+  "P1": "haiku-xhigh/1/4",
+  "P2": "haiku-xhigh/1/5",
+  "P3": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "cf errors from the source evaluation (`evaluate_each_source`) and from `list_slices` in `_select_item`/`_open_dependencies` are never wrapped, so a cf outage escapes `resume_item` as a traceback with exit 1, which an automated caller reads as FLAGGED rather than HALTED (exit 3); the catch-all OSError branch also mislabels any OSError as a report-write failure."
+  ],
+  "F2": [
+   "DROP",
+   "report.json` is written only by squadron itself, so a non-object item or a missing key means a hand-corrupted file; this hardens against input that cannot normally arrive."
+  ],
+  "F3": [
+   "DROP",
+   "a failed write leaves at most a stray dot-prefixed temp file and the previous report stays intact, so this is cleanup hygiene with no wrong behavior."
+  ],
+  "F4": [
+   "DROP",
+   "the slice design (line 67) states that `cf list tasks --json` provides `completed` and `total`, and the parser always fills both, so the dataclass's zero defaults are never used in production."
+  ],
+  "F5": [
+   "DROP",
+   "the lock's scope (commits and cf moves) is a deliberate D11 design choice, and the claim that the revise dispatch conflicts with a batch is speculation the reviewer admits they did not trace."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P2": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P3": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 55.0,
+ "duration_seconds": 54.94816758390516,
+ "cost_usd": 1.0567236999999998,
+ "effort": "high",
+ "tool_calls_made": 14,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=825963, cached=724590, cache_write=101353, completion=4991, reasoning=None)",
+ "raw_output": "I'm checking the last finding (F5): looking at judge-cycle.yaml to see whether its dispatch step actually writes to the checkout.\nF1: KEEP \u2014 cf errors from the source evaluation (`evaluate_each_source`) and from `list_slices` in `_select_item`/`_open_dependencies` are never wrapped, so a cf outage escapes `resume_item` as a traceback with exit 1, which an automated caller reads as FLAGGED rather than HALTED (exit 3); the catch-all OSError branch also mislabels any OSError as a report-write failure.\nF2: DROP \u2014 `report.json` is written only by squadron itself, so a non-object item or a missing key means a hand-corrupted file; this hardens against input that cannot normally arrive.\nF3: DROP \u2014 a failed write leaves at most a stray dot-prefixed temp file and the previous report stays intact, so this is cleanup hygiene with no wrong behavior.\nF4: DROP \u2014 the slice design (line 67) states that `cf list tasks --json` provides `completed` and `total`, and the parser always fills both, so the dataclass's zero defaults are never used in production.\nF5: DROP \u2014 the lock's scope (commits and cf moves) is a deliberate D11 design choice, and the claim that the revise dispatch conflicts with a batch is speculation the reviewer admits they did not trace.\nF1: KEEP \u2014 cf errors from the source evaluation and from `list_slices` in `_select_item`/`_open_dependencies` aren't wrapped, so a cf failure after the git precondition escapes `resume_item` as a traceback with exit 1, which a caller reads as FLAGGED instead of HALTED; the catch-all OSError branch also labels any OSError as a report-write failure.\nF2: DROP \u2014 `report.json` is written only by squadron itself, so a non-object item or a missing key means a hand-corrupted file, and this hardens against input that can't normally arrive.\nF3: DROP \u2014 a failed write leaves at most a stray dot-prefixed temp file and the previous report stays intact, so this is cleanup hygiene with no wrong behavior.\nF4: DROP \u2014 the slice design (line 67) says `cf list tasks --json` provides `completed` and `total`, and `list_tasks` always fills both fields, so the dataclass's zero defaults are never used in production.\nF5: DROP \u2014 the lock covering only commits and cf moves is a deliberate D11 design choice, and the reviewer admits they didn't trace whether the revise dispatch conflicts with a batch."
+}

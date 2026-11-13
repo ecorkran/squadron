@@ -1,0 +1,369 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`b2_lifecycle.sh` reports a missing rule for `17/main` as `MISSING`, but `setup-backup.sh` treats every `MISSING` line as not-OK",
+      "description": "`b2_lifecycle.sh` prints `OK lifecycle <prefix>` / `MISSING lifecycle <prefix> (...)`. `setup-backup.sh` re-writes those into `OK <cluster> lifecycle ...` / `MISSING <cluster> lifecycle ...` via the `case` at deploy/setup-backup.sh:216-219 \u2014 but only lines matching `\"OK \"*` or `\"MISSING lifecycle \"*` are echoed; everything else falls into `report \"MISSING $C lifecycle-read ...\"`, which *is* tallied as not-OK. That part is intended. The real problem is the opposite direction: the `MISSING lifecycle` lines are echoed directly with `echo`, bypassing `report`, so they are never tallied \u2014 that matches the documented TD10 intent and the test `test_missing_rule_does_not_change_the_exit_code`. However the `MISSING lifecycle` line is echoed with the cluster inserted as `${line%% *} $C ${line#* }`, producing e.g. `MISSING 17/tick lifecycle 17-tick/base/ (...)`. `cutover_227_helpers.setup_not_ok` filters these with `re.match(r\"^MISSING \\S+ lifecycle \", line)` \u2014 so it works only because the cluster name contains no space. That coupling is implicit and undocumented; the helper's regex and the shell's `${line%% *}` insertion must stay in lockstep.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh:210-222"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`b2_lifecycle.sh` reads rules from the bucket root but the check runs with the *cluster's* sub-path, so production's `17/main` rules are looked up with `--subpath -` while the tick's are looked up with `--subpath 17-tick`",
+      "description": "`setup-backup.sh` passes `--subpath \"${BC_REMOTE[$i]}\"`. For `17/main` the table says `-`, so the expected prefix is `base/` and `wal/` \u2014 the bucket root. For `17/tick` it is `17-tick`, so `17-tick/base/`, `17-tick/wal/`. But the *offsite* paths actually written by the cron jobs are `b2:<bucket>/wal` and `b2:<bucket>/base` for production and `b2:<bucket>/17-tick/wal` / `.../base` for the tick \u2014 see `deploy/cron.d/manta-trading-backup.cluster` (`--remote @CLUSTER_REMOTE@/wal`). The lifecycle rule's `fileNamePrefix` in B2 is matched against the path *relative to the bucket*, so `base/`/`wal/` and `17-tick/base/`/`17-tick/wal/` are the right expectations. This part is consistent. The concern is that `b2_lifecycle.sh` is called with `--subpath` values taken straight from the table column `remote_subpath`, which is *also* used to build the rclone remote prefix \u2014 a single column now drives both the rclone path and the B2 rule prefix, and the two are only coincidentally the same because `rclone copy` preserves the sub-directory. If a row ever set `remote_subpath` to something other than the B2 rule prefix, the check would silently look at the wrong prefix. Worth a comment or a separate column.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh:208-210"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`b2_lifecycle.sh` reads the whole `rclone backend lifecycle` output into a shell variable and re-parses it with `jq` on every prefix \u2014 an O(n\u00b2)-ish pattern with a credential-bearing command line",
+      "description": "`RULES=$(... rclone backend lifecycle \":b2:$BUCKET\" 2>&1)` captures stdout *and stderr* together, then the script runs `jq` against that combined text once for the type check and once per prefix. Because stderr is merged into the same buffer, a warning line on stderr makes `jq -e 'type == \"array\"'` fail and the whole check reports `UNREADABLE` even though the rules were read fine \u2014 a real risk with rclone, which prints progress/warnings. The `2>&1` is only needed for the error message. Capturing stdout and stderr separately would make the parse robust.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "deploy/lib/b2_lifecycle.sh:65-83"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`b2_lifecycle.sh` passes the B2 application key via `RCLONE_B2_KEY` in the environment, but the rclone remote `b2` is already configured in `~/.config/rclone/rclone.conf` \u2014 the two credential sources can diverge",
+      "description": "The script documents that the rules are read through rclone's *native* b2 backend (`:b2:<bucket>`) \"with the same bucket-scoped application key given in its environment\", overriding `RCLONE_B2_ACCOUNT`/`RCLONE_B2_KEY`. The runbook (200-backup-and-restore.md) configures a `[b2]` remote whose type is `b2`. If the configured remote is `s3` (as `restic_repo.sh` uses `s3:${endpoint}/${bucket}` for the same credentials), then `rclone backend lifecycle \":b2:$BUCKET\"` uses the *native* b2 backend with the env-supplied key, while every other job uses the configured `b2:` remote. Two credential paths for one bucket is a divergence risk the repo's \"one value, one source\" convention discourages. This is worth confirming against the actual `~/.config/rclone/rclone.conf` type on the host.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "deploy/lib/b2_lifecycle.sh:65-67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cutover_227_helpers.strip_new_args` strips a hard-coded `--replication-host 127.0.0.1`, duplicating the table value the renderer already owns",
+      "description": "`strip_new_args` removes `\" --url-key {url_key}\"`, `\" --replication-host 127.0.0.1\"` and `\" --remote {bucket_remote} --dest\"`. The `127.0.0.1` is the production row's `replication_host` in `deploy/backup-clusters.conf` \u2014 a value that also lives in `BackupCluster.replication_host` (scripts/backup_clusters.py). The cutover already loads that row (`ctx.main`), so the literal should come from `ctx.main.replication_host`, not be re-spelled. `scripts/cron_weekly_backup.sh` has the same class of constant as `PRE227_HOST_TO=@127.0.0.1:` \u2014 a third copy. Changing the table's replication host would leave the cutover's comparison silently wrong (it would then report a \"production cron lines changed\" failure rather than the truth).",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:85-88"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cutover_227_helpers.production_lines` identifies the host block by `j.split()[5] == \"root\"`, which is a positional guess at the cron user column",
+      "description": "`production_lines` returns `block_lines(text, MAIN) + host`, where `host` is every job line whose sixth field is `root`. In `/etc/cron.d` the user column is indeed field 6, but the helper is parsing a *rendered file* whose format is only incidentally the one `render_cron.sh` writes. `cutover_227_tick_backup.main` then does `production_lines(CRON_FILE.read_text())[0].split()[5]` to learn the cron user \u2014 if the installed file is the *pre-227* file (as it is before the cutover), `production_lines` returns all job lines and `[0]` is the health job, whose user is `manta`. That works today, but the helper's own docstring says it handles \"a file without blocks (pre-227)\", so the two paths are already different code for the same question.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:76-81"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cutover_227_host.conf_sums` reads `pg_lsclusters` output with a bare `r.split()[5]`, which is the same positional fragility the diff fixed on the shell side",
+      "description": "`conf_sums()` does `next(r.split()[5] for r in rows if r.split()[:2] == MAIN.split(\"/\"))`. The shell side of this slice explicitly moved to `pg_lsclusters --no-header` and parsed the columns by name (\"the data directory is what pg_lsclusters says, never a derived path\", TD4). The Python side keeps the index-based parse, and it uses `pg_lsclusters --no-header` \u2014 but the `Owner` column can contain a space (`<unknown>` in the test fixture is one token, but a real \"not owner\" marker may not be), which would shift field 5 and silently select the wrong path. The two implementations of the same fact should agree on the parse.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_host.py:82-93"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cutover_227_host.tick_locks_held` builds a SQL `IN (...)` list by string interpolation of lock keys",
+      "description": "The keys come from `TICK_ACQUISITION_LOCK_KEY`/`TICK_INGEST_LOCK_KEY` (integers from `src/manta_trading/data/tick/constants.py`), so the interpolation is not attacker-controlled today, but the project rule is \"always use parameterized queries (never f-string SQL)\" and the sql.md rules apply to `**/*.py` under test/ and any DB-connecting code. `psql` here is invoked via `run()` with `-c`, so parameterization is not directly available; a psycopg call with bound parameters would be the compliant shape. Also note `classid = 0 AND objsubid = 1` is a hard-coded assumption about how the lock key is split into the `pg_locks` key columns \u2014 worth a comment tying it to `src/manta_trading/data/locking.py`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "scripts/cutover_227_host.py:95-104"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cutover_227_tick_backup.step_weekly` treats a `=== weekly backup done` *unarmed* line as success and then arms the file itself",
+      "description": "`WEEKLY_DONE = \"=== weekly backup done\"` matches both `=== weekly backup done (unarmed): ...` and `=== weekly backup done: ...` in `scripts/cron_weekly_backup.sh`. The check is `tail.startswith(WEEKLY_DONE)`, so an *unarmed* run \u2014 which explicitly skips the destructive reconcile \u2014 satisfies it, and the cutover then `arm.touch()`es the file. That is the intended \"watch one reconcile, then arm\" workflow, but the code cannot distinguish an armed run from an unarmed one, so a run that failed *after* the base backup but before the reconcile would still arm the file and the next scheduled weekly run would perform the destructive offsite mirror unattended. The tail check should require the armed form (`\"=== weekly backup done: \"`) and the unarmed form should be treated as \"not armed yet\".",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:176-197"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cutover_227_tick_backup.step_offsite` compares local `base/` against the remote with `rclone check --one-way` but the local `base/` directory is keyed by date, while the remote base path is a prefix",
+      "description": "`step_offsite` runs `rclone check --one-way <local>/base <remote>/base`. `cron_weekly_backup.sh` writes `backup_prod.sh --dest \"$BASE_DIR/$DATE_STAMP\"` and pushes to `\"$REMOTE_BASE/$DATE_STAMP\"`, so the remote is `b2:<bucket>/17-tick/base/<YYYYMMDD>` and the local is `<root>/base/<YYYYMMDD>` \u2014 the directory structures match, so `rclone check` compares like-for-like. But `rclone check --one-way` reports *extra* remote files as OK and local-only files as differences; combined with the fact that the local `base/` may still hold dates the remote never received (because the weekly job pushes only the newest date), a `rclone check` over the whole `base/` tree will report differences on the first run. The step's expectation (\"offsite base/ differs\") is therefore likely to fail on the very first cutover. This is a logic risk in a step that has no host-level test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:225-241"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cutover_227_tick_backup.step_production` requires `setup-backup --check` to exit 0, but `setup-backup --check` exits 1 whenever *any* item is not OK \u2014 including the tick cluster's `MISSING ... arm-file`",
+      "description": "At the end of the cutover the tick cluster's arm file exists (step 8 creates it), but `setup-backup --check` also reports `MISSING 17/tick lifecycle ...` for rules the operator must add by hand in the B2 console. Those are deliberately not tallied by `setup-backup.sh`, so they do not affect its exit code. However `step_production` requires `result.returncode == 0` *and* separately collects `ctx.lifecycle` \u2014 while `step_apply` (step 4) allows `MISSING 17/tick arm-file` via `APPLY_ALLOWED`. The two steps use different acceptance rules for the same output, and neither `setup_not_ok` call in step 12 re-checks that the remaining not-OK lines are only lifecycle ones. `step_production` relies purely on the exit code, which conflates \"the arm file is missing\" with \"the lifecycle rules are missing\". A `setup_not_ok(result.stdout, ...)` call with the lifecycle filter would make the intent explicit and would catch an unexpected DRIFT that the exit code happens to tolerate.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:243-256"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`setup-backup.sh` step numbering changed from 8 steps to 7, but the docstring's step list and the `step` labels were not re-checked against the runbook",
+      "description": "The header comment now reads \"Steps: 1 restic package; 2 host directories; 3 per cluster: ...; 4 cron.d; 5 timeshift; 6 restic repository; 7 leftover user-crontab lines\", and the labels say \"Step 3/7\" for what used to be steps 3\u20134+7a. Any runbook text that references \"step 4\" or \"step 7a\" of `setup-backup.sh` is now stale. The runbook 200-backup-and-restore.md was not in the diff, so its references could not be verified here.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh:38-45"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`provision_tick_cluster.sh` drops `trading_tick_proof` from `DATABASES` and from the URL-key map, but `scripts/proof_226/` still reads `MT_PROOF_226_*` from `.env`",
+      "description": "The URL-key map now has only `MT_TICK_DB_URL` and `MT_TICK_MAINTENANCE_URL`; the test asserts exactly that. `scripts/proof_226/common.py` still defines `PROOF_DB_URL_ENV = \"MT_PROOF_226_DB_URL\"` and `PROOF_MAINTENANCE_URL_ENV = \"MT_PROOF_226_MAINTENANCE_URL\"`, and `test/unit/test_proof_226_harness.py` still exercises them. Slice 227's task list says to remove the `MT_PROOF_226_*` entries from `.env`, which implies the proof harness is being retired; but the harness code and its tests are untouched in this diff and will now read env keys that no longer exist. If the proof harness is intentionally dead code, it should be deleted in this slice; if not, removing the keys from `.env` breaks it.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/provision_tick_cluster.sh:78-95"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`provision_tick_roles.sql` grants `REPLICATION` to the maintenance role, which is a meaningful privilege increase that the file's own header does not mention",
+      "description": "The file's header (lines 1-30) carefully enumerates the two roles and their isolation properties, and states \"there is no GRANT postgres and no ALTER ... OWNER in this file\". The new `ALTER ROLE %I REPLICATION` block is a third privilege the header does not mention. The inline comment justifies *why* it is opt-in, but the header \u2014 the part a reader consults \u2014 still describes the old privilege surface.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "scripts/provision_tick_roles.sql:105-127"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`render_cron.sh` renders cluster blocks by textual substitution of `@CLUSTER@` inside `# cluster @CLUSTER@`, so the block marker is generated rather than authored",
+      "description": "The `# cluster <name>` marker line lives in the cluster template, which means a table row whose name contained a space or a `#` would produce a malformed marker. `backup_clusters.sh` does not validate the cluster-name column (only `url_key`, `backup_root` and duplicates are checked). A cluster name with a space would also break `cutover_227_helpers.block_lines`'s `f\"{CLUSTER_MARKER}{name}\"` marker match and `pg_lsclusters`'s `ver/name` keying. Adding a name-format validation to `backup_clusters.sh` (and the Python twin) would close this.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "deploy/lib/render_cron.sh:104-121"
+    },
+    {
+      "severity": "PASS",
+      "title": "The cluster table has two parsers with matching rules and a parity test",
+      "description": "`backup_clusters.sh` enforces 15 fields, no duplicate cluster, a `MT_*` url_key and a `/data/` root prefix; `scripts/backup_clusters.py` applies the same rules and raises `ValueError` naming the line. Both are consumed by the same callers (`setup-backup.sh`, `render_cron.sh`, the cutover), and the malformed-table path is covered on both sides (`test_malformed_table_stops_before_any_step`, `test_malformed_table_refused`).",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "deploy/lib/backup_clusters.sh:22-60"
+    },
+    {
+      "severity": "PASS",
+      "title": "The `bash 5.2` `patsub_replacement` hazard is both documented and tested",
+      "description": "Every `${x//pat/rep}` in the renderer quotes its replacement, with a comment explaining why (`2>&1` would otherwise become `2>@X@1`), and `test_ampersand_survives_substitution` asserts every rendered job line still ends in `2>&1`. This is the kind of subtle regression that would otherwise silently break every cron job.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "deploy/lib/render_cron.sh:38-40"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`b2_lifecycle.sh` reports a missing rule for `17/main` as `MISSING`, but `setup-backup.sh` treats every `MISSING` line as not-OK",
+      "location": "deploy/setup-backup.sh:210-222",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`b2_lifecycle.sh` reads rules from the bucket root but the check runs with the *cluster's* sub-path, so production's `17/main` rules are looked up with `--subpath -` while the tick's are looked up with `--subpath 17-tick`",
+      "location": "deploy/setup-backup.sh:208-210",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`b2_lifecycle.sh` reads the whole `rclone backend lifecycle` output into a shell variable and re-parses it with `jq` on every prefix \u2014 an O(n\u00b2)-ish pattern with a credential-bearing command line",
+      "location": "deploy/lib/b2_lifecycle.sh:65-83",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "`b2_lifecycle.sh` passes the B2 application key via `RCLONE_B2_KEY` in the environment, but the rclone remote `b2` is already configured in `~/.config/rclone/rclone.conf` \u2014 the two credential sources can diverge",
+      "location": "deploy/lib/b2_lifecycle.sh:65-67",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`cutover_227_helpers.strip_new_args` strips a hard-coded `--replication-host 127.0.0.1`, duplicating the table value the renderer already owns",
+      "location": "scripts/cutover_227_helpers.py:85-88",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`cutover_227_helpers.production_lines` identifies the host block by `j.split()[5] == \"root\"`, which is a positional guess at the cron user column",
+      "location": "scripts/cutover_227_helpers.py:76-81",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`cutover_227_host.conf_sums` reads `pg_lsclusters` output with a bare `r.split()[5]`, which is the same positional fragility the diff fixed on the shell side",
+      "location": "scripts/cutover_227_host.py:82-93",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`cutover_227_host.tick_locks_held` builds a SQL `IN (...)` list by string interpolation of lock keys",
+      "location": "scripts/cutover_227_host.py:95-104",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`cutover_227_tick_backup.step_weekly` treats a `=== weekly backup done` *unarmed* line as success and then arms the file itself",
+      "location": "scripts/cutover_227_tick_backup.py:176-197",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`cutover_227_tick_backup.step_offsite` compares local `base/` against the remote with `rclone check --one-way` but the local `base/` directory is keyed by date, while the remote base path is a prefix",
+      "location": "scripts/cutover_227_tick_backup.py:225-241",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`cutover_227_tick_backup.step_production` requires `setup-backup --check` to exit 0, but `setup-backup --check` exits 1 whenever *any* item is not OK \u2014 including the tick cluster's `MISSING ... arm-file`",
+      "location": "scripts/cutover_227_tick_backup.py:243-256",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`setup-backup.sh` step numbering changed from 8 steps to 7, but the docstring's step list and the `step` labels were not re-checked against the runbook",
+      "location": "deploy/setup-backup.sh:38-45",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`provision_tick_cluster.sh` drops `trading_tick_proof` from `DATABASES` and from the URL-key map, but `scripts/proof_226/` still reads `MT_PROOF_226_*` from `.env`",
+      "location": "scripts/provision_tick_cluster.sh:78-95",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`provision_tick_roles.sql` grants `REPLICATION` to the maintenance role, which is a meaningful privilege increase that the file's own header does not mention",
+      "location": "scripts/provision_tick_roles.sql:105-127",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`render_cron.sh` renders cluster blocks by textual substitution of `@CLUSTER@` inside `# cluster @CLUSTER@`, so the block marker is generated rather than authored",
+      "location": "deploy/lib/render_cron.sh:104-121",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The cluster table has two parsers with matching rules and a parity test",
+      "location": "deploy/lib/backup_clusters.sh:22-60",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The `bash 5.2` `patsub_replacement` hazard is both documented and tested",
+      "location": "deploy/lib/render_cron.sh:38-40",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:43:20.407982",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 29,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 282955,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 17,
+    "in_fences": 0,
+    "in_section": 17,
+    "surviving": 17
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1435989,
+  "cached_tokens": 1070976,
+  "cache_write_tokens": null,
+  "completion_tokens": 81506,
+  "reasoning_tokens": 75946,
+  "duration_seconds": 461.869117916096,
+  "cost_usd": 0.059324607,
+  "cost_basis": "alias_pricing"
+}

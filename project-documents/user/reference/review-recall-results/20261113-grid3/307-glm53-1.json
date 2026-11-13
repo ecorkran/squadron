@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Over-session failure names are keyed by product only, so names can be attributed to the wrong family",
+      "description": "`over_sessions()` (`scripts/purchase_accounting.py:106`) filters coverage `volume_checks` on `verdict == \"over\"` and drops the `family` field that the coverage document actually provides (`volume_verdict_dict` in `src/manta_trading/data/tick/tick_coverage.py` emits `family` per volume check). `_family_evidence()` (`scripts/cutover_304_evidence.py`) accumulates those names into `named` keyed by product alone, and `over_failures()` then prints `named.get(row.product)` for *any* accounting row whose `traded_vs_cleared` over-count is non-zero. Two consequences:\n\n- If more than one family of a product carries over counts (the tick tier is a volume family beside `bar_1m`; I could not fully confirm `VOLUME_FAMILIES`' membership from the files I read), each failure line lists every over session of the product, whichever family it belongs to, and the count in the line (\"N sessions over\") comes from a different instrument (the accounting row) than the names (the statistics coverage document), with no correspondence check between them.\n- For a family whose coverage is never read \u2014 `coverage_reads()` covers only history wants, so the tick tier has no coverage doc \u2014 the failure line falls back to the `'?'` placeholder, naming nothing.\n\nThe exit rule still fails correctly (the count comes from accounting), but this script's product is an evidence report the PM reads; mis-attributed names in a failure line are a real defect of that report. Key `named` by `(product, family)` and include the `family` field in each name.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py#over_failures"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--estimate` reads cost figures without the unset guard, so a malformed payload escapes as a bare traceback",
+      "description": "`judge_estimate(..., check_ceilings=False)` returns `BUY` *before* the `_decimal(summary, \"planned_usd\")` validation (confirmed in `scripts/cutover_304_checks.py`), so in `--estimate` mode nothing checks the cost figures are present or numeric. `_estimate_only` then reads them raw: `planned = Decimal(summary[\"planned_usd\"])` and `trailing = Decimal(summary[\"trailing_30d_usd\"])`. `Decimal(None)` raises `TypeError` and a non-numeric string raises `decimal.InvalidOperation` \u2014 neither is a `KeyError`/`ValueError`, so `main`'s deliberate \"unexpected payload\" handler misses them. The operator gets an unnarrated traceback: nothing is written to the cutover log, which is the artifact the design says is the cutover's report. Reuse the existing `_decimal` guard (exposed from `cutover_304_checks`) or add `TypeError`/`InvalidOperation` to the payload handler so the stop is narrated. Note `final_failures` reads `planned_usd` the same raw way, but that is pre-existing code outside this diff's changes.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#_estimate_only"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`EXIT_USAGE` is defined but never used",
+      "description": "`EXIT_USAGE = 2` was added in this diff, but the argparse `SystemExit` handler in `main` uses `return int(exc.code or 0)` and nothing else references the constant. Remove it, or use it where the usage exit is produced.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:81"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The \"want has no end date\" guard is implemented twice",
+      "description": "`latest_want_end()` (`scripts/purchase_verdicts.py`) and `coverage_reads()` (`scripts/cutover_304_evidence.py`) both walk `TICK_UNIVERSE` history and raise the identical \"want has no end date\" refusal for an open-ended want. Two copies of the same invariant over the same data can drift apart when one is edited. A single shared helper (the two modules already share `cutover_304_checks`) would keep one definition.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py#latest_want_end"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Resubmit matching cannot distinguish the two products, which now share identical request keys",
+      "description": "`resubmit_origins` keys jobless requests by `(schema, range_start, range_end)`, and this diff's `_HISTORY_WANTS` gives ES and GC the *same* schema and range, so their requests collide on that key by construction (the docstring acknowledges this and takes the earliest, which errs toward refusal \u2014 the spend-safe direction). The residual risk is a false refusal with no in-script remedy: a resubmit of the product whose original was made after `since` is refused because the other product's earlier jobless request wins the `min()`. The debug rows carry `symbols`, so if the estimate's request rows ever expose per-request symbols, including them in `RequestKey` would remove the collision without weakening the guard. As written it is a documented, safe-direction tradeoff; recording it here so the limitation is visible in review.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py#resubmit_origins"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Over-session failure names are keyed by product only, so names can be attributed to the wrong family",
+      "location": "scripts/purchase_accounting.py#over_failures",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`--estimate` reads cost figures without the unset guard, so a malformed payload escapes as a bare traceback",
+      "location": "scripts/cutover_304_first_purchase.py#_estimate_only",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`EXIT_USAGE` is defined but never used",
+      "location": "scripts/cutover_304_first_purchase.py:81",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The \"want has no end date\" guard is implemented twice",
+      "location": "scripts/purchase_verdicts.py#latest_want_end",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Resubmit matching cannot distinguish the two products, which now share identical request keys",
+      "location": "scripts/cutover_304_checks.py#resubmit_origins",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:23:55.401492",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 28,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 93952,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 943717,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1200001,
+  "cached_tokens": 1040384,
+  "cache_write_tokens": null,
+  "completion_tokens": 27268,
+  "reasoning_tokens": 23557,
+  "duration_seconds": 225.60816270904616,
+  "cost_usd": 0.61394284,
+  "cost_basis": "alias_pricing"
+}

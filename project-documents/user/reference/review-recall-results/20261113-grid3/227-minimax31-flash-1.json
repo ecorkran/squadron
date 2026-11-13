@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`run_lib` reports the wrong library name when a per-cluster lib fails",
+      "description": "`run_lib` does `local prefix=$1 out rc=0; shift` and then names the library with `$(basename \"$1\")`. The per-cluster call site is `run_lib \"$C\" env PGCLUSTER=\"$C\" \"$LIB_DIR/pg_settings.sh\" \u2026`, so after the shift `$1` is `env`, not the library. A failure that prints no `DRIFT`/`MISSING`/`PENDING RESTART` line therefore reports `MISSING 17/main env exited 1` instead of naming `pg_settings.sh`. The cutover's step 4 (`setup_not_ok(..., APPLY_ALLOWED)`) matches on the leading token, so the mislabelled line is still caught \u2014 but the operator-facing item name is wrong and the doc comment (`run_lib <prefix> <lib> [args...]`) no longer describes the call. Either pass the library path separately or export `PGCLUSTER` instead of wrapping in `env`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh#run_lib"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The tick health verification can pass on a stale log line",
+      "description": "`run_health` runs the health command but discards its `CompletedProcess` (return code ignored) and then reads `backup-health.log`'s last line. If the health job fails before it writes its log line (argument validation, an unset variable, a crash), the log still holds the *previous* run's line, and a previous `FLAGS archive=0 stale=0` satisfies steps 7 and 10. `step_weekly` avoids this by requiring `result.returncode == 0`; `run_health` should require the same, and/or check that the log grew during the run. As written, the cutover can report \"tick health is archive=0 stale=0\" for a health job that never ran.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#run_health"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A failing step that raises anything else loses the report entirely",
+      "description": "`run_steps` catches only `StepFailed` and `subprocess.CalledProcessError`. Every other exception escapes `main()` before `report.write_text(...)`: `KeyError` from `cluster(TABLE_PATH, MAIN/TICK)` when the table lacks a row, `StopIteration` from `conf_sums()`'s `next(...)` when `17/main` is absent from `pg_lsclusters`, `FileNotFoundError` from `CRON_FILE.read_text()` or production's `backup-health.log`. The module docstring and the slice both promise \"the first failure stops the run and the report is still written\"; today only the two handled exception types honour that. A top-level `except Exception` in `main()` that still writes the report (with the traceback in `Seen:`) would satisfy the documented contract.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#run_steps"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The report names the B2 console rules only when step 12 runs",
+      "description": "`ctx.lifecycle` is populated only in `step_production` (step 12), from `lifecycle_missing(result.stdout)`. The lifecycle MISSING lines are already present in step 2's `setup-backup.sh --check` output, so if any earlier step fails, the report has no \"B2 console rules to add (TD10)\" section and the PM never learns which two rules to create. TD10 makes the report the mechanism for the slice's only non-script PM step; collecting the lines in the step that first sees them (step 2) and re-reading them in step 12 would keep that promise on a failed run.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#step_production"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Values duplicated across bash and Python instead of defined once",
+      "description": "`PUSH_MIN_AGE_S = 120` restates `sync_wal_offsite.sh`'s `MIN_AGE=2m` and `cron_weekly_backup.sh`'s `PUSH_MIN_AGE_SEC=120`; `WEEKLY_DONE = \"=== weekly backup done\"` restates the literal in `cron_weekly_backup.sh`; `ARM_FILE = \"RECONCILE-ARMED\"` restates `setup-backup.sh`'s `ARM_FILE`; `TICK_UNIT = \"postgresql@17-tick\"` restates `provision_tick_cluster.sh`'s `UNIT`. AGENTS.md requires a value used in a comparison to be defined in exactly one place. A drift in `PUSH_MIN_AGE_S` is the dangerous one: the offsite check in step 11 would report a spurious \"offsite wal/ differs\" (or, in the other direction, miss a real difference) with no test tying the two constants together.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:66"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Production's live backup directories are re-owned and re-moded, outside TD3's guarantee",
+      "description": "The new per-cluster loop calls `ensure_dir \"$C dir-root\" \"$ROOT\" \"$CRON_OWNER\" \"$CRON_DIR_MODE\"` and the same for `base/` and `metadata/`. For `17/main` that means `/data/backup`, `/data/backup/base` and `/data/backup/metadata` are chowned to `manta:manta` and chmod'ed `775` \u2014 the old code created those directories as root and only ever fixed the WAL directory's shape. So production's live backup tree changes ownership and gains group-write, and the slice's TD3 (\"production's backup paths and prefixes unchanged\") and the cutover's verification (cron lines, config hashes) do not cover directory ownership or mode. Either state the intended production shape explicitly in the design, or exclude the host root and production's existing directories from the shape enforcement and report them read-only.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh#ensure_dir"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`b2_lifecycle.sh` merges stderr into the JSON parse and re-queries per cluster",
+      "description": "`RULES=$(rclone backend lifecycle \u2026 2>&1)` folds rclone's stderr into the payload that is later parsed as JSON, so any warning line on stderr makes a perfectly readable rule list report `UNREADABLE lifecycle (not a JSON rule list: \u2026)`, which `setup-backup.sh` tallies as a failure (`MISSING <cluster> lifecycle-read`). Capturing stdout and stderr separately would keep the two apart. Relatedly, `setup-backup.sh` invokes the library once per cluster, so a two-cluster table makes two identical network round trips whose results could differ between calls.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/lib/b2_lifecycle.sh:66"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Raw rclone output is embedded verbatim in a committed report",
+      "description": "`record()` copies the whole stdout/stderr of `setup-backup.sh` into `step.seen`, which `render_report` writes into `project-documents/user/notes/<date>-227-cutover.md` \u2014 a file that is committed. The B2 credentials never appear on a command line, but a future rclone error message that echoed the account id or key would land in the repository. The project already has `deploy/lib/log_scrub.sh`, used by `provision_tick_cluster.sh` for exactly this, before copying a log into `project-documents/user/notes/`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#record"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`strip_new_args` hard-codes the replication host and the bucket remote",
+      "description": "The strip removes `\" --replication-host 127.0.0.1\"` as a literal while the host actually comes from the table's `replication_host` column (`ctx.main.replication_host` is available on the `BackupCluster` dataclass). If that column ever changes, the strip no longer matches and the cutover stops with \"production cron lines changed beyond the new arguments\" \u2014 a false alarm with no hint that the strip, not the render, is at fault. The bucket remote is passed in as an argument, so only the host is inconsistent.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:84"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The cluster template's `##` marker is a convention the renderer does not validate",
+      "description": "`CLUSTER_TEXT=$(grep -v '^##' \"$CLUSTER_TEMPLATE\")` drops the template's comment lines, but under `set -euo pipefail` a cluster template containing only `##` lines makes `grep` exit 1 and the script die with no named error. Conversely, a legitimate cron job line that begins with `##` would be silently dropped from every cluster block. Dropping the lines by a more explicit marker (`# template-comment `) with an explicit check that at least one job line survives would make the failure mode a named error instead of an exit-status leak.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "deploy/lib/render_cron.sh:100"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Production's host facts are duplicated across two test modules",
+      "description": "`CHECKOUT`, `BUCKET`, `MAIN_KEY` in `test/unit/test_cutover_227.py` and `_PROD_CHECKOUT`, `_PROD_BUCKET`, `_PROD_PGDATA` in `test/unit/test_setup_backup.py` are the same production facts written twice, and the second copy must agree with the first for the parity assertions to hold. Moving them to one shared module (or reading them from `deploy/backup-clusters.conf` plus a single constants module) keeps the two suites from drifting apart.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "test/unit/test_cutover_227.py:24"
+    },
+    {
+      "severity": "PASS",
+      "title": "The production-parity control is real and well anchored",
+      "description": "`test_production_lines_gain_only_the_new_arguments` renders the real cron file from the real table, strips exactly the three new argument pairs, and compares the result line-for-line with `test/unit/fixtures/cron_main_pre227.txt` \u2014 the actual installed production file. `test_production_blocks_never_name_tick` and `test_ampersand_survives_substitution` close the two other ways this refactor could silently change production (a stray tick path, and bash 5.2's `patsub_replacement` mangling the `2>&1` in the substituted cluster blocks). The cutover applies the same comparison to the file it installs, so the guarantee holds on the host, not only in the test.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "test/unit/test_setup_backup.py:790"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`run_lib` reports the wrong library name when a per-cluster lib fails",
+      "location": "deploy/setup-backup.sh#run_lib",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The tick health verification can pass on a stale log line",
+      "location": "scripts/cutover_227_tick_backup.py#run_health",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A failing step that raises anything else loses the report entirely",
+      "location": "scripts/cutover_227_tick_backup.py#run_steps",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The report names the B2 console rules only when step 12 runs",
+      "location": "scripts/cutover_227_tick_backup.py#step_production",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Values duplicated across bash and Python instead of defined once",
+      "location": "scripts/cutover_227_tick_backup.py:66",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Production's live backup directories are re-owned and re-moded, outside TD3's guarantee",
+      "location": "deploy/setup-backup.sh#ensure_dir",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`b2_lifecycle.sh` merges stderr into the JSON parse and re-queries per cluster",
+      "location": "deploy/lib/b2_lifecycle.sh:66",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Raw rclone output is embedded verbatim in a committed report",
+      "location": "scripts/cutover_227_tick_backup.py#record",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`strip_new_args` hard-codes the replication host and the bucket remote",
+      "location": "scripts/cutover_227_helpers.py:84",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The cluster template's `##` marker is a convention the renderer does not validate",
+      "location": "deploy/lib/render_cron.sh:100",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Production's host facts are duplicated across two test modules",
+      "location": "test/unit/test_cutover_227.py:24",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The production-parity control is real and well anchored",
+      "location": "test/unit/test_setup_backup.py:790",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:12:29.338640",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 375033,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1740902,
+  "cached_tokens": 1454720,
+  "cache_write_tokens": null,
+  "completion_tokens": 104388,
+  "reasoning_tokens": 100354,
+  "duration_seconds": 617.0792814590968,
+  "cost_usd": 0.06296309,
+  "cost_basis": "alias_pricing"
+}

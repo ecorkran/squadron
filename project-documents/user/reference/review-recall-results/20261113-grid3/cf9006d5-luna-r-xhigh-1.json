@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Dry run can write through absolute symlinks into real files",
+      "description": "`copyInstallPaths` preserves symlinks when copying install paths into the sandbox. If a copied path is an absolute symlink (for example, `.claude/rules` pointing outside the sandbox), the installer can follow it and modify files at the symlink\u2019s real destination. That breaks the `--dry-run` guarantee that nothing is written. Reject or safely dereference symlinks before running the installer in the sandbox, and add a regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:41-45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dry-run failures discard the diagnostics explaining them",
+      "description": "The install\u2019s stdout is buffered, but buffered lines are replayed only after `install(...)` returns successfully. If the install aborts after printing a diagnostic\u2014for example, because managed-section markers are broken\u2014the exception skips replay, and the outer installer returns failure without showing that explanation. Replay relevant buffered diagnostics when the install throws as well.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:114-120"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Dry run can write through absolute symlinks into real files",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:41-45",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Dry-run failures discard the diagnostics explaining them",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:114-120",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:37:41.027612",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 55,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 21369,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "xhigh",
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 1007175,
+  "cached_tokens": 882832,
+  "cache_write_tokens": null,
+  "completion_tokens": 25622,
+  "reasoning_tokens": 23541,
+  "duration_seconds": 287.96154899988323,
+  "cost_usd": 0.03407362,
+  "cost_basis": "alias_pricing"
+}

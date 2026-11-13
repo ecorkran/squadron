@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Frontmatter read failures are misclassified as `doctype` validation failures",
+      "description": "At `packages/core/src/schema/sliceDesignFiles.ts:95`, `validateFile()` relies on `parseFrontmatter(file)` before it performs its own wrapped `readFile()` at lines 101-105. `parseFrontmatter()` reads at `packages/core/src/introspection/parsers/frontmatterParser.ts:17-18` and has a blanket `catch` at lines 68-69 that returns `{ found: false, data: {} }` on any error. Therefore an I/O failure in that first read \u2014 for example a file becoming unreadable after `preflight()`'s `stat`/`access` checks at `packages/core/src/schema/sliceDesignFiles.ts:73-86` \u2014 becomes `frontmatter.data.docType !== 'slice-design'` and returns a normal `reason: doctype` failure at lines 96-97. The CLI then sets exit code 1 at `packages/cli/src/commands/validateDesign.ts:83-85` instead of routing a thrown `SliceDesignValidationError` through `handleError(err, 2)` at lines 100-103. Read the document once in the file layer and parse frontmatter from that text, or make the parser error-aware, so read failures are wrapped consistently and exit 2.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:95-105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Public validation result type permits illegal states",
+      "description": "`DesignValidationResult` at `packages/core/src/schema/sliceDesignFiles.ts:42-49` uses `pass: boolean`, `missing: string[]`, and an optional `reason`, so it allows states such as `{ pass: true, reason: 'doctype' }` and `{ pass: false, missing: ['## Value'], reason: 'doctype' }`. The CLI compensates with runtime checks at `packages/cli/src/commands/validateDesign.ts:50-57` (`result.pass ? ...` and `result.reason === DesignFailureReason.DocType`). This shape is exported as a public core API at `packages/core/src/node.ts:30-37` and serialized as the command\u2019s JSON contract at `packages/cli/src/commands/validateDesign.ts:25-31`. The TypeScript rules require illegal states to be unrepresentable and prefer discriminated unions over runtime string checks. Use `pass` as a discriminant or introduce a `kind`/`status` union while preserving the documented JSON fields.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:42-49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New TypeScript source files do not follow the required kebab-case file naming convention",
+      "description": "The TypeScript project rules require source files to be kebab-case. The newly added modules are camelCase: `packages/cli/src/commands/validateDesign.ts:1`, `packages/core/src/schema/sliceDesignFiles.ts:1`, and `packages/core/src/schema/sliceDesignValidator.ts:1`. The new CLI test already uses kebab-case at `packages/cli/tests/commands/validate-design.test.ts:1`, which makes the source naming drift more visible. Rename the new source files to `validate-design.ts`, `slice-design-files.ts`, and `slice-design-validator.ts`, then update imports and exports accordingly.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:1"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Frontmatter read failures are misclassified as `doctype` validation failures",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:95-105",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Public validation result type permits illegal states",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:42-49",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "New TypeScript source files do not follow the required kebab-case file naming convention",
+      "location": "packages/cli/src/commands/validateDesign.ts:1",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:27:52.299786",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 90,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 407321,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1288286,
+  "cached_tokens": 1088832,
+  "cache_write_tokens": null,
+  "completion_tokens": 102047,
+  "reasoning_tokens": 98497,
+  "duration_seconds": 1151.5690053750295,
+  "cost_usd": 0.23359654,
+  "cost_basis": "alias_pricing"
+}

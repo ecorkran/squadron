@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`SDKExecutionSession.auto_memory` crashes when `base_options.env` is None",
+      "description": "The new property does `AUTO_MEMORY_DISABLE_ENV not in self.base_options.env`. `ClaudeAgentOptions.env` is an optional mapping (`dict[str, str] | None`), so on a session built with options that omit `env` this evaluates `... not in None` and raises `TypeError: argument of type 'NoneType' is not iterable`. `SDKExecutionSession` is exported in `__all__` and is constructed directly \u2014 `tests/pipeline/conftest.py::scripted_session` builds it with `ClaudeAgentOptions(cwd=\".\", permission_mode=\"bypassPermissions\")` (no `env`), and `dispatch.py:373` reads `session.auto_memory` on that surface. `open_pipeline_session` always sets a dict, so the production path is masked. The fix is `self.base_options.env or {}`. (The same optionality concern applies to `setting_sources` at lines 131\u2013135: `list(sources)` yields `list[SettingSource]`, which is not assignable to the declared `list[str] | None` under strict pyright \u2014 the same Literal-vs-`str` mismatch the author already suppressed with `# pyright: ignore[reportArgumentType]` at line 466.)",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:137-140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`get_typed_config` accepts a bool for an `int`-typed key",
+      "description": "The `type_ is bool` branch guards the bool/int subclass relationship in one direction only. `type_ is int` still passes `isinstance(value, int)`, and `isinstance(True, int)` is `True`, so a hand-written `.squadron.toml` containing `pipeline.background_idle_timeout_s = true` is returned as `True` rather than rejected. `load_config` merges raw TOML values without coercing them to the declared type, so this is reachable without going through `set_config`. The concrete effect is `asyncio.timeout(True)` in `sdk_session.py:_background_idle_timeout_s` \u2014 a 1-second idle timeout where the operator asked for a number. The docstring promises the value is \"validated against ``type_``\"; the bool branch should be excluded from the int branch (`isinstance(value, bool)` \u2192 reject).",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/config/manager.py:134-137"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No load test for the new background-wait / idle-timeout path",
+      "description": "The new dispatch path holds a live SDK session open while background agents run, with a configurable silence budget that defaults to 1800 s (`config/keys.py`, `pipeline.background_idle_timeout_s`), stops tracked tasks on expiry, and re-reads the stream across turns. This is exactly the \"simulation, network, concurrency, or environment-layer\" class the Python rules require a `tests/load/` tier for, asserting latency/throughput/resource bounds rather than functional correctness. The diff adds only unit tests against the fake `ScriptedClient` in `tests/pipeline/conftest.py` (with a 0.05 s synthetic timeout); no load test exercises a realistic configuration, so event-loop starvation, the 30-minute default bound, and the `stop_task` fan-out are untested at realistic scale. I could not confirm from the reviewed diff whether a `tests/load/` tier exists in this tree.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#_collect_turns"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Pipeline config is resolved against different directories for the session and the one-shot dispatch",
+      "description": "`open_pipeline_session` resolves `pipeline.user_settings`, `pipeline.auto_memory`, and `pipeline.background_idle_timeout_s` against `str(Path.cwd())` (the process cwd at session-open time), and `SDKExecutionSession._background_idle_timeout_s` re-reads against `base_options.cwd`. The one-shot path in `pipeline/actions/dispatch.py:141-150` resolves the same two keys against `cwd or \".\"`, i.e. the pipeline's `effective_cwd`. Today these coincide only because `run.py::_run_pipeline` never passes `cwd` to `execute_pipeline`; `execute_pipeline(cwd=...)` is a public parameter, so a caller that uses it would get one directory's `.squadron.toml` for the persistent session and another's for the one-shot dispatch \u2014 and the recorded `setting_sources` metadata would not describe the file that was actually read.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#open_pipeline_session"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The settings-policy docstring states an invariant the code does not enforce, and `sq serve` behavior changed silently",
+      "description": "The module docstring states that \"no automated path may leave ``setting_sources`` unset\", but `providers/sdk/provider.py:89-90` deliberately leaves the kwarg unset when `config.setting_sources is None` \u2014 the `sq serve` path \u2014 and `core/models.py` even carries a `SETTING_SOURCES_CLI_DEFAULT = \"cli default\"` sentinel for exactly that case. The docstring overstates the guarantee. Separately, the same provider change now always writes `kwargs[\"env\"]`, and `AgentConfig.auto_memory` defaults to `False`; a `sq serve` agent therefore now receives `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` where it previously received no env override at all. That is a real behavior change for a path the `pipeline.auto_memory` description does not mention (\"pipeline sessions and pipeline dispatch only... Reviews, judges, PR, summary, and audit paths always run with memory off\").",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/settings.py:1-6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The always-present digest lines change every review artifact's bytes",
+      "description": "The Run Digest now unconditionally emits `- System prompt:` and `- Settings sources:` lines, so every persisted review artifact \u2014 including clean passes \u2014 gains two lines. The same file documents a byte-identity constraint tied to a snapshot fixture (\"the clean_pass_artifact.md snapshot guard depends on it\", `persistence.py:293-299`). That fixture is a markdown file and the review scope excludes `*.md`, so I could not confirm whether it was regenerated in this change; it should be checked, since a stale fixture turns a passing suite red for a reason unrelated to the feature.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py:254-256"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`SDKExecutionSession.auto_memory` crashes when `base_options.env` is None",
+      "location": "src/squadron/pipeline/sdk_session.py:137-140",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`get_typed_config` accepts a bool for an `int`-typed key",
+      "location": "src/squadron/config/manager.py:134-137",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No load test for the new background-wait / idle-timeout path",
+      "location": "src/squadron/pipeline/sdk_session.py#_collect_turns",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Pipeline config is resolved against different directories for the session and the one-shot dispatch",
+      "location": "src/squadron/pipeline/sdk_session.py#open_pipeline_session",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The settings-policy docstring states an invariant the code does not enforce, and `sq serve` behavior changed silently",
+      "location": "src/squadron/providers/sdk/settings.py:1-6",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The always-present digest lines change every review artifact's bytes",
+      "location": "src/squadron/review/persistence.py:254-256",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:36:52.504249",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 52,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 492760,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1934437,
+  "cached_tokens": 1646592,
+  "cache_write_tokens": null,
+  "completion_tokens": 125893,
+  "reasoning_tokens": 120049,
+  "duration_seconds": 492.7298692080658,
+  "cost_usd": 0.070882419,
+  "cost_basis": "alias_pricing"
+}

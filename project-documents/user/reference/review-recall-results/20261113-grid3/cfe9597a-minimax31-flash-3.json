@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`--fix` exit code is 1 even when every finding was fixed, contradicting the documented 0/1/2 contract",
+      "description": "The command's help text, the CHANGELOG entry, and the slice design (`D3 \u2014 Exit 0 after a fully-successful --fix run`) all promise exit `0` when `--fix` resolves everything. But `remaining` is only populated from findings that had **no** `fixAction` or whose fix **threw**. A finding whose fix *succeeded* is dropped from `remaining`, so `remaining.length === 0` and the exit code is correctly left unset \u2014 however, the fix path has a second failure mode that breaks this: `updateFrontmatterField` returns a `FixLogEntry` unconditionally and never throws when the write silently produced a different value than requested. More importantly, the human output path reports `Fixed N of M findings` where M is `findings.length` (all findings, including ones with no fixAction at all), so a run with one unfixable finding and one fixable finding prints \"Fixed 1 of 2 findings\" while exiting 1 \u2014 the \"of 2\" denominator is misleading. The JSON path has the same mismatch (`totalFindings` counts pre-fix findings, `fixed` counts applied fixes, but there is no `remaining` count, so a consumer cannot tell \"3 findings, 3 fixed\" from \"3 findings, 1 fixed, 2 unfixable\" without re-deriving it from `findings[].fixAction`). Recommend adding a `remaining` count to the JSON shape and using it as the summary denominator.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:160-163"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `\u2192 Fixed:` line matches the wrong finding when one file has multiple findings for the same field",
+      "description": "`fixLog.find((e) => e.filePath === filePath && e.field === finding.fixAction?.field)` finds the **first** fix-log entry for that (file, field) pair. If a document has two findings for the same field (e.g. a missing required `dateCreated` *and* an invalid `dateCreated` value, or the `docType` and `dateCreated` findings both mapping to the same field name across repeated runs), every such finding renders the same \"Fixed: X \u2192 Y\" line \u2014 the first entry's before/after \u2014 even though the second finding was never fixed. The same ambiguity exists in `check.ts` but there the match key includes `rule` plus a path suffix comparison; here the key is weaker (file + field). Because `--fix` mutates files, the second write's `before` value is genuinely different from the first, so the display can be actively wrong. Match on the full `(filePath, field, value)` triple, or index the fix log by the finding it was produced from.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:73"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`handleError(err, 2)` conflates invocation errors with unexpected runtime failures",
+      "description": "The `catch` around `validateFrontmatterAction` passes `2` for **every** error, including unexpected ones (a `TypeError` inside the core validator, an `EACCES` from a readdir, a bug in the fix loop). The slice design defines exit `2` as \"invocation error (unresolvable project, missing `projectPath`, unknown subcommand)\" \u2014 a caller (squadron's pre-commit gate) will reasonably treat `2` as \"you invoked me wrong, fix the command line\" and `1` as \"your documents are invalid\". A crash in the validator currently masquerades as a usage error. `UserError` already carries a `code` (`PROJECT_NOT_FOUND`, etc.) and `resolveProjectWorktree` throws `UserError` for the unresolvable-project case, so the fix is narrow: throw `UserError` with exit `2`, and let the default `1` apply to everything else. Note also that `handleError` is typed `never` and calls `process.exit`, so the `process.exitCode = 1` path below is unaffected \u2014 but the two error channels should not share one code.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:174-179"
+    },
+    {
+      "severity": "PASS",
+      "title": "The three squadron docType schemas are registered exactly as designed, with the `dateUpdated` rationale documented",
+      "description": "The comment correctly explains why `dateUpdated` is *not* required for these three docTypes and warns against \"fixing\" it \u2014 this matches the slice design's D-section and the `updateFrontmatterField` behavior I read at `packages/core/src/introspection/writers/markdownWriter.ts:119-155` (the stamp is skipped only when `key === 'dateUpdated'`; for these docTypes a fix would legitimately add a `dateUpdated` field without the schema requiring it, which the slice explicitly calls convention-correct). The corresponding test at `packages/core/tests/schema/frontmatterSchema.test.ts:48-57` asserts the exact field set, which is the right shape of assertion.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/schema/frontmatterSchema.ts:118-139"
+    },
+    {
+      "severity": "PASS",
+      "title": "The `--fix` path passes an explicit date stamp and the writer never reads a clock",
+      "description": "`formatDateProject()` is computed once per run and passed as the fourth argument to `updateFrontmatterField`, satisfying the slice's B1/B2 requirements and the \"date passed as an explicit parameter (no inline clock)\" constraint. The CLI test at `packages/cli/tests/commands/validate.test.ts:120-127` pins the stamp format with `/^\\d{8}$/`, which is a real behavioral assertion rather than a mock-shape assertion.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:113-121"
+    },
+    {
+      "severity": "PASS",
+      "title": "The pre-existing `every schema requires docType, status, dateCreated, dateUpdated` test was correctly narrowed rather than deleted",
+      "description": "The original test iterated `Object.entries(FRONTMATTER_SCHEMAS)`, which would have started failing the moment the three lifecycle-free docTypes were added. Narrowing the iteration to the explicit `EXPECTED_DOC_TYPES` list preserves the original invariant for canonical docTypes and adds a separate, explicit test for the new ones \u2014 rather than weakening the assertion to accommodate the new entries.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:30-45"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`validate.ts` does not honor worktree resolution, unlike most sibling commands",
+      "description": "`resolveProjectWorktree` returns a `worktreeId` when CWD resolves to a worktree, but `validate.ts` destructures only `{ id }` and always validates `project.projectPath`. Sibling commands (`arch.ts:53`, `slice.ts:36`, `task.ts:50`, `plan.ts:43`) route filesystem operations through `resolveOperationPath(project, worktreeId)`. This may well be intentional \u2014 the slice design says the command resolves \"the configured document root\" and `cf check` itself is worktree-agnostic \u2014 but it is an undocumented asymmetry for a command whose primary consumer is a git pre-commit hook, where the CWD is very often a worktree root. Worth either routing through `resolveOperationPath` or stating explicitly in the help text that validation always targets the main project root.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:92-93"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`--fix` exit code is 1 even when every finding was fixed, contradicting the documented 0/1/2 contract",
+      "location": "packages/cli/src/commands/validate.ts:160-163",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `\u2192 Fixed:` line matches the wrong finding when one file has multiple findings for the same field",
+      "location": "packages/cli/src/commands/validate.ts:73",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`handleError(err, 2)` conflates invocation errors with unexpected runtime failures",
+      "location": "packages/cli/src/commands/validate.ts:174-179",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The three squadron docType schemas are registered exactly as designed, with the `dateUpdated` rationale documented",
+      "location": "packages/core/src/schema/frontmatterSchema.ts:118-139",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The `--fix` path passes an explicit date stamp and the writer never reads a clock",
+      "location": "packages/cli/src/commands/validate.ts:113-121",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The pre-existing `every schema requires docType, status, dateCreated, dateUpdated` test was correctly narrowed rather than deleted",
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:30-45",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`validate.ts` does not honor worktree resolution, unlike most sibling commands",
+      "location": "packages/cli/src/commands/validate.ts:92-93",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:23:37.518227",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 275498,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 853682,
+  "cached_tokens": 715520,
+  "cache_write_tokens": null,
+  "completion_tokens": 68280,
+  "reasoning_tokens": 64867,
+  "duration_seconds": 408.94227237510495,
+  "cost_usd": 0.03585479,
+  "cost_basis": "alias_pricing"
+}

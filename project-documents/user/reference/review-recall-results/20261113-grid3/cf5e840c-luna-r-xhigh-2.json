@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "User-level adoption state leaks into every project",
+      "description": "`readAdoptionState` uses `ConfigManager.get()`, which falls back to the user config when the project config has no value. Because `cf config set adoption.state ... --global` is allowed, a global `declined` or `complete` value suppresses brownfield detection in every project without a project-local state; global `in_progress` forces adoption prompts across them. This conflicts with adoption state being repository-owned. Read only the project-scoped value for this state, or otherwise prevent user-level values from influencing it, and add a test covering two projects with a global value.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionState.ts:15-16"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "User-level adoption state leaks into every project",
+      "location": "packages/core/src/adoption/adoptionState.ts:15-16",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:05:29.555057",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 49,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 33780,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": "xhigh",
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 1746062,
+  "cached_tokens": 1610710,
+  "cache_write_tokens": null,
+  "completion_tokens": 38195,
+  "reasoning_tokens": 35746,
+  "duration_seconds": 401.81508687487803,
+  "cost_usd": 0.0487398,
+  "cost_basis": "alias_pricing"
+}

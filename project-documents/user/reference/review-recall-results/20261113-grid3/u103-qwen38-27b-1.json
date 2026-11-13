@@ -1,0 +1,225 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Hook lifecycle and error funneling are correct and well-isolated",
+      "description": "Verified in the full file: `create`/`destroy` are unreachable via the facade (`ChartOperations` omits them, confirmed against `src/chart/chart-operations.ts` and asserted in `use-chart-provider.facade.test.tsx`); teardown order (disposers \u2192 observer disconnect \u2192 destroy \u2192 null ref) matches what the resize/errors suites assert; `setMountOutcome` commits `ready`/`error` as one `MountState`; the `disposedRef` + disposed-flags close the queued-callback window. The `readChartStyle` lazy initializer in `src/routes/chart-route.tsx` is read-only and safe under StrictMode double-invocation, and the context providers are mounted in `src/app/App.tsx` above the router as intended.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts"
+    },
+    {
+      "severity": "PASS",
+      "title": "Error handling matches the project's explicit-failure convention",
+      "description": "Every catch either funnels to `setOperationError` + `console.error` (operation funnel, disposer loop, provider.destroy) or to the mount-failure path, and `toError` normalizes non-Error throws per the TS rules' `unknown`-narrowing guidance. No bare/blanket swallows; each `catch` carries a comment explaining why logging-and-continuing is correct (teardown must not abort, observer callbacks run outside React). The route renders the error beside the live chart rather than tearing it down, which the file justifies and the e2e smoke spec asserts via `getByRole('alert', { name: 'Chart error' })`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:130-150"
+    },
+    {
+      "severity": "PASS",
+      "title": "Harness route gating is production-safe",
+      "description": "Confirmed in the actual file: `harnessEnabled` uses literal `===` comparisons so Vite's define-time replacement folds the branch to `false` in a `production` build and Rollup can drop `ChartHarnessRoute`; `playwright.config.ts` now builds and previews with `--mode e2e` so `chart-render.spec.ts` keeps its route, and `pnpm build --mode e2e` appends the flag only to `vite build` (the `tsc -b &&` leg is unaffected). The comment accurately distinguishes `DEV` from `MODE` \u2014 a real trap avoided.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/routes/router.ts:31-58"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test suites are behavior-focused and the shared spy keeps them DRY",
+      "description": "The four `use-chart-provider.*.test.tsx` suites assert contract (create/destroy pairing under StrictMode double-invoke, disposer-before-destroy ordering, teardown-race inertness, facade stable identity, generic `getCapability` preservation via `expectTypeOf`) rather than implementation details. The shared spy centralizes the mock, the ResizeObserver stub, and reset semantics (`triggerResize` returning `false` when disconnected prevents vacuous passes \u2014 a genuinely good anti-pattern guard), and each test file declares its own `vi.mock` with a documented reason, which is the correct Vitest pattern.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/test/support/chart-provider-spy.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "smoke.spec.ts comment points at the wrong spec",
+      "description": "The updated header says \"The chart itself is asserted in chart-render.spec.ts\", but `chart-render.spec.ts` exercises the internal `/__chart-harness` route (slice 102), not `/`. The live chart at `/` is asserted in the new `e2e/chart-live.spec.ts`. One-line comment fix; the spec's own assertions (shell heading, `chart-container` visible, no error alert) are correct for the new route.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "e2e/smoke.spec.ts:9"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Series-count gate has no multi-series removal test",
+      "description": "`seriesCountRef` is documented as \"A COUNT, not a flag: removing one of several series must not look like an empty chart\" (src/chart/use-chart-provider.ts:66-73), but the translation suite only covers the single-series add/remove cycle. There is no test that adds two series, removes one, and asserts `setVisibleRange` is still applied \u2014 i.e., the exact case the count exists for. The `Math.max(0, ...)` floor in the counter is likewise untested (it is never exercised by current suites since the facade can't over-remove). A small addition to the existing suite would pin the documented rationale.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.translation.test.tsx:139-152"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Split import block in translation test",
+      "description": "`import { chartSpy, resetChartSpy } ...` and `import { renderWithContexts } ...` sit after the `LINE_SERIES` constant, breaking the sorted external\u2192internal\u2192sibling import grouping every other file in the diff follows (and the \"Sort imports\" rule). Hoisting those two lines to the top of the import section is the fix.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.translation.test.tsx:22-23"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test location convention deviates from the stated testing rule",
+      "description": "The testing rule calls for a centralized package-level `tests/` directory, but this project places unit tests in `src/test/` and e2e in a root `e2e/` directory. That predates this change (slice-102 suites are already in both places, and `vite.config.ts`'s vitest `include` and `playwright.config.ts`'s `testDir` are built around it), and the new files are consistent with the existing project layout \u2014 flagging for awareness only, since migrating the whole suite is out of scope here. Naming (`{module}.{facet}.test.tsx`) and the jsdom/Playwright split otherwise follow the rules (Vitest over Jest, RTL for component probes, e2e for real rendering).",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "e2e/chart-live.spec.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "use-chart-provider.ts mildly over the ~300-line guide",
+      "description": "The file is 366 lines including its (useful) comments; the eslint-config comment itself notes that inlining the facade would push it ~60% over the guideline, so the current split was the right call \u2014 the remaining overflow is mostly block comments. Worth a future trim only if tasks 16/17-style extensions land here; no action needed for this slice.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Hook lifecycle and error funneling are correct and well-isolated",
+      "location": "src/chart/use-chart-provider.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Error handling matches the project's explicit-failure convention",
+      "location": "src/chart/use-chart-provider.ts:130-150",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Harness route gating is production-safe",
+      "location": "src/routes/router.ts:31-58",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Test suites are behavior-focused and the shared spy keeps them DRY",
+      "location": "src/test/support/chart-provider-spy.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "smoke.spec.ts comment points at the wrong spec",
+      "location": "e2e/smoke.spec.ts:9",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Series-count gate has no multi-series removal test",
+      "location": "src/test/use-chart-provider.translation.test.tsx:139-152",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Split import block in translation test",
+      "location": "src/test/use-chart-provider.translation.test.tsx:22-23",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test location convention deviates from the stated testing rule",
+      "location": "e2e/chart-live.spec.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "use-chart-provider.ts mildly over the ~300-line guide",
+      "location": "src/chart/use-chart-provider.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:16:29.560113",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 17,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 186782,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 393769,
+  "cached_tokens": 341888,
+  "cache_write_tokens": null,
+  "completion_tokens": 48205,
+  "reasoning_tokens": 45792,
+  "duration_seconds": 472.75572620891035,
+  "cost_usd": 0.13559684,
+  "cost_basis": "alias_pricing"
+}

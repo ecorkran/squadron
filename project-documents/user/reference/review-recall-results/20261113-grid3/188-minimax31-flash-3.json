@@ -1,0 +1,297 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`date | datetime` query params let FastAPI coerce a date into midnight, making a bare `end` date exclusive of that day",
+      "description": "`start`/`end` are declared `date | datetime | None`. Pydantic's union validation tries `date` first, and `datetime` is a subclass of `date`, so a full ISO timestamp such as `2026-06-01T08:30:00Z` can be parsed as a `date` \u2014 Pydantic's lax `date` parsing accepts a datetime string and truncates it to the date. When that happens the value is a `date`, so `_as_utc` takes the `not isinstance(value, datetime)` branch and resolves the *upper* bound to `23:59:59.999999` \u2014 silently widening or narrowing the requested window depending on which side it landed on. The unit test `test_naive_datetime_is_read_as_utc` (`test/unit/api_server/test_kalshi_timeseries.py`) asserts the correct behaviour for `?start=2026-06-01T08:30:00`, but only for the `start` (lower) side; there is no test for a datetime-valued `end`, which is the side where truncation to end-of-day actually changes the answer. The same class of bug the module docstring warns about (\"one of them ends up exclusive by accident\") is therefore not fully closed. The `windows.py` docstring asserts the opposite convention from `bars.py` (which treats a bare `end` date as inclusive end-of-day via `window_end_utc`) \u2014 the two conventions are now spelled in two places with different meanings, which is exactly the drift the extraction was meant to prevent.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/windows.py:38-48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`windows.py` duplicates the day-boundary helpers that `gaps.py` still owns privately",
+      "description": "The new shared module documents its raison d'\u00eatre as \"the day-boundary convention lives here rather than in `bars.py` because two route families now depend on it\", but `src/manta_trading/api_server/routes/gaps.py:54` and `:59` still define private `_window_start_utc` / `_window_end_utc` copies, and `test/integration/test_gaps_window_sql.py:25-26` imports those private names. There are now three spellings of \"midnight UTC on a day\" in the routes package. The slice's own stated invariant (\"two derivations of 'the last instant of a day' is exactly how one of them ends up exclusive by accident\") argues for folding `gaps.py` onto `windows.py` in the same change; leaving a third copy behind preserves the hazard it was written to remove.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/gaps.py:54-59"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The trades reader selects `market_ticker` out of `TRADE_COLUMNS` by string comparison, and the model then indexes the tuple positionally",
+      "description": "`TRADE_VALUE_COLUMNS` drops the ticker with `column != \"market_ticker\"` \u2014 a literal name compared against the repository's mapping, which is exactly the \"one value, one source\" pattern the rest of the slice avoids (the candle path derives its columns straight from `CANDLE_COLUMNS`). More importantly, `TradeRecord.from_row` (`src/manta_trading/api_server/models/kalshi_timeseries.py:161-176`) then reads `values[0]..values[7]` positionally, so a reordering or insertion in `TRADE_COLUMNS` silently shifts every field on the wire. `TradeRow.values` is typed `tuple[Any, ...]`, so no checker can catch it. The candle path avoids this by walking `CANDLE_COLUMNS` explicitly; the trade path should do the same (or `TradeRow` should carry named fields) rather than relying on positional agreement between two modules.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:43-46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The load-tier seeding writes candle rows with every value column identical, including the `price` object's OHLC fields",
+      "description": "`_seed_kalshi_dense` copies `Decimal(\"0.4900\")` into all fourteen candle value columns, including `price_open_dollars`, `price_high_dollars`, `price_low_dollars`, `price_close_dollars` and `price_previous_dollars`. The response model nests these under `price`, so the measured \"ceiling-sized candle response\" (`test/load/test_188_kalshi_api_nfr.py:198-224`, and the `CANDLES_CEILING_RESPONSE_MB = 34.80` figure cited in `src/manta_trading/constants.py`) is a response whose every decimal serialises to the same short string `\"0.4900\"`. Real Kalshi candles carry values like `\"0.4900\"` but also longer ones (`\"0.0050\"`, `\"0.9900\"`), and the 34.80 MB figure is quoted in `constants.py` as the rationale for the \"ceiling bounds rows, not bytes\" decision. That measurement is taken from a degenerate fixture whose decimals are uniformly short, so the byte figure it justifies is likely understated relative to production. The seeding should use a spread of realistic fixed-point values.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "test/load/conftest.py:466-479"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The load tier reaches into `pool._pool`, a private psycopg-pool attribute, to install the recording cursor",
+      "description": "`for conn in list(pool._pool):  # noqa: SLF001 \u2014 no public accessor` mutates the cursor factory of every live pooled connection. psycopg-pool's public API offers no way to set a cursor factory on an already-constructed pool, so the test reaches into a private attribute that can change between psycopg-pool releases \u2014 and the `# noqa: SLF001` comment explicitly acknowledges the rule violation without a technical justification, which the project's Python rules treat as a bug. The whole mechanism exists to prove D8's \"no row fetch after the refusal\". A less brittle alternative (e.g. asserting on `pg_stat_statements` where available, or a counting wrapper around the route's reader seam, as the unit tier already does with `calls`) would keep the assertion without depending on psycopg-pool internals.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:160-166"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_RecordingCursor.statements` is a mutable class attribute shared across tests",
+      "description": "`statements: list[str] = []` is a class-level list, reset by assignment at the start of `_run()` in the one test that uses it. Because it is class state, any future test that constructs `_RecordingCursor` without resetting it inherits the previous test's statements, and the assertion `assert not fetches` could then fail for the wrong reason. The same file's `noqa: RUF012` comment documents the choice, but the safer shape \u2014 an instance-level list captured via the cursor factory \u2014 is available at no cost.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:139-140"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The new readers' `market_context` uses an inner join through `events` and `series`, so a market whose series row is missing is a 404 rather than an empty response",
+      "description": "`_CONTEXT_QUERY` joins `markets \u2192 events \u2192 series` with inner joins. If a market row exists but its event or series parent is missing (possible transiently during a catalog upsert, since `write_catalog` writes parents and children in one transaction but the catalog walk and the market insert are separate statements upstream), `market_context` returns `None` and the route answers 404 \"Market not found\" for a ticker that does exist. The `LEFT JOIN` to `market_candle_state` is the only optional join. This may be intentional (a market without a series cannot be tape-filtered or collected), but the docstring says only \"``None`` means the ticker is unknown\", which overstates what the query guarantees.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:88-95"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`serve_timeseries.py` is 296 lines and `kalshi_timeseries.py` (models) is 223 \u2014 both near but within the ~300-line guide",
+      "description": "No action required, but `serve_timeseries.py` combines four responsibilities (context seek, tape facts, the shared window builder, and the four query functions) in one module. The window/predicate builder in particular is the kind of low-level SQL plumbing that `serve_catalog` keeps separate; if a third time series is added, that builder will want its own module.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tape_filtered` reaches into the rendered SQL's parameter dict to re-implement the membership test in Python",
+      "description": "The helper's docstring claims \"the membership test is not re-spelled here\", yet the function reads `selection.params[\"trades_excluded_categories\"]` and performs the `in` test in Python, while the SQL performs `COALESCE(s.category, '') = ANY(...)`. The two agree today (and `test/integration/test_kalshi_serving.py:TestTapeFiltered` proves it against the live predicate), but the \"single source of truth\" is the *rendered SQL fragment*, which Python then re-implements rather than executing. A future change to the SQL predicate (e.g. case-insensitive matching) would silently diverge from the Python side, and the existing test would catch it only if the test is extended.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:151-166"
+    },
+    {
+      "severity": "PASS",
+      "title": "Admission guard uses an exact count and no `LIMIT`, with the refusal raised after the connection is released",
+      "description": "Verified against `src/manta_trading/data/kalshi/serve_timeseries.py`: the count and the fetch share one predicate builder (`_window`), so `count == len(fetch)` holds by construction, and the integration tests at `test/integration/test_kalshi_serving.py` (`test_count_equals_len_fetch`, parametrised over offsets) confirm it. The 422 is raised after `run_in_executor` returns, so no pooled connection is held while the exception unwinds \u2014 the unit test `test_the_connection_is_released_before_the_refusal` asserts `pool.open_now == 0`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:104-135"
+    },
+    {
+      "severity": "PASS",
+      "title": "The `effective_tape_floor` rename keeps one spelling shared by the CLI and the API",
+      "description": "The rename from `_effective_floor` to `effective_tape_floor` makes it importable, and `serve_timeseries.tape_facts` calls exactly that function (`src/manta_trading/data/kalshi/serve_timeseries.py:141-150`), so the CLI's `read_trade_status` and the API's `coverage_from` cannot drift. The three branches are now covered directly by `TestEffectiveTapeFloor` in `test/integration/test_kalshi_status.py`, not only through the CLI path.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/trade_status.py:130-143"
+    },
+    {
+      "severity": "PASS",
+      "title": "The new load tier is gated, self-contained, and provably free of production-URL reads",
+      "description": "The tier uses `create_app(db_url=...)` (the explicit parameter added for this purpose in slice 187) rather than an environment side channel, is skipped unless `MT_RUN_LOAD_TESTS=1`, and the `kalshi_dense_db` fixture derives solely from `ephemeral_db` (`test/load/conftest.py:549-556`), which mints its own UUID-named database. The existing `test_load_tier_never_references_prod_db_url` guard in `test/load/test_167_data_status_nfr.py:214` scans every `*.py` in the tier, so the new module is covered mechanically.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:1-60"
+    },
+    {
+      "severity": "PASS",
+      "title": "The candle model re-nests columns by walking `CANDLE_COLUMNS` rather than restating the mapping",
+      "description": "`CandleRecord.from_row` iterates `CANDLE_COLUMNS` and splits single-element paths (the flat `volume_fp` / `open_interest_fp`) from two-element paths (the nested objects), so a column added to the repository mapping is served without an edit here. The unit test `test_nested_field_set_is_exactly_what_candle_columns_describes` (`test/unit/api_server/test_kalshi_models.py`) asserts the served field set equals the reachable set from `CANDLE_COLUMNS` \u2014 an assertion that fails if the mapping and the model drift apart.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:71-104"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`date | datetime` query params let FastAPI coerce a date into midnight, making a bare `end` date exclusive of that day",
+      "location": "src/manta_trading/api_server/routes/windows.py:38-48",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`windows.py` duplicates the day-boundary helpers that `gaps.py` still owns privately",
+      "location": "src/manta_trading/api_server/routes/gaps.py:54-59",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "The trades reader selects `market_ticker` out of `TRADE_COLUMNS` by string comparison, and the model then indexes the tuple positionally",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:43-46",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The load-tier seeding writes candle rows with every value column identical, including the `price` object's OHLC fields",
+      "location": "test/load/conftest.py:466-479",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The load tier reaches into `pool._pool`, a private psycopg-pool attribute, to install the recording cursor",
+      "location": "test/load/test_188_kalshi_api_nfr.py:160-166",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`_RecordingCursor.statements` is a mutable class attribute shared across tests",
+      "location": "test/load/test_188_kalshi_api_nfr.py:139-140",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The new readers' `market_context` uses an inner join through `events` and `series`, so a market whose series row is missing is a 404 rather than an empty response",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:88-95",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`serve_timeseries.py` is 296 lines and `kalshi_timeseries.py` (models) is 223 \u2014 both near but within the ~300-line guide",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`tape_filtered` reaches into the rendered SQL's parameter dict to re-implement the membership test in Python",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:151-166",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Admission guard uses an exact count and no `LIMIT`, with the refusal raised after the connection is released",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:104-135",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The `effective_tape_floor` rename keeps one spelling shared by the CLI and the API",
+      "location": "src/manta_trading/data/kalshi/trade_status.py:130-143",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The new load tier is gated, self-contained, and provably free of production-URL reads",
+      "location": "test/load/test_188_kalshi_api_nfr.py:1-60",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The candle model re-nests columns by walking `CANDLE_COLUMNS` rather than restating the mapping",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:71-104",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:10:30.197006",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 168803,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1409055,
+  "cached_tokens": 1199683,
+  "cache_write_tokens": null,
+  "completion_tokens": 47940,
+  "reasoning_tokens": 43195,
+  "duration_seconds": 338.1240863339044,
+  "cost_usd": 0.038482681,
+  "cost_basis": "alias_pricing"
+}

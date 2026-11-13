@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Editor backup file `CoreServiceFactory.test.ts-E` committed to the repo",
+      "description": "The diff adds `packages/core/tests/services/CoreServiceFactory.test.ts-E` \u2014 a verbatim copy of the *pre-change* `CoreServiceFactory.test.ts`. It is dead code: it still calls `createContextPipeline(FIXTURE_PROJECT_PATH)` with one argument, which no longer matches the new required `options` parameter (so it would not typecheck if it were ever renamed back to `.ts`), and it will silently drift from the live test file. The `.ts-E` suffix means neither Vitest nor `tsc` picks it up, so nothing in CI flags it. It should be deleted rather than committed.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The adoption remedy text and config file name are written out in six places",
+      "description": "The same two user-facing strings are re-typed across the module instead of being defined once:\n- `.context-forge.toml` is a named constant in `packages/core/src/adoption/adoptionState.ts:8` (`PROJECT_CONFIG_FILE`), but `adoptionResolver.ts:92` hardcodes it inside the error message.\n- The \"cf config set adoption.state declined\" remedy appears in `adoptionResolver.ts:28` (`DECLINE_REMEDY`), `adoptionFacts.ts:93`, `packages/core/src/detection/sourceVolume.ts:36-38` (`OVERRIDE_REMEDY`) and `packages/core/src/detection/planningArtifacts.ts:15-16` (`OVERRIDE_REMEDY`) \u2014 the last two with yet different wording.\n- The key literal `adoption.state` is defined in `packages/core/src/config/ConfigKeys.ts:112` and again as `ADOPTION_STATE_KEY` in `adoptionState.ts:7`.\n\nThis directly contradicts the AGENTS.md rule \"Never scatter comparison values across code\u2026 Changing a value should require editing exactly one place.\" A user who renames the key, the file, or the remedy has to find every copy; the two `OVERRIDE_REMEDY` constants already disagree on wording. Exporting one shared remedy constant (and using `PROJECT_CONFIG_FILE` inside it) would remove the duplication.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:92"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exported MCP `generateContext` grew a mode parameter in the middle of its signature",
+      "description": "`generateContext(projectId, adoptionStateWrites, overrides?, additionalInstructions?, worktreeId?)` now takes five positional parameters, with the new `adoptionStateWrites: AdoptionStateWrites` inserted *before* the three that were already optional. Two consequences:\n1. The project's TypeScript rules say \"Prefer named parameters (via object destructuring) when a function takes 3+ parameters\" \u2014 this function is now well past that threshold, and the two call sites (`contextTools.ts:201` and `contextTools.ts:266`) have to remember the order.\n2. `generateContext` is an exported function from the MCP package, so inserting a parameter in the middle is a breaking change for any external caller compiled against the previous signature.\n\nAn options object (`generateContext(projectId, { adoptionStateWrites, overrides, additionalInstructions, worktreeId })`) would keep the call sites readable and avoid the positional-mode flag.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:59"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`ContextIntegrator` constructor now takes seven positional parameters",
+      "description": "The constructor grew from six to seven positional parameters (`resolveAdoptionFn` appended after `resolvePermissivenessFn`), three of which are `null` at most call sites. The new tests make the cost visible: `new ContextIntegrator(engine, true, () => PROFILES, null, null, null, resolver)` \u2014 a reader cannot tell which `null` is which without counting. This is the same rule as above (\"named parameters \u2026 when a function takes 3+ parameters\"), and the change makes an existing smell materially worse. Grouping the optional resolvers into a single options object would fix this and the MCP finding together.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:88"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`cf build` now has an undocumented write side effect",
+      "description": "`cf build` passes `{ adoptionStateWrites: 'persist' }`, so a Phase 0 build of a detected brownfield project writes `adoption.state = in_progress` into the project's `.context-forge.toml`. The command's own description is still \"Generate a context prompt\" and the help text does not mention it; the only signal is a bullet inside the generated prompt (\"adoption.state was set to in_progress by this build\"). The write is clearly intended by the design (and the `cf build --it brownfield-adoption` escape hatch is documented in the error message), but for a command whose output is routinely piped it is worth stating in the command help that Phase 0 builds may persist the adoption state.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/build.ts:84"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Parity test's `afterEach` can throw a `TypeError` that masks the real failure",
+      "description": "`checkout` is declared as `let checkout: string;` and assigned only inside the test body, but `afterEach` unconditionally calls `fs.rmSync(checkout, { recursive: true, force: true })`. If the test fails before that assignment, the cleanup throws `TypeError: The \"path\" argument must be of type string`, replacing the assertion failure that actually explains the bug. Guarding with `if (checkout)` (and initialising to `undefined`) keeps the original error visible.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/mcp-server/tests/integration/adoptionParity.test.ts:52"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The comment justifying the `adoption/contracts` import is inaccurate",
+      "description": "The comment says importing `contracts.ts` \"keeps services/ and adoption/ from importing each other's internals\", but the adoption module *does* import services internals \u2014 `adoption/adoptionResolver.ts:13-15` imports `ContextProfileParser`, `promptFilePath` and `SystemPromptParser` from `../services/`. There is no module cycle (contracts is a leaf), so the design is sound, but the stated reason is wrong and will mislead the next maintainer into thinking the dependency only runs one way.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:9"
+    },
+    {
+      "severity": "PASS",
+      "title": "Outcome model is exhaustively typed and fails loudly on an unknown kind",
+      "description": "`AdoptionOutcome` is a discriminated union, `decideOutcome` is pure and asserts that the facts it needs were supplied (\"state is unset, so `artifacts` is required\"), and both `isSelected` (`adoptionResolver.ts:52`) and `describeOutcome`/`describeSourceVolume` (`adoptionFacts.ts:41,63`) use `const unhandled: never` so a future outcome kind fails to compile rather than silently falling through. The \"never use silent fallback values\" rule is respected throughout the new module, including the guide-missing and write-failure paths, which raise `AdoptionError` with a concrete remedy and are rethrown by `ContextIntegrator.generateContextFromProject` (`ContextIntegrator.ts:122`) rather than degrading to the concept prompt.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionOutcome.ts:31"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Editor backup file `CoreServiceFactory.test.ts-E` committed to the repo",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The adoption remedy text and config file name are written out in six places",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:92",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Exported MCP `generateContext` grew a mode parameter in the middle of its signature",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:59",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`ContextIntegrator` constructor now takes seven positional parameters",
+      "location": "packages/core/src/services/ContextIntegrator.ts:88",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`cf build` now has an undocumented write side effect",
+      "location": "packages/cli/src/commands/build.ts:84",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Parity test's `afterEach` can throw a `TypeError` that masks the real failure",
+      "location": "packages/mcp-server/tests/integration/adoptionParity.test.ts:52",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The comment justifying the `adoption/contracts` import is inaccurate",
+      "location": "packages/core/src/services/ContextIntegrator.ts:9",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Outcome model is exhaustively typed and fails loudly on an unknown kind",
+      "location": "packages/core/src/adoption/adoptionOutcome.ts:31",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:30:29.969374",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 96745,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 956222,
+  "cached_tokens": 813440,
+  "cache_write_tokens": null,
+  "completion_tokens": 25571,
+  "reasoning_tokens": 22567,
+  "duration_seconds": 180.10139320790768,
+  "cost_usd": 0.024074029999999996,
+  "cost_basis": "alias_pricing"
+}

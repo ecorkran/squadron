@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Concurrent inserts can push responses over the configured row ceiling",
+      "description": "The routes count rows, then fetch them in a separate statement, and admit the request using the earlier count. Under the default READ COMMITTED isolation, a writer can commit rows between those statements, allowing the fetch\u2014and the response\u2014to exceed `max_rows`. The same pattern appears in the trades route. Use a consistent snapshot or otherwise enforce the ceiling against the rows actually returned.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:112-124"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Large response construction and encoding block the event loop",
+      "description": "After the database read returns from the executor, `CandlesResponse.build` and `timeseries_response` run synchronously in the async handler. Building models and encoding a ceiling-sized response (measured in the added load test at about 34.8 MB for candles) can occupy the event loop and delay unrelated requests. The trades route has the same issue at lines 168-174.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:125-126"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Trades watermark description says it is the newest stored trade",
+      "description": "The field description calls `tape_complete_through` the created time of the newest stored trade, but the value comes from `sync_state.watermark_ts`, which records how far the trades phase has fully walked (see `src/manta_trading/market/schema/migrations/kalshi.py:440-446`). For a quiet tape, those instants can differ, so clients reading the generated API schema may misinterpret the coverage fact.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188-192"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Concurrent inserts can push responses over the configured row ceiling",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:112-124",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Large response construction and encoding block the event loop",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:125-126",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Trades watermark description says it is the newest stored trade",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188-192",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T10:12:18.197057",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 55,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 34226,
+  "failed_tool_calls": 6,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "xhigh",
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 1926165,
+  "cached_tokens": 1786904,
+  "cache_write_tokens": null,
+  "completion_tokens": 46576,
+  "reasoning_tokens": 43039,
+  "duration_seconds": 495.0338503329549,
+  "cost_usd": 0.05508314,
+  "cost_basis": "alias_pricing"
+}

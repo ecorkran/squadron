@@ -1,0 +1,33 @@
+{
+ "case": "188",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "P1": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Both new routes type `start`/`end` as `date | datetime`. Pydantic tries `date` first and accepts a datetime string whose time is midnight, so `_as_utc` (`windows.py:46-47`) treats it as a bare date and widens `end` to 23:59:59.999999, returning an extra day of data."
+  ],
+  "F2": [
+   "KEEP",
+   "In both handlers, model build and serialization (`kalshi_timeseries.py:125-126`, `168-174`) run on the event loop after the executor call. The project's Python rules forbid blocking sync work in an async function (over 1 ms), and on a near-ceiling result this stalls every other request for about a second."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 34.1,
+ "duration_seconds": 34.05308362515643,
+ "cost_usd": 0.6749573999999999,
+ "effort": "high",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=242533, cached=169164, cache_write=73359, completion=2678, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 Both new routes type `start`/`end` as `date | datetime`. Pydantic tries `date` first and accepts a datetime string whose time is midnight, so `_as_utc` (`windows.py:46-47`) treats it as a bare date and widens `end` to 23:59:59.999999, returning an extra day of data.\n\nF2: KEEP \u2014 In both handlers, model build and serialization (`kalshi_timeseries.py:125-126`, `168-174`) run on the event loop after the executor call. The project's Python rules forbid blocking sync work in an async function (over 1 ms), and on a near-ceiling result this stalls every other request for about a second.\nF1: KEEP \u2014 Both new routes type `start`/`end` as `date | datetime`. Pydantic tries `date` first and accepts a datetime string whose time is midnight, so `_as_utc` (`windows.py:46-47`) treats it as a bare date and widens `end` to 23:59:59.999999, returning an extra day of data.\nF2: KEEP \u2014 In both handlers, model build and serialization (`kalshi_timeseries.py:125-126`, `168-174`) run on the event loop after the executor call. The project's Python rules forbid blocking sync work in an async function (over 1 ms), and on a near-ceiling result this stalls every other request for about a second."
+}

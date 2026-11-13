@@ -1,0 +1,129 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Split reviews retain only the first part\u2019s spend",
+      "description": "Each part receives usage metadata, but `fold_review_parts()` copies only the first part\u2019s metadata. Subsequent parts\u2019 tokens, turns, duration, and cost disappear from run statistics. A direct reproduction confirmed this. Aggregate every part\u2019s usage before returning the folded result.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:505-506"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Failed split-review parts violate the folding contract",
+      "description": "The new failure return has empty outputs, while `fold_review_parts()` requires every part to identify its input file. With multiple parts, a provider failure therefore triggers a secondary `TypeError`; the outer handler discards the captured usage. This was reproduced directly. Preserve the part identity and failure status through folding.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:493"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Loop and fan-out spend never reaches run statistics",
+      "description": "The report sums only persisted top-level action results. However, loop execution keeps earlier iterations in `StepResult.prior_rounds`, which `StateManager._append_step()` does not serialize. Fan-out reducers likewise discard branch usage metadata. Consequently, loops report only their final iteration and fan-outs omit their branch spend. Persist these records and include them exactly once in totals; add end-to-end coverage for both structures.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/usage_report.py:112-116"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failed compaction drops available usage telemetry",
+      "description": "The exception branch returns without stamping usage, even when the SDK raises a `ProviderError` carrying completed-turn telemetry. Failed compactions therefore lose known spend, unlike dispatch and summary failures. Capture the exception\u2019s telemetry and test that it survives the returned failure result.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py:82-89"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Split reviews retain only the first part\u2019s spend",
+      "location": "src/squadron/pipeline/actions/review.py:505-506",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Failed split-review parts violate the folding contract",
+      "location": "src/squadron/pipeline/actions/review.py:493",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Loop and fan-out spend never reaches run statistics",
+      "location": "src/squadron/stats/usage_report.py:112-116",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Failed compaction drops available usage telemetry",
+      "location": "src/squadron/pipeline/actions/compact.py:82-89",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:14:14.977479",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 125483,
+  "cached_tokens": 125184,
+  "cache_write_tokens": null,
+  "completion_tokens": 612,
+  "reasoning_tokens": 154,
+  "duration_seconds": 82.4624923330266,
+  "cost_usd": null,
+  "cost_basis": null
+}

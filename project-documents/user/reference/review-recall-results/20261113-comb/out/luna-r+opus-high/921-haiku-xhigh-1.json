@@ -1,0 +1,58 @@
+{
+ "case": "921",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "P1": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "mt-run` waits in its `while is_running` loop until the unit ends (`deploy/mt-run:127-129`), so the `run()` call at `cutover_common.py:356` blocks until the whole unbounded pass is over and the trailing-line check only runs afterwards."
+  ],
+  "F2": [
+   "KEEP",
+   "When verify refuses or crashes (`scan refused`, exit 2, or a traceback), the output contains no literal `FAIL`, and the return code is only logged, so the edited `ok` line reports CUTOVER COMPLETE."
+  ],
+  "F3": [
+   "KEEP",
+   "The new sudoers file gives NOPASSWD root to `mt-run *` with any arguments and to an installer under `/home/manta` that the operator account can likely edit, which effectively hands out unrestricted root despite the file's \"nothing wider\" header."
+  ],
+  "F4": [
+   "KEEP",
+   "_repair` runs `sudo /opt/manta-trading/.venv/bin/python \u2026` and no rule covers that path, so each `--verify` poll, which comes 15 minutes after the last, will hit a sudo password prompt and stall the run the rule was meant to make unattended."
+  ],
+  "F5": [
+   "KEEP",
+   "A multi-session chunk with one truly empty session (halt or no trades) is now judged PARTIAL and re-requested every cycle until RETRY_EXHAUSTED; the old classifier called it SUCCESS, so this spends quota and leaves a collected range marked terminal."
+  ],
+  "F6": [
+   "DROP",
+   "The `-infinity` case can't occur on the long-running production job, and the finish-versus-start race is narrow and only makes the result too strict (a wait or false FAIL, never a false pass); the rest is about reuse and message wording."
+  ],
+  "F7": [
+   "KEEP",
+   "start_log` only copies `say()` lines, and `_repair` prints the verify verdicts with plain `print`, so the log file meant to be the cutover's record has none of the `[PASS]`/`[FAIL]` acceptance lines."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 69.8,
+ "duration_seconds": 69.80878620804287,
+ "cost_usd": 1.066344,
+ "effort": "high",
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=695277, cached=592315, cache_write=102944, completion=6170, reasoning=None)",
+ "raw_output": "F1\u2013F5 are checked. I'm reading the cagg freshness probe for F6, then I'll give the verdicts.\nF1: KEEP \u2014 `mt-run` waits in its `while is_running` loop until the unit ends (`deploy/mt-run:127-129`), so the `run()` call at `cutover_common.py:356` blocks until the whole unbounded pass is over and the trailing-line check only runs afterwards.\nF2: KEEP \u2014 When verify refuses or crashes (`scan refused`, exit 2, or a traceback), the output contains no literal `FAIL`, and the return code is only logged, so the edited `ok` line reports CUTOVER COMPLETE.\nF3: KEEP \u2014 The new sudoers file gives NOPASSWD root to `mt-run *` with any arguments and to an installer under `/home/manta` that the operator account can likely edit, which effectively hands out unrestricted root despite the file's \"nothing wider\" header.\nF4: KEEP \u2014 `_repair` runs `sudo /opt/manta-trading/.venv/bin/python \u2026` and no rule covers that path, so each `--verify` poll, which comes 15 minutes after the last, will hit a sudo password prompt and stall the run the rule was meant to make unattended.\nF5: KEEP \u2014 A multi-session chunk with one truly empty session (halt or no trades) is now judged PARTIAL and re-requested every cycle until RETRY_EXHAUSTED; the old classifier called it SUCCESS, so this spends quota and leaves a collected range marked terminal.\nF6: DROP \u2014 The `-infinity` case can't occur on the long-running production job, and the finish-versus-start race is narrow and only makes the result too strict (a wait or false FAIL, never a false pass); the rest is about reuse and message wording.\nF7: KEEP \u2014 `start_log` only copies `say()` lines, and `_repair` prints the verify verdicts with plain `print`, so the log file meant to be the cutover's record has none of the `[PASS]`/`[FAIL]` acceptance lines.\nF1: KEEP \u2014 `mt-run` waits in its `while is_running` loop until the unit ends (`deploy/mt-run:127-129`), so the `run()` call at `cutover_common.py:356` blocks until the whole unbounded pass is over and the trailing-line check only runs afterwards.\nF2: KEEP \u2014 When verify refuses or crashes (`scan refused`, exit 2, or a traceback), the output contains no literal `FAIL`, and the return code is only logged, so the edited `ok` line reports CUTOVER COMPLETE.\nF3: KEEP \u2014 The new sudoers file gives NOPASSWD root to `mt-run *` with any arguments and to an installer under `/home/manta` that the operator account can likely edit, which effectively hands out unrestricted root despite the file's \"nothing wider\" header.\nF4: KEEP \u2014 `_repair` runs `sudo /opt/manta-trading/.venv/bin/python \u2026` and no rule covers that path, so each `--verify` poll, which comes 15 minutes after the last, will hit a sudo password prompt and stall the run the rule was meant to make unattended.\nF5: KEEP \u2014 A multi-session chunk with one truly empty session (halt or no trades) is now judged PARTIAL and re-requested every cycle until RETRY_EXHAUSTED; the old classifier called it SUCCESS, so this spends quota and leaves a collected range marked terminal.\nF6: DROP \u2014 The `-infinity` case can't occur on the long-running production job, and the finish-versus-start race is narrow and only makes the result too strict (a wait or false FAIL, never a false pass); the rest is about reuse and message wording.\nF7: KEEP \u2014 `start_log` only copies `say()` lines, and `_repair` prints the verify verdicts with plain `print`, so the log file meant to be the cutover's record has none of the `[PASS]`/`[FAIL]` acceptance lines."
+}

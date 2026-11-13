@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`OutputDeclaration.__value__` relies on an undocumented CPython `TypeAliasType` attribute",
+      "description": "`_output_tuple` checks `isinstance(item, OutputDeclaration.__value__)`. `OutputDeclaration` is a PEP 695 `type` statement, so `__value__` is the `TypeAliasType`'s runtime value attribute \u2014 an implementation detail of CPython's `typing` module rather than a documented public API of the language. It happens to work on CPython 3.12\u20133.14, but it is not part of the `type` alias specification, so a future interpreter change or a strict re-implementation could break it silently at runtime. The same pattern is not used anywhere else in `src/`.\n\nThe check also duplicates what `require_iterable_of` already does for the declared type. A clearer, spec-supported alternative is to check membership against the concrete classes: `isinstance(item, SeriesOutput | LabelOutput | SignalOutput)` (the codebase already uses `isinstance(x, tuple | list)` style in `canonical.py:229-231`), or to pass the expected tuple type into `require_iterable_of`. Please replace the `__value__` access with a documented construct.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py:235"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`as_real` accepts NumPy float32 but silently loses precision",
+      "description": "`as_real` converts any `numbers.Real` to a Python `float` via `float(value)`. For `np.float32(0.1)` this yields `0.10000000149011612`, not `0.1`. The docstring in `as_integer` explicitly says \"the same coercion as `as_real`, so both accept the same scalars\", and `test_value_checks.py:118` asserts `as_real(np.float32(2.5)) == 2.5`, which passes only because `2.5` is exactly representable in binary32.\n\nThe consequence is real for this slice: `as_real` is the coercion behind `ParameterType.REAL` defaults, bounds, bound parameters, `ConfidenceRange` bounds, and `SignalEvent.confidence`. A producer that publishes a `float32` confidence range and a consumer that reads it as `float64` can disagree at the range boundary \u2014 `np.float32(1.0)` is fine, but a `float32` value just above `1.0` (e.g. `np.float32(1.0000001)`) becomes `1.0000001192092896`, which fails `low <= value <= high` against a `1.0` upper bound even though the producer's own float32 comparison would have accepted it.\n\nThis is inherent to widening float32 to float64 and is arguably the intended \"coerce to float\" contract, but it is undocumented and untested at the boundary. At minimum the docstring should say that a `float32` input is widened and may fall outside a range it satisfied in float32. Consider documenting the precision loss explicitly, or rejecting `float32` inputs that are not exactly representable as float64.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py:79-93"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`SignalSequence` converts events to NumPy arrays on every construction, defeating the sparse-event design goal",
+      "description": "`_require_time_order` and `_require_confidence_in_range` each build a NumPy array from the events via `np.fromiter`. That is two array allocations plus two generator passes per `SignalSequence` construction, for a data structure the module docstring explicitly describes as sparse (\"a tuple of small frozen values is adequate; columnar storage is 260's concern\"). Signal sequences are constructed per node output per run, so the cost is bounded but the vectorization buys little for the expected event counts while adding a dependency on NumPy semantics (e.g. `np.fromiter` on an empty tuple, and the int64 cast in `_require_time_order`).\n\nThis is not incorrect, and the vectorized form does give the \"compare neighbours\" safety the comment describes. It is worth a note that the same checks could be plain Python comparisons with an explicit `int` type check (which `SignalEvent.__post_init__` already guarantees at `signals.py:62-66`), removing the NumPy dependency from the signals path entirely.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/signals.py:118-140"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`LabelSeries._require_series` uses `assert` for type narrowing",
+      "description": "`require_instance(series, Series, ...)` already guarantees `isinstance(series, Series)` at runtime, and the following `assert isinstance(series, Series)` exists only to satisfy pyright. The `assert` is redundant with the check immediately above it, and asserts are stripped under `python -O`, which would make the narrowing disappear while the runtime guarantee still holds. It is harmless today but reads as if the type check were being done twice. `typing.cast` would express the intent without a runtime statement.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/labels.py:101-105"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The \"no element loops\" guards in the new test files do not cover comprehensions or generators",
+      "description": "`ELEMENT_LOOP_NODES` in `test_confidence.py` and `test_labels.py` omits `ast.GeneratorExp`, while `tests/core_model/test_import_boundary.py:180-187` defines its own `ELEMENT_LOOP_NODES` that *does* include `ast.GeneratorExp` and is applied to `series_index.py` and `series.py`. The two new guards therefore prove less than the equivalent existing guard, and the same tuple is now defined twice with different contents.\n\nConcretely, `labels.py:66-68` contains a generator expression (`all(... for category in self.category_ids)`) that the new `test_labels_module_has_no_element_loops` cannot see. That generator iterates a set of scalars rather than an array, so it is not a vectorization violation, but the guard's name over-promises. Reuse the existing helper from `test_import_boundary.py` (or move it to `conftest.py`) so both suites enforce the same rule.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_confidence.py:25-31"
+    },
+    {
+      "severity": "PASS",
+      "title": "`InvalidParametersError` is now copy- and pickle-safe",
+      "description": "`super().__init__(issues)` stores the tuple as the sole argument, so `args == (issues,)` and `BaseException.__reduce__` rebuilds the error via `cls(issues)`. `__str__` is overridden to format the issues, so the message is unaffected. `tests/core_model/test_declarations.py:311-323` exercises `copy.copy`, `copy.deepcopy`, and a pickle round trip and asserts both `issues` equality and `str()` equality. This closes the earlier F003 finding.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/errors.py:97-110"
+    },
+    {
+      "severity": "PASS",
+      "title": "The single int64-bound source is used consistently",
+      "description": "`INT64_MIN`/`INT64_MAX` are now imported from `timestamps.py` (which derives them from `np.iinfo`) rather than re-declared, and `labels.py:29` imports `INT64_MAX` from `timestamps.py` directly. This closes the earlier F001 finding and satisfies the project rule that a value used in conditionals has exactly one definition.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py:23"
+    },
+    {
+      "severity": "PASS",
+      "title": "`as_integer` and `as_real` now agree on the scalars they accept",
+      "description": "`as_integer` delegates to `as_real` for non-`Integral` inputs, so both accept `np.float32`/`np.float64` and both reject `bool`, `Decimal`, `str`, `UNKNOWN`, NaN and infinity. `test_value_checks.py` covers `np.float32` on both the accept and reject sides, and `np.bool_(True)` is rejected by both. This closes the earlier F005 finding.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py:57-77"
+    },
+    {
+      "severity": "PASS",
+      "title": "The confidence range check rejects NaN and infinity and ignores invalid slots",
+      "description": "`(values >= low) & (values <= high)` is `False` for NaN, so a valid NaN is reported as outside the range; infinity compares outside any finite range. The `valid & ~inside` mask means invalid slots are never inspected, and `np.flatnonzero(...)[0]` names the first offending position. `test_confidence.py` covers NaN, `+inf`, the lower-of-two-offenders case, and the empty-array case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/confidence.py:60-76"
+    },
+    {
+      "severity": "PASS",
+      "title": "Signal event time ordering is protected by an explicit `ns` type check",
+      "description": "`SignalEvent.__post_init__` rejects a `Timestamp` whose `ns` is not an exact `int`, which is what makes the `np.fromiter(..., dtype=np.int64)` in `_require_time_order` safe from silent truncation. `test_signals.py:85` covers a float `ns`. This closes the earlier F007 finding at the slice boundary, without needing to change `Timestamp` itself.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/signals.py:62-66"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`OutputDeclaration.__value__` relies on an undocumented CPython `TypeAliasType` attribute",
+      "location": "src/manta_trading_engine/core_model/declarations.py:235",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`as_real` accepts NumPy float32 but silently loses precision",
+      "location": "src/manta_trading_engine/core_model/value_checks.py:79-93",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`SignalSequence` converts events to NumPy arrays on every construction, defeating the sparse-event design goal",
+      "location": "src/manta_trading_engine/core_model/signals.py:118-140",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`LabelSeries._require_series` uses `assert` for type narrowing",
+      "location": "src/manta_trading_engine/core_model/labels.py:101-105",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The \"no element loops\" guards in the new test files do not cover comprehensions or generators",
+      "location": "tests/core_model/test_confidence.py:25-31",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`InvalidParametersError` is now copy- and pickle-safe",
+      "location": "src/manta_trading_engine/core_model/errors.py:97-110",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The single int64-bound source is used consistently",
+      "location": "src/manta_trading_engine/core_model/value_checks.py:23",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`as_integer` and `as_real` now agree on the scalars they accept",
+      "location": "src/manta_trading_engine/core_model/value_checks.py:57-77",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The confidence range check rejects NaN and infinity and ignores invalid slots",
+      "location": "src/manta_trading_engine/core_model/confidence.py:60-76",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Signal event time ordering is protected by an explicit `ns` type check",
+      "location": "src/manta_trading_engine/core_model/signals.py:62-66",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:31:53.073255",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 579232,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1216789,
+  "cached_tokens": 1013248,
+  "cache_write_tokens": null,
+  "completion_tokens": 151140,
+  "reasoning_tokens": 147397,
+  "duration_seconds": 671.3417290418874,
+  "cost_usd": 0.067700311,
+  "cost_basis": "alias_pricing"
+}

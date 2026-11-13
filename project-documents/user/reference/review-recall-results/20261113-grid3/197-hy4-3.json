@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A HALTED item resume marks the completed batch run as failed",
+      "description": "Description: `_run_pipeline` finalizes the supplied `run_id` as `ExecutionStatus.FAILED` in its `except BaseException` handler (`run.py:266-273`). `src/squadron/cli/commands/run_item.py#run_body` invokes `_run_pipeline_sdk(..., run_id=run_id, item_rerun=rerun)` (`run_item.py:71-81`), so the same run-state file used by the batch is reused. When `resume_item` returns `ResumeExit.HALTED` for `GitEnvironmentError`/`OSError` (`src/squadron/pipeline/item_resume.py:130-135`), the batch's `RunState.status` has already been overwritten to `failed` and `current_step` cleared by `StateManager.finalize` (`src/squadron/pipeline/state.py#StateManager.finalize`). The slice design says the run's status stays COMPLETED. The HALTED tests in `tests/pipeline/test_item_resume_body.py:103-148` bypass this because `tests/pipeline/item_resume_support.py#body_runner` calls `execute_pipeline` directly, not `_run_pipeline_sdk`; add a CLI-level regression test asserting `StateManager.load(run_id).status == \"completed\"` after a halt.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py:210-275"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Resume failure handling collapses \"nothing ran\" into \"halted mid-item\"",
+      "description": "Description: The top-level `resume_item` handler maps every `GitEnvironmentError` to `ResumeExit.HALTED` and every `OSError` to a message saying the batch report could not be written (`item_resume.py:126-135`). That is true only for failures after the body started. Failures in `_validate` (`item_resume.py:179-195`), `_git_precondition` (`item_resume.py:230-242`), or `_select_item` (`item_resume.py:277-303`) can also raise these types before any git/model work; D8 defines pre-body refusals as `REJECTED` (2, \"nothing ran\") and unknown git state as `HALTED` (3). In particular `_select_item` calls `run_git` at line 297; `src/squadron/review/git_utils.py#run_git` returns `None` on timeout/OSError, but line 301 unconditionally says the branch \"is not merged\" and raises `_Stop(REJECTED)` with only generic WARNING logs, not an ERROR signal that git could not answer. Unexpected `OSError` from state/pipeline/cf reads is swallowed into `HALTED` with no `logger.exception`, so those paths can also be mislabeled \"cannot write the batch report\". Split precondition failures from body failures, log unexpected I/O at ERROR, and add tests for `run_git is None` and an early `OSError` asserting the expected exit code and log.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:109-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--item` is silently ignored by other `sq run` modes",
+      "description": "Description: `check_item_flags` (`src/squadron/cli/commands/run_item.py:32-47`) only checks the relationship among `resume`, `item`, `decision`, and `instructions`. In `run()` it is called at the top (`run.py:1010-1015`), but dispatch branches for `--prompt-only/--next`, `--step-done`, `--status`, `--validate`, `--explain`, and `--dry-run` (`run.py:1100-1198`) all return before the `--resume --item` handler (`run.py:1199-1203`). For example, `--resume r --item 401 --decision retry --prompt-only --next` runs `_handle_prompt_only_next` and exits 0; `--resume r --item 401 --decision retry --step-done s` marks a step done; `--resume r --item 401 --decision retry --from x` is rejected by the generic `--resume/--from` check with exit 1, not `USAGE_EXIT` 2. Tests in `tests/cli/commands/test_run_item.py:16-107` cover only missing-flag combinations and plain resume. Add explicit mutual-exclusion guards for item-resume against every non-execution mode and assert exit 2.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py:1009-1203"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`report.json` loader trusts untyped JSON and ignores its `docType`",
+      "description": "Description: `BatchReport.load` reads a file boundary with `json.loads`, `cast`, `report[\"items\"]`, and only checks `schemaVersion` (`batch_report.py:313-338`). It never validates `docType == REPORT_DOC_TYPE` (defined at `batch_report.py:33`), nor that `items` is a list of objects. `BatchItemRecord.from_json` (`batch_report.py:164-179`) uses `data.get` for every required field: a missing `index` or `name` becomes the literal `\"None\"`, a missing `outcome` becomes `ItemOutcome(\"None\")` and surfaces only through the broad `except (KeyError, TypeError, ValueError)` as a generic malformed-report error, and a string `unsavedParts` is cast to `list[object]` and iterated character-by-character. This violates the Python rule to use Pydantic at file-parsing boundaries and lets malformed reports reach `src/squadron/pipeline/item_resume.py#_check_record` with plausible-looking data. Define a Pydantic report/record schema (or at least validate `docType`, required keys, and container types) before constructing `BatchReport`, and add negative tests.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:313-338"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Report filename and `docType` are defined in more than one place",
+      "description": "Description: `batch_report.py` defines `REPORT_JSON_SUFFIX` (line 35) and `BatchReport.json_path()` (around line 296); `state.py:494-500` imports that suffix to skip report files; `run.py:618-621` uses `json_path()` to display it. But `_validate` hard-codes `f\"{request.run_id}.{each.name}.report.json\"` at `item_resume.py:187`, and the test support helper does the same (`tests/pipeline/item_resume_support.py#Project.report_path`). Also `render()` hard-codes `\"docType\": \"batch-report\"` at `batch_report.py:260` while `to_json()` uses `REPORT_DOC_TYPE` at line 286. A future suffix/docType change would make item resume look for a file the writer no longer produces, or make Markdown and JSON disagree. Use the shared constant/helper everywhere and add a test that constructing and loading via `BatchReport.json_path` agrees with `_validate`'s path.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:187"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failed atomic report writes leak sibling temp files and can leave mixed report versions",
+      "description": "Description: `_write_atomic` creates a `NamedTemporaryFile(..., delete=False)` and only calls `temp.replace(target)`; when the replace raises `OSError` (the failure mode asserted in `tests/pipeline/test_batch_report.py#TestReportJson.test_a_failed_write_keeps_the_previous_report_and_logs_error`), the sibling temp file is not unlinked, so each ENOSPC/permission failure leaves another hidden artifact in the runs directory. In addition, `BatchReport.write` (`batch_report.py:302-310`) replaces the Markdown file before attempting the JSON file; a JSON failure leaves the Markdown at version N+1 and `report.json` at version N, which is exactly the machine-readable file item resume reads. The docstring's \"a failed write leaves the previous report intact\" is therefore not true for the Markdown report when JSON fails. Clean up the temp file in a `finally`/`except`, consider writing both temps before replacing either (or document/restore the pair), and assert no `.<target>.*` leftovers and pair consistency in the failure test.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:343-355"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "CLI item resume creates a bidirectional import and depends on private runner internals",
+      "description": "Description: `run.py` imports `check_item_flags`/`handle_item_resume` at module load (`run.py:22-23`), while `handle_item_resume` imports `_apply_param_overrides` and `_run_pipeline_sdk` back from `run.py` at call time with `pyright: ignore[reportPrivateUsage]` (`run_item.py:52-58`). This is a bidirectional command-module dependency and inverts the dependency graph: the adapter reaches into private implementation details instead of receiving a `BodyRunner` or a shared runner module. The CLI tests patch `run_item.resume_item` (`tests/cli/commands/test_run_item.py:44-70`), and the integration tests bypass the CLI body runner entirely (`tests/pipeline/item_resume_support.py#body_runner`), so the real adapter path is not exercised. Extract the runner/param-override helpers into a neutral module (or inject them into `handle_item_resume`) and add one CLI-level test that exercises the actual `run_body` without private import patches.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py#handle_item_resume"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A HALTED item resume marks the completed batch run as failed",
+      "location": "src/squadron/cli/commands/run.py:210-275",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Resume failure handling collapses \"nothing ran\" into \"halted mid-item\"",
+      "location": "src/squadron/pipeline/item_resume.py:109-135",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`--item` is silently ignored by other `sq run` modes",
+      "location": "src/squadron/cli/commands/run.py:1009-1203",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`report.json` loader trusts untyped JSON and ignores its `docType`",
+      "location": "src/squadron/pipeline/batch_report.py:313-338",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Report filename and `docType` are defined in more than one place",
+      "location": "src/squadron/pipeline/item_resume.py:187",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Failed atomic report writes leak sibling temp files and can leave mixed report versions",
+      "location": "src/squadron/pipeline/batch_report.py:343-355",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "CLI item resume creates a bidirectional import and depends on private runner internals",
+      "location": "src/squadron/cli/commands/run_item.py#handle_item_resume",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T11:52:28.368501",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 54,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 429027,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 16,
+  "prompt_tokens": 2807158,
+  "cached_tokens": 2203200,
+  "cache_write_tokens": null,
+  "completion_tokens": 111301,
+  "reasoning_tokens": 107159,
+  "duration_seconds": 1126.9748636248987,
+  "cost_usd": 0.437243936,
+  "cost_basis": "alias_pricing"
+}

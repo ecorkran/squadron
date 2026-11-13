@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Blanket catches in checkoutReadiness report git failures as the wrong reason",
+      "description": "The `rev-parse --show-toplevel` catch (lines 43-45) returns `NOT_A_CHECKOUT` for any error from `gitExec`. The `symbolic-ref` catch (lines 51-53) returns `DETACHED_HEAD` for any error. The comments only justify the expected exit codes (1 for detached HEAD, non-zero outside a work tree). But `gitExec` also rejects when the 60s `FIX_GIT_TIMEOUT_MS` kills the process (`guides/gitExec.ts:89-101`, message \"timed out after 60s\"), when the git binary is missing, and on permission errors. So a hung hook or stuck lock in another checkout shows up as \"checkout missing or not a git checkout\" or \"checkout is on a detached HEAD\", and nothing is logged. The write is still skipped, so no data is lost, but the reason is wrong and there is no diagnostic. This is a catch-all with no specific-exception handling, which the exception rule in CLAUDE.md does not allow. No test covers the timeout path (`checkoutReadiness.test.ts` has six cases, none for it). Fix: have `gitExec` expose whether the kill was a timeout or the exit code, then rethrow everything except the expected exit.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/git/checkoutReadiness.ts:41-54"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Multi-checkout fix output reports each fix twice",
+      "description": "`printCheckOutput` prints each finding through `formatFinding(finding, fixRes, showWorktree)` (line 90). For a fixed finding, `formatFinding` adds a `\u2192 Fixed: before \u2192 after in path` line (lines 26-39). Lines 95-96 then call `printRoutedFixResult(fixRes)`, which prints the same fix log again grouped by checkout. A two-checkout run therefore lists every applied fix twice, worded differently, under different headers. The test \"groups the invoking write, the committed write, and the deferral by checkout\" checks only that the lines are present, so it does not catch this. The fixErrors loop is also duplicated (lines 97-99 and 106-110). Fix: when `showWorktree` is true, drop the inline \"Fixed:\" line or the per-checkout lines, so the fix report appears in one place.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/output/checkReport.ts:89-96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The invoking checkout is resolved two different ways",
+      "description": "`invokingPath` at line 170 comes from `resolveOperationPath(project, worktreeId)`. The `worktreeId` is set by `resolveProjectWorktree` through `resolveWorktreeForPath` (`cli/src/utils/project.ts:105`, `core/src/utils/worktree-overlay.ts:30`), which does string-prefix matching on cwd with no `realpath`. In fix mode with two or more views, `runRoutedFix` overwrites it at line 238 with `resolveInvokingCheckout`, which realpaths the git toplevel and each view root (`routedFixes.ts:74-96`). The two can disagree. On macOS, if a registered `worktreePath` uses the `/var` form and cwd resolves to `/private/var`, the string match fails. The read-only `projectPath` then reports the primary checkout while `--fix` routes to the worktree. The removed comment in `check-worktree-fix.test.ts` documented this same `/var` vs `/private/var` mismatch. The MCP tool has the same split (`workflowTools.ts:266-274`: read-only uses `project.projectPath`, fix uses git). No test uses a symlinked checkout path, which is the case the realpath matching exists for. Fix: use one resolver for both read and fix, or document why they differ.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/check.ts:170"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "fix()/fixAll() remain as un-routed write entry points",
+      "description": "Nothing in production code calls `ConsistencyChecker.fix()` or `fixAll()` after this diff. The CLI and MCP now go through `planRoutedFixes`/`applyFixPlan`. A grep of this checkout finds callers only in `ConsistencyChecker.test.ts` and `ConsistencyChecker.reviewGate.test.ts`. The methods still apply fixes to whatever view they receive, with no ownership routing and no commit. That is the per-view write behavior slice 213 replaced, so any caller that runs them once per worktree view reintroduces the duplicate-write bug. Fix: delete them and move their tests onto `applyFixes`/`applyFixPlan`, or make them refuse multi-view projects.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:202-214"
+    },
+    {
+      "severity": "NOTE",
+      "title": "workflow.auto_fix now writes and commits into other checkouts without a preview",
+      "description": "The `confirm` flag now excludes the auto_fix path, which matches the SC 11 comment and test. Before this diff, the all-slices auto_fix path prompted unless `--yes` was set. This is now the one path where a previously prompted write commits silently in another checkout. Confirm this is the intended behavior.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/check.ts:187-189"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`--fix --json` without `--yes` prints human-readable text before the prompt",
+      "description": "`printCheckOutput` and `printFixPlan` print text before `askConfirmation`, regardless of `--json`. The dry-run print predates this diff, and the plan preview adds to it. Anything reading JSON from stdout gets text mixed in.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/check.ts:262-265"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Exports with no consumers outside core",
+      "description": "`checkoutReadiness`, `FIX_GIT_TIMEOUT_MS`, `ReadinessResult`, `AttributedCheckResult`, and `FixPlanEntry` are exported from the Node barrel. `resolveFixOwner` is exported from `introspection/index.ts:22-23`, and `fixRelPath` from `routedFixes.ts:59`. The CLI and MCP do not use any of them. Only core's own modules and tests do. Trim them to what consumers need.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/node.ts:48"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Non-null assertions and a label fallback stand in for a type guarantee",
+      "description": "`fixRelPath` and the owner lookup at line 143 use `fixAction!`, relying on a `fixable && fixAction` filter that the type does not express. `fixReport.ts:51` and `:104` fall back to `finding.location` when `fixAction` is missing. Those fallbacks are unreachable today, but if one were reached, `location` can be a label such as \"slice plan entry 250\", and `relative()` would return a meaningless path instead of failing. A `FixableFinding` type with a required `fixAction` removes the assertions and the fallbacks. CLAUDE.md forbids silent fallback values.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:60"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Size and duplication",
+      "description": "`routedFixes.ts` is 301 lines, at the ~300 limit, and mixes routing, readiness gating, commit/rollback, and apply. `commitViewWrites` and `CommitOutcome` could move to their own module. Separately, the `scopeViews`/`runCheck` narrowing is duplicated in `check.ts:173-177` and `workflowTools.ts:276-281`. The diff rewrote both copies instead of moving them to core next to `buildAttributedViews`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:216-246"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Cross-package test helper import",
+      "description": "Two packages' tests reach into `core/tests/helpers/gitWorktreeFixture.ts` by relative path (also `packages/cli/tests/commands/check-worktree-fix.test.ts:16`). `mcp-server/tsconfig.test.json` includes `tests/**` with `rootDir: \".\"`, which would flag this import under tsc, but no package.json or workflow in this checkout references that config, so the build is not affected today. A shared test-support location avoids the coupling.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/mcp-server/tests/workflowCheckRouting.test.ts:17"
+    },
+    {
+      "severity": "PASS",
+      "title": "subjectIndex is set at every fixAction construction",
+      "description": "All 17 `fixAction: {` literals in `ConsistencyChecker.ts` (lines 329-1102) set `subjectIndex`, and the frontmatter-schema path at line 1244 does too. The field is required, so a missing one fails the type check. The subject-index test covers each rule.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/types.ts:262-268"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fixed-count and rollback arithmetic is consistent",
+      "description": "`applyFixes` increments `fixed` once per `fixLog` push (`ConsistencyChecker.ts:237, 243`), so `fixed -= fixLog.length` on rollback is exact. The readiness gate runs again before the commit and excludes dirty paths, so the rollback's `restorePathsToHead` cannot clobber a user's uncommitted edits.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:263-281"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Blanket catches in checkoutReadiness report git failures as the wrong reason",
+      "location": "packages/core/src/git/checkoutReadiness.ts:41-54",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Multi-checkout fix output reports each fix twice",
+      "location": "packages/cli/src/output/checkReport.ts:89-96",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The invoking checkout is resolved two different ways",
+      "location": "packages/cli/src/commands/check.ts:170",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "fix()/fixAll() remain as un-routed write entry points",
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:202-214",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "workflow.auto_fix now writes and commits into other checkouts without a preview",
+      "location": "packages/cli/src/commands/check.ts:187-189",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`--fix --json` without `--yes` prints human-readable text before the prompt",
+      "location": "packages/cli/src/commands/check.ts:262-265",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Exports with no consumers outside core",
+      "location": "packages/core/src/node.ts:48",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Non-null assertions and a label fallback stand in for a type guarantee",
+      "location": "packages/core/src/introspection/routedFixes.ts:60",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Size and duplication",
+      "location": "packages/core/src/introspection/routedFixes.ts:216-246",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Cross-package test helper import",
+      "location": "packages/mcp-server/tests/workflowCheckRouting.test.ts:17",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "subjectIndex is set at every fixAction construction",
+      "location": "packages/core/src/introspection/types.ts:262-268",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fixed-count and rollback arithmetic is consistent",
+      "location": "packages/core/src/introspection/routedFixes.ts:263-281",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T12:18:34.265650",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 26,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 27,
+  "prompt_tokens": 2511702,
+  "cached_tokens": 2179920,
+  "cache_write_tokens": 331758,
+  "completion_tokens": 78912,
+  "reasoning_tokens": null,
+  "duration_seconds": 341.79037000006065,
+  "cost_usd": 0.57560732,
+  "cost_basis": "provider"
+}

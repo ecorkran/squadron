@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews` resolves the reviews directory from the process cwd, not the git root",
+      "description": "`stats_reviews` builds its target as `reviews_dir = Path.cwd() / REVIEWS_DIR`, where `REVIEWS_DIR = Path(\"project-documents/user/reviews\")` (src/squadron/review/persistence.py:32). Every other command that reads or writes artifacts under `project-documents` anchors at the git root via `resolve_repo_cwd` (src/squadron/cli/commands/review.py:292, 661; pr.py:193, 316; review_pr.py:361), and src/squadron/cli/commands/cwd_resolution.py:5-8 documents exactly why: a config `cwd` may point at a subdirectory of the repo, which \"makes every repo-relative path unreadable.\" Running `sq stats reviews` from any subdirectory (or with such a config cwd) therefore reports `No review directory at \u2026` and exits 0 instead of showing the report \u2014 and the command has no `--cwd` option to correct it. The tests only ever `monkeypatch.chdir` to the repo root (`tests/cli/test_stats.py::test_reviews_table_and_json`), so the subdirectory case is untested. Fix: anchor with `resolve_repo_cwd(None)` (and/or add a `--cwd` option for parity with the review commands).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py#stats_reviews"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Split (multi-part) pipeline reviews lose parts 2..N spend from both stats views",
+      "description": "The new stamping in `ReviewAction._run_part` (src/squadron/pipeline/actions/review.py, `stamp(part.metadata, capture.record_from_review(...))`) puts a usage record on every part's `ActionResult`. But `_review` folds parts with `fold_review_parts`, whose `_metadata` keeps only `parts[0].metadata` (summing `tool_calls_made` but not the usage record), and the executor persists that single folded result in run state. Consequently `sq stats run` (src/squadron/stats/usage_report.py reads `action.metadata[USAGE_KEY]` per step) reports only part 1's spend for the step. Meanwhile every part's artifact is stamped with `runId` (traceability, slice 195 D12), so `reviews_usage_report` excludes them all into `excluded_run_ids` (src/squadron/stats/reviews_report.py:88-90) and `sq stats reviews` omits their spend too. For any multi-part pipeline review \u2014 split task files are a supported flow this codebase names explicitly (`review_parts`, `name_suffix` handling) \u2014 parts 2..N spend appears in *neither* view, breaking the invariant the module docstrings state (\"each review's spend appears in exactly one view\"). No test asserts usage aggregation across parts (`tests/pipeline/actions/test_review_action_parts.py` doesn't touch usage). Suggested fix: aggregate the per-part `USAGE_KEY` records in `_metadata` with the same None-preserving sums as `usage_totals` (turns/tokens/cost, `priced` count), mirroring the existing `TOOL_CALLS_MADE_KEY` summation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review_fold.py#_metadata"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Review provider-failure path logs an expected named error with a full traceback as \"unexpected error\"",
+      "description": "In the new `except ProviderError as exc:` branch of `_run_part`, after the WARNING about the saved failure artifact, the code calls `_logger.exception(\"review: unexpected error in step %s\", context.step_name)` for a `ProviderError` \u2014 an expected, named failure whose message is already recorded. This contradicts the convention this diff itself applies in dispatch and summary (\"a named provider failure (issue 200): the message says what happened, so one ERROR line and no traceback\") and labels the failure \"unexpected\" when it is the normal provider-error path. The pre-change behavior had the same profile only via the `execute` catch-all (whose wording was also \"unexpected error\"); now that the branch is explicit, the traceback should be dropped (plain ERROR/WARNING) and reserved for genuinely uncaught exceptions in `execute`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py#_run_part"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`get_all_aliases()` re-reads both models.toml files on every model resolution and per table cell",
+      "description": "`_resolved` now calls `get_all_aliases()` a sixth time per resolution (`alias if alias in get_all_aliases() else None`), on top of the existing calls inside `require_known_model`, `resolve_model_alias`, `model_allows_tools`, `model_max_output_tokens`, and `model_effort` (src/squadron/models/aliases.py). Each call does `data/models.toml` + user `models.toml` `read_text()` + `tomllib.loads`; model resolution happens per step/action for every run. The new lookup could reuse a single alias-table read computed once at the top of `_resolved`. The same pattern is now also per-row in `stats_views._is_subscription` (one table lookup per cost cell rendered). Not blocking \u2014 files are small \u2014 but the per-resolution multiplication is avoidable.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/resolver.py#_resolved"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Prompt-only compact runs an LLM call but neither requires nor records a capture",
+      "description": "The slice's stated invariant (src/squadron/pipeline/models.py: `usage_capture` comment; `require_capture` docstring \"an LLM action never runs without one\") is upheld on the SDK-rotate path, but `_execute_prompt_only` dispatches `/compact` through `claude_agent_sdk.query` \u2014 a real LLM call \u2014 without ever calling `require_capture` or reading the result's usage. `COMPACT` is in `LLM_ACTION_TYPES`, so these steps surface as \"N LLM action(s) have no usage recorded\" in `sq stats run` (visible, not silent), but the spend is simply never captured and a missing `UsageCapture` on this path would not fail fast. Either record the compact turn's usage from the stream's result message or document the prompt-only path as an explicit exemption.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py#_execute_prompt_only"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `api-rate equiv.` cost label is effectively unreachable in the reviews view",
+      "description": "`cost_cell` switches the label to \"api-rate equiv.\" when `record.cost_basis is PROVIDER` and `_is_subscription(record.alias)` \u2014 but the standalone-review records are rebuilt from artifact frontmatter (src/squadron/stats/reviews_report.py `_record`), where `alias` is derived from `requestedModel`, which persistence only writes when the answering model *substituted* the requested one, and which holds a model id rather than an alias name (src/squadron/review/persistence.py `_review_frontmatter_lines`; review_client sets `result.requested_model = resolved_model`, a model id). So for normal runs the reviews view shows `$\u2026 prov` for subscription-alias spend while the run view shows `$\u2026 api-rate equiv.` for the same money. Either record the alias name in the artifact frontmatter or drop the subscription check from the reviews path; as written the `_is_subscription` branch is dead code for that view.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats_views.py#cost_cell"
+    },
+    {
+      "severity": "PASS",
+      "title": "Strong test coverage with observability assertions on the new failure paths",
+      "description": "The diff follows test-with conventions well: failure modes carry observable-signal tests (partial-interrupt WARNING with run/step ids in `test_stall_with_failed_drain_records_partial` and `test_partial_record_sets_flag_and_warns_with_run_and_step`; warn-once pricing in `test_pricing_warning_once_per_capture`; effort-gap log-once in `test_effort_gap_logged_once_per_capture`; \"no token usage\" warning-once in `tests/pipeline/test_sdk_session.py::TestSessionTelemetry::test_results_without_usage_warn_once_per_dispatch`); the JSON/table parity claim is tested both directions (`test_run_json_matches_table_rows`, `test_reviews_table_and_json`); the state round-trip is pinned (`tests/pipeline/test_state_usage.py`, including schema v3/v4/v5 pre-slice fixtures that exist on disk); and the real-CLI `ResultMessage` fixture (`tests/providers/sdk/result_fixture.py`) satisfies the project rule that parser tests use the actual production format. The missing-capture guard is tested for dispatch, summary, compact, and review.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/test_usage_capture.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats reviews` resolves the reviews directory from the process cwd, not the git root",
+      "location": "src/squadron/cli/commands/stats.py#stats_reviews",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Split (multi-part) pipeline reviews lose parts 2..N spend from both stats views",
+      "location": "src/squadron/pipeline/actions/review_fold.py#_metadata",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Review provider-failure path logs an expected named error with a full traceback as \"unexpected error\"",
+      "location": "src/squadron/pipeline/actions/review.py#_run_part",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`get_all_aliases()` re-reads both models.toml files on every model resolution and per table cell",
+      "location": "src/squadron/pipeline/resolver.py#_resolved",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Prompt-only compact runs an LLM call but neither requires nor records a capture",
+      "location": "src/squadron/pipeline/actions/compact.py#_execute_prompt_only",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The `api-rate equiv.` cost label is effectively unreachable in the reviews view",
+      "location": "src/squadron/cli/stats_views.py#cost_cell",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Strong test coverage with observability assertions on the new failure paths",
+      "location": "tests/pipeline/test_usage_capture.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:03:36.561274",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 41,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 283879,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2677425,
+  "cached_tokens": 2152768,
+  "cache_write_tokens": null,
+  "completion_tokens": 74671,
+  "reasoning_tokens": 70889,
+  "duration_seconds": 518.18926366698,
+  "cost_usd": 0.39783228000000004,
+  "cost_basis": "alias_pricing"
+}

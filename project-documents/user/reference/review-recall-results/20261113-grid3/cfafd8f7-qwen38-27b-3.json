@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "ConsistencyChecker.fix()/fixAll() are now dead public API \u2014 the exact pre-213 un-routed fix path",
+      "description": "The entire point of this change is that fixes must be routed through `planRoutedFixes`/`applyFixPlan` so ownership, readiness gating, and cross-checkout commits are enforced. Before this diff, both consumers of the unsafe direct path \u2014 the CLI (`runAttributed(views, (v) => checker.fix(v))` / `checker.fixAll`) and the MCP tool \u2014 were the only production callers of `fix()` and `fixAll()`. I confirmed via grep across all `packages/*/src` that neither method has any remaining source caller; only test files reference them (`ConsistencyChecker.test.ts:380,616,...`, `reviewGate.test.ts:166`, and the now-stale `mockFix`/`mockFixAll` entries in `check.test.ts:43-44`). They remain exported on the public `ConsistencyChecker` API as a ready-made shortcut that bypasses worktree routing, which is the very class of bug this slice fixes (pre-#213, a merged/un-routed `applyFixes` wrote only the first-seen checkout). Either delete them (updating the ~15 test call sites to `check()` + `applyFixes(result)`) or document them as deprecated/un-routed so a future consumer doesn't reintroduce the bug.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:204-213"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test runs the multi-checkout fix path with the invoking checkout being a non-primary worktree",
+      "description": "The headline multi-checkout behaviors (owner committed in `b`, invoking checkout left uncommitted, \"will commit in \u2026\" preview) are all exercised with the *primary* checkout as the invoking one: the CLI suite mocks `process.cwd` to `fx.primary` (only the *stray-unregistered* case changes cwd), the MCP suite does the same (`workflowCheckRouting.test.ts:97`), and the core suite's `planFromPrimary()` hardcodes `setup.fx.primary` as `invokingPath` (`routedFixes.test.ts:300`). The asymmetric case \u2014 invoking from `b` (a registered non-primary worktree), where `b`'s own fixes must stay uncommitted while the primary's owned fixes are written and *committed into the primary* \u2014 is a distinct code path in `planRoutedFixes` (`commit = !samePath(view.view.projectPath, invokingPath)`) and in `printRoutedFixResult`'s INVOKING_NOTE branch, and it is the normal working state for an agent living in a feature worktree (the MCP comment at `workflowTools.ts:264` explicitly calls this out). A single real-git test running `applyFixPlan` (or the CLI `run()`) with cwd/`invokingPath` set to `wtb` and a primary-owned finding would close the gap.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/routedFixes.test.ts:300"
+    },
+    {
+      "severity": "NOTE",
+      "title": "resolveInvokingCheckout's rev-parse is unbounded while every other fix-path git call is capped at 60 s",
+      "description": "`FIX_GIT_TIMEOUT_MS` is documented as the bound for \"every git call `cf check --fix` makes against a checkout *other than the invoking one*,\" and `checkoutReadiness`/`commitPathsIfChanged`/`restorePathsToHead` all receive it. The one unbounded git call is `gitExec(['rev-parse', '--show-toplevel'], cwd)` inside `resolveInvokingCheckout` \u2014 a local, nearly instantaneous operation, so the practical risk is minimal, but the invocation path is unbounded in a case (stuck lock/hook at repo root) that the rest of the flow explicitly guards against. Worth a one-line comment justifying the asymmetry, or passing the same timeout.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:80"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "ConsistencyChecker.fix()/fixAll() are now dead public API \u2014 the exact pre-213 un-routed fix path",
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:204-213",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No test runs the multi-checkout fix path with the invoking checkout being a non-primary worktree",
+      "location": "packages/core/tests/introspection/routedFixes.test.ts:300",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "resolveInvokingCheckout's rev-parse is unbounded while every other fix-path git call is capped at 60 s",
+      "location": "packages/core/src/introspection/routedFixes.ts:80",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T13:31:42.765074",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 28,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 303970,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 1130690,
+  "cached_tokens": 962107,
+  "cache_write_tokens": null,
+  "completion_tokens": 79392,
+  "reasoning_tokens": 76527,
+  "duration_seconds": 1001.1765001669992,
+  "cost_usd": 0.26322767,
+  "cost_basis": "alias_pricing"
+}

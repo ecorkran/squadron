@@ -1,0 +1,48 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sonnet-high/1/1",
+  "F2": "sonnet-high/1/2",
+  "F3": "sonnet-high/1/5",
+  "P1": "sonnet-high/1/0",
+  "P2": "sonnet-high/1/3",
+  "P3": "sonnet-high/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The public `error` contract (`chart-operations.ts:77`) and the test name both promise the first error, but `setOperationError` replaces it with each new failure, and no test catches that."
+  ],
+  "F2": [
+   "DROP",
+   "All three tokens are defined in `theme.css`. Returning `undefined` is a deliberate, documented choice for environments with no stylesheet, so this only guards against a hypothetical future token rename."
+  ],
+  "F3": [
+   "KEEP",
+   "The range effect's dependencies don't include the series count, so adding the first series after the range is set never applies the range. That breaks the exact seam the comment says initiative 120 relies on."
+  ],
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P2": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P3": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 34.6,
+ "duration_seconds": 34.57098595891148,
+ "cost_usd": 0.7326307999999999,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=340162, cached=261682, cache_write=78468, completion=2594, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The public `error` contract (`chart-operations.ts:77`) and the test name both promise the first error, but `setOperationError` replaces it with each new failure, and no test catches that.\nF2: DROP \u2014 All three tokens are defined in `theme.css`. Returning `undefined` is a deliberate, documented choice for environments with no stylesheet, so this only guards against a hypothetical future token rename.\nF3: KEEP \u2014 The range effect's dependencies don't include the series count, so adding the first series after the range is set never applies the range. That breaks the exact seam the comment says initiative 120 relies on.\nF1: KEEP \u2014 The `error` doc comment (`chart-operations.ts:77`) and the test name both say the first error is kept, but `setOperationError` overwrites it on every new failure, and no test catches this.\nF2: DROP \u2014 All three tokens are defined in `theme.css`, and returning `undefined` is a deliberate, documented choice for when no stylesheet is loaded, so this only guards against a future token rename.\nF3: KEEP \u2014 The range effect does not re-run when the first series is added, because the series count is a ref and not one of its dependencies, so a range set beforehand is never applied; this is the seam the comment says initiative 120 will use."
+}

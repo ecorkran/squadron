@@ -1,0 +1,171 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "New parsers verified against the real CLI's JSON shapes; failures are explicit",
+      "description": "Description: `purchase_verdicts.not_caught_up_report` consumes `coverage` documents whose session entries carry `session_date`/`status`/`unit_ids` as `tick_coverage.TickCoverage.to_dict()` renders them, and `purchase_accounting.accounting_rows` consumes `accounting_futures._product_payload` output (verified in `src/manta_trading/cli/commands/accounting_futures.py:59` and `src/manta_trading/data/tick/tick_coverage.py`). Missing keys raise `CutoverError` naming the key (e.g. `accounting_rows` at `scripts/purchase_accounting.py:57-95`), unknown session buckets stop the exit rule (`_unaccounted`, `scripts/purchase_verdicts.py:237-245`), and `verify_cme_sessions.py` genuinely accepts `--calendar <id> <dirs...>` with exits 0/1/2 as `run_session_check` maps them. Tests pin all of this through the real rendering functions rather than hand-built dicts.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unused constant EXIT_USAGE",
+      "description": "Description: `EXIT_USAGE = 2` (added beside `JOURNAL_LINES`) is never referenced \u2014 `main()` returns `int(exc.code or 0)` directly from the argparse `SystemExit`. Ruff will not flag an unused module constant, so it will linger as dead code. Delete it or use it in the `SystemExit` handler.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#EXIT_USAGE"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Duplicated \"want has no end date\" guard",
+      "description": "Description: `coverage_reads()` and `purchase_verdicts.latest_want_end()` (`scripts/purchase_verdicts.py:73-87`) each iterate `TICK_UNIVERSE` and raise the same `CutoverError` (\"\u2026want has no end date\") for an open-ended want \u2014 two copies of the same validation loop with the same message. A shared helper (e.g. in `cutover_304_checks`, which both modules already import or can import) would state the \"every end is fixed\" invariant once, per the project's one-value-one-source rule.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py#coverage_reads"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Import order in cutover_304_evidence.py likely violates the required isort rule",
+      "description": "Description: The new `import purchase_accounting` / `import purchase_verdicts` lines are placed *before* `from cutover_304_checks import ...` / `from cutover_common import ...`, i.e. `p` before `c`. Module-name ordering is what the rest of the diff follows (`purchase_verdicts.py` and `purchase_accounting.py` both list `cutover_*` before `manta_trading`), and the mandated ruff config includes the `I` rule, under which this block is unsorted. I could not inspect `pyproject.toml`/`ruff.toml` (excluded from the diff scope), so please confirm `ruff check` passes on this file; if the `I` rule is active for `scripts/`, move the two `purchase_*` imports after `cutover_common`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py:25-26"
+    },
+    {
+      "severity": "NOTE",
+      "title": "--estimate exits 0 and prints the ceiling command even when the verdict is \"refused\" for a non-ceiling reason, without narrating the reason",
+      "description": "Description: With `check_ceilings=False`, `judge_estimate` (`scripts/cutover_304_checks.py:193-231`) returns `Estimate.BUY` for *any* non-`nothing_to_buy` verdict \u2014 including a `refused` verdict \u2014 and `_estimate_only` prints `verdict {verdict}: buy` plus the ceiling command, but never prints `summary[\"reasons\"]` to the terminal (they only reach the narration file inside the raw JSON logged by `fetch_estimate`). The refused-for-a-short-ceiling case is the intended D4 flow, but I did not fully trace `spend_guard.evaluate_spend`'s estimate-only refusals (unverified): if a refusal can arise for a non-ceiling reason (e.g. a space verdict reason appended in `plan_summary`), the operator gets a command and exit 0 with the cause visible only in the log file. Printing `summary[\"reasons\"]` in `_estimate_only` would close the gap cheaply.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#_estimate_only"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Resubmit-origin matching assumes reset re-stamps requested_at (unverified)",
+      "description": "Description: `resubmit_origins` matches a resubmit to the earliest *jobless* row of the same `(schema, range)` and `_check_resubmit` requires that row's `requested_at` to be \u2265 the cutover start. I could not read the `reset` implementation (unverified): if `reset` puts a row back to `requested` while *preserving* the original `requested_at`, then a re-run of the same cutover after a failed pass + reset would judge its own resubmit as \"before this cutover started\" and stop, leaving the cutover unfinishable without manual intervention. The matching direction is otherwise sound (earliest-wins can only look older, never newer; the shared-range key intentionally omits product, per the docstring), and refusal is the safe direction \u2014 but the reset-timestamp behavior is worth confirming, since a false stop here blocks the whole slice rather than just flagging a finding.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py#resubmit_origins"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "New parsers verified against the real CLI's JSON shapes; failures are explicit",
+      "location": "scripts/purchase_verdicts.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Unused constant EXIT_USAGE",
+      "location": "scripts/cutover_304_first_purchase.py#EXIT_USAGE",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Duplicated \"want has no end date\" guard",
+      "location": "scripts/cutover_304_evidence.py#coverage_reads",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Import order in cutover_304_evidence.py likely violates the required isort rule",
+      "location": "scripts/cutover_304_evidence.py:25-26",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "--estimate exits 0 and prints the ceiling command even when the verdict is \"refused\" for a non-ceiling reason, without narrating the reason",
+      "location": "scripts/cutover_304_first_purchase.py#_estimate_only",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Resubmit-origin matching assumes reset re-stamps requested_at (unverified)",
+      "location": "scripts/cutover_304_checks.py#resubmit_origins",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T09:30:10.045257",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 41,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 267744,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1579527,
+  "cached_tokens": 1314929,
+  "cache_write_tokens": null,
+  "completion_tokens": 74403,
+  "reasoning_tokens": 68600,
+  "duration_seconds": 623.0158432498574,
+  "cost_usd": 0.29293657,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The coverage connection is autocommit (`store_context.py:160`), so `ledger_totals` and `raw_counts` each read their own snapshot. If an ingest commits between the two reads, raw exceeds ledger and the command wrongly exits 3, even though the data is fine."
+  ],
+  "F2": [
+   "KEEP",
+   "raw_counts` counts every `tick_trade` row in the session window, with no shape or instrument filter. The ledger, by contrast, only counts this shape. Adopted requests for another shape of the same product (e.g. `ES.OPT`) would then show up as false mismatches."
+  ],
+  "F3": [
+   "DROP",
+   "coverage` is a one-shot CLI read with nothing else running on its event loop. The quadratic scan has no real effect at realistic key counts, so the 1 ms rule protects nothing here."
+  ]
+ },
+ "wall_seconds": 52.2,
+ "duration_seconds": 52.177669750060886,
+ "cost_usd": 0.8684462000000002,
+ "effort": "high",
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=539685, cached=452703, cache_write=86966, completion=4067, reasoning=None)",
+ "raw_output": "I've checked all three findings against the code. Verdicts:\n\nF1: KEEP \u2014 The coverage connection is autocommit (`store_context.py:160`), so `ledger_totals` and `raw_counts` each read their own snapshot. If an ingest commits between the two reads, raw exceeds ledger and the command wrongly exits 3, even though the data is fine.\nF2: KEEP \u2014 `raw_counts` counts every `tick_trade` row in the session window, with no shape or instrument filter. The ledger, by contrast, only counts this shape. Adopted requests for another shape of the same product (e.g. `ES.OPT`) would then show up as false mismatches.\nF3: DROP \u2014 `coverage` is a one-shot CLI read with nothing else running on its event loop. The quadratic scan has no real effect at realistic key counts, so the 1 ms rule protects nothing here.\nF1: KEEP \u2014 The coverage connection is autocommit (`store_context.py:160`), so `ledger_totals` and `raw_counts` read separate snapshots, and an ingest committing between them makes a valid database report a mismatch and exit 3.\nF2: KEEP \u2014 `raw_counts` counts every `tick_trade` row in the session window regardless of shape, while `ledger_totals` counts only this shape, so rows from another adopted shape of the same product (e.g. `ES.OPT`) show up as false mismatches.\nF3: DROP \u2014 `coverage` is a one-shot CLI read with nothing else on its event loop, and the per-session scan has no real effect at realistic key counts."
+}

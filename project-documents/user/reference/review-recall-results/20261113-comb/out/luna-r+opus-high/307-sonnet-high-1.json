@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r+opus-high",
+ "refs": {
+  "P1": "sonnet-high/1/0",
+  "P2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "P1": [
+   "DROP",
+   "dropped by luna-r"
+  ],
+  "P2": [
+   "DROP",
+   "dropped by luna-r"
+  ]
+ },
+ "wall_seconds": 0.0,
+ "duration_seconds": 0,
+ "cost_usd": 0,
+ "effort": null,
+ "tool_calls_made": 0,
+ "recovery_turn_used": false,
+ "usage": null,
+ "raw_output": ""
+}
