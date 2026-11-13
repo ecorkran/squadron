@@ -342,3 +342,19 @@ def test_require_known_model_omits_suggestion_without_close_match(glm_alias: Non
         require_known_model("zzzzzzzzzzzzzzzz", profile_source=False)
     assert excinfo.value.close_matches == []
     assert "did you mean" not in str(excinfo.value)
+
+
+# OpenRouter counts max_tokens against the context window (input + max_tokens must fit) and
+# against the key's affordable credit. A cap near a 1M window fails any prompt over ~100k
+# tokens with HTTP 400 (seen on glm53 in the review-recall benchmark). Half the largest
+# window we use leaves room for input on every packaged model.
+OUTPUT_CAP_CEILING = 524_288
+
+
+def test_builtin_output_caps_leave_room_for_input() -> None:
+    too_large = {
+        name: alias["max_output_tokens"]
+        for name, alias in load_builtin_aliases().items()
+        if alias.get("max_output_tokens", 0) > OUTPUT_CAP_CEILING
+    }
+    assert too_large == {}
