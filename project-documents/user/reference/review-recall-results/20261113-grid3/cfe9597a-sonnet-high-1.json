@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "\"Wrong docType literal\" test asserts nothing about the values constraint",
+      "description": "The test name and comments claim it proves the `docType` `values` constraint is enforced. All three assertions expect `toHaveLength(0)`:\n- `devlog` with `dateCreated` is valid, which duplicates the earlier \"validates clean\" test.\n- `gate-evidence` with `dateCreated` is also valid. The variable is named `mismatched`, but nothing is mismatched.\n- An unknown docType passes through unvalidated.\n\n`validateFrontmatter` picks the schema with `FRONTMATTER_SCHEMAS[data.docType]` (`frontmatterSchema.ts:228`) and skips the `docType` field when checking required fields (`:234`). The `values` constraint on `docType` is therefore never evaluated through this path. The test cannot fail for the reason it names, which gives false confidence. Either delete it or rewrite it to assert something real, for example that the schema's `docType.values` matches its own key. The unknown-docType pass-through is existing behavior and could be its own explicit test.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts (test \"a wrong docType literal is still caught by the value-constraint logic\")"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Silent `'?'` fallback and stringly-typed severity map",
+      "description": "`SEVERITY_ICON` is typed `Record<string, string>` and read with `?? '?'` (line 62). `FrontmatterFinding['severity']` is the closed union `'warning' | 'error'`. Typing the map as `Record<FrontmatterFinding['severity'], string>` would make the compiler enforce exhaustiveness and remove the fallback. This also fits the project rule against silent fallback values. The `finding.severity === 'error' ? errorStyle : warnStyle` check on line 63 repeats the same branching and could live in the same map.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:15-18"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test mocks and exit code are never restored",
+      "description": "`beforeEach` uses `vi.clearAllMocks()`, which resets call history but not implementations. There is no `afterEach(vi.restoreAllMocks)`. The \"unresolvable project exits 2\" test replaces `process.exit` with a no-op, and that replacement stays in place for every later test in the file. The file also leaves `process.exitCode = 1` set after tests that expect it. It only avoids failing the vitest worker because the last test happens to be a clean run. Add an `afterEach` that restores mocks and resets `process.exitCode`, so test order doesn't matter.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate.test.ts:52-60, 86-93"
+    },
+    {
+      "severity": "NOTE",
+      "title": "JSON output and fix-log types are loose or duplicated",
+      "description": "`FixLogRecord` re-declares a subset of core's `FixLogEntry`. It could be derived with `Pick<FixLogEntry, ...>`, or the core type could be reused. The JSON payload is a `Record<string, unknown>` with fix fields added conditionally. A small `ValidateJsonOutput` interface would document the machine-readable contract that the \"--json emits the documented shape\" test relies on. In fix mode, `findings`, `totalFindings`, `errors` and `warnings` all describe the pre-fix state. Consumers have to subtract `fixed` to learn what remains, and a short comment saying so would help.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:26-31, 137"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Three identical schema literals",
+      "description": "`review-resolution`, `gate-evidence` and `devlog` differ only by name. The comment explaining why `dateUpdated` is omitted is good. A tiny helper such as `machineArtifactSchema(docType)` would keep the three from drifting apart. This is optional.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/schema/frontmatterSchema.ts:118-141"
+    },
+    {
+      "severity": "PASS",
+      "title": "CLI command wiring, exit codes and `dateUpdated` stamping",
+      "description": "Project resolution failures throw `UserError` and exit 2 through `handleError(err, 2)`. The optional `exitCode` parameter defaults to 1, so existing callers are unaffected (`check.ts:268`). Exit 1 is set for any remaining or failed fixes. Per-fix failures are collected and reported rather than swallowed, and `dateStamp` is computed once and passed as the fourth argument to `updateFrontmatterField`, which matches its signature. Tests are in the centralized `tests/` directory, mock at module boundaries, and cover the clean, findings, fix-success, fix-failure, unfixable, JSON and path-forwarding cases.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:87-157"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "\"Wrong docType literal\" test asserts nothing about the values constraint",
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts (test \"a wrong docType literal is still caught by the value-constraint logic\")",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Silent `'?'` fallback and stringly-typed severity map",
+      "location": "packages/cli/src/commands/validate.ts:15-18",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test mocks and exit code are never restored",
+      "location": "packages/cli/tests/commands/validate.test.ts:52-60, 86-93",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "JSON output and fix-log types are loose or duplicated",
+      "location": "packages/cli/src/commands/validate.ts:26-31, 137",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Three identical schema literals",
+      "location": "packages/core/src/schema/frontmatterSchema.ts:118-141",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "CLI command wiring, exit codes and `dateUpdated` stamping",
+      "location": "packages/cli/src/commands/validate.ts:87-157",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:27:39.864865",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 329917,
+  "cached_tokens": 219754,
+  "cache_write_tokens": 110155,
+  "completion_tokens": 5367,
+  "reasoning_tokens": null,
+  "duration_seconds": 44.91288270801306,
+  "cost_usd": 0.5177961,
+  "cost_basis": "provider"
+}

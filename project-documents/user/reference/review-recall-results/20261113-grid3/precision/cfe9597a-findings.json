@@ -1,0 +1,226 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "FAIL",
+  "title": "Crash handler passes Node's listener arguments into handleError's exit code",
+  "location": "packages/cli/src/index.ts:171-172",
+  "description": "`process.on('uncaughtException', handleError)` and `process.on('unhandledRejection', handleError)` hand the listener's second argument to `handleError`. Node passes an origin string for `uncaughtException` and the promise for `unhandledRejection`. Before this diff `handleError` took one parameter, so the extra argument was ignored. The diff adds `exitCode = 1` as that second parameter (errors.ts:46), and it flows into `process.exit(exitCode)` (errors.ts:71). The intended exit code 1 is lost. I could not execute Node here, so the exact result depends on the version. On Node 18, which is the `engines` floor (packages/cli/package.json:37), the value is likely coerced to 0, so a crash could exit successfully. On Node 20+, the exit-code validation probably throws inside the handler. Either way, the crash path no longer exits 1. The existing `errors.test.ts` only covers the default code, and nothing tests the new parameter or the listener wiring. Fix: wrap the listeners, e.g. `process.on('uncaughtException', (err) => handleError(err))`, and add a test for a non-default code."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "FAIL",
+  "title": "`cf validate frontmatter` ignores worktree scope; `--fix` can write to the main checkout",
+  "location": "packages/cli/src/commands/validate.ts:89-103",
+  "description": "`validateFrontmatterAction` destructures only `id` from `resolveProjectWorktree`, which drops `worktreeId` and `source: 'worktree'`. It then validates `project.projectPath`, the main checkout. Core's `applyWorktreeOverlay` replaces `projectPath` with `worktreePath` (core `utils/worktree-overlay.ts:9`). `cf check` validates through those overlays (check.ts:220-223), and the other file-touching commands resolve the root with `resolveOperationPath` (utils/worktree-overlay.ts:16-25; used in task.ts:50, slice.ts:36, status.ts:53). Two consequences follow:\n- Run from inside a registered worktree, the command validates the main checkout. With `--fix` it rewrites files there, with no confirmation prompt.\n- Explicit paths are resolved against the cwd (frontmatterFileValidator.ts:58). A worktree path then fails the containment check against the main root (lines 59-60) and is silently skipped. The command reports \"0 files checked\" and exits 0.\n\nFix: derive the root with `resolveOperationPath(project, worktreeId)` and pass that to the validator. Add a test with a worktree-scoped project. No test covers this path today."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "`--fix` output reports pre-fix totals and never reports how many remain",
+  "location": "packages/cli/src/commands/validate.ts:136-156",
+  "description": "With `--fix`, `findings`, `totalFindings`, `errors`, and `warnings` are all computed from the pre-fix list. The `remaining` list is used only for the exit code (line 154). The JSON payload therefore lists already-fixed findings as findings, and it has no `remaining` or `unfixed` count. A script that reads `totalFindings` or `findings.length` after `--fix` sees failures that were repaired. The human summary has the same gap: \"N findings across M files\" followed by \"Fixed X of N\" (lines 74-78), with no unresolved count. The `--json in fix mode` test checks `fixed`, `fixLog`, and `fixErrors` but not the totals. Fix: add a `remaining` count and compute the lists and counts from the post-fix state, or keep the pre-fix counts in a separately named field."
+ },
+ {
+  "ref": "haiku-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "Fix application duplicates `ConsistencyChecker.applyFixes`, and the action function is about 70 lines",
+  "location": "packages/cli/src/commands/validate.ts:87-157",
+  "description": "The `--fix` loop (lines 109-134) reimplements an existing path. Core Rule 12 turns the same `validateFrontmatter` findings into fixable items (core ConsistencyChecker.ts:1148-1166). `applyFixes` applies them through `updateFrontmatterField` with a date stamp that defaults to `formatDateProject()` (ConsistencyChecker.ts:210-233). `validate.ts` builds its own `fixLog`/`fixErrors` and makes its own `formatDateProject()` call. That leaves two copies of \"apply a frontmatter fix and stamp `dateUpdated`\" to drift apart. The action function is roughly 70 lines against the project's ~50-line guideline. Fix: extract an `applyFrontmatterFixes(findings, dateStamp)` helper, ideally in core beside `validateFrontmatterFiles`, and have both commands call it. At minimum, split the fix block out of the action. The validate-and-parse loop duplicated in ConsistencyChecker `ruleFrontmatterSchema` predates this diff, and the comment at ConsistencyChecker.ts:1119-1130 acknowledges it, so I am not counting it against this change."
+ },
+ {
+  "ref": "haiku-xhigh/1/4",
+  "severity": "CONCERN",
+  "title": "Severity handling is loosely typed and uses scattered string literals",
+  "location": "packages/cli/src/commands/validate.ts:15-18",
+  "description": "`SEVERITY_ICON` is typed `Record<string, string>` and read with `?? '?'` (line 62). The core type is `severity: 'warning' | 'error'` (core frontmatterSchema.ts:25). Typing the map as `Record<FrontmatterFinding['severity'], string>` would let the compiler enforce coverage, and the fallback would no longer be needed. The `?? '?'` is a silent fallback, which CLAUDE.md prohibits, and it cannot fire under the union type anyway. The literals `'error'` and `'warning'` are also compared inline at validate.ts:63 and 140-141, which conflicts with the \"define once\" rule. `check.ts:25-29` and `check.ts:74-75` repeat the same icon map, the same fallback, and the same colour ternary. A single helper for severity presentation would remove both duplicates."
+ },
+ {
+  "ref": "haiku-xhigh/1/5",
+  "severity": "CONCERN",
+  "title": "Explicit path arguments that don't resolve are dropped silently and reported as success",
+  "location": "packages/cli/src/commands/validate.ts:99-103",
+  "description": "`cf validate frontmatter typo.md` exits 0 with \"No inconsistencies found (0 files checked)\". The resolver skips nonexistent, non-`.md`, and out-of-root entries without recording them (core frontmatterFileValidator.ts:52-66). The help text documents this for staged-file lists, where deletions are expected, and skipping deleted files is reasonable. The problem is that a mistyped path looks identical to a clean run, and CLAUDE.md says to fail explicitly rather than fall back silently. Fix: keep the skip behaviour, but return the skipped entries with reasons (for example a `skipped` array in JSON, plus a human-readable line), so a script can tell \"nothing to check\" from \"your path was wrong\". Do not change the exit code for deletion-only lists."
+ },
+ {
+  "ref": "haiku-xhigh/1/6",
+  "severity": "CONCERN",
+  "title": "Misnamed test that cannot detect a regression in the docType constraint",
+  "location": "packages/core/tests/schema/frontmatterSchema.test.ts:371-396",
+  "description": "The test is titled \"a wrong docType literal is still caught by the value-constraint logic\", but it asserts zero findings in all three cases, so nothing is caught. Its comments say it proves the docType `values` constraint is enforced. It doesn't. The schema is selected by `FRONTMATTER_SCHEMAS[data.docType]` (frontmatterSchema.ts:228), so the docType values check in step 4 (lines 268-298) can never fail. The docType `values` entries on the schemas are therefore redundant, and the test would still pass if they were deleted. Fix: rename the test and its comments to describe what is asserted (unknown docTypes pass through, and each schema validates only its own docType). Then either drop the redundant docType `values` entries or add a test that exercises them. The positive tests at lines 329-369 do cover the new schemas' required fields."
+ },
+ {
+  "ref": "hy4/1/0",
+  "severity": "FAIL",
+  "title": "Validate command ignores the active worktree path",
+  "location": "packages/cli/src/commands/validate.ts:89-103",
+  "description": "`validateFrontmatterAction` destructures only `id` from `resolveProjectWorktree` and passes `project.projectPath` into `validateFrontmatterFiles` at `packages/cli/src/commands/validate.ts:89-103`. `packages/cli/src/utils/project.ts#resolveProjectWorktree` returns a `worktreeId` when cwd matches a registered worktree path, and `packages/cli/src/utils/worktree-overlay.ts:16-24` provides `resolveOperationPath` for exactly this filesystem-path selection, but the new command does not use either. In a worktree, the no-paths mode validates/fixes the main checkout; explicit staged paths resolved from the worktree cwd are outside the main `project-documents/user/` root and are silently skipped by `packages/core/src/schema/frontmatterFileValidator.ts#resolveExplicitPaths`. For a pre-commit gate this can report a false green with zero relevant files checked, and `--fix` can mutate the wrong tree. Use the resolved worktree operation path and add a test from a worktree cwd."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "--fix can exit 0 while a document is still invalid",
+  "location": "packages/cli/src/commands/validate.ts:107-155",
+  "description": "`validateFrontmatter` returns immediately after emitting an inferred `docType` fixAction (`packages/core/src/schema/frontmatterSchema.ts:221-229`). The CLI fix loop at `packages/cli/src/commands/validate.ts:109-133` applies that fix, sets `remaining` only from unfixable/failed findings, and never revalidates; output and exit code at `packages/cli/src/commands/validate.ts:136-155` are still based on the original findings. A document missing `docType` but otherwise lacking required fields can therefore be \"fixed\" to a schema that now requires `project`, `status`, `dateCreated`, and `dateUpdated`, yet the command exits 0 and JSON reports `fixed: 1` with no `fixErrors`. The new tests do not cover missing-`docType` fixes. Either revalidate after `docType` fixes or keep the run non-clean."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "handleError's second parameter breaks process event listeners",
+  "location": "packages/cli/src/utils/errors.ts:46-71",
+  "description": "`handleError` now accepts `exitCode = 1` and calls `process.exit(exitCode)` at `packages/cli/src/utils/errors.ts:46-71`. It is still registered directly as `process.on('uncaughtException', handleError)` and `process.on('unhandledRejection', handleError)` at `packages/cli/src/index.ts:171-172`. Node invokes those listeners with a second argument (`origin` string for `uncaughtException`, the rejected promise for `unhandledRejection`), so that value is now passed as the exit code instead of the default `1`. Depending on Node version, `process.exit` will reject the non-numeric argument or coerce it incorrectly, making top-level error handling unreliable. Wrap the listeners, e.g. `(err) => handleError(err)`, or make the second parameter an options object that cannot collide with event-listener signatures."
+ },
+ {
+  "ref": "hy4/1/3",
+  "severity": "CONCERN",
+  "title": "Broad catches collapse unrelated failures into exit 2 and stdout error output",
+  "location": "packages/cli/src/commands/validate.ts:118-130",
+  "description": "The fix-loop catch at `packages/cli/src/commands/validate.ts:118-130` catches every error, records a string, and continues without a comment explaining why swallowing is correct or an ERROR-level log; its messages are printed to stdout by `printHumanOutput` at `packages/cli/src/commands/validate.ts:80-83`. This is not one of the allowed exception patterns in `CLAUDE.md` (specific handled exception with rationale, rethrow after logging, or true process-boundary handler). Separately, the command-level catch at `packages/cli/src/commands/validate.ts:177-181` calls `handleError(err, 2)` for any error thrown by `store.getById` or `validateFrontmatterFiles`, so unexpected storage/I/O failures are classified as \"invocation error\" even though the documented contract in `CHANGELOG.md:25` reserves 2 for project-resolution failures. Narrow the exit-2 handling to known invocation errors and send fix errors to stderr/logging."
+ },
+ {
+  "ref": "hy4/1/4",
+  "severity": "CONCERN",
+  "title": "Fix actions are applied without validating their type",
+  "location": "packages/cli/src/commands/validate.ts:113-125",
+  "description": "The loop at `packages/cli/src/commands/validate.ts:113-125` treats any `finding.fixAction` as a frontmatter field write. The public type is still a loose `fixAction?: { type: string; field: string; value: string }` at `packages/core/src/schema/frontmatterSchema.ts:28`, so illegal action variants are representable. `ConsistencyChecker.applyFixes` in `packages/core/src/introspection/ConsistencyChecker.ts#applyFixes` branches on `fixAction.type`; this command skips that check entirely. A future non-frontmatter action would silently be written as YAML with `field`/`value`. Use a discriminated union for fix actions and skip/report unsupported action types explicitly."
+ },
+ {
+  "ref": "hy4/1/5",
+  "severity": "CONCERN",
+  "title": "New docType-constraint test is misleading and provides no coverage",
+  "location": "packages/core/tests/schema/frontmatterSchema.test.ts:371-397",
+  "description": "The test named \"a wrong docType literal is still caught by the value-constraint logic\" at `packages/core/tests/schema/frontmatterSchema.test.ts:371-397` does not construct a wrong literal for a registered schema: it passes valid `devlog`, valid `gate-evidence`, and an unknown docType, then expects zero findings for all three. Because `validateFrontmatter` selects the schema by `FRONTMATTER_SCHEMAS[data.docType]` and returns early when absent (`packages/core/src/schema/frontmatterSchema.ts:228-229`), a mistyped or unknown `docType` never reaches the value-constraint loop. The comments at `packages/core/tests/schema/frontmatterSchema.test.ts:389-395` describe the opposite behavior from what is asserted. Add a real regression test for the intended behavior, or rename/rewrite this test to document the unknown-docType pass-through explicitly."
+ },
+ {
+  "ref": "hy4/1/6",
+  "severity": "CONCERN",
+  "title": "Validate tests leak spy implementations between tests",
+  "location": "packages/cli/tests/commands/validate.test.ts",
+  "description": "The suite installs console/stdout spies in `beforeEach` at `packages/cli/tests/commands/validate.test.ts:52-60`, and the \"unresolvable project\" test installs a `process.exit` spy at `packages/cli/tests/commands/validate.test.ts:83-91`. There is no `afterEach`/`vi.restoreAllMocks()` in the file; `vi.clearAllMocks()` at line 53 only clears call history and does not restore implementations. With Vitest's default `restoreMocks: false`, later tests in this file run with `process.exit` still stubbed and console/stdout still mocked, so behavior depends on test order and a later unexpected `handleError` call can be hidden. Add per-file mock restoration or configure `restoreMocks`."
+ },
+ {
+  "ref": "luna-r/1/0",
+  "severity": "CONCERN",
+  "title": "Validation can report success after silently skipping unreadable directories",
+  "location": "packages/cli/src/commands/validate.ts:98",
+  "description": "The new command treats the result of `validateFrontmatterFiles` as a complete scan, but `discoverAllDocuments` in `packages/core/src/schema/frontmatterFileValidator.ts` catches every `readdir` error and skips that directory. If a scan directory exists but cannot be read, its documents are omitted and the command can report \u201cNo inconsistencies found\u201d with exit code 0. Limit the skip behavior to expected missing-directory errors and surface other scan failures so validation cannot give a false clean result."
+ },
+ {
+  "ref": "luna-r-high/1/0",
+  "severity": "CONCERN",
+  "title": "Symlinks can bypass the document-root check and allow out-of-root fixes",
+  "location": "packages/core/src/schema/frontmatterFileValidator.ts:59-62",
+  "description": "The containment check is lexical: it resolves the supplied path and checks whether that path is beneath the document root, but it does not resolve symlinks. A `.md` symlink inside the root that targets a file outside it therefore passes validation; with `cf validate frontmatter --fix`, the writer follows the symlink and can modify the external target. The default directory scan can also include symlinked files. Resolve and verify the canonical target before reading or writing, or reject symlinks."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "A dateUpdated backfill can overwrite the current modification date",
+  "location": "packages/cli/src/commands/validate.ts:113-133",
+  "description": "When a document is missing both a fixable field (for example, `status`) and `dateUpdated`, the status fix first stamps `dateUpdated` with the current date. The precomputed `dateUpdated` finding is then processed and writes `dateCreated` over that stamp. This leaves a document that was modified by `--fix` with a stale update date. Preserve the backfill behavior for a date-only fix, but avoid letting it overwrite the stamp after other fixes have modified the file."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "--fix can write through a symlink outside the project",
+  "location": "packages/cli/src/commands/validate.ts:119-124",
+  "description": "The `--fix` loop writes to each finding\u2019s `filePath`. The validator\u2019s in-root check in `packages/core/src/schema/frontmatterFileValidator.ts:52-63` is lexical and does not resolve symlinks; the default directory walk can also return symlinked `.md` files. A symlink under the document root that targets a file outside it can therefore be validated and, with `--fix`, modified outside the project. Resolve and verify the target\u2019s real path before applying writes."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "FAIL",
+  "title": "Node event callbacks corrupt the error exit code",
+  "location": "packages/cli/src/utils/errors.ts:46-73",
+  "description": "`packages/cli/src/index.ts:171-172` registers `handleError` directly as the `uncaughtException` and `unhandledRejection` listener. Node invokes these listeners with a second metadata argument\u2014an origin string for `uncaughtException` and the rejected promise for `unhandledRejection`. The new `exitCode` parameter therefore receives that metadata, and `process.exit(exitCode)` can throw `ERR_INVALID_ARG_TYPE` instead of terminating with the intended code. Register wrapper listeners such as `(err) => handleError(err)` or use event-specific handlers."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "FAIL",
+  "title": "Worktree resolution is discarded, allowing a false clean result",
+  "location": "packages/cli/src/commands/validate.ts:90-103",
+  "description": "Only `id` is retained from `resolveProjectWorktree`; the resolved `worktreeId` is discarded and `project.projectPath` is always used. When invoked from a registered worktree, the no-path mode scans the main worktree instead. More seriously, explicit paths are resolved relative to the worktree CWD but checked for containment against the main project\u2019s document root, causing them to be silently skipped. The command can therefore report zero files checked and exit successfully without validating the worktree contents. Use the resolved worktree path, such as through `resolveOperationPath(project, worktreeId)`, and add worktree-specific tests."
+ },
+ {
+  "ref": "minimax31-flash/1/2",
+  "severity": "CONCERN",
+  "title": "Commander-generated invocation errors do not use exit code 2",
+  "location": "packages/cli/src/commands/validate.ts:160-182",
+  "description": "Only errors reaching the `frontmatter` action are passed to `handleError(err, 2)`. Missing or unknown `validate` subcommands are handled by Commander before that action runs and use Commander\u2019s default failure exit code, normally 1. This violates the documented 0/1/2 contract and makes invocation failures indistinguishable from validation findings for shell consumers. Configure the command tree to exit 2 for these errors and cover missing/unknown subcommands in tests."
+ },
+ {
+  "ref": "minimax31-flash/1/3",
+  "severity": "CONCERN",
+  "title": "Missing projectPath is emitted as an unknown JSON error",
+  "location": "packages/cli/src/commands/validate.ts:93-98",
+  "description": "The missing-`projectPath` error is a known configuration failure, but the `UserError` is constructed without an error code. Consequently, JSON mode reports `\"code\":\"UNKNOWN\"` through `packages/cli/src/utils/errors.ts:48-54`, preventing machine consumers from distinguishing this condition from an unexpected failure. Use the existing `MISSING_CONFIG` error code."
+ },
+ {
+  "ref": "minimax31-flash/1/4",
+  "severity": "CONCERN",
+  "title": "The wrong-docType test never exercises an invalid literal",
+  "location": "packages/core/tests/schema/frontmatterSchema.test.ts:368-391",
+  "description": "The test is titled \u201ca wrong docType literal is still caught,\u201d but every registered literal is expected to validate cleanly, and the unknown literal is also expected to pass. Because the validator selects the schema using `data.docType`, a registered schema\u2019s singleton `docType.values` constraint cannot encounter a mismatched value through this API. The test therefore provides false confidence about the behavior it claims to cover. Either exercise a genuinely invalid value against an independently selected schema or rename/document the test to accurately describe the current lookup-based behavior."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "FAIL",
+  "title": "Error-handler parameter conflicts with process event arguments",
+  "location": "packages/cli/src/utils/errors.ts:46",
+  "description": "`index.ts` registers `handleError` directly for `uncaughtException` and `unhandledRejection`. Those events supply an origin string or Promise as their second argument, now interpreted as `exitCode`. Reproduction throws `ERR_INVALID_ARG_TYPE` inside `process.exit`, breaking clean error handling across the CLI. Wrap both listeners so they pass only the error, and add regression tests."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "FAIL",
+  "title": "Successful writes can produce a false validation success",
+  "location": "packages/cli/src/commands/validate.ts:133",
+  "description": "`remaining` tracks failed writes, not validation results. In `frontmatterSchema.ts`, missing `docType` produces one fixable finding and returns before checking other required fields. Consequently, a document named `100-slice.example.md` with only `status` can receive its inferred `docType` and exit successfully while still missing `slice`, `project`, and `dateCreated`. Revalidate after fixing and derive the exit status from the resulting findings. Add a real-service regression test."
+ },
+ {
+  "ref": "sol-high/1/2",
+  "severity": "CONCERN",
+  "title": "Missing-date repair can overwrite the current update timestamp",
+  "location": "packages/cli/src/commands/validate.ts:119-124",
+  "description": "The schema\u2019s fix for missing `dateUpdated` uses `dateCreated`. The writer deliberately ignores the fourth argument when updating `dateUpdated` itself. If both status and `dateUpdated` need repair, the status write stamps today, then the date repair overwrites it with the creation date. Use the run\u2019s timestamp for `dateUpdated` repairs and test the persisted result rather than only mocked arguments."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "Test named for docType value enforcement asserts nothing of the kind",
+  "location": "packages/core/tests/schema/frontmatterSchema.test.ts",
+  "description": "The last test in the \"squadron machine-artifact docTypes (#73)\" block is named \"a wrong docType literal is still caught by the value-constraint logic\". Every assertion in it is `toHaveLength(0)`. It validates `devlog`, `gate-evidence` and an unknown docType, and all three come back clean. The `mismatched` variable is just a valid `gate-evidence` document. Nothing here exercises a failing `values` check, so the test passes whether or not the constraint works. The comments describe a guarantee the test doesn't provide. Replace it with a case that should fail, for example a schema-registered docType whose `docType` field holds a different value. Alternatively, delete it, since the three \"validates clean\" tests already cover the happy path."
+ },
+ {
+  "ref": "sonnet/1/1",
+  "severity": "CONCERN",
+  "title": "Silent fallback and loosely typed output in the validate command",
+  "location": "packages/cli/src/commands/validate.ts:14-17",
+  "description": "`SEVERITY_ICON` is typed `Record<string, string>` and read as `SEVERITY_ICON[finding.severity] ?? '?'` (line 62). This is a silent placeholder fallback that the project rules forbid. `finding.severity` is a closed union (`'error' | 'warning'`), so key the map on that type, e.g. `Record<FrontmatterFinding['severity'], string>`. The compiler then enforces exhaustiveness and the `?? '?'` goes away. The `colorFn` selection on line 63 has the same flaw. It treats every non-`'error'` severity as a warning, so a new severity would be coloured as a warning without any error. Similarly, `jsonOutput` is built as `Record<string, unknown>` and mutated conditionally for fix mode. A small interface with optional `fixed`, `fixLog` and `fixErrors` would document the JSON contract, which tests and scripts consume."
+ },
+ {
+  "ref": "sonnet/1/2",
+  "severity": "CONCERN",
+  "title": "Fix loop applies any fixAction without checking its type",
+  "location": "packages/cli/src/commands/validate.ts:112-135",
+  "description": "The `--fix` loop checks only that `finding.fixAction` exists, then always calls `updateFrontmatterField(field, value)`. The test fixtures give `fixAction` a `type: 'update-frontmatter'` discriminator. If the core service ever emits another action type, this code would apply it as a frontmatter edit without complaint. Either narrow on `fixAction.type`, or add an exhaustive switch so unsupported actions are counted as unfixed. The fix loop also overwrites the file once per finding, so a file with several findings gets several writes and several `dateUpdated` stamps. This is harmless, but it is worth knowing about."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "\"Wrong docType literal\" test asserts nothing about the values constraint",
+  "location": "packages/core/tests/schema/frontmatterSchema.test.ts (test \"a wrong docType literal is still caught by the value-constraint logic\")",
+  "description": "The test name and comments claim it proves the `docType` `values` constraint is enforced. All three assertions expect `toHaveLength(0)`:\n- `devlog` with `dateCreated` is valid, which duplicates the earlier \"validates clean\" test.\n- `gate-evidence` with `dateCreated` is also valid. The variable is named `mismatched`, but nothing is mismatched.\n- An unknown docType passes through unvalidated.\n\n`validateFrontmatter` picks the schema with `FRONTMATTER_SCHEMAS[data.docType]` (`frontmatterSchema.ts:228`) and skips the `docType` field when checking required fields (`:234`). The `values` constraint on `docType` is therefore never evaluated through this path. The test cannot fail for the reason it names, which gives false confidence. Either delete it or rewrite it to assert something real, for example that the schema's `docType.values` matches its own key. The unknown-docType pass-through is existing behavior and could be its own explicit test."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "Silent `'?'` fallback and stringly-typed severity map",
+  "location": "packages/cli/src/commands/validate.ts:15-18",
+  "description": "`SEVERITY_ICON` is typed `Record<string, string>` and read with `?? '?'` (line 62). `FrontmatterFinding['severity']` is the closed union `'warning' | 'error'`. Typing the map as `Record<FrontmatterFinding['severity'], string>` would make the compiler enforce exhaustiveness and remove the fallback. This also fits the project rule against silent fallback values. The `finding.severity === 'error' ? errorStyle : warnStyle` check on line 63 repeats the same branching and could live in the same map."
+ },
+ {
+  "ref": "sonnet-high/1/2",
+  "severity": "CONCERN",
+  "title": "Test mocks and exit code are never restored",
+  "location": "packages/cli/tests/commands/validate.test.ts:52-60, 86-93",
+  "description": "`beforeEach` uses `vi.clearAllMocks()`, which resets call history but not implementations. There is no `afterEach(vi.restoreAllMocks)`. The \"unresolvable project exits 2\" test replaces `process.exit` with a no-op, and that replacement stays in place for every later test in the file. The file also leaves `process.exitCode = 1` set after tests that expect it. It only avoids failing the vitest worker because the last test happens to be a clean run. Add an `afterEach` that restores mocks and resets `process.exitCode`, so test order doesn't matter."
+ }
+]

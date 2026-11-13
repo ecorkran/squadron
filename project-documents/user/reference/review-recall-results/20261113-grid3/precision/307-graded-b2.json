@@ -1,0 +1,22 @@
+{"case": "307",
+ "matched": {
+  "hy4/1/0": "307-I1",
+  "hy4/1/1": "307-N1",
+  "hy4/1/2": "307-I9",
+  "hy4/1/5": "307-I11",
+  "luna-r-high/1/0": "307-N1",
+  "luna-r-high/1/1": "307-I5"
+ },
+ "new_issues": [
+  {"id": "307-M1", "title": "Production command JSON, gh output and env text are parsed with Mapping[str, Any] and direct key access instead of Pydantic models at the boundary.",
+   "members": ["hy4/1/3"], "grade": "MINOR", "confidence": "high",
+   "why": "True that the new scripts read json.loads output with key access and no schema models, and the project's python rules ask for Pydantic at external boundaries. Missing keys and bad JSON are already translated to CutoverError, and main stops on KeyError/ValueError as a recorded failure, so a changed field type is speculative and would still stop the run. Rule conformance, not a behavior defect.",
+   "evidence": ["scripts/purchase_verdicts.py:43-61", "scripts/cutover_304_first_purchase.py:229-250", "project-documents/ai-project-guide/project-guides/rules/python.md:23"],
+   "known": null, "fail_justified": null},
+  {"id": "307-M2", "title": "Helper try/except blocks translate errors to CutoverError without logger.exception.",
+   "members": ["hy4/1/4"], "grade": "MINOR", "confidence": "high",
+   "why": "The helpers catch specific exceptions and re-raise CutoverError with a message and `from exc`; no logger is used and main's handler only says the message. Nothing is swallowed and every failure stops the run with a specific message, so this is a rule-conformance point about stack traces in an operator script, not a silent failure.",
+   "evidence": ["scripts/purchase_verdicts.py:43-61", "scripts/cutover_304_first_purchase.py:243-250"],
+   "known": null, "fail_justified": null}
+ ],
+ "disputes": []}

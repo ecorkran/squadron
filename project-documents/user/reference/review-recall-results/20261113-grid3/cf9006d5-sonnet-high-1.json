@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Scoped-rule index path goes absolute when the target root isn't the guide's parent",
+      "description": "`scopedRuleIndex` builds its rule paths with `relativeToRoot(ctx.targetRoot, ctx.guide.rules)`. `relativeToRoot` (`paths.ts:38-41`) returns the path unchanged when it isn't under the root. This change creates two cases where the guide isn't under `targetRoot`:\n- **Worktrees.** `installWorktrees` passes the main checkout's `guideDir` with `targetRoot = wtPath`. The worktree's `AGENTS.md` then lists scoped rules by absolute path into the main checkout. Before this change, the worktree got a copy of the root's `AGENTS.md`, which has relative paths.\n- **Dry run.** `dryRunInstall` swaps `targetRoot` for a temp sandbox, so the sandbox `AGENTS.md` has absolute paths while the real one is relative. `reportChanges` will then always list `~ AGENTS.md` as modified for the `agents` target, even on an up-to-date project.\n\nNeither case is tested. The dry-run tests in `flags.test.ts` only use `claude`, which doesn't call `scopedRuleIndex`. The worktree tests in `setup-ide.test.ts` mock `installIde`. The scoped-rule path should be computed against the checkout the guide is installed into, not `targetRoot`. For worktrees that means the worktree root. For a dry run it means the real root.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/targets/agents.ts:24"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Install-output paths are now hard-coded in several unlinked lists",
+      "description": "Removing `propagateDirs` from `TargetDescriptor` took away the one place that said what each target writes. The dry run now keeps its own `INSTALL_PATHS` list, which has `.agents` as a literal even though `AGENT_SKILLS_DIR` exists. `paths.ts:44` adds `LINT_WRITE_PATHS`, which duplicates the filenames passed to `writeOrSuggest` in `lint.ts`. `tests/ideInstall/harness.ts:26-41` has a third copy. The targets write to literal `.claude`, `.github`, `.cursor` paths too.\n\nIf a target or lint check starts writing somewhere new, the dry-run sandbox won't copy that location. The preview will then be wrong with no error. This breaks the \"define once\" rule in CLAUDE.md. Derive the list from the target definitions and the lint check, or add a test that fails when an install writes outside the list.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:18-30"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dry-run and worktree paths are thinly covered",
+      "description": "- **Dry run:** only `claude` is exercised. There is no dry run combined with `--write-lint`, which is why `LINT_WRITE_PATHS` exists, and none for `agents`, `copilot` or `cursor`. That gap hid the first finding.\n- **Worktree installs:** `setup-ide.test.ts` mocks `installIde` entirely, so no test installs a worktree root from a guide in a different directory. The one test with a separate root (`test_flags_root_outside_guide`) only covers `claude`.\n- **`--root` argument:** in `harness.ts:109`, the `--root` arg is only used to pick the target out of the args and for the snapshot label. The root actually comes from the `root` parameter, so the argument doesn't exercise anything.\n- **Sandbox leak test:** `sandboxes()` compares `os.tmpdir()` listings before and after, which could flake if another test file runs a dry run in parallel. That's unlikely today.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/ideInstall/flags.test.ts:30-76"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Real-guide smoke test needs the guide checked out",
+      "description": "The test reads `project-documents/ai-project-guide/project-guides` from the repo root. A glob for `lint/*` under that path found nothing in this worktree, so the guide may not be initialized here. The test fails loudly rather than silently, which is acceptable. It does mean a CI job without the submodule will fail on it. The test's header should say so.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/ideInstall/realGuide.test.ts:12"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Lint failure happens after the install has finished",
+      "description": "`checkLintConfigs` runs after `manifest.finish()`. A guide without a `lint/` directory throws `InstallAbort` once all files are written, so the user gets exit 1 on an install that mostly succeeded. In `installWorktrees` that counts as a worktree failure. The behavior matches the bash port, and the message is clear. A pre-check before any writes would be cleaner.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/installer.ts:53-56"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Odd comma handling in the ruff `extend-select` builder",
+      "description": "`missing.split('\\n').join(',').replaceAll(',', ', ')` is a roundabout `join(', ')`. It would also rewrite any comma inside a requirement string. Today's `required` entries have none, but `join(', ')` states the intent and avoids the risk.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts:131"
+    },
+    {
+      "severity": "PASS",
+      "title": "Removal of the old script and propagation path is complete",
+      "description": "A repo-wide grep over `packages/**/*.ts` found no remaining references to the deleted symbols: `guideScript`, `readManifest`, `parseManifestLine`, `manifestTempPath`, `propagateToWorktrees`, `pruneStaleFiles`, `sweepGeneratedPrompts`, `propagateDirs`, `generatedPromptDirs`, `execSetupIde`, `runSetupIdeInWorktrees` and `ManifestEntry`.\n\nOther points that held up:\n- `rules.exclude` parsing is centralized in `parseRulesExclude` and reused by the validator.\n- The `#38` and `#40` fixes have matching test and snapshot updates.\n- The worktree loop handles install failures (exit 1) separately from unexpected exceptions, and tests cover both.\n- The overwrite prompt tests are table-driven across the four targets.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Scoped-rule index path goes absolute when the target root isn't the guide's parent",
+      "location": "packages/cli/src/ideInstall/targets/agents.ts:24",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Install-output paths are now hard-coded in several unlinked lists",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:18-30",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Dry-run and worktree paths are thinly covered",
+      "location": "packages/cli/tests/ideInstall/flags.test.ts:30-76",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Real-guide smoke test needs the guide checked out",
+      "location": "packages/cli/tests/ideInstall/realGuide.test.ts:12",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Lint failure happens after the install has finished",
+      "location": "packages/cli/src/ideInstall/installer.ts:53-56",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Odd comma handling in the ruff `extend-select` builder",
+      "location": "packages/cli/src/ideInstall/lint.ts:131",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Removal of the old script and propagation path is complete",
+      "location": "packages/cli/src/commands/setup-ide.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:29:44.100348",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 14,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 15,
+  "prompt_tokens": 1044894,
+  "cached_tokens": 759001,
+  "cache_write_tokens": 285881,
+  "completion_tokens": 11300,
+  "reasoning_tokens": null,
+  "duration_seconds": 97.98789074993692,
+  "cost_usd": 1.3422631999999999,
+  "cost_basis": "provider"
+}

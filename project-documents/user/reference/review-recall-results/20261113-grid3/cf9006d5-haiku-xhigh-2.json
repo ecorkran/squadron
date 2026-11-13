@@ -1,0 +1,279 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Python lint baseline is read eagerly, and the guide does not ship that file",
+      "description": "In `LintCheck.python()`, when no `ruff.toml`/`.ruff.toml` exists and `pyproject.toml` has no `[tool.ruff]` section, line 116 evaluates `fs.readFileSync(this.source('python', 'ruff.toml'))` as an argument before `writeOrSuggest` checks `writeLint`. The guide tree in this worktree has `project-documents/ai-project-guide/project-guides/lint/python/required` and nothing else under `python/`. The only `ruff.toml` in the repo is the test fixture's, under `packages/cli/tests/ideInstall/fixture_guide/lint/python/`.\n\nEffect, traced by reading: any project with `pyproject.toml`, `setup.py` or `requirements*.txt` and no ruff config hits an ENOENT on every `cf setup-ide <target>` run, with or without `--write-lint` and with `--dry-run`. `installIde` maps that to a filesystem error and returns exit 1. `setupIdeAction` then throws, so worktree installs and command installs are skipped. `cf init --ide` calls the same path (`init.ts:152`). The root files are already written by then, because `checkLintConfigs` runs after `manifest.finish()`. Skip this with `rules.exclude` containing `python.md`.\n\nFix: read the baseline only inside the write branch, and when the guide lacks it, fail with an explicit `InstallAbort` that names the missing file.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts:116"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dry run can write to or delete real project files through symlinks",
+      "description": "`copyInstallPaths` uses `fs.cpSync` with `verbatimSymlinks: true` and leaves `dereference` at its default of false. Symlinks are copied as symlinks with their original target text. An absolute link in an install directory, such as `.claude/agents -> /abs/project/shared-agents`, still resolves to the real project from inside the sandbox. The install then writes through it in `installFile` (`manifest.ts:139`) and deletes through it in `finish()` (`manifest.ts:192`), since both resolve the parent directory through the link. The module's own contract says \"The project is never touched.\" `flags.test.ts` checks only plain-file trees, so this path is untested.\n\nFix: copy with `dereference: true` so the sandbox holds its own bytes. `reportChanges` uses `lstat` on both sides, so it must follow the same rule or the copies will show up as spurious `+` entries.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:37-48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stale-file deletion lost the containment and non-regular-file guards",
+      "description": "The deleted `pruneStaleFiles` (in `worktreePropagation.ts`) rejected manifest paths containing `..` or absolute paths, rejected stale paths whose parent resolved outside the checkout through a symlink, and kept non-regular stale paths. Its test file `worktreePrune.test.ts` pinned all three and was deleted. `InstallManifest.finish()` now does `path.join(this.targetRoot, rel)`, then `isFile` (which follows symlinks), then `rmSync`, with no containment check. `removeEmptyInstallDirs` has the same unchecked path arithmetic. A `../` manifest line whose CRC and size match an outside file would delete that file, and a symlinked stale entry is removed rather than kept. No ideInstall test covers these cases.\n\nFix: port the lexical and realpath containment checks and the non-regular skip into `finish()`, and restore the three tests against the new module.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/manifest.ts:186-201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Required-file parser silently passes requirements it should check",
+      "description": "Two paths report a requirement as satisfied when it is not:\n1. `toReadLines` drops a final line with no trailing newline, so `missingRequirements` never checks it. `lint.test.ts:107` pins that drop.\n2. A line whose first alternative is empty (`|x`) pushes `''` into `missing`, and `join` then makes it indistinguishable from \"nothing missing\". `lint.test.ts:111` expects `''` and treats it as correct.\n\nCLAUDE.md treats a silent miss on valid input as a bug, and a required file without a final newline is valid input. The shipped `required` files all end with newlines, so this is latent.\n\nFix: check every non-blank, non-comment line including the last. Throw on a line whose first alternative is empty.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts:43-51 (with packages/cli/src/ideInstall/lines.ts:27-31)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The test suite cannot see the real guide's lint path",
+      "description": "The real-guide smoke test runs against an empty project. `python()` returns at its project-detection check and never reaches the baseline read. Every lint test uses the fixture guide, which does ship `lint/python/ruff.toml`. That mismatch is why the missing file at `lint.ts:116` passes CI.\n\nFix: add a real-guide case with a `pyproject.toml` and no ruff config. Assert exit 0, and assert `ruff.toml` is written only with `--write-lint`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/ideInstall/realGuide.test.ts:29"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Lint file names are spelled out in two places, and one list does nothing",
+      "description": "`LINT_WRITE_PATHS` repeats the file names that `lint.ts` writes. Lint only writes configs that are absent (`lint.ts:133-136`, `178`, `196`, and the `writeOrSuggest` callers). Copying an absent path into the sandbox does nothing, so the list is never needed. Drop it, or derive it from the write sites.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/paths.ts:43-50"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Prompt says files \"will be overwritten\" but the installer now preserves them",
+      "description": "Unmanaged `CLAUDE.md`/`AGENTS.md` are now backed up to `.pre-context-forge` with a managed block appended, and non-owned rule files are skipped with a warning (`manifest.ts:144-174`). The comment at `setup-ide.ts:144-146` describes this, but the prompt still says \"will be overwritten.\" Suggest: \"already exist; unmanaged content is kept and backed up to `<name>.pre-context-forge`.\"",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:151"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Managed-marker detection uses two different match modes",
+      "description": "The prompt-skip check matches the BEGIN marker as a substring. `managedState` matches it as a whole line. A file with an indented or suffixed BEGIN marker skips the prompt, then fails with the unbalanced-markers message. The failure is loud, not silent, but the two checks disagree. This predates the diff, which now routes both through the same installer. Use one matcher.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:39-43 and 55-66, with packages/cli/src/ideInstall/managedSection.ts:46-47"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Harness still parses a `--root` flag that no longer exists",
+      "description": "`run()` skips the token after `--root` when choosing the target. `flags.test.ts` passes `--root` only as a label, so the flag is dead in the harness. Remove the special case and pass the root directly.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/ideInstall/harness.ts:109"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`worktreePropagation.ts` no longer propagates anything",
+      "description": "The module now only filters registered worktrees. Its name, `propagationTargets`, and `worktreePropagation.test.ts` all keep the old \"propagation\" name. Rename when convenient.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/worktreePropagation.ts"
+    },
+    {
+      "severity": "PASS",
+      "title": "No references to the removed copy-and-prune and guide-script symbols remain",
+      "description": "Searched `packages/` for `readManifest`, `parseManifestLine`, `manifestTempPath`, `ManifestEntry`, `propagateToWorktrees`, `pruneStaleFiles`, `sweepGeneratedPrompts`, `guideScript`, `setupIdeScriptPath`, `propagateDirs`, `generatedPromptDirs` and `--capabilities`. The only hit is a comment in `flags.test.ts`. `init.ts:152` calls `setupIdeAction` and ignores the changed return value.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts"
+    },
+    {
+      "severity": "PASS",
+      "title": "The `getApplyTo` and `replaceBlock` fixes behave as their updated tests claim",
+      "description": "`getApplyTo` now returns on the closing fence, so the no-paths case gives `**` once. Unclosed frontmatter with paths gives `''`, which matches the documented behavior. `replaceBlock` (`managedSection.ts:112-128`) trims exactly one added newline, and only when the original lacked one. The updated snapshots match that logic.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/frontmatter.ts:64-89"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Python lint baseline is read eagerly, and the guide does not ship that file",
+      "location": "packages/cli/src/ideInstall/lint.ts:116",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Dry run can write to or delete real project files through symlinks",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:37-48",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Stale-file deletion lost the containment and non-regular-file guards",
+      "location": "packages/cli/src/ideInstall/manifest.ts:186-201",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Required-file parser silently passes requirements it should check",
+      "location": "packages/cli/src/ideInstall/lint.ts:43-51 (with packages/cli/src/ideInstall/lines.ts:27-31)",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The test suite cannot see the real guide's lint path",
+      "location": "packages/cli/tests/ideInstall/realGuide.test.ts:29",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Lint file names are spelled out in two places, and one list does nothing",
+      "location": "packages/cli/src/ideInstall/paths.ts:43-50",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Prompt says files \"will be overwritten\" but the installer now preserves them",
+      "location": "packages/cli/src/commands/setup-ide.ts:151",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Managed-marker detection uses two different match modes",
+      "location": "packages/cli/src/commands/setup-ide.ts:39-43 and 55-66, with packages/cli/src/ideInstall/managedSection.ts:46-47",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Harness still parses a `--root` flag that no longer exists",
+      "location": "packages/cli/tests/ideInstall/harness.ts:109",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`worktreePropagation.ts` no longer propagates anything",
+      "location": "packages/cli/src/commands/worktreePropagation.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "No references to the removed copy-and-prune and guide-script symbols remain",
+      "location": "packages/cli/src/commands/setup-ide.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `getApplyTo` and `replaceBlock` fixes behave as their updated tests claim",
+      "location": "packages/cli/src/ideInstall/frontmatter.ts:64-89",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:23:04.221534",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 43,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 44,
+  "prompt_tokens": 4085884,
+  "cached_tokens": 3773708,
+  "cache_write_tokens": 312142,
+  "completion_tokens": 89800,
+  "reasoning_tokens": null,
+  "duration_seconds": 395.1239958337974,
+  "cost_usd": 0.7351585,
+  "cost_basis": "provider"
+}

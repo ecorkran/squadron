@@ -1,0 +1,233 @@
+{
+  "case": "cfe9597a",
+  "matched": {},
+  "new_issues": [
+    {
+      "id": "cfe9597a-N1",
+      "title": "validateFrontmatterAction drops the resolved worktreeId and validates project.projectPath, so from a registered worktree explicit paths fail containment, are silently skipped, and the command reports a clean pass (and --fix can write the main checkout).",
+      "members": ["haiku-xhigh/1/1", "hy4/1/0", "minimax31-flash/1/1"],
+      "grade": "REAL",
+      "confidence": "high",
+      "why": "The action destructures only { id } from resolveProjectWorktree and passes project.projectPath to validateFrontmatterFiles. resolveExplicitPaths resolves explicit paths against cwd and drops any outside project-documents/user of that root, so a worktree's staged paths are all skipped, filesChecked is 0 and the exit is 0. With no paths it walks, and with --fix writes, the primary checkout. Fix commit e9597a5e applies resolveOperationPath, exactly this defect.",
+      "evidence": [
+        "packages/cli/src/commands/validate.ts:89",
+        "packages/cli/src/commands/validate.ts:99-103",
+        "packages/core/src/schema/frontmatterFileValidator.ts:52-66"
+      ],
+      "known": "B1",
+      "fail_justified": true
+    },
+    {
+      "id": "cfe9597a-N2",
+      "title": "handleError gained an exitCode parameter but is still registered directly as the uncaughtException and unhandledRejection listener, so Node's second listener argument becomes the exit code.",
+      "members": ["haiku-xhigh/1/0", "hy4/1/2", "minimax31-flash/1/0", "sol-high/1/0"],
+      "grade": "REAL",
+      "confidence": "high",
+      "why": "index.ts:171-172 pass handleError straight to process.on, and Node calls those listeners with (err, origin) and (reason, promise). Reproduced on Node 22 with the same signature: process.exit('uncaughtException') throws ERR_INVALID_ARG_TYPE inside the handler, a raw stack trace is printed after the message, and the process exits 7 instead of 1. On the Node 18 engines floor the string is not validated and the exit code can be coerced. This is a regression on every escaped-error path introduced by the diff, and it is still present at the repo's current HEAD.",
+      "evidence": [
+        "packages/cli/src/index.ts:171-172",
+        "packages/cli/src/utils/errors.ts:46",
+        "packages/cli/src/utils/errors.ts:71",
+        "packages/cli/package.json:37"
+      ],
+      "known": null,
+      "fail_justified": false
+    },
+    {
+      "id": "cfe9597a-N3",
+      "title": "--fix never revalidates, so applying an inferred docType exits 0 although the now-typed document still lacks that schema's required fields.",
+      "members": ["hy4/1/1", "sol-high/1/1"],
+      "grade": "REAL",
+      "confidence": "medium",
+      "why": "validateFrontmatter returns right after the missing-docType finding, without checking any other field. The fix loop applies it, sets remaining to the unfixable or failed findings only, and sets the exit code from remaining, so a document missing docType and also missing project or dateCreated exits 0 with fixed: 1. The command is documented as a pre-commit gate whose exit 0 means '--fix resolved everything', so this is a false clean result. The next run would report the remaining fields.",
+      "evidence": [
+        "packages/core/src/schema/frontmatterSchema.ts:209-225",
+        "packages/cli/src/commands/validate.ts:107-134",
+        "packages/cli/src/commands/validate.ts:154-156"
+      ],
+      "known": null,
+      "fail_justified": false
+    },
+    {
+      "id": "cfe9597a-N4",
+      "title": "With --fix, JSON and human output report pre-fix totals and give no remaining count.",
+      "members": ["haiku-xhigh/1/2"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "totalFindings, errors, warnings and findings come from the pre-fix list, and remaining is used only for the exit code. fixed, fixLog and fixErrors are reported alongside, matching cf check's existing shape and the documented JSON contract, so this is a reporting-design point rather than wrong output.",
+      "evidence": [
+        "packages/cli/src/commands/validate.ts:136-152"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe9597a-N5",
+      "title": "The --fix loop duplicates ConsistencyChecker.applyFixes and the action function runs about 70 lines.",
+      "members": ["haiku-xhigh/1/3"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "validate.ts reimplements the apply-frontmatter-fix and date-stamp loop that applyFixes already has, and the action is longer than the project's guideline. Both copies behave correctly; DRY and size only.",
+      "evidence": [
+        "packages/cli/src/commands/validate.ts:87-157"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe9597a-N6",
+      "title": "SEVERITY_ICON is typed Record<string, string> with a '?' fallback, and severity literals are compared inline.",
+      "members": ["haiku-xhigh/1/4", "sonnet/1/1", "sonnet-high/1/1"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "severity is the closed union 'error' | 'warning', so the fallback cannot fire and the colour ternary is correct for both values. Typing and style only.",
+      "evidence": [
+        "packages/cli/src/commands/validate.ts:15-18",
+        "packages/cli/src/commands/validate.ts:62-63"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe9597a-N7",
+      "title": "A mistyped explicit path is silently skipped and the run reports success with 0 files checked.",
+      "members": ["haiku-xhigh/1/5"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "resolveExplicitPaths, unchanged from base, skips nonexistent, non-.md and out-of-root paths, and the new command's help text and CHANGELOG both document that skip as intended for staged-file lists. The finding asks for a skipped list in the output: a usability improvement to documented behavior. The worktree case where this produces a false green is graded separately as N1.",
+      "evidence": [
+        "packages/core/src/schema/frontmatterFileValidator.ts:52-66",
+        "packages/cli/src/commands/validate.ts:166-172"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe9597a-N8",
+      "title": "The test 'a wrong docType literal is still caught by the value-constraint logic' asserts zero findings in every case and cannot detect what it claims.",
+      "members": ["haiku-xhigh/1/6", "hy4/1/5", "minimax31-flash/1/4", "sonnet/1/0", "sonnet-high/1/0"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "All three assertions are toHaveLength(0) over valid devlog, valid gate-evidence and an unknown docType. Because the schema is chosen by FRONTMATTER_SCHEMAS[data.docType], the docType values check can never fail. The test is misnamed and adds no coverage, but the code under test is correct.",
+      "evidence": [
+        "packages/core/tests/schema/frontmatterSchema.test.ts:371-397",
+        "packages/core/src/schema/frontmatterSchema.ts:228-234"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe9597a-N9",
+      "title": "Broad catches: fix errors go to stdout with no log or comment, and any error in the action, including storage or I/O failures, exits 2.",
+      "members": ["hy4/1/3"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "The fix-loop catch records the error in fixErrors, prints it and forces exit 1, so nothing is swallowed. The action-level handleError(err, 2) does classify unexpected failures as exit 2, which the CHANGELOG describes as unresolvable project, but every exit-2 case is still a non-zero failure. Contract precision rather than wrong behavior.",
+      "evidence": [
+        "packages/cli/src/commands/validate.ts:118-130",
+        "packages/cli/src/commands/validate.ts:176-181"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe9597a-N10",
+      "title": "The fix loop applies any fixAction as a frontmatter write without checking fixAction.type.",
+      "members": ["hy4/1/4", "sonnet/1/2"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "validateFrontmatter emits only type 'update-frontmatter' fix actions, so every action the loop can see is a frontmatter write. Checking the type guards against a future variant: speculative hardening. The repeated per-finding writes noted in sonnet/1/2 are harmless.",
+      "evidence": [
+        "packages/cli/src/commands/validate.ts:113-125",
+        "packages/core/src/schema/frontmatterSchema.ts:221",
+        "packages/core/src/schema/frontmatterSchema.ts:262"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe9597a-N11",
+      "title": "The validate tests never restore spies, so the process.exit stub and console mocks persist across later tests.",
+      "members": ["hy4/1/6", "sonnet-high/1/2"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "beforeEach calls vi.clearAllMocks and installs new spies, and there is no afterEach restore, so the process.exit no-op from the exit-2 test stays in place. Test hygiene only; the suite's assertions are unaffected today.",
+      "evidence": [
+        "packages/cli/tests/commands/validate.test.ts:52-60",
+        "packages/cli/tests/commands/validate.test.ts:83-91"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe9597a-N12",
+      "title": "discoverAllDocuments swallows every readdir error, so an unreadable scan directory yields a clean result.",
+      "members": ["luna-r/1/0"],
+      "grade": "PREEXISTING",
+      "confidence": "high",
+      "why": "The catch-all around readdir is in frontmatterFileValidator.ts, which was extracted in the base commit and is unchanged in base..head. The new command only calls it.",
+      "evidence": [
+        "packages/core/src/schema/frontmatterFileValidator.ts:29-38"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe9597a-N13",
+      "title": "Containment is checked lexically, so a .md symlink inside the document root that points outside can be validated and written through by --fix.",
+      "members": ["luna-r-high/1/0", "luna-r-xhigh/1/1"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "resolveExplicitPaths and discoverAllDocuments do not realpath, and updateFrontmatterField follows symlinks, so the claim is true. The containment code is unchanged from base, and the symlink would have to be placed in the user's own project-documents by the user; this local CLI has no trust boundary there. Hardening, not a defect.",
+      "evidence": [
+        "packages/core/src/schema/frontmatterFileValidator.ts:56-62",
+        "packages/cli/src/commands/validate.ts:119-124"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe9597a-N14",
+      "title": "When a document is missing both status and dateUpdated, the status fix stamps today and the later dateUpdated backfill overwrites it with dateCreated.",
+      "members": ["luna-r-xhigh/1/0", "sol-high/1/2"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "Schema order puts status before dateUpdated, updateFrontmatterField stamps dateUpdated on every write except one whose key is dateUpdated, and the backfill value is dateCreated, so the sequence ends with dateUpdated equal to dateCreated. The effect is only a stale metadata date in a narrow case, matches the backfill the CHANGELOG describes, and cf check --fix applies fixes in the same order.",
+      "evidence": [
+        "packages/core/src/schema/frontmatterSchema.ts:241-244",
+        "packages/core/src/introspection/writers/markdownWriter.ts:137-139",
+        "packages/cli/src/commands/validate.ts:113-131"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe9597a-N15",
+      "title": "Commander-level invocation errors such as a missing or unknown validate subcommand exit 1, not 2.",
+      "members": ["minimax31-flash/1/2"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "Only errors reaching the frontmatter action go through handleError(err, 2); Commander handles subcommand parsing with its own exit code. The documented 0/1/2 contract is for cf validate frontmatter, and a script calling it correctly never reaches this path. Contract-edge polish.",
+      "evidence": [
+        "packages/cli/src/commands/validate.ts:159-182"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe9597a-N16",
+      "title": "The missing-projectPath UserError has no code, so JSON mode reports UNKNOWN instead of MISSING_CONFIG.",
+      "members": ["minimax31-flash/1/3"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "The UserError is constructed without a code and handleError emits code ?? 'UNKNOWN'. The same uncoded message is used by other commands; the error is still reported with exit 2. Machine-code precision only.",
+      "evidence": [
+        "packages/cli/src/commands/validate.ts:95-97",
+        "packages/cli/src/utils/errors.ts:48-54"
+      ],
+      "known": null,
+      "fail_justified": null
+    }
+  ],
+  "disputes": []
+}

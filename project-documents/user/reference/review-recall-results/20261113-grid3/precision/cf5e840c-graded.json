@@ -1,0 +1,216 @@
+{
+  "case": "cf5e840c",
+  "matched": {},
+  "new_issues": [
+    {
+      "id": "cf5e840c-N1",
+      "title": "A stale sed backup copy CoreServiceFactory.test.ts-E was committed.",
+      "members": [
+        "haiku-xhigh/1/0",
+        "hy4/1/0",
+        "luna-r-xhigh/1/1",
+        "minimax31-flash/1/0",
+        "qwen38-27b/1/0",
+        "sonnet/1/0",
+        "sonnet-high/1/0"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "The diff adds packages/core/tests/services/CoreServiceFactory.test.ts-E (blob e6539010, the pre-change test) with one-argument createContextPipeline calls. Vitest includes only tests/**/*.{test,spec}.{ts,...} and core tsconfig includes only src/**, so the file is never run or typechecked. Dead clutter worth deleting, but it causes no wrong behavior.",
+      "evidence": [
+        "packages/core/tests/services/CoreServiceFactory.test.ts-E:1",
+        "packages/core/vitest.config.ts:5",
+        "packages/core/tsconfig.json:20"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf5e840c-N2",
+      "title": "Plain (non-AdoptionError) failures in the adoption step fall into the generic catch and return the error-stub context instead of failing the build.",
+      "members": [
+        "haiku-xhigh/1/1",
+        "luna-r-high/1/0",
+        "minimax31-flash/1/1",
+        "sonnet/1/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "True at head: generateContextFromProject rethrows only PermissivenessFragmentError and AdoptionError; plain errors from readAdoptionState (malformed TOML), readHistory, presentPaths/recognizeCi (non-ENOENT) or the guide read become getErrorContext's stub, and the new comment 'Errors propagate' is inaccurate. But the stub-on-error catch predates the diff, malformed .context-forge.toml already produced the stub via resolveIntegrationBranchForPrompt before this change, the stub visibly carries the error text rather than posing as a concept prompt, and the remaining triggers are rare I/O failures. A contract/comment mismatch worth tightening, not a merge-blocking defect on its own (the real harm in this area, the in_progress write before the probes, is the separate known bug which no finding names).",
+      "evidence": [
+        "packages/core/src/services/ContextIntegrator.ts:119-126",
+        "packages/core/src/services/ContextIntegrator.ts:146-152",
+        "packages/core/src/adoption/adoptionState.ts:14-16",
+        "packages/core/src/services/integrationBranchResolver.ts:9-10",
+        "packages/core/src/services/ContextIntegrator.ts:327-338"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf5e840c-N3",
+      "title": "context_build keeps idempotentHint: true although a first brownfield build writes adoption.state.",
+      "members": [
+        "hy4/1/1",
+        "luna-r/1/0"
+      ],
+      "grade": "FALSE",
+      "confidence": "medium",
+      "why": "context_build is annotated readOnlyHint: false, idempotentHint: true. MCP's idempotentHint means repeated calls with the same arguments have no additional effect on the environment. The first brownfield build writes in_progress; a repeat call reads in_progress, the outcome is adoption-in-progress, stateSetByBuild is false and nothing more is written. The environment effect is idempotent; only the output's one-time notice differs, which the hint does not cover.",
+      "evidence": [
+        "packages/mcp-server/src/tools/contextTools.ts:154",
+        "packages/core/src/adoption/adoptionResolver.ts:39",
+        "packages/core/src/adoption/adoptionResolver.ts:128-129"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf5e840c-N4",
+      "title": "template_preview claims no side effects but generateContext still runs ensureGuideForProject, which can initialize the guide submodule.",
+      "members": [
+        "hy4/1/2"
+      ],
+      "grade": "PREEXISTING",
+      "confidence": "high",
+      "why": "ensureGuideForProject in generateContext and template_preview's readOnlyHint/description are unchanged context lines in base..head; this diff only added the 'read-only' adoption mode, which does stop the new adoption write. The guide auto-init side effect existed before.",
+      "evidence": [
+        "packages/mcp-server/src/tools/contextTools.ts:92",
+        "packages/mcp-server/src/tools/contextTools.ts:225-228"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf5e840c-N5",
+      "title": "ContextIntegrator's constructor and generateContext grow more positional parameters instead of an options object.",
+      "members": [
+        "hy4/1/3"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True: the constructor now takes seven positional parameters and generateContext gained a second positional adoptionStateWrites. This is an API-style point; all call sites are typed and correct.",
+      "evidence": [
+        "packages/core/src/services/ContextIntegrator.ts:86-94",
+        "packages/mcp-server/src/tools/contextTools.ts:58-64"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf5e840c-N6",
+      "title": "The 'persist'/'read-only' write-mode literals (and adoption state literals) are repeated rather than defined as named constants.",
+      "members": [
+        "hy4/1/4",
+        "minimax31-flash/1/2"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "AdoptionStateWrites is a string-literal union and callers pass 'persist'/'read-only' literally. The union type makes a typo a compile error, so this is a define-once style point with no behavioral effect.",
+      "evidence": [
+        "packages/core/src/adoption/adoptionResolver.ts:26",
+        "packages/core/src/adoption/adoptionResolver.ts:128",
+        "packages/cli/src/commands/build.ts:84",
+        "packages/mcp-server/src/tools/contextTools.ts:204"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf5e840c-N7",
+      "title": "The new template section key 'adoptionFacts' is camelCase among kebab-case keys.",
+      "members": [
+        "hy4/1/5"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "The other keys in buildTemplate are kebab-case or single words; 'adoptionFacts' is inconsistent. No code looks sections up by key, so it is naming only.",
+      "evidence": [
+        "packages/core/src/services/ContextTemplateEngine.ts:115"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf5e840c-N8",
+      "title": "Integration tests spread the whole process.env into the spawned CLI.",
+      "members": [
+        "hy4/1/6"
+      ],
+      "grade": "PREEXISTING",
+      "confidence": "high",
+      "why": "The env spread at build.integration.test.ts:96 and the other cited files is not in the base..head diff, which only adds the adoptionStateWrites option to createContextPipeline calls in that test.",
+      "evidence": [
+        "packages/cli/tests/integration/build.integration.test.ts:96"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf5e840c-N9",
+      "title": "assertGuideSupportsAdoption relies on ContextProfileParser, which only matches 'context_profiles:\\n' and so fails on CRLF guides.",
+      "members": [
+        "luna-r-high/1/1",
+        "luna-r-xhigh/1/0"
+      ],
+      "grade": "PREEXISTING",
+      "confidence": "medium",
+      "why": "ContextProfileParser's PROFILE_KEY = 'context_profiles:\\n' is unchanged by this diff, and ContextIntegrator's existing profile filtering already depends on it. The new resolver is one more caller that would turn a CRLF guide into a misleading 'no profile' AdoptionError, but the defect lives in the unchanged parser and needs a CRLF guide checkout to arise.",
+      "evidence": [
+        "packages/core/src/services/ContextProfileParser.ts:10",
+        "packages/core/src/services/ContextProfileParser.ts:131-134",
+        "packages/core/src/adoption/adoptionResolver.ts:76"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf5e840c-N10",
+      "title": "persistInProgress wraps and rethrows the write error without an ERROR log.",
+      "members": [
+        "haiku-xhigh/1/3"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True that nothing is logged before the throw, but the AdoptionError carries the original message and cause and propagates to the CLI/MCP error handler, which reports it. A logging-convention point only.",
+      "evidence": [
+        "packages/core/src/adoption/adoptionResolver.ts:86-97"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf5e840c-N11",
+      "title": "Adoption is silently skipped when project.projectPath is absent.",
+      "members": [
+        "haiku-xhigh/1/2"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "True for direct library callers, but cf build throws when projectPath is missing and the MCP path also requires it, so no shipped entry point reaches this branch. Speculative hardening.",
+      "evidence": [
+        "packages/core/src/services/ContextIntegrator.ts:149-152",
+        "packages/cli/src/commands/build.ts:51-55"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf5e840c-N12",
+      "title": "The 'implementation' default instruction literal is repeated again at the new adoption step.",
+      "members": [
+        "sonnet-high/1/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True: line 148 adds another `project.instruction || 'implementation'`, alongside lines 216, 244, 289. All copies currently agree, and when adoption selects, the replaced instruction flows through the spread project, so behavior is correct. Define-once style point.",
+      "evidence": [
+        "packages/core/src/services/ContextIntegrator.ts:148",
+        "packages/core/src/services/ContextIntegrator.ts:244"
+      ],
+      "known": null,
+      "fail_justified": null
+    }
+  ],
+  "disputes": []
+}

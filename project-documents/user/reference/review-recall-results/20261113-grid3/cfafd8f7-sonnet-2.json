@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Readiness probe can throw and abort the whole fix plan",
+      "description": "`checkoutReadiness` handles failures from the first two git probes, but not the later steps. `realpathSync(topLevel)` and `realpathSync(checkoutPath)` can throw, for example if the directory vanishes between `existsSync` and the call. The `rev-parse --git-path` call and each `git status --porcelain` call are also unguarded. Any of these rejections propagates out of `gateByReadiness` and `planRoutedFixes`, so one broken non-invoking checkout, a timeout or a lock aborts the entire fix run. The design says such checkouts should be deferred with a reason, and no `DeferReason` covers a probe failure. Map unexpected probe failures to an explicit deferral. Alternatively, catch them, log at ERROR level, and rethrow with the checkout path in the message.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/git/checkoutReadiness.ts:41-69"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Plan/apply wiring is duplicated between CLI and MCP",
+      "description": "The `scopeViews` construction, the `runCheck` selector, the `resolveInvokingCheckout` guard (only when more than one view) and the `planRoutedFixes` then `applyFixPlan` sequence are written out twice. They appear in `check.ts:172-198` and `runRoutedFix`, and again in `workflowTools.ts`. The `fileSlice: \\`${n}-slice\\`` literal is also repeated. The two copies can drift, and the PR's own premise is parity between them. Move the shared sequence into a core helper such as `runRoutedFix({ project, views, checker, scope })`, with the prompt step injected by the CLI.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/workflowTools.ts:259-298"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Non-null assertions on `fixAction` instead of a narrowed type",
+      "description": "`fixRelPath` and `routeView` use `finding.fixAction!` (`fixReport.ts` falls back with `?.` instead). The code is safe today only because `fixableOf` filters on `f.fixAction`, but `gateByReadiness` is exported and takes unfiltered `ConsistencyFinding[]`. A caller that passes a finding without a `fixAction` gets a runtime TypeError. The typescript rule treats `as` and `!` as a smell. Introduce a `FixableFinding = ConsistencyFinding & { fixAction: NonNullable<\u2026> }` type and a guard, and use it in these signatures.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:62-63"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Output mode selected by a display flag, not by result shape",
+      "description": "`printCheckOutput` chooses the routed report with `fixRes && showWorktree`. `showWorktree` means \"views carry worktree attribution\", and it is also used to prefix findings. The data that actually drives the routed report is `deferred`, `commits` and `fixLog[].worktree`. If the attribution rule changes (for example, only some views get a worktree), the summary path will silently change. Derive the mode from the result, for example by checking whether `fixRes.commits` or `fixRes.deferred` is non-empty or any `fixLog` entry has a `worktree`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/output/checkReport.ts:97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test helpers exported from test files; cross-package relative imports",
+      "description": "`routedFixes.test.ts` exports `designPath`, `tasksPath`, `completeBeta`, `worktreeCtx`, `createRoutedSetup`, `dryRun`, `aboutSubject` and `RoutedSetup` from a `*.test.ts` file. Nothing in the diff imports them, and `createProjectFor` at the bottom of the file reads the module-level `setup` implicitly. Move shared pieces into `tests/helpers/` and drop the `export` from anything that isn't shared. The CLI and MCP tests import `../../../core/tests/helpers/gitWorktreeFixture.js` across package boundaries. That works, but it couples package test trees. A shared test-utils location would be cleaner.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/routedFixes.test.ts:50-170"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lost error cause when rethrowing as UserError",
+      "description": "`runRoutedFix` catches the `resolveInvokingCheckout` error and throws `new UserError(err.message)` without `cause`. The original git failure, which `resolveInvokingCheckout` attaches via `{ cause: err }`, is dropped. Pass `{ cause: err }` if `UserError` supports it. If it doesn't, this is acceptable because the message is already user-facing.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/check.ts:~236"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`checker.fix` / `checker.fixAll` may now be unreferenced",
+      "description": "Both consumers now use `check`/`checkAll` plus `applyFixes`. The mocks for `fix`/`fixAll` were removed from the CLI and MCP tests. If no other callers exist, those public methods are dead code, and they bypass routing, so they invite misuse. I did not verify other callers.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Single-checkout `restoredfix` accounting",
+      "description": "After a failed commit and a successful restore, `fixed -= fixLog.length` and `fixLog = []` is correct, and test case 5 covers it. In the failed-restore case the entries intentionally remain, as test 7 asserts. This behaviour is acceptable.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:264-270"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Readiness probe can throw and abort the whole fix plan",
+      "location": "packages/core/src/git/checkoutReadiness.ts:41-69",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Plan/apply wiring is duplicated between CLI and MCP",
+      "location": "packages/mcp-server/src/tools/workflowTools.ts:259-298",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Non-null assertions on `fixAction` instead of a narrowed type",
+      "location": "packages/core/src/introspection/routedFixes.ts:62-63",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Output mode selected by a display flag, not by result shape",
+      "location": "packages/cli/src/output/checkReport.ts:97",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test helpers exported from test files; cross-package relative imports",
+      "location": "packages/core/tests/introspection/routedFixes.test.ts:50-170",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Lost error cause when rethrowing as UserError",
+      "location": "packages/cli/src/commands/check.ts:~236",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`checker.fix` / `checker.fixAll` may now be unreferenced",
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Single-checkout `restoredfix` accounting",
+      "location": "packages/core/src/introspection/routedFixes.ts:264-270",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:29:16.680758",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 238011,
+  "cached_tokens": 99728,
+  "cache_write_tokens": 138279,
+  "completion_tokens": 3616,
+  "reasoning_tokens": null,
+  "duration_seconds": 32.94102770811878,
+  "cost_usd": 0.6065551,
+  "cost_basis": "provider"
+}

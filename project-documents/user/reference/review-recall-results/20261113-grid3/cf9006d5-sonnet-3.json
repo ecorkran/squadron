@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A worktree's config read failure aborts the loop and skips command install",
+      "description": "`installCheckout` awaits `readRulesExclude(root)` for each checkout. `ConfigManager.get` can throw, as can the explicit `typeof value !== 'string'` check. The `installWorktrees` doc comment says only an install exit code of 1 is recorded and the loop continues, and any other exception is a bug. A worktree with an unreadable or invalid per-worktree config therefore stops the remaining worktrees from being installed. The `installCommandsForTarget` call after the loop is skipped too. The root install has already been written by then, so the run ends partly applied. The old design recorded each worktree's failure and carried on. Either catch a config error per worktree and record it as a failure, or say in the doc comment that config errors abort the loop. The test \"stops on any other exception\" pins the abort behaviour for a `TypeError`. It does not cover a config failure.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:75-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The lint port has thin test coverage for its branching logic",
+      "description": "`python()` handles several cases:\n- a `ruff.toml` that extends `pyproject.toml`\n- `.ruff.toml` precedence\n- a `setup.py` or `requirements*.txt`-only project\n- a weak `pyproject.toml` with no `--write-lint`\n\n`dart()` swaps the lints include line for Flutter projects. `csharp()` writes `.editorconfig` and `Directory.Build.props` selectively. `lint.test.ts` covers the following:\n- Python: report-only, baseline write, weak pyproject plus `--write-lint`, and a complete config.\n- Dart and TypeScript: a report run followed by a write run.\n- C#: project depth.\n\nIt does not exercise:\n- the `extend = \"pyproject.toml\"` merge path\n- the Flutter include rewrite\n- the partial C# write\n- `.ruff.toml` precedence\n\nA silent regression in any of these would not be caught. Per the project's parsing rules, `pyprojectRuffSections` should also have a test against real-world pyproject text, such as the repo's own `pyproject.toml` if there is one.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts:98-150"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`python()` is long and bypasses `writeOrSuggest`",
+      "description": "`python()` runs to roughly 50 lines with four exit paths, which is at the project's function-length limit. Its final branch writes `ruff.toml` and prints the success status itself. That duplicates what `writeOrSuggest` does for every other language. Splitting out a helper such as `writeExtendingRuffToml(missing)`, and having it share the write-and-report step with `writeOrSuggest`, would make the file consistent and easier to test.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts:98-150"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`worktreePropagation.ts` no longer matches its name",
+      "description": "After this change the file holds only `propagationTargets`. Nothing is propagated anymore, because each worktree gets a full installer run. `installWorktrees` and the \"\u2192 setup-ide in worktree\" log line use the new vocabulary. Consider moving `propagationTargets` into `setup-ide.ts` or a file named for worktree selection, and renaming the function. The test file and the `ideTargets.ts` comments would follow.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/worktreePropagation.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Behavioural fixes are recorded in tests and comments",
+      "description": "The `getApplyTo` double `**` bug (#40) and the missing final newline (#38) are fixed. The comments, the tests and the snapshots, including the new `<no final newline>` marker, agree with each other. The `applyTo` change also shifts the `broken.instructions.md` CRC in the copilot snapshots. That is expected, but any user whose installed copilot rule file was written with the old bad value will see it rewritten once on the next run.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/frontmatter.ts:58-90"
+    },
+    {
+      "severity": "PASS",
+      "title": "Removal of the bash-script path and the legacy manifest, prune and sweep code",
+      "description": "The capability probing, the `.bak` creation, the copy-and-prune propagation and the manifest reader are all gone, along with their tests. `ideTargets.ts` shrank to what is still used. The exit-code and `InstallAbort` handling in `installIde` separates install failures from bugs, which matches the project's exception-handling rule. The `rules.exclude` parsing was centralised in `parseRulesExclude` in core, and both the validator and the CLI use it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dry-run sandbox cleanup and test isolation",
+      "description": "The sandbox is removed in `finally`, and a test confirms it is cleaned up when the install aborts. The tests use throwaway temp directories and never read a production database URL. The updated `setup-ide.test.ts` mocks only the installer boundary and asserts on what is passed to it.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:96-122"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A worktree's config read failure aborts the loop and skips command install",
+      "location": "packages/cli/src/commands/setup-ide.ts:75-100",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The lint port has thin test coverage for its branching logic",
+      "location": "packages/cli/src/ideInstall/lint.ts:98-150",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`python()` is long and bypasses `writeOrSuggest`",
+      "location": "packages/cli/src/ideInstall/lint.ts:98-150",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`worktreePropagation.ts` no longer matches its name",
+      "location": "packages/cli/src/commands/worktreePropagation.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Behavioural fixes are recorded in tests and comments",
+      "location": "packages/cli/src/ideInstall/frontmatter.ts:58-90",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Removal of the bash-script path and the legacy manifest, prune and sweep code",
+      "location": "packages/cli/src/commands/setup-ide.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Dry-run sandbox cleanup and test isolation",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:96-122",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:31:58.512426",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 470917,
+  "cached_tokens": 302352,
+  "cache_write_tokens": 168559,
+  "completion_tokens": 4406,
+  "reasoning_tokens": null,
+  "duration_seconds": 39.03452658304013,
+  "cost_usd": 0.7583573000000001,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,149 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "`source_bar_stamping` accepts a raw string, not only the enum",
+  "location": "src/manta_trading_engine/core_model/markets.py:94-98",
+  "description": "`Market.__post_init__` validates `source_bar_stamping` with a membership test (`not in SOURCE_BAR_STAMPINGS`) and no instance check. `TimeMeaning` is a `StrEnum`, so the plain string `\"period_start\"` hashes and compares equal to `TimeMeaning.PERIOD_START`, and it passes. I reasoned this from the MRO (`str` precedes `Enum`), not by running it. The other enum fields use `_require_instance`: `session_mode` at markets.py:64-66 and `continuity_kind` at markets.py:102-104. The existing test \"non-enum continuity\" rejects a raw string, so this field is inconsistent with its neighbours.\n\nThe canonical bytes are the same for the string and the enum, so the hash is unaffected. The damage is to identity checks on the stored value. `period_end.py:82` tests `start.meaning is TimeMeaning.PERIOD_START`, and `test_markets.py:161` asserts `is meaning`. A market built with a raw string would fail those checks silently. Slice 102 line 120 says any non-`TimeMeaning` value raises `InvalidMarketError`. No test covers a raw string.\n\nFix: add `_require_instance(self.source_bar_stamping, TimeMeaning, \"market.source_bar_stamping\")` before the membership check, and add a parametrized rejection test with `\"period_start\"`."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Collection fields raise `TypeError` for `UNKNOWN`, and their annotations contradict the docstring",
+  "location": "src/manta_trading_engine/core_model/markets.py:141-161",
+  "description": "`_normalize_calendars` calls `tuple(refs)` (markets.py:144), and `_normalize_bases` calls `frozenset(bases)` (markets.py:161), before any type check. `Unknown` defines no `__iter__`, so `UNKNOWN` or any non-iterable raises a raw `TypeError` instead of `InvalidMarketError`. Slice 102 D6 (line 157) says market attributes may not be `UNKNOWN`, and D8 says Core Model errors are typed. No test covers `UNKNOWN` or a non-iterable for these two fields.\n\nThe `Market` docstring (markets.py:74-75) says these fields \"accept any iterable.\" The field annotations at markets.py:83 and :85 declare `tuple[...]` and `frozenset[...]`, so a strict-pyright caller passing a list gets a type error.\n\nFix: check `isinstance(refs, Iterable)` before converting and raise `InvalidMarketError` otherwise. Align the annotation with the accepted input, either by widening it or by changing the docstring."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "Duplicated validation helpers across `markets.py` and `instruments.py`",
+  "location": "src/manta_trading_engine/core_model/instruments.py:80-86",
+  "description": "`_require_instance` in `instruments.py:80-86` matches `_require_instance` in `markets.py:132-138` line for line, except for the exception class. `Instrument.__post_init__` (instruments.py:69-75) also re-implements `_require_nonempty_str` (markets.py:123-129) inline. `instruments.py` already imports `Market` from `markets.py`, so it can reuse the helpers. Project rules say not to duplicate logic.\n\nFix: move the helpers into one shared validation module that takes the error class as a parameter, or import them from `markets.py`."
+ },
+ {
+  "ref": "hy4/1/0",
+  "severity": "CONCERN",
+  "title": "Plain strings can satisfy the TimeMeaning source-stamping contract",
+  "location": "src/manta_trading_engine/core_model/markets.py:88-99",
+  "description": "`Market.__post_init__` validates `source_bar_stamping` only with `if self.source_bar_stamping not in SOURCE_BAR_STAMPINGS` at `src/manta_trading_engine/core_model/markets.py:94-99`; the allowed set is built from `TimeMeaning` members at `src/manta_trading_engine/core_model/markets.py:48-50`. `TimeMeaning` is a `StrEnum` at `src/manta_trading_engine/core_model/timestamps.py:37-43`, so in Python 3.12 a plain `\"period_start\"`/`\"period_end\"` compares and hashes like the corresponding member. A dynamically typed caller can therefore construct a `Market` whose `source_bar_stamping` is a plain `str` despite the `TimeMeaning` annotation at `src/manta_trading_engine/core_model/markets.py:84`, breaking identity-based consumers such as `tests/core_model/test_markets.py:160-161`. Add an exact `TimeMeaning` runtime guard before the membership check and a regression test for plain strings."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "Market constructor annotations disagree with accepted iterable inputs",
+  "location": "src/manta_trading_engine/core_model/markets.py:74-85",
+  "description": "The `Market` docstring at `src/manta_trading_engine/core_model/markets.py:74-75` says `session_calendars` and `adjustment_bases` accept any iterable, the normalization helpers at `src/manta_trading_engine/core_model/markets.py:141-165` are typed as `Iterable[...]`, and `tests/core_model/test_markets.py:150-153` passes a generator and a set. However, the dataclass fields are annotated `tuple[...]` and `frozenset[...]` at `src/manta_trading_engine/core_model/markets.py:83-85`, so the generated `__init__` tells strict Pyright\u2014configured at `pyproject.toml:39-42`\u2014to reject those inputs for typed callers. The helper at `tests/core_model/test_markets.py:38-46` hides this by constructing through `dict[str, Any]`. Use a typed custom constructor/`InitVar` pattern to express input versus stored types, or tighten the documented runtime contract and tests."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "Uniformity corpus is not tied to ALL_INSTRUMENT_FIXTURES",
+  "location": "tests/core_model/test_market_uniformity.py:36-48",
+  "description": "`UNIFORM_ROWS` hard-codes the five fixture instruments at `tests/core_model/test_market_uniformity.py:36-41` and parametrizes the test at `tests/core_model/test_market_uniformity.py:44-48`. The fixture tuple `ALL_INSTRUMENT_FIXTURES` lives at `src/manta_trading_engine/core_model/fixtures/instruments.py:55-61`, but this uniformity file does not import it; `tests/core_model/test_instruments.py:208-210` uses it only for an id/count assertion. There is no assertion that every `ALL_INSTRUMENT_FIXTURES` member appears in `UNIFORM_ROWS`, so adding a fixture requires manual synchronization and can leave the \u201cone code path over every fixture instrument\u201d criterion uncovered by this specific test. Derive the rows from the fixture tuple or add a coverage assertion."
+ },
+ {
+  "ref": "hy4/1/3",
+  "severity": "CONCERN",
+  "title": "Unused 60-second constant leaves dead test scaffolding",
+  "location": "tests/core_model/test_market_uniformity.py:34",
+  "description": "`SIXTY_SECONDS_NS` is declared at `tests/core_model/test_market_uniformity.py:34` but has no other reference in the test tree. The same 60-second width is still hard-coded in `BarSpec.time(60)` at `tests/core_model/test_market_uniformity.py:56` and repeated in the expected-end literals at `tests/core_model/test_market_uniformity.py:37-41`. This is dead code and repeats one timing value in several places, contrary to the project \u201cone value, one source\u201d convention. Remove the constant or use it to build the bar spec and expected values."
+ },
+ {
+  "ref": "luna/1/0",
+  "severity": "CONCERN",
+  "title": "Validate enum inputs before membership checks",
+  "location": "src/manta_trading_engine/core_model/markets.py:94-98",
+  "description": "`source_bar_stamping` is checked for set membership before its type is validated. Passing an unhashable value (for example, a list) raises `TypeError` instead of the model\u2019s `InvalidMarketError`; similarly, `calendar_id_for` and `require_adjustment_basis` accept unsupported values without validating their argument types. Validate these inputs explicitly so malformed runtime values fail through the documented error contract."
+ },
+ {
+  "ref": "luna-r/1/0",
+  "severity": "CONCERN",
+  "title": "Validate `source_bar_stamping` as a `TimeMeaning`",
+  "location": "src/manta_trading_engine/core_model/markets.py:94-98",
+  "description": "`TimeMeaning` is a `StrEnum`, so a plain string such as `\"period_start\"` compares equal to `TimeMeaning.PERIOD_START` and passes this membership check. The resulting `Market` accepts a value outside its declared contract; because the value remains a string, canonicalization can also encode it differently from the corresponding enum. Check the runtime type before accepting the value, and add a test that rejects plain strings."
+ },
+ {
+  "ref": "luna-r-high/1/0",
+  "severity": "CONCERN",
+  "title": "Reject plain strings for source bar stamping",
+  "location": "src/manta_trading_engine/core_model/markets.py:94",
+  "description": "`SOURCE_BAR_STAMPINGS` contains `TimeMeaning` members, which are `StrEnum`s and compare equal to their string values. As a result, `Market(source_bar_stamping=\"period_start\", ...)` passes this check and stores a plain `str` instead of a `TimeMeaning`. That breaks the field\u2019s declared type contract and can make downstream enum identity checks fail. Validate the value\u2019s type before checking membership."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Reject strings passed as source bar stamping",
+  "location": "src/manta_trading_engine/core_model/markets.py:94",
+  "description": "`TimeMeaning` is a `StrEnum`, so a plain string such as `\"period_start\"` compares equal to its enum member and passes the set-membership check. The `Market` can therefore store a `str` where its field contract requires `TimeMeaning`. Validate the type explicitly before checking the allowed values."
+ },
+ {
+  "ref": "luna-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Validate enum values before accepting them",
+  "location": "src/manta_trading_engine/core_model/markets.py:94-98",
+  "description": "`TimeMeaning` is a `StrEnum`, so the plain string `\"period_start\"` compares equal to `TimeMeaning.PERIOD_START` and passes this membership check. The `Market` then stores a `str` where callers expect a `TimeMeaning`, which can break code that relies on enum identity or type. The lookup methods have the same issue: `calendar_id_for(\"regular\")` and `require_adjustment_basis(\"raw\")` accept plain strings as valid enum arguments. Validate the enum types explicitly and cover these cases in tests."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "CONCERN",
+  "title": "`Market.source_bar_stamping` accepts a plain `str`, unlike every other enum field in the module",
+  "location": "src/manta_trading_engine/core_model/markets.py:94",
+  "description": "`__post_init__` validates this field with `if self.source_bar_stamping not in SOURCE_BAR_STAMPINGS:`. Because `TimeMeaning` is a `StrEnum`, its members hash and compare equal to their string values (`str.__hash__`/`str.__eq__` precede `Enum`'s in the MRO), so `SOURCE_BAR_STAMPINGS` accepts the plain string `\"period_start\"`. The check therefore admits a value that is not a `TimeMeaning` and stores it verbatim on a canonical type.\n\nThis is inconsistent with the rest of the module: `continuity_kind` (`markets.py:102`), `SessionCalendarRef.session_mode` (`markets.py:64`), and every `adjustment_bases` element (`markets.py:165`) all go through `_require_instance`, which rejects a plain `str`. `source_bar_stamping` is the only enum field that does not.\n\nThe concrete risk is identity-based checks. `period_end.py:82` uses exactly this pattern (`if start.meaning is not TimeMeaning.PERIOD_START:`). A market built from untyped external metadata (the 140 adapter that populates `Market` from trading-data) can hold `\"period_start\"` instead of `TimeMeaning.PERIOD_START`; the canonical bytes are identical (both encode to `\"period_start\"`), so no golden vector catches it, but `market.source_bar_stamping is TimeMeaning.PERIOD_START` is `False` and an `is`-based consumer silently takes the wrong branch. The same looseness affects the lookups: `calendar_id_for(\"extended\")` (`markets.py:106`) and `require_adjustment_basis(\"raw\")` (`markets.py:115`) both succeed on a plain string.\n\nSuggested fix: validate with `_require_instance(self.source_bar_stamping, TimeMeaning, \"market.source_bar_stamping\")` before the membership test, matching the other fields."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "CONCERN",
+  "title": "Market normalization leaks raw `TypeError` instead of the documented `InvalidMarketError`",
+  "location": "src/manta_trading_engine/core_model/markets.py:144",
+  "description": "The slice design's data-flow contract states that invalid input \"raises `InvalidMarketError` or `InvalidInstrumentError` naming the field\", and the error hierarchy exists precisely so callers can catch `CoreModelError` at a boundary. Two paths in `Market.__post_init__` break that contract:\n\n- `_normalize_calendars` calls `items = tuple(refs)` (`markets.py:144`) before any type check, so `Market(session_calendars=None)` or `Market(session_calendars=5)` raises `TypeError: 'NoneType' object is not iterable` instead of `InvalidMarketError` naming the field.\n- `_normalize_bases` calls `items = frozenset(bases)` (`markets.py:161`) before validating element types, so an unhashable element such as `Market(adjustment_bases=[AdjustmentBasis.RAW, [\"x\"]])` raises `TypeError: unhashable type: 'list'`. The existing test (`test_markets.py`, \"non-basis element\") only covers a hashable `\"raw2\"`, which is why this path is not exercised.\n\nThe element-type check that does exist (`markets.py:165`) runs only after the set has been built, so it cannot catch this class of input. Concretely: validate the container type first (or wrap the iteration in a narrow `try`/`except TypeError` that re-raises `InvalidMarketError` naming the field), and validate each element's type before it is hashed."
+ },
+ {
+  "ref": "qwen38-27b/1/0",
+  "severity": "CONCERN",
+  "title": "Test-only fixtures are shipped inside the production source tree",
+  "location": "src/manta_trading_engine/core_model/fixtures/calendars.py",
+  "description": "The fixtures live in `src/manta_trading_engine/core_model/fixtures/`, not under `tests/`. The module docstrings make the intent explicit (\"Hand-written fixture calendars for tests. These are not served data\"), and the import-boundary test (`tests/core_model/test_import_boundary.py:31-35`, `test_market_and_instrument_types_keep_their_boundary`) enforces that model modules (`markets.py`, `instruments.py`) never import `fixtures.*`. So the boundary is one-directional: production model code cannot depend on fixtures, but the shipped package still contains test-only data, and the only consumer of the new `FIXTURE_CALENDARS` mapping (`src/manta_trading_engine/core_model/fixtures/calendars.py:168-179`) is a test. This matches the project's pre-existing convention (the fixtures package already held `calendars.py`), so it is not a regression this slice introduces \u2014 but it is a dependency-direction smell that will grow with every new fixture added this way, and `Mapping`/`MappingProxyType` imports in a shipped test-data module are machinery that only tests need. Flagging it so the project can consciously decide to move the fixtures under `tests/` (the ruff `testpaths` layout already supports that) before the pattern spreads to more modules in later slices."
+ },
+ {
+  "ref": "qwen38-27b/1/1",
+  "severity": "CONCERN",
+  "title": "`make_market` helper is duplicated across two test modules",
+  "location": "tests/core_model/test_market_uniformity.py:33-40",
+  "description": "`tests/core_model/test_market_uniformity.py` defines its own `make_market(market_id)` (line 33) that builds a valid `Market`, while `tests/core_model/test_markets.py:29-40` defines a second `make_market(**overrides)` with different defaults (different timezone, two session calendars, two bases). Both test the same concept and will both have to be updated whenever the `Market` constructor changes (e.g., a new required field in a later slice). This is the kind of shared test scaffolding the rules say belongs in `conftest.py` (\"Use `conftest.py` for shared fixtures; keep individual test files clean\"). Minor today, but a third caller (the slice that validates metadata against the `Market` contract) would make the drift real."
+ },
+ {
+  "ref": "sol/1/0",
+  "severity": "CONCERN",
+  "title": "Validate stamping type before checking membership",
+  "location": "src/manta_trading_engine/core_model/markets.py:94-98",
+  "description": "Because `TimeMeaning` is a `StrEnum`, `\"period_start\"` passes this membership check and remains a plain string. Verified that construction succeeds, but accessing the promised enum\u2019s `.value` raises `AttributeError`. Require a `TimeMeaning` instance before checking supported values, and add a raw-string rejection test."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "CONCERN",
+  "title": "Validate adjustment bases before deduplication",
+  "location": "src/manta_trading_engine/core_model/markets.py:160-165",
+  "description": "Converting to `frozenset` before validation hides invalid elements that compare equal to enum members. Verified that `[AdjustmentBasis.RAW, \"raw\"]` succeeds while the reversed list raises `InvalidMarketError`. Validate every input element before deduplicating, with regression tests covering both orders."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "CONCERN",
+  "title": "Source stamping accepts strings instead of enforcing TimeMeaning",
+  "location": "src/manta_trading_engine/core_model/markets.py:94",
+  "description": "Membership alone does not validate the enum type: `StrEnum` members compare equal to strings. Verified that `source_bar_stamping=\"period_start\"` is accepted and retained as `str`, violating the declared field contract. Require a `TimeMeaning` instance before checking supported values, and add regression tests for string inputs."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "CONCERN",
+  "title": "Adjustment-basis validation depends on input order",
+  "location": "src/manta_trading_engine/core_model/markets.py:160-165",
+  "description": "Converting to `frozenset` before validation removes equal elements, potentially hiding invalid strings. Verified that `[AdjustmentBasis.RAW, \"raw\"]` succeeds, while the reversed list raises `InvalidMarketError`. Validate each input element before deduplication so malformed input is consistently rejected; test both orders."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "`_require_instance` is duplicated across `markets.py` and `instruments.py`",
+  "location": "src/manta_trading_engine/core_model/instruments.py:79-85",
+  "description": "`instruments.py` defines `_require_instance(value, expected, field)`, and `markets.py` defines a byte-for-byte equivalent. The only difference is the exception class, `InvalidInstrumentError` versus `InvalidMarketError`. The project rule says \"Do not duplicate logic\". `markets.py` also carries a `_require_nonempty_str` that `instruments.py` re-implements inline for `instrument_id`, with a slightly different message. Both modules are deliberately kept free of `canonical` and `calendars` imports. A small shared validation helper in a new module (for example `core_model/validation.py`) could take the error class as a parameter. That would keep the boundary and leave one place to change the message format. The `test_import_boundary` module list would need to include the new module."
+ }
+]

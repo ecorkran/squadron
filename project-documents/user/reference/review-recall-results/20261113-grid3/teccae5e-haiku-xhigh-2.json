@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`source_bar_stamping` accepts raw strings and stores them unconverted",
+      "description": "The check `self.source_bar_stamping not in SOURCE_BAR_STAMPINGS` is a frozenset membership test. `TimeMeaning` is a `StrEnum` (`timestamps.py:37`). CPython defines `class StrEnum(str, ReprEnum)` (`enum.py:1310`), so `str` precedes `Enum` in the MRO and the member hashes and compares equal to its value. As a result, `Market(source_bar_stamping=\"period_start\", ...)` passes validation and stores a plain `str`.\n\nThe other enum fields do not have this hole. `continuity_kind` (`markets.py:102-104`) and `session_mode` both go through `_require_instance`. A caller that later writes `market.source_bar_stamping is TimeMeaning.PERIOD_START` gets `False`. The canonical bytes are identical, so the hash does not reveal the problem. No test covers it: `REJECTED_MARKETS` only includes the enum member `AVAILABLE_AT` and a plain string for `continuity_kind`.\n\nFix: call `_require_instance(self.source_bar_stamping, TimeMeaning, ...)` before the membership check, and add a case with `\"period_start\"` to the rejection tests.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:94"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Validation helpers are duplicated across `markets.py` and `instruments.py`",
+      "description": "`_require_instance` is defined twice with the same body, once in `instruments.py:80-86` and once in `markets.py:132-138`. The only difference is the exception class. `Instrument.__post_init__` (`instruments.py:69-75`) also repeats the `_require_nonempty_str` logic from `markets.py:123-129` inline. Both copies annotate `expected: type` with a bare `type`. I could not confirm whether pyright strict flags that under `reportMissingTypeArgument`.\n\nThis breaks the project's DRY rule. Fix it with one validator module parameterized by error class, and let both modules import it. That module must stay free of `calendars`, `canonical`, and `fixtures` imports, which `test_import_boundary.py` enforces.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/instruments.py:80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unbounded `Decimal` exponents can make `canonicalize` allocate about a gigabyte",
+      "description": "`_require_positive_decimal` accepts any finite `Decimal` above zero. `Decimal(\"1E+999999999\")` passes at line 98. `canonicalize` then calls `_decimal_plain_digits` (`canonical.py:104-109`), which pads with `\"0\" * exponent` for positive exponents and builds `\"0.\" + \"0\" * ...` for very negative ones. One `tick_size` value would produce a string of about 10^9 characters before hashing.\n\nFix: bound the magnitude in the validator, for example by checking `value.adjusted()` against a named constant. Add a test with a large exponent. I reached this by reading the code, not by executing it.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/instruments.py:89-102"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Market field annotations are narrower than what the constructor accepts",
+      "description": "The class docstring (`markets.py:74-75`) says `session_calendars` and `adjustment_bases` accept any iterable. The field annotations say `tuple` and `frozenset`. Pyright strict would flag a typed call that passes a list. Test helpers route arguments through `dict[str, Any]` (`test_markets.py:36-45`), so pyright never sees those calls. Either annotate the constructor input as an iterable or drop the \"any iterable\" promise.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:83-85"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`SIXTY_SECONDS_NS` is defined but never used",
+      "description": "The constant is unused. The expected end values are written as literals instead.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "tests/core_model/test_market_uniformity.py:34"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Uniformity test does not read per-market stamping",
+      "description": "Every row passes `TimeMeaning.PERIOD_START` to `period_end`, including the Kalshi instrument. That market declares `source_bar_stamping=TimeMeaning.PERIOD_END` (`fixtures/markets.py:54`). Nothing in `src` reads `source_bar_stamping` yet, so no tested path can observe the difference. The test does not claim otherwise, but a reader could take \"one code path serves every market\" to mean the per-market stamping is covered. When a consumer appears, the test should take the start meaning from the market.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_market_uniformity.py:50-60"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`test_calendars_are_referenced_by_id_only` is a weak test",
+      "description": "`replace(EQUITY_FIXTURE)` makes a copy with no changes, so the test is a no-op setup. The assertion checks only that one literal date string is absent. A positive check that the calendar id appears in the canonical bytes would test the intended property more directly.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_instruments.py:262-264"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test helper `make_market` is duplicated with different defaults",
+      "description": "`test_instruments.py:43` and `test_markets.py:36` each define a `make_market`, with different signatures and defaults. Consider one shared helper in a test `conftest.py`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "tests/core_model/test_instruments.py:43"
+    },
+    {
+      "severity": "NOTE",
+      "title": "ISO 4217 currency check rejects USDT, which conflicts with the planned crypto market",
+      "description": "`_CURRENCY_CODE` accepts exactly three uppercase letters. `test_instruments.py:97` asserts that `\"USDT\"` is rejected, so this was a deliberate choice. Crypto quote currencies such as USDT and USDC are common, and the project lists crypto as a later market. The project owner should confirm this rule before crypto work starts.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/instruments.py:23-25"
+    },
+    {
+      "severity": "PASS",
+      "title": "Extended fixture calendar literals match their wall-clock comments",
+      "description": "I re-derived all nine extended session open and close values, plus the coverage bounds, from the wall times in the comments. The derivation used EDT (UTC-4) through Nov 1 and EST (UTC-5) after, with the epoch anchored at 2026-01-01. Every value matches. The longest extended session is 16 hours, under the 24-hour `MAX_TIME_BAR_WIDTH_NS` check in `calendars.py:246`. The uniformity test's expected ends also match the fixture opens plus 60 seconds for the equity, Globex, and always-open rows.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/fixtures/calendars.py:70-112"
+    },
+    {
+      "severity": "PASS",
+      "title": "Decimal identity is consistent with equality",
+      "description": "`_decimal_plain_digits` strips trailing zeros, so `Decimal(\"1\")` and `Decimal(\"1.0\")` produce identical canonical bytes. That matches their equality and hash, so `ContractTerms` identity does not split equal values. The exponent issue above is a separate matter of magnitude, not of equality.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/canonical.py:89-110"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`source_bar_stamping` accepts raw strings and stores them unconverted",
+      "location": "src/manta_trading_engine/core_model/markets.py:94",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Validation helpers are duplicated across `markets.py` and `instruments.py`",
+      "location": "src/manta_trading_engine/core_model/instruments.py:80",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Unbounded `Decimal` exponents can make `canonicalize` allocate about a gigabyte",
+      "location": "src/manta_trading_engine/core_model/instruments.py:89-102",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Market field annotations are narrower than what the constructor accepts",
+      "location": "src/manta_trading_engine/core_model/markets.py:83-85",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`SIXTY_SECONDS_NS` is defined but never used",
+      "location": "tests/core_model/test_market_uniformity.py:34",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Uniformity test does not read per-market stamping",
+      "location": "tests/core_model/test_market_uniformity.py:50-60",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`test_calendars_are_referenced_by_id_only` is a weak test",
+      "location": "tests/core_model/test_instruments.py:262-264",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Test helper `make_market` is duplicated with different defaults",
+      "location": "tests/core_model/test_instruments.py:43",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "ISO 4217 currency check rejects USDT, which conflicts with the planned crypto market",
+      "location": "src/manta_trading_engine/core_model/instruments.py:23-25",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Extended fixture calendar literals match their wall-clock comments",
+      "location": "src/manta_trading_engine/core_model/fixtures/calendars.py:70-112",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Decimal identity is consistent with equality",
+      "location": "src/manta_trading_engine/core_model/canonical.py:89-110",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:24:59.533166",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 35,
+  "prompt_tokens": 1983513,
+  "cached_tokens": 1747696,
+  "cache_write_tokens": 235793,
+  "completion_tokens": 64229,
+  "reasoning_tokens": null,
+  "duration_seconds": 271.1149704589043,
+  "cost_usd": 0.45331094,
+  "cost_basis": "provider"
+}

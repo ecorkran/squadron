@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Dry-run and lint-write path lists are hand-maintained copies of what the installers write",
+      "description": "`INSTALL_PATHS` hard-codes `CLAUDE.md`, `AGENTS.md`, `.claude`, `.cursor`, `.github`, `.agents`, and the manifest dir. The change removes `propagateDirs` from `TARGETS`, so these lists no longer derive from one definition. `AGENT_SKILLS_DIR` still exists in `ideTargets.ts` and `.agents` is repeated here as a literal.\n\n`LINT_WRITE_PATHS` in `paths.ts` repeats the literal file names that `lint.ts` writes (`ruff.toml`, `analysis_options.yaml`, `eslint.config.mjs`, `.editorconfig`, `Directory.Build.props`). I checked that the two currently agree, but nothing enforces it.\n\nA new target, or a new lint output missing from either list, would drop out of the dry-run preview with no error or warning. That breaks the CLAUDE.md rule to define each value once and reference it everywhere. Derive the dry-run list from `TARGETS` (marker files plus an install-dirs field) and from shared constants that `lint.ts` also uses. Alternatively, add a test that fails when an install writes a path outside these lists.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts#INSTALL_PATHS"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`isFilesystemError` classifies any Error with a string `code` as an install failure, not a bug",
+      "description": "`isFilesystemError` accepts any `Error` with a string `code`, and `installIde` turns a match into `exitCode: 1` (lines 91-95). Node also sets string codes on non-filesystem errors, such as `ERR_INVALID_ARG_TYPE` and `ERR_FS_CP_EINVAL`. A programming bug that throws one of those would be reported as an ordinary failed install. The stack would be lost, and in `installWorktrees` the loop would carry on to the next worktree.\n\nThe doc comments here and on `installWorktrees` say \"any other exception is a bug and propagates\", which this check doesn't guarantee. The test \"stops on any other exception\" mocks `installIde` itself, so it never exercises this classification.\n\nNarrow the check to an allowlist of errno codes (`EACCES`, `ENOSPC`, `ENOENT`, `EPERM`, `EEXIST`, `EROFS`, \u2026), or to codes that start with `E` but not `ERR_`. Add a test that drives `installIde` with a real non-filesystem error.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/installer.ts:59-62"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`python()` in `lint.ts` is long and branchy",
+      "description": "The method runs to roughly 55 lines and handles three config sources: standalone ruff config, `pyproject.toml`, and the layered `extend` case. That is slightly over the ~50-line guideline. Splitting out the \"write extending ruff.toml\" branch would shorten it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/lint.ts#LintCheck.python"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Intentional output changes for #38 and #40",
+      "description": "`getApplyTo` now returns `**` once instead of `**\\n**`. `replaceBlock` now keeps a missing final newline. Both diverge from the guide's bash behavior. They are documented in comments and the snapshots were updated, including a changed manifest CRC for `broken.instructions.md`. Existing copilot installs will see a one-time rewrite of rules that have no `paths:`. Mention this in the changelog.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/frontmatter.ts:58-88"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`realGuide.test.ts` needs the guide submodule checked out",
+      "description": "The test reads `project-documents/ai-project-guide` under `REPO_ROOT`. The guide is present in this worktree, so it should work here. In a checkout where the submodule isn't initialized, it will fail with \"install exited 1\" rather than a clear \"guide missing\" message. A precondition check with a descriptive error would help.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/ideInstall/realGuide.test.ts:13"
+    },
+    {
+      "severity": "PASS",
+      "title": "Native installer replaces the bash script and worktree propagation",
+      "description": "I grepped `packages/` and found no remaining references to `guideScript`, `propagateToWorktrees`, `readManifest`, `parseManifestLine`, `manifestTempPath`, `ManifestEntry`, `propagateDirs` or `generatedPromptDirs`. The `Record<Target, \u2026>` typing is preserved in `TARGETS` and `TARGET_SETUP`. The legacy `.prompt.md` sweep moved into the copilot installer, guarded by `GENERATED_MARKER` (`targets/copilot.ts:75-85`). Worktrees are installed from the main checkout's guide, each with its own `rules.exclude`.\n\nThe new `setup-ide.test.ts` covers the arguments passed to the installer, alias normalization, a failing worktree not stopping the others, non-install exceptions stopping the loop, and the overwrite prompt for all four targets. `parseRulesExclude` is centralized in core and reused by the validator.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:83-196"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Dry-run and lint-write path lists are hand-maintained copies of what the installers write",
+      "location": "packages/cli/src/ideInstall/dryRun.ts#INSTALL_PATHS",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`isFilesystemError` classifies any Error with a string `code` as an install failure, not a bug",
+      "location": "packages/cli/src/ideInstall/installer.ts:59-62",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`python()` in `lint.ts` is long and branchy",
+      "location": "packages/cli/src/ideInstall/lint.ts#LintCheck.python",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Intentional output changes for #38 and #40",
+      "location": "packages/cli/src/ideInstall/frontmatter.ts:58-88",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`realGuide.test.ts` needs the guide submodule checked out",
+      "location": "packages/cli/tests/ideInstall/realGuide.test.ts:13",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Native installer replaces the bash script and worktree propagation",
+      "location": "packages/cli/src/commands/setup-ide.ts:83-196",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:31:05.384312",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 14,
+  "prompt_tokens": 1246164,
+  "cached_tokens": 1063992,
+  "cache_write_tokens": 182158,
+  "completion_tokens": 8996,
+  "reasoning_tokens": null,
+  "duration_seconds": 80.17798625002615,
+  "cost_usd": 0.9348338,
+  "cost_basis": "provider"
+}

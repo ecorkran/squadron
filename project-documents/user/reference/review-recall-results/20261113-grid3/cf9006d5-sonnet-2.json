@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Too little of the diff was examined to support PASS",
+      "description": "The diff was 199225 characters (review.large_diff_chars is 100000) and the model made 2 successful tool call(s); review.min_tool_calls_large_diff is 3. The verdict rests mostly on the diff text, not on the code behind it. The model's own verdict was PASS.",
+      "file_ref": null,
+      "category": "review-coverage",
+      "raw_category": null,
+      "location": null
+    },
+    {
+      "severity": "PASS",
+      "title": "Native installer replaces the bash script path cleanly",
+      "description": "The `guideScript.ts` shell-out is gone. `setup-ide.ts` now calls `installIde` in-process for the root and for each worktree. The worktree loop in `installWorktrees` records an exit-1 install, keeps going, and lets any other exception propagate. That matches `installIde`'s own split in `installer.ts:90-97`, where `InstallAbort` and filesystem errors become exit 1 and everything else is rethrown. I found no leftover references to the deleted symbols (`readManifest`, `propagateToWorktrees`, `guideScript`, `propagateDirs`) in the CLI package. The `AGENT_SKILLS_DIR` and `GENERATED_MARKER` exports are still used by `commandInstaller.ts` and `targets/*.ts`, so removing the descriptor fields left no dead exports.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:65-195"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dry-run sandbox is cleaned up on every path and checks the real project",
+      "description": "`dryRunInstall` removes the sandbox in a `finally` block, so an abort or throw still cleans up, and `flags.test.ts` covers the abort case. Lint detection still reads from `projectRoot` while writes go to the sandbox, so `--dry-run --write-lint` previews against the real project. `LINT_WRITE_PATHS` in `paths.ts` keeps the sandbox copy list in step with the files `lint.ts` can write.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:100-123"
+    },
+    {
+      "severity": "PASS",
+      "title": "The `getApplyTo` (#40) and `replaceBlock` (#38) fixes are intentional and tested",
+      "description": "Both functions now deviate from the bash behaviour on purpose. `getApplyTo` returns `**` once instead of `**\\n**`. `replaceBlock` keeps a missing final newline (`managedSection.ts:123-128`). The unit tests and snapshots were updated to match, and the doc comments say why. The `replaceBlock` slice is only applied when the original is non-empty and lacks a trailing newline, so it never strips a newline that was in the input. The copilot manifest CRCs changed in the snapshots as a direct result, which is consistent.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/frontmatter.ts:58-89"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`worktreePropagation.ts` no longer propagates anything",
+      "description": "The file now holds only `propagationTargets`, and its caller `installWorktrees` lives in `setup-ide.ts`. The \"propagation\" name no longer matches what the code does. Consider folding `propagationTargets` into `setup-ide.ts` or renaming the module. This is cosmetic and doesn't block anything.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/worktreePropagation.ts:1-17"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor test and typing polish",
+      "description": "There is a stray double blank line before `describe('cf setup-ide'`. The tests assert what cf passes to `installIde` and what it does with the result, and the installer's own behaviour is covered under `tests/ideInstall`. That split keeps each layer's tests about its own behaviour. Coverage for `lint.ts` (python, dart, typescript, csharp depth, `missingRequirements`) and `rulesExclude` is reasonable. The `lint.ts` python branch that builds `extendSelect` with `split/join/replaceAll` is roundabout. It is a port, so a one-line `join(', ')` would be a safe simplification.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/setup-ide.test.ts:199-203"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "review-coverage",
+      "raw_category": null,
+      "summary": "Too little of the diff was examined to support PASS",
+      "location": null,
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Native installer replaces the bash script path cleanly",
+      "location": "packages/cli/src/commands/setup-ide.ts:65-195",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Dry-run sandbox is cleaned up on every path and checks the real project",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:100-123",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `getApplyTo` (#40) and `replaceBlock` (#38) fixes are intentional and tested",
+      "location": "packages/cli/src/ideInstall/frontmatter.ts:58-89",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`worktreePropagation.ts` no longer propagates anything",
+      "location": "packages/cli/src/commands/worktreePropagation.ts:1-17",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Minor test and typing polish",
+      "location": "packages/cli/tests/commands/setup-ide.test.ts:199-203",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:30:22.365964",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "imposed",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 289746,
+  "cached_tokens": 125636,
+  "cache_write_tokens": 164106,
+  "completion_tokens": 3249,
+  "reasoning_tokens": null,
+  "duration_seconds": 28.965818291064352,
+  "cost_usd": 0.7112997000000001,
+  "cost_basis": "provider"
+}

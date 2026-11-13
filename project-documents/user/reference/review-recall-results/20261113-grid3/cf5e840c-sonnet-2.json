@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Stray sed backup file committed",
+      "description": "The diff adds `packages/core/tests/services/CoreServiceFactory.test.ts-E`, and the file exists on disk. It is a macOS `sed -i` backup. It is a byte-for-byte copy of the pre-change test file, so it still has the old `createContextPipeline(path)` calls. It is not a test file, but it adds noise and could be mistaken for one. Delete it and consider adding `*-E` to `.gitignore`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Magic default `'implementation'` duplicated again",
+      "description": "The new line `project.instruction || 'implementation'` is a fifth copy of this silent fallback. Other copies are at lines 216, 244 and 289, plus `FileProjectStore.ts:104`. The project rules forbid scattered magic defaults and silent fallbacks, so this needs a single named constant. At the least, the new site should reuse the value from the existing mapping. The adoption resolver now also depends on this default. If the fallback is changed in one place only, the instruction the resolver sees can differ from the one used later for profile filtering.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:148"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Positional boolean-like parameter inserted mid-signature",
+      "description": "`generateContext` now takes `adoptionStateWrites` as the second positional argument, ahead of the optional parameters. All call sites are updated, and the `'persist'` and `'read-only'` string literals are self-describing. The signature already has five positional parameters. Consider an options object the next time it changes.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:60"
+    },
+    {
+      "severity": "PASS",
+      "title": "Adoption resolver design and test coverage",
+      "description": "Requiring `adoptionStateWrites` makes every caller choose whether adoption state is persisted, and the `template_preview` path is correctly read-only. `AdoptionError` is rethrown instead of falling back to the error stub, and a test covers that. The `isSelected` switch is exhaustive with a `never` check. The guide check runs before any state write, and a test asserts this. The persist-failure path wraps the error with `cause` and a remedy message. Unit, integration (13 scenarios), CLI/MCP parity and engine-ordering tests are all present. The new code is typed and does not use `any`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Stray sed backup file committed",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Magic default `'implementation'` duplicated again",
+      "location": "packages/core/src/services/ContextIntegrator.ts:148",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Positional boolean-like parameter inserted mid-signature",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:60",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Adoption resolver design and test coverage",
+      "location": "packages/core/src/adoption/adoptionResolver.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:29:57.019446",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 267465,
+  "cached_tokens": 170537,
+  "cache_write_tokens": 96922,
+  "completion_tokens": 1682,
+  "reasoning_tokens": null,
+  "duration_seconds": 18.042211208026856,
+  "cost_usd": 0.4250343,
+  "cost_basis": "provider"
+}

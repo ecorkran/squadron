@@ -1,0 +1,128 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Element-loop guard duplicated in three test files with conflicting node sets",
+  "location": "tests/core_model/test_labels.py:27-34",
+  "description": "`ELEMENT_LOOP_NODES` and the AST walk are copied into `test_labels.py` (lines 27-34 and 283-286) and `test_confidence.py` (lines 25-32 and 133-136). `test_import_boundary.py` already has the same check as `_loop_lines` (lines 172-209). The copies disagree. `test_import_boundary.py:179` includes `ast.GeneratorExp`, while the two new copies exclude it on purpose so that the `all(... for category in ...)` generator in `labels.py` is allowed. The same \"no element loops\" rule therefore means different things in different test modules. Fix: keep one node set and one helper in `test_import_boundary.py`, parametrize it over the vector modules (`confidence.py`, `labels.py`), and put the generator-expression exemption in that one place."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "`LabelVocabulary.category_ids` is typed `frozenset[int]` but the constructor accepts `set`",
+  "location": "src/manta_trading_engine/core_model/labels.py:50",
+  "description": "The field is annotated `frozenset[int]`, so under strict pyright the generated `__init__` rejects sets. The runtime check at line 56 accepts both `set` and `frozenset`, and it needs `# pyright: ignore[reportUnnecessaryIsInstance]` to pass. The tests then pass sets with `# pyright: ignore[reportArgumentType]` (`test_vocabulary_builds_and_stores_a_frozenset` and `test_equal_vocabularies_are_equal` in `tests/core_model/test_labels.py`). The public signature and the runtime contract disagree. The rest of this module requires exact types (`type(category) is int`), so the simplest fix is to require `frozenset` at runtime, drop the `set` branch, and update those two tests. That removes both suppressions."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "`_coerce` returns an implicit `None` for an unhandled `ParameterType`",
+  "location": "src/manta_trading_engine/core_model/declarations.py:50-60",
+  "description": "`_coerce` handles `INTEGER` and `REAL` in a `match` with no fall-through. Its return type includes `None`, which means \"uncoercible\". A future `ParameterType` member would therefore return `None` silently. A valid default would fail as \"is not a valid <type>\", and a valid supplied value would be reported as `wrong_type`. Neither message points at the missing branch, and pyright does not flag it, because `None` is already in the return type. Fix: add `case _: assert_never(parameter_type)` (from `typing`). Pyright then reports the gap when a member is added, and the runtime fails loudly."
+ },
+ {
+  "ref": "haiku-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "Vacuous test: `test_match_selects_the_branch_for_each_form`",
+  "location": "tests/core_model/test_declarations.py:154-164",
+  "description": "The test runs a `match` in its own body on the output it was given, then asserts on the string the test itself built. It never calls anything in `declarations.py`, so it passes regardless of what the library does with the three output forms. Delete it. The behavior it implies is already covered by `test_declared_order_is_preserved` and `test_declarations_reject`, which includes a non-declaration item at `outputs[1]`."
+ },
+ {
+  "ref": "haiku-xhigh/1/4",
+  "severity": "CONCERN",
+  "title": "No test pins the int64-extreme ordering that `_require_time_order` depends on",
+  "location": "src/manta_trading_engine/core_model/signals.py:114-121",
+  "description": "Line 117 says subtraction would wrap at the int64 extremes, which is why the code compares neighbours. No test in `tests/core_model/test_signals.py` covers that case. `test_rejects_decreasing_times` (line 146) uses 100, 300, 200. A refactor to `np.diff` would silently accept `[INT64_MAX, INT64_MIN]`, because the difference wraps to a positive value. `tests/core_model/test_series_index.py:252-260` already covers this for `BarIndex`. Add the equivalent `SignalSequence` case."
+ },
+ {
+  "ref": "hy4/1/0",
+  "severity": "CONCERN",
+  "title": "SignalEvent leaks AttributeError for malformed timestamp meanings",
+  "location": "src/manta_trading_engine/core_model/signals.py:76-80",
+  "description": "`SignalEvent.__post_init__` checks `self.time.meaning is not TimeMeaning.AVAILABLE_AT` and then formats the failure with `self.time.meaning.value`. `Timestamp` only validates `ns` at `src/manta_trading_engine/core_model/timestamps.py:54-58`; it does not validate `meaning`. Thus runtime callers can pass `Timestamp(100, \"available_at\")`, `Timestamp(100, 5)`, or `Timestamp(100, None)`, which are accepted by `Timestamp`, fail the identity check at `src/manta_trading_engine/core_model/signals.py:76`, and then raise `AttributeError` at `src/manta_trading_engine/core_model/signals.py:79` instead of `InvalidSignalError`. That breaks the slice contract that anything other than `AVAILABLE_AT` raises `InvalidSignalError`. Validate that `meaning` is a `TimeMeaning` instance first, and format malformed values without assuming `.value`."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "Signal rejection tests omit malformed meaning values",
+  "location": "tests/core_model/test_signals.py:79-92",
+  "description": "The parametrized rejection cases at `tests/core_model/test_signals.py:79-92` cover a non-`Timestamp`, wrong `TimeMeaning` enum members, and a float `ns`, but there is no case for a `Timestamp` whose `meaning` is a plain string, integer, or `None`. Because `Timestamp` permits those field values (`src/manta_trading_engine/core_model/timestamps.py:54-58`) and the new validation path is at `src/manta_trading_engine/core_model/signals.py:76-80`, add parametrized cases asserting `InvalidSignalError` for those malformed meanings. Without this regression test, the crash described above is not caught by the suite."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "Confidence test helpers use loose NumPy array annotations",
+  "location": "tests/core_model/test_confidence.py:69-74",
+  "description": "`_array` and `_mask` at `tests/core_model/test_confidence.py:69-74` return bare `np.ndarray`, while strict Pyright includes tests (`pyproject.toml:39-44`). The surrounding suite uses precise NumPy annotations, for example `NDArray[np.int64]`, `NDArray[np.float64]`, and `NDArray[np.bool_]` at `tests/core_model/test_labels.py:44-53`, and parameterized `np.ndarray[...]` forms at `tests/core_model/test_timestamps.py:119` and `tests/core_model/test_timestamps.py:162`. Bare `np.ndarray` erases dtype/shape information and can introduce partially unknown types under strict checking; use `NDArray[np.float64]` and `NDArray[np.bool_]` here."
+ },
+ {
+  "ref": "luna-r/1/0",
+  "severity": "CONCERN",
+  "title": "Malformed timestamp meaning leaks an `AttributeError`",
+  "location": "src/manta_trading_engine/core_model/signals.py:76-80",
+  "description": "`Timestamp` does not validate that `meaning` is a `TimeMeaning`. If a caller constructs `Timestamp(100, \"bad\")` and passes it to `SignalEvent`, this check correctly detects that the meaning is not `AVAILABLE_AT`, but formatting the error accesses `self.time.meaning.value` and raises `AttributeError` instead of `InvalidSignalError`. Validate the meaning\u2019s type before formatting it, and cover this case with a test."
+ },
+ {
+  "ref": "luna-r-high/1/0",
+  "severity": "CONCERN",
+  "title": "Invalid timestamp meaning escapes as `AttributeError`",
+  "location": "src/manta_trading_engine/core_model/signals.py:75-80",
+  "description": "`Timestamp` does not validate its `meaning`, so a timestamp with a non-`TimeMeaning` value can reach this branch. The error message then accesses `self.time.meaning.value`, raising `AttributeError` instead of the intended `InvalidSignalError`. Validate the meaning before accessing `.value` and add a regression test for a malformed timestamp."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Integer coercion can accept fractional real values",
+  "location": "src/manta_trading_engine/core_model/value_checks.py:67-70",
+  "description": "`as_integer` converts a non-`Integral` real to `float` before checking whether it is integral. That conversion can lose fractional precision: for example, `Fraction(2**53 + 1, 2**53)` rounds to `1.0` and is accepted as integer `1`. This can silently accept a fractional supplied integer parameter, default, or bound. Check integrality without first making a lossy float conversion, and add a regression test."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Invalid timestamp meaning can cause an unexpected AttributeError",
+  "location": "src/manta_trading_engine/core_model/signals.py:76-79",
+  "description": "`Timestamp.__post_init__` validates `ns` but does not validate `meaning`, so `Timestamp(100, \"available_at\")` can be constructed. `SignalEvent` rejects it by identity comparison, then accesses `.value` on the string while building the error message, raising `AttributeError` instead of `InvalidSignalError`. Validate the meaning\u2019s type before formatting the error, and cover this malformed timestamp in a test."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "FAIL",
+  "title": "Invalid timestamp meanings escape the promised signal error",
+  "location": "src/manta_trading_engine/core_model/signals.py:64-79",
+  "description": "`SignalEvent` promises that a timestamp whose meaning is not `AVAILABLE_AT` raises `InvalidSignalError`, but `Timestamp.__post_init__` only validates the nanosecond range and accepts an arbitrary `meaning` at runtime. When `SignalEvent` detects a mismatched meaning, it formats the error with `self.time.meaning.value`; a value such as `Timestamp(100, \"available_at\")` therefore raises `AttributeError` instead of `InvalidSignalError`. Validate the meaning type before comparing it, and add a regression test covering a malformed `Timestamp.meaning`."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "CONCERN",
+  "title": "Integer coercion rounds fractional real values into integers",
+  "location": "src/manta_trading_engine/core_model/value_checks.py#as_integer",
+  "description": "For non-`Integral` values, `as_integer` first converts the value to a floating-point number and then checks `is_integer()`. This can silently change a fractional real into an integer: for example, `Fraction(10**100 + 1, 10**100)` converts to `1.0` and is accepted as `1`, despite not being integral. Because parameter declarations and binding use this function, such a value can enter a run parameter under a different value. Determine integrality from the original value before any lossy float conversion, or explicitly restrict the accepted non-integral types, and add regression coverage for a fractional `numbers.Real`."
+ },
+ {
+  "ref": "qwen38-27b/1/0",
+  "severity": "FAIL",
+  "title": "Three test lines exceed the 88-character limit and will fail CI (`ruff check` E501 and `ruff format --check`)",
+  "location": "tests/core_model/test_signals.py:140",
+  "description": "`pyproject.toml` sets `line-length = 88` with `select = [\"E\", ...]` and no per-file ignore, and CI runs `uv run ruff check` and `uv run ruff format --check`. Three lines in the new test files exceed 88 characters because a trailing `# pyright: ignore[reportArgumentType]` comment was appended instead of wrapping the call:\n\n- `tests/core_model/test_signals.py:140` (~138 chars): `sequence = SignalSequence(UNIT_RANGE, (_event(100, confidence=0.0), _event(200, confidence=1)))  # pyright: ignore[reportArgumentType]`\n- `tests/core_model/test_signals.py:85` (~113 chars): `({\"time\": Timestamp(1.5, TimeMeaning.AVAILABLE_AT)}, r\"time\\.ns\"),  # pyright: ignore[reportArgumentType]`\n- `tests/core_model/test_labels.py:66` (~109 chars): `vocabulary = LabelVocabulary(\"regime.trend\", {0, 1, 2}, UNIT_RANGE)  # pyright: ignore[reportArgumentType]`\n\nEach will be flagged by E501 and is not in canonical `ruff format` shape, so both CI lint steps fail on this commit. Fix: wrap the argument lists (the `pyright: ignore` comment then lands on the closing line, where the suppressed call expression still spans). All `pyright: ignore` comments I verified against the code are genuinely needed in strict mode (e.g. `test_labels.py:107` for a `set[int]` literal, `test_signals.py:74` for `confidence: 1`), so only the three long lines need reformatting, not the suppressions."
+ },
+ {
+  "ref": "qwen38-27b/1/1",
+  "severity": "CONCERN",
+  "title": "\"Element loop\" guard is now defined twice with different semantics, and the comment in test_confidence.py doesn't match its file",
+  "location": "tests/core_model/test_confidence.py:24-33",
+  "description": "The established project guard in `tests/core_model/test_import_boundary.py` counts `ast.GeneratorExp` as an element loop and even self-tests that (`test_loop_guard_detects_every_loop_form` includes `\"z = sum(x for x in y)\\n\"`). The new `test_confidence.py` and `test_labels.py` each redefine a local `ELEMENT_LOOP_NODES` tuple that excludes `ast.GeneratorExp`, with the comment \"A generator expression is allowed: `all(...)` over one is not an array pass.\" Consequences:\n\n1. The new modules do rely on that exemption \u2014 `labels.py` uses `all(... for category in self.category_ids)` and `np.fromiter((event.time.ns for event in events))`-style generators \u2014 so a guard that silently permits element-wide generator loops is a weaker check than the project's own standard for the same invariant (\"every check is one NumPy expression\").\n2. The exemption comment was copied verbatim into `test_confidence.py`, where `confidence.py` contains no `all(...)` and no generator expression at all, so the justification describes code that isn't there.\n3. The AST-scan logic is now triplicated (`test_import_boundary.py`, `test_confidence.py`, `test_labels.py`).\n\nSuggested resolution: centralize one loop-detection helper (and one decision about whether generator expressions count) \u2014 e.g. in `tests/core_model/conftest.py` \u2014 and reuse it from all three test files, fixing the stale comment while at it. Not blocking: the for/while/comprehension forms are still caught everywhere."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "Bare `np.ndarray` return annotations will fail strict pyright",
+  "location": "tests/core_model/test_confidence.py:69-74",
+  "description": "`_array` and `_mask` are annotated `-> np.ndarray` with no type arguments. `pyproject.toml` sets `typeCheckingMode = \"strict\"` and includes `tests`, and the Python rules make zero pyright errors a merge blocker. Strict mode reports `reportMissingTypeArgument` for the bare generic. The sibling helpers in `tests/core_model/test_labels.py` already use `NDArray[np.float64]` and `NDArray[np.bool_]`. Use those types here too."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "Test exercises Python's `match` statement, not project code",
+  "location": "tests/core_model/test_declarations.py#test_match_selects_the_branch_for_each_form",
+  "description": "The test builds a local `match output:` with its own branches and asserts on the strings it built. It calls no production code, so it passes whatever `declarations.py` does. If the intent is to prove the three output forms support structural matching, it only shows that dataclasses with `slots=True` have `__match_args__`. That is language behavior. Either remove it, or move the `match` into a real consumer (for example a describe helper in the catalog slice) and test that."
+ }
+]

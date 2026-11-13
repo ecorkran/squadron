@@ -1,0 +1,107 @@
+[
+ {
+  "ref": "hy4/1/0",
+  "severity": "CONCERN",
+  "title": "Shared RunObserver state is pruned per project tick",
+  "location": "src/amoeba/runner/observe.py:108-111",
+  "description": "`RunnerTenant` creates one `RunObserver` and passes it to every `ProjectTick` (`src/amoeba/runner/tenant.py:74`, `src/amoeba/runner/tenant.py:133`). At the start of `observe()`, however, the observer treats the current project's entries as the complete live set:\n\n```python\nlive = {entry.id for entry in entries}\nself._last_poll = {k: v for k, v in self._last_poll.items() if k in live}\nself._overdue &= live\nself._faulted = {k: v for k, v in self._faulted.items() if k in live}\n```\n\nWith multiple hosted projects, ticking project A therefore discards poll cadence, overdue-launch state, and standing faults for project B. On B's next tick, a run that was just polled can be polled again, an overdue launch can stop recurring until it is rediscovered, and a standing observation fault can be treated as recovered and its escalation closed. The tenant-level `test_a_project_the_budget_did_not_reach_goes_first_next_tick` checks ordering, but no test asserts that observer state survives interleaved projects. Key the state by project (or give each project its own observer) and add a multi-project regression test."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "A CUT_OFF tick can still launch all planned runs and reports the wrong result",
+  "location": "src/amoeba/runner/tick.py:161-168",
+  "description": "`_act()` checks `budget.allows_call()` only before each `Popen`, and `TickBudget` bounds when a call may *start*, not how long it runs (`src/amoeba/runner/budget.py:27-31`). A clock that crosses the deadline during the preceding poll/probe/store stages does not prevent a launch that was already planned: the first launch can start before the deadline, the next launch is refused and `CUT_OFF` returned, or \u2014 with one action \u2014 the tick launches it and then returns `COMPLETE` even though the deadline has passed. This contradicts the documented `CUT_OFF when the budget ran out` contract (`src/amoeba/runner/tick.py:88`) and the tick-level `test_a_cut_off_tick_closes_nothing` only covers a deadline of zero, where no calls happen at all. Check the budget at the stage boundary too (before deciding/acting), and add a test where the deadline expires after observation but before `_act()`."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "Store failures are swallowed by the runner's broad catch and converted into an escalation",
+  "location": "src/amoeba/runner/tenant.py:142-149",
+  "description": "The re-raise tuple `STORE_FAILURES` (`src/amoeba/runner/faults.py:51-56`) covers only `StoreBusyError`, `StoreCorruptError`, `StorePermissionError`, `StoreSchemaError`, and `sqlite3.Error`. The store's own base class is `StoreError`, and it also raises `StoreIntegrityError`, `NodeNotFoundError`, `InvalidTransitionError`, and `UnknownVocabularyValueError` (`src/amoeba/store/models.py:139-190`). Those are caught by `except Exception`, logged, and passed to `escalate()`, which itself performs more store writes. A broken/corrupt/raced store is therefore reported as a per-project `unexpected_fault`, the process keeps running, and the escalation write can fail again. The docstring claims \"a store failure ... re-raises and the process exits\"; the tests only parametrize `StoreBusyError` and `UpstreamShapeError`. Re-raise `StoreError` (and preferably the whole typed store hierarchy) alongside `UpstreamShapeError`, and add a regression test for e.g. `StoreIntegrityError`."
+ },
+ {
+  "ref": "hy4/1/3",
+  "severity": "CONCERN",
+  "title": "Escalation payloads can persist untrusted stderr tails verbatim",
+  "location": "src/amoeba/runner/finish.py:96-116",
+  "description": "`LaunchFailed.tail` comes from up to 4 KiB of the detached child's stderr (`src/amoeba/runner/launch.py:98-109`) or from `_still_overdue`'s fault detail (`src/amoeba/runner/observe.py:251-270`). `_record_launch_failed` puts that raw text into `context` and `PAYLOAD_STDERR_TAIL`, and `finish._block_once` \u2192 `Store.block()` \u2192 `_write_block()` stores it verbatim in the `blocked_states.context` and `messages.payload` columns. Those values are externally visible through `inspect` and the feed, yet `JournalEntry`'s own contract says \"Callers must not place secrets in them\" (`src/amoeba/store/journal_models.py:96-103`) and `ProjectEscalationOperations` repeats the warning. A provider that prints credentials to stderr therefore leaks them into durable, operator-visible records \u2014 including the environment that `launch()` deliberately says is never logged. Redact/bound secrets before persisting external output, or document and enforce a sanitization boundary with tests that inject credential-shaped stderr."
+ },
+ {
+  "ref": "hy4/1/4",
+  "severity": "CONCERN",
+  "title": "`validate_settings` omits documented startup invariants",
+  "location": "src/amoeba/runner/factory.py:38-52",
+  "description": "`ProcessSettings` documents `tick_call_timeout_seconds` as \"Larger than `tick_deadline_seconds` so one call that starts just inside the deadline still has room to finish\" (`src/amoeba/process/settings.py:74-77`), and `--sq-timeout` as the bound on the Runner's `sq` probe. `validate_settings()` checks only three positivity constraints plus `tick_call_timeout < shutdown_grace`; it does not check `tick_call_timeout > tick_deadline`, `shutdown_grace > 0`, `sq_timeout > 0`, or `launch_grace >= 0`. Because `settings_flags.py` exposes all of these as `type=float` with no validation, `amoeba start --tick-deadline 10 --tick-call-timeout 1` boots successfully with a budget that contradicts the design, and a zero/negative `sq_timeout` makes the start-up probe time out. Validate the full documented invariant set at the factory boundary and parametrize tests for each violated relation."
+ },
+ {
+  "ref": "hy4/1/5",
+  "severity": "CONCERN",
+  "title": "Runner's simulation/concurrency paths have no dedicated load test",
+  "location": "tests/load",
+  "description": "The Python rules require \"any code on the simulation, network, concurrency, or environment-layer paths\" to have at least one load test asserting latency/throughput/resource bounds, gated in CI. This change adds a resident-process tenant that performs per-tick subprocess polling, `cf` probes, detached `Popen` launches, and a `TickBudget` deadline, and `.github/workflows/ci.yml` already gates `pytest tests/load`. Yet `tests/load/` contains no runner or `TickBudget` test: the files are `test_cf_watch_load.py`, `test_crash_loop.py`, `test_feed_and_detection_load.py`, `test_harness_smoke.py`, `test_inbox_concurrent.py`, `test_recovery_scale.py`, `test_serve_load.py`, `test_verdict_concurrent.py`, and none reference `runner`, `Runner`, `TickBudget`, or `tick_deadline`. `tests/runner/test_budget_coverage.py` is a unit test with injected clocks, so it cannot detect event-loop starvation, per-tick latency growth with many projects/runs, or child-process resource leakage. Add a `tests/load/test_runner_load.py` that drives a realistic multi-project/many-run configuration through `RunnerTenant.tick` and asserts a per-tick bound plus no leaked `Popen` handles."
+ },
+ {
+  "ref": "hy4/1/6",
+  "severity": "CONCERN",
+  "title": "New CLI harness injects a stub that breaks existing version-label assertions",
+  "location": "tests/cli_harness.py:45-55",
+  "description": "`cli_environment()` now prepends `write_sq_stub(...)` to `PATH` for every CLI test. The `sq` stub's generated script does not handle `sq --version`: it falls through to `mode = os.environ[MODE_ENV]` and, when `SQ_STUB_MODE` is unset (the default for the CLI harness), raises `KeyError` and exits non-zero. `capture_sq_version_label()` then records `VERSION_UNAVAILABLE` (`src/amoeba/process/version_label.py:34-38`) instead of the fake label. `tests/cli/test_detection_end_to_end.py:129-130` explicitly expects `FAKE_SQ_LABEL` from `DetectionE2E`'s own fake `sq`, but that fake is now shadowed by the stub placed in `cli_environment()` before `DetectionE2E.__init__` prepends `fake_bin`. Several other CLI tests that start the process also inherit a nonfunctional `sq --version`. Either teach the stub to answer `--version` (and set a stable label), or make `DetectionE2E` and other harnesses override `PATH` after composing `cli_environment()` so their fake wins; add an assertion that the start-up label is the expected one."
+ },
+ {
+  "ref": "hy4/1/7",
+  "severity": "CONCERN",
+  "title": "Test helper imports a private helper from another test module",
+  "location": "tests/runner/test_budget_coverage.py:18",
+  "description": "`from runner.test_probes import _link  # pyright: ignore[reportPrivateUsage]` reaches into another test module's private `_link()` helper. The same helper is defined anew in `tests/runner/test_probes.py:203-210`, so the link-submission recipe now has two homes and one test file has a static dependency on another test's collection/module. This is fragile under pytest's `-p`/parallel collection and violates the DRY/shared-fixture conventions. Move `_link()` into `tests/runner/tick_support.py` (or a shared `conftest.py` fixture) and import it from both test modules."
+ },
+ {
+  "ref": "hy4/1/8",
+  "severity": "CONCERN",
+  "title": "Stale docstring contradicts the completed escalation implementation",
+  "location": "src/amoeba/runner/faults.py:4",
+  "description": "The module docstring still says \"Escalation writes join this module in a later task.\" The same file now defines `raise_expected_faults()` (`line 120`) and `escalate()` (`line 152`), both of which perform escalation writes. This is misleading for maintainers reading the process-boundary contract. Remove the stale sentence and replace it with a one-line description of the two escalation paths (expected project-scoped fault vs unexpected node/project fault)."
+ },
+ {
+  "ref": "luna-r-high/1/0",
+  "severity": "CONCERN",
+  "title": "Recheck the tick budget immediately before spawning a run",
+  "location": "src/amoeba/runner/tick.py:163-187",
+  "description": "`_act` checks the budget before calling `_launch`, but `_launch` then mints the ID, builds arguments, and writes the journal entry before `launch()` calls `Popen`. If that work crosses the deadline\u2014or a stop is requested during it\u2014the subprocess still starts after the budget should have refused it. Check the budget again at the actual spawn boundary, before `Popen`, and avoid leaving a newly journaled entry without an intentional outcome if the check refuses the call."
+ },
+ {
+  "ref": "luna-r-high/1/1",
+  "severity": "CONCERN",
+  "title": "Propagate store integrity failures instead of treating them as project faults",
+  "location": "src/amoeba/runner/faults.py:51-57",
+  "description": "`STORE_FAILURES` omits `StoreIntegrityError`, even though store operations raise it when a database invariant is violated. `RunnerTenant._tick_project` only propagates the listed store failures; this exception therefore falls through to the broad catch and is handled as an ordinary unexpected project fault, allowing the process to continue after a store integrity failure. Include this typed store failure in the propagate set so the process stops rather than treating the store as usable."
+ },
+ {
+  "ref": "luna-r-high/1/2",
+  "severity": "CONCERN",
+  "title": "Add a load test for the Runner\u2019s subprocess and multi-project path",
+  "location": "tests/load",
+  "description": "The new Runner performs bounded `sq` and `cf` subprocess calls and ticks multiple projects, but the existing load-test tier contains no Runner coverage. Unit and end-to-end tests exercise functional behavior and deadline checks, but do not establish throughput, latency, or resource bounds with a realistic mix of projects and in-flight runs. The Python testing rules require a gated load test for network, concurrency, or environment-layer paths."
+ },
+ {
+  "ref": "deepseek4-flash/1/0",
+  "severity": "FAIL",
+  "title": "Observer state is pruned against one project's entries, so the poll interval and fault dedup break for multi-project supervisors",
+  "location": "src/amoeba/runner/observe.py#RunObserver.observe",
+  "description": "`RunnerTenant` builds **one** `RunObserver` in `__init__` (`src/amoeba/runner/tenant.py#RunnerTenant.__init__`) and passes that same instance into every `ProjectTick` (`_tick_project`). `ProjectTick.run` then calls it once per project with only that project's entries: `self._observer.observe(self._run_entries(), ...)`, where `_run_entries` filters `unresolved_journal_entries(project_id)` (`src/amoeba/runner/tick.py#ProjectTick.run`).\n\n`RunObserver.observe` prunes all three pieces of cross-tick state against *the entries it was handed*:\n\n```python\nlive = {entry.id for entry in entries}\nself._last_poll = {k: v for k, v in self._last_poll.items() if k in live}\nself._overdue &= live\nself._faulted = {k: v for k, v in self._faulted.items() if k in live}\n```\n\nSo project B's tick discards project A's remembered state. Consequences, each contradicting a documented decision:\n\n- `_last_poll` is lost, so `_poll_due` returns `True` for A's runs on every A tick. D10's \"at most once per tick and no more often than the run poll interval\" (architecture, and the task's own acceptance wording) holds only for a single-project supervisor. `test_a_confirmed_run_is_not_polled_before_the_interval` passes only because its rig ticks one project. Each `sq runs wait` is a bounded subprocess call, so this burns the tick budget repeatedly.\n- `_faulted` is lost, so the replay mechanism in `_confirmed` never fires across projects: A's standing `RUN_OBSERVATION_FAILED` stops being replayed, `_close_recovered` closes A's escalation on that tick, and the next poll reopens a fresh row \u2014 exactly the close/reopen churn the `_faulted` field's own comment says it exists to prevent.\n- `_overdue` is lost the same way, so an overdue launch's `LAUNCH_OVERDUE` escalation also alternately closes and reopens.\n\n`amoeba start` hosts however many projects exist (`host.project_ids` \"grows at runtime\", per `host.py`), and slice 125 is told to add its planner without changing `tenant.py` or `launch.py` \u2014 so deferring this carries it forward. The fix is to keep the state keyed per entry id and prune against the entries currently in flight across the supervisor (or to give each project its own observer, keyed by project).\n\n---"
+ },
+ {
+  "ref": "deepseek4-flash/1/1",
+  "severity": "CONCERN",
+  "title": "`_in_flight_run_ids` indexes a parameter that legacy entries may not carry, and the failure lands in the not-caught escalation path",
+  "location": "src/amoeba/runner/faults.py#_in_flight_run_ids",
+  "description": "```python\nstr(entry.parameters[PARAM_RUN_ID])\n```\n\nEvery sibling that reads the same key defends itself and raises a descriptive error: `launch._text_parameter` and `finish._run_id` use `.get` plus an explicit `ValueError`, and `observe._observe_one` does the same for the same key. `REQUIRED_PARAMETER_KEYS` guarantees the key only for entries written through today's `journal_issue`; `ProcessSettings` documents entries \"journaled before slice 120, which carry no run id\", and `unresolved_journal_entries` returns whatever is unresolved. A bare `KeyError` here propagates out of `escalate`, which the comment in `_tick_project` explicitly says is \"not caught again\", turning a per-project fault into a process-wide crash with a traceback at the CLI boundary. Use `.get` and raise the descriptive error the other readers raise.\n\n---"
+ },
+ {
+  "ref": "deepseek4-flash/1/2",
+  "severity": "CONCERN",
+  "title": "No load-tier coverage for the Runner's launch/poll path",
+  "location": "tests/load/test_crash_loop.py",
+  "description": "`tests/load/` contains no test that composes the Runner: `test_crash_loop.py` and `test_recovery_scale.py` drive a stand-in journaling tenant (`JOURNALING_TENANT` in `load_harness.py`), not `RunnerTenant`. The Runner is now a real environment-boundary path \u2014 it spawns detached children, holds process handles for reaping, and makes bounded subprocess calls on a deadline \u2014 which is the class of path the Python rules require the load tier to exercise, asserting on latency, throughput or resource bounds rather than functional correctness. The crash proof in `tests/runner/` does drive real processes and SIGKILL, but it asserts end state, not bounds, and it never runs more than one project. A multi-project configuration would also have caught the state-pruning defect above.\n\n---"
+ }
+]

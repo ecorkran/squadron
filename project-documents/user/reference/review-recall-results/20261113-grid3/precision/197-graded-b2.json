@@ -1,0 +1,66 @@
+{
+ "case": "197",
+ "matched": {
+  "hy4/1/0": "197-I3",
+  "luna-r-high/1/0": "197-I3",
+  "deepseek4-flash/1/3": "197-I3",
+  "hy4/1/2": "197-N2",
+  "deepseek4-flash/1/0": "197-I1"
+ },
+ "new_issues": [
+  {
+   "id": "197-M1",
+   "title": "Item-resume flags are not rejected in combination with --dry-run, --validate and other run modes, so --item is ignored or an assert fires.",
+   "members": [
+    "hy4/1/1",
+    "luna-r-high/1/1",
+    "deepseek4-flash/1/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "check_item_flags only relates --item/--resume/--decision/--instructions, and run()'s exclusivity guards do not mention item. The --validate and --dry-run arms run before the new '--resume --item' block: with a pipeline argument, the dry-run or validate output is printed and the item resume is silently skipped; without one, the pipeline-required guard is bypassed by resume and 'assert pipeline is not None' raises AssertionError. True, but it needs contradictory flags, both arms are read-only, and the same --resume/--dry-run crash shape already existed at base; a CLI validation gap.",
+   "evidence": [
+    "src/squadron/cli/commands/run_item.py:32-48",
+    "src/squadron/cli/commands/run.py:1081-1093",
+    "src/squadron/cli/commands/run.py:1148-1150",
+    "src/squadron/cli/commands/run.py:1175-1203"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "197-M2",
+   "title": "_select_item reports a git merge-base timeout or invocation failure as 'branch is not merged into target'.",
+   "members": [
+    "hy4/1/3",
+    "deepseek4-flash/1/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "_select_item treats run_git(...)=None the same as returncode 1 and raises _Stop(REJECTED, '... status complete but {branch} is not merged into {target}'). True, but the result is fail-safe (nothing runs, exit REJECTED), and run_git itself logs a WARNING on timeout naming the git command, so the fault is observable; the cost is a misleading refusal reason in a rare path.",
+   "evidence": [
+    "src/squadron/pipeline/item_resume.py:296-303",
+    "src/squadron/review/git_utils.py:28-58"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "197-M3",
+   "title": "BatchReport.write replaces the Markdown report before the JSON one, so a failed JSON write leaves the two formats disagreeing.",
+   "members": [
+    "hy4/1/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "write() calls _write_atomic for the .report.md and then for the .report.json; each is atomic but a failure on the second leaves new Markdown beside old JSON, contrary to the docstring's 'a failed write leaves the previous report intact'. The machine-read file (report.json, used by BatchReport.load and item resume) stays at its previous consistent state and the OSError is logged and surfaced as HALTED, so only the human report is ahead; a rare disk-failure inconsistency.",
+   "evidence": [
+    "src/squadron/pipeline/batch_report.py:302-310",
+    "src/squadron/pipeline/batch_report.py:343-355"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
+ ],
+ "disputes": []
+}

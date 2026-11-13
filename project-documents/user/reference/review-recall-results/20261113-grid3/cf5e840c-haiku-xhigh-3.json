@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Stale `-E` snapshot of the pre-change test is committed",
+      "description": "The diff adds `CoreServiceFactory.test.ts-E` as a new file. Its blob (`e6539010`) is the pre-change version of `CoreServiceFactory.test.ts`, and it still calls `createContextPipeline(FIXTURE_PROJECT_PATH)` with one argument. Vitest only picks up `*.test.ts` and `tsc` ignores the `-E` suffix, so it does not break the build. It is still dead, misleading code: it appears in every grep for the factory and reads like a second copy of the suite. Delete it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New selection path hard-codes a silent default instruction, duplicated a fourth time",
+      "description": "The new line `const instruction = project.instruction || 'implementation';` repeats the same expression already present at lines 216, 244 and 289. This one decides whether adoption runs at all, so a project with no instruction is silently treated as `implementation`. The project rules forbid silent fallbacks and scattered magic defaults. Compute the effective instruction once, define the default in one place (`projectSchema.ts:78` already keys on `'implementation'`), and pass that value into `mapProjectToEnhancedContext` instead of recomputing it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:148"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Layering boundary stated in a comment is violated in the same change",
+      "description": "`ContextIntegrator.ts:9` says `services/` and `adoption/` never import each other's internals and that the integrator depends on `contracts.ts` only. But `adoptionResolver.ts` imports `ContextProfileParser`, `promptFilePath` and `SystemPromptParser` from `services/`, and `CoreServiceFactory.ts:12` imports `adoption/adoptionResolver.js` directly rather than through the contract. I found no runtime cycle, since those services modules do not import `adoption/`. The problem is that the stated boundary is false. Either correct the comment, or have the resolver receive the guide readers through its parameters so the adoption module stops reaching into services.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:13-15"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Comment says errors propagate, but only `AdoptionError` does",
+      "description": "The comment says \"Errors propagate\", but the catch at lines 119-125 rethrows only `PermissivenessFragmentError` and `AdoptionError`. Any other error from the adoption resolver is logged and returned as the `\u26a0\ufe0f Error generating context` stub. The test \"keeps the error-stub behavior for any other resolver error\" asserts exactly that. The concrete case is a malformed `.context-forge.toml`: `adoptionState.ts:14-15` documents that the parser error \"propagates\", and it reaches the stub path, not the rethrow path. Either wrap the state-read failure in `AdoptionError` so it fails the build like the other adoption failures, or correct the comment to describe the stub behavior.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:146-147"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Remedy command and state literals are repeated across the adoption module",
+      "description": "`DECLINE_REMEDY` in this file and the inline text in `adoptionFacts.ts:93` both spell out `cf config set adoption.state declined`, with different formatting (backticks in one). Move the remedy into `contracts.ts`, which both files already import from. The literal `'in_progress'` is repeated at `adoptionOutcome.ts:34`, `adoptionResolver.ts:88,107` and `adoptionFacts.ts:44,92`. `AdoptionState` is a compiler-checked union, so renames will surface as type errors, which lowers the risk.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:28"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Positional `adoptionStateWrites` in `generateContext` is inconsistent with the options object in `createContextPipeline`",
+      "description": "The same change makes `createContextPipeline` take `{ adoptionStateWrites }` as a named options object, but `generateContext` takes a bare positional string ahead of the optional overrides. Call sites at lines 202-205 and 267-270 pass `'persist'` and `'read-only'` as bare literals. The project rules prefer named parameters once there are three or more. Use the same options shape in both places.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:58-61"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Touches no filesystem\" test does not assert that",
+      "description": "The test uses nonexistent paths and checks only `toEqual({ selected: false })`. `ConfigManager.readToml` returns `{}` on `ENOENT` (`ConfigManager.ts:26-27`), so any read the resolver made would be silent and the test would still pass. Assert that `measureSourceVolume` and `findPlanningArtifacts` are not called, as the concept-plus-planned test already does for the walk, or rename the test.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/adoption/adoptionResolver.test.ts:66"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Parity test reimplements the CLI wiring instead of exercising `cf build`",
+      "description": "The CLI half hand-copies `build.ts`'s pipeline calls rather than running the command. If `build.ts` gains a step (an override, a guide-warning change), this test will not notice. Either call the command's action directly or name the test as a pipeline-parity check.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/mcp-server/tests/integration/adoptionParity.test.ts:82-88"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`ContextIntegrator.ts` keeps growing past the file-size guideline",
+      "description": "The file is 398 lines against the ~300-line guideline, and this change adds to it. Consider moving the adoption step (lines 146-159) into a small helper beside the other resolver calls, so the integrator only composes results.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:1-398"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Stale `-E` snapshot of the pre-change test is committed",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "New selection path hard-codes a silent default instruction, duplicated a fourth time",
+      "location": "packages/core/src/services/ContextIntegrator.ts:148",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Layering boundary stated in a comment is violated in the same change",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:13-15",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Comment says errors propagate, but only `AdoptionError` does",
+      "location": "packages/core/src/services/ContextIntegrator.ts:146-147",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Remedy command and state literals are repeated across the adoption module",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:28",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Positional `adoptionStateWrites` in `generateContext` is inconsistent with the options object in `createContextPipeline`",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:58-61",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "\"Touches no filesystem\" test does not assert that",
+      "location": "packages/core/tests/adoption/adoptionResolver.test.ts:66",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Parity test reimplements the CLI wiring instead of exercising `cf build`",
+      "location": "packages/mcp-server/tests/integration/adoptionParity.test.ts:82-88",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`ContextIntegrator.ts` keeps growing past the file-size guideline",
+      "location": "packages/core/src/services/ContextIntegrator.ts:1-398",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:27:14.757604",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 36,
+  "prompt_tokens": 2017204,
+  "cached_tokens": 1828349,
+  "cache_write_tokens": 188829,
+  "completion_tokens": 57248,
+  "reasoning_tokens": null,
+  "duration_seconds": 249.27992141712457,
+  "cost_usd": 0.42351151000000004,
+  "cost_basis": "provider"
+}

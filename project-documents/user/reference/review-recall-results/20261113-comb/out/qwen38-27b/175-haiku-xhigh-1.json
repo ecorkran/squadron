@@ -1,0 +1,58 @@
+{
+ "case": "175",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "_metadata` copies only `parts[0].metadata`, so with the new per-part usage stamps in `_run_part`, split reviews (e.g. tasks) persist only part 1's record and understate run cost in state and `sq stats run`."
+  ],
+  "F2": [
+   "KEEP",
+   "compact's failure branch returns no metadata, dropping the `ProviderError.telemetry` that `sdk_session.dispatch()` attaches, and a `_reconnect` failure after `capture_summary` discards the captured reply and its real spend, violating slice 175 D5/SC2."
+  ],
+  "F3": [
+   "KEEP",
+   "the success path passes `resolved=None`, so the record gets `alias=None` and a subscription alias's provider cost renders as \"prov\" instead of D3's \"api-rate equiv.\" (and alias pricing is unreachable), with the test locking in `model == \"haiku\"`."
+  ],
+  "F4": [
+   "DROP",
+   "the addressed-findings judge and PR composer are explicitly excluded from this slice's usage capture (\"Neither has a run or artifact to attach a record to\"), and compact capture is scoped to \"compact (SDK session)\" only, so both unrecorded paths are deliberate scope, not defects."
+  ],
+  "F5": [
+   "DROP",
+   "the writer's and reader's key names currently match exactly, so this is a DRY/maintainability point about hypothetical future drift, not a present wrong-data bug."
+  ],
+  "F6": [
+   "DROP",
+   "the reader's behavior against real artifacts was verified in the slice walkthrough (`sq stats reviews` on real files), making this a missing-test hardening for a path that already works."
+  ],
+  "F7": [
+   "DROP",
+   "the fold and one-shot plumbing duplication is real but purely a refactoring/DRY point with no behavioral effect."
+  ],
+  "F8": [
+   "DROP",
+   "the length guideline is a soft \"where practical\" style target, not a correctness defect, and part of the length predates this change."
+  ]
+ },
+ "wall_seconds": 362.0,
+ "duration_seconds": 362.0356195420027,
+ "cost_usd": 0.13587496000000002,
+ "effort": null,
+ "tool_calls_made": 17,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=426232, cached=348928, cache_write=None, completion=45398, reasoning=47351)",
+ "raw_output": "\n\nF1: KEEP \u2014 `_metadata` copies only `parts[0].metadata`, so with the new per-part usage stamps in `_run_part`, split reviews (e.g. tasks) persist only part 1's record and understate run cost in state and `sq stats run`.\nF2: KEEP \u2014 compact's failure branch returns no metadata, dropping the `ProviderError.telemetry` that `sdk_session.dispatch()` attaches, and a `_reconnect` failure after `capture_summary` discards the captured reply and its real spend, violating slice 175 D5/SC2.\nF3: KEEP \u2014 the success path passes `resolved=None`, so the record gets `alias=None` and a subscription alias's provider cost renders as \"prov\" instead of D3's \"api-rate equiv.\" (and alias pricing is unreachable), with the test locking in `model == \"haiku\"`.\nF4: DROP \u2014 the addressed-findings judge and PR composer are explicitly excluded from this slice's usage capture (\"Neither has a run or artifact to attach a record to\"), and compact capture is scoped to \"compact (SDK session)\" only, so both unrecorded paths are deliberate scope, not defects.\nF5: DROP \u2014 the writer's and reader's key names currently match exactly, so this is a DRY/maintainability point about hypothetical future drift, not a present wrong-data bug.\nF6: DROP \u2014 the reader's behavior against real artifacts was verified in the slice walkthrough (`sq stats reviews` on real files), making this a missing-test hardening for a path that already works.\nF7: DROP \u2014 the fold and one-shot plumbing duplication is real but purely a refactoring/DRY point with no behavioral effect.\nF8: DROP \u2014 the length guideline is a soft \"where practical\" style target, not a correctness defect, and part of the length predates this change.\n\n\nF1: KEEP \u2014 `_metadata` copies only `parts[0].metadata`, so once `_run_part` stamps per-part usage records, split reviews (e.g. a split tasks breakdown) persist only part 1's turns, tokens, and cost to run state and `sq stats run`, silently dropping parts 2..N.\nF2: KEEP \u2014 the failure branch returns an ActionResult with no metadata, discarding the `ProviderError.telemetry` that `SDKExecutionSession.dispatch()` attaches, and a `_reconnect` raise after `capture_summary` drops the captured reply's real spend, both violating slice 175 D5/SC2 (failed calls must record what they spent).\nF3: KEEP \u2014 compact's success path passes `resolved=None`, so the record has `alias=None` (making `_is_subscription` false, so a subscription alias's provider cost renders \"prov\" instead of D3's \"api-rate equiv.\" and alias pricing unreachable) and `model` holds the alias name instead of the resolved model id, as the summary action correctly resolves.\nF4: DROP \u2014 the slice explicitly excludes the addressed-findings judge (\"Neither has a run or artifact to attach a record to\") and scopes compact capture to the SDK session only, so both unrecorded paths are documented scope decisions, not defects in the changed code.\nF5: DROP \u2014 the writer's and reader's key names currently match exactly, so this is a DRY/maintainability point about hypothetical future drift, not a present wrong-data bug.\nF6: DROP \u2014 the reader's output was verified against real production artifacts in the slice walkthrough and the hand-written fixtures use the same `key: value` format the reader consumes; this is a missing-test point for a path that already works.\nF7: DROP \u2014 the duplicated fold and one-shot plumbing is real but purely a refactoring/DRY point with no behavioral effect (the two warn messages even differ slightly, so it is not even an exact duplication).\nF8: DROP \u2014 the file/function length guideline is a soft \"where practical\" style target, part of the cited length predates this change, and it causes no wrong behavior."
+}

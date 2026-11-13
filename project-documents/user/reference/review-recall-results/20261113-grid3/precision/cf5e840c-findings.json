@@ -1,0 +1,170 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Stale duplicate test file committed",
+  "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1",
+  "description": "The diff adds `CoreServiceFactory.test.ts-E`, a 146-line copy of the pre-change `CoreServiceFactory.test.ts`. Its index line matches the old blob (`e6539010`), and it still calls `createContextPipeline(FIXTURE_PROJECT_PATH)` with one argument (lines 29, 35, 59, 99, 119, 141). It looks like a backup left by `sed -i -E` on macOS. Vitest's `*.test.ts` glob does not pick it up, but it is dead code that will show up in every search for the old call signature. Delete it."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Adoption failures other than AdoptionError degrade to an error stub",
+  "location": "packages/core/src/services/ContextIntegrator.ts:146-152",
+  "description": "The comment at line 147 says \"Errors propagate\", but only `AdoptionError` is rethrown (line 123). Any other failure in the adoption step goes to the generic catch at lines 119-125 and comes back as the \"\u26a0\ufe0f Error generating context\" stub. Examples in this step: a malformed `.context-forge.toml` (`readAdoptionState` throws the parser's plain error, pinned by `adoptionState.test.ts:59-63`), or a non-ENOENT read failure in `recognizeCi` (`ciDetection.ts:49-54` rethrows it). `build.ts` prints the stub as the prompt and does not fail. `ContextIntegrator.test.ts:434` pins this behavior. Either wrap the adoption step's errors in `AdoptionError` with `cause`, or correct the comment and the test together so the stated contract matches the behavior."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "Adoption is silently skipped when project.projectPath is absent",
+  "location": "packages/core/src/services/ContextIntegrator.ts:149-152",
+  "description": "The resolver receives `project.projectPath`, but `ProjectData.projectPath` is optional (`types/project.ts:17`). When it is missing, the condition at line 150 is false, `adoption` is null, and the concept prompt is built for a repository that may be brownfield. No error and no notice are produced. The pipeline already knows its root, since `createContextPipeline(projectPath, ...)` takes it (`CoreServiceFactory.ts:30`, `:51`). The CLI (`build.ts:51`) and the MCP tool guard this case, so only library callers that omit `projectPath` reach it. It is still the silent fallback that the diff's own comment at line 122 warns against. Bind the root inside `createAdoptionResolver` from the pipeline's `projectPath`, or throw when eligibility is met and no path is available."
+ },
+ {
+  "ref": "haiku-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "Wrap-and-rethrow without the required ERROR log",
+  "location": "packages/core/src/adoption/adoptionResolver.ts:86-97",
+  "description": "`persistInProgress` catches any error from `writeAdoptionState`, rethrows it as `AdoptionError` with `cause`, and logs nothing. The project's exception rule (CLAUDE.md, \"Exception Handling\" (a)) requires ERROR-level logging before a re-raise. Core has no logger, so `console.error`, as used at `ContextIntegrator.ts:124`, is the nearest convention. Add that log before the throw."
+ },
+ {
+  "ref": "hy4/1/0",
+  "severity": "CONCERN",
+  "title": "Remove the stray `-E` backup test file",
+  "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:29",
+  "description": "The diff adds `packages/core/tests/services/CoreServiceFactory.test.ts-E:1-146`, an editor-style duplicate of `packages/core/tests/services/CoreServiceFactory.test.ts`. It still calls `createContextPipeline(FIXTURE_PROJECT_PATH)` and `createContextPipeline(checkout)` at `packages/core/tests/services/CoreServiceFactory.test.ts-E:29,35,59,99,119,141` without the now-required `{ adoptionStateWrites }` options object. The Vitest include pattern at `packages/core/vitest.config.ts:5` does not match `.ts-E`, so this is dead duplicate code that would fail if renamed or picked up by tooling; remove it."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "`context_build` advertises idempotence while first brownfield build mutates state",
+  "location": "packages/mcp-server/src/tools/contextTools.ts:155",
+  "description": "`packages/mcp-server/src/tools/contextTools.ts:155` still declares `idempotentHint: true`, but the `context_build` handler passes `'persist'` at `packages/mcp-server/src/tools/contextTools.ts:202-204`. On a first brownfield detection, `packages/core/src/adoption/adoptionResolver.ts:128-129` writes `adoption.state = in_progress`, and `packages/core/src/adoption/adoptionFacts.ts:92` adds the one-time state-set notice; the next identical call sees `in_progress` and emits different Adoption Facts. This breaks the idempotence contract both by mutating `.context-forge.toml` and by changing output on repeated calls; set `idempotentHint` to false or separate the state-writing operation."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "`template_preview` is still not side-effect free",
+  "location": "packages/mcp-server/src/tools/contextTools.ts:228",
+  "description": "`packages/mcp-server/src/tools/contextTools.ts:228` advertises `readOnlyHint: true`, and the tool description at `packages/mcp-server/src/tools/contextTools.ts:225-227` says it triggers no side effects. The new `'read-only'` pipeline option at `packages/mcp-server/src/tools/contextTools.ts:267-270` only prevents adoption-state writes; `generateContext` still calls `ensureGuideForProject` at `packages/mcp-server/src/tools/contextTools.ts:92`, whose `GuideManager.ensureCheckout` `not_initialized` branch at `packages/core/src/guides/GuideManager.ts:211-214` can initialize a guide submodule and mutate the checkout. The added test at `packages/mcp-server/tests/contextTools.test.ts:368-378` checks only the pipeline option, not the tool\u2019s full read-only contract; either remove auto-init for previews or change the annotation/description."
+ },
+ {
+  "ref": "hy4/1/3",
+  "severity": "CONCERN",
+  "title": "New wiring expands positional APIs instead of named options",
+  "location": "packages/core/src/services/ContextIntegrator.ts:86-94",
+  "description": "`packages/core/src/services/ContextIntegrator.ts:86-94` now has seven positional constructor parameters, and `generateContext` at `packages/mcp-server/src/tools/contextTools.ts:58-63` has five. The TypeScript rules prefer named parameters for functions taking three or more arguments; the seven-argument call at `packages/core/src/services/CoreServiceFactory.ts:43-51` and the null-heavy test construction at `packages/core/tests/services/ContextIntegrator.test.ts:384` show how easy this is to misorder. Use options objects such as `{ engine, enableNewEngine, resolvers }` and `{ projectId, adoptionStateWrites, overrides, additionalInstructions, worktreeId }` to make the new wiring self-documenting."
+ },
+ {
+  "ref": "hy4/1/4",
+  "severity": "CONCERN",
+  "title": "Centralize the new mode and state comparison values",
+  "location": "packages/core/src/adoption/adoptionResolver.ts:26",
+  "description": "`packages/core/src/adoption/adoptionResolver.ts:26` defines `AdoptionStateWrites` as raw string literals and line 128 compares against `'persist'`; callers repeat `'persist'`/`'read-only'` at `packages/cli/src/commands/build.ts:84` and `packages/mcp-server/src/tools/contextTools.ts:204,270`. Adoption state values are also scattered through `packages/core/src/adoption/adoptionOutcome.ts#decideOutcome`, `packages/core/src/adoption/adoptionResolver.ts:91,107,128-129`, and `packages/core/src/adoption/adoptionFacts.ts:92`, even though `ADOPTION_STATES` exists at `packages/core/src/config/ConfigKeys.ts:27`. AGENTS.md says comparison values must be defined once, and the TypeScript guide prefers `as const` objects; define named constants or a const object and use them in conditionals, call sites, and tests."
+ },
+ {
+  "ref": "hy4/1/5",
+  "severity": "CONCERN",
+  "title": "New section key breaks existing kebab-case naming",
+  "location": "packages/core/src/services/ContextTemplateEngine.ts:115",
+  "description": "`packages/core/src/services/ContextTemplateEngine.ts:113-119` adds `key: 'adoptionFacts'`, while the surrounding section identifiers in the same `buildTemplate` method use kebab-case or single words (`project-intro`, `project-info`, `context-init`, `permissiveness`, `additional-notes`, `current-events`, `tools-section`). Rename the key to `adoption-facts` so section identifiers remain consistent and future tooling can rely on one naming shape."
+ },
+ {
+  "ref": "hy4/1/6",
+  "severity": "CONCERN",
+  "title": "Integration runner injects the entire environment into the CLI process",
+  "location": "packages/cli/tests/integration/build.integration.test.ts:96",
+  "description": "`packages/cli/tests/integration/build.integration.test.ts:96` runs the built CLI with `env: { ...process.env, CONTEXT_FORGE_DATA_DIR: dataDir }`. The testing rules say never inject a whole `.env`/all environment variables into a test process and instead pass an explicit named list; similar spreads appear at `packages/mcp-server/tests/serverLifecycle.test.ts:98` and `packages/cli/tests/integration/guidesVersionFlag.integration.test.ts:33`. Use an explicit allowlist such as `PATH`, `HOME`, `CONTEXT_FORGE_DATA_DIR`, and any required `CF_*` flags so credentials present in the parent process are not handed to spawned commands."
+ },
+ {
+  "ref": "luna-r/1/0",
+  "severity": "CONCERN",
+  "title": "`context_build` is no longer idempotent",
+  "location": "packages/core/src/adoption/adoptionResolver.ts:129-130",
+  "description": "The first detected brownfield build now persists `adoption.state`, and that write changes what a subsequent build reports. However, the MCP `context_build` tool is still annotated `idempotentHint: true` in `packages/mcp-server/src/tools/contextTools.ts:155`. Update the annotation to reflect the new state-changing behavior, or avoid the persisted side effect."
+ },
+ {
+  "ref": "luna-r-high/1/0",
+  "severity": "CONCERN",
+  "title": "Malformed project config can be returned as a successful error-context build",
+  "location": "packages/core/src/services/ContextIntegrator.ts#generateContextFromProject",
+  "description": "`readAdoptionState` lets malformed TOML parsing errors propagate without wrapping them as `AdoptionError`. This catch rethrows only `AdoptionError`; other errors are converted into an error-context string. Consequently, a build with malformed `.context-forge.toml` can return that stub as if generation succeeded instead of failing, unlike invalid adoption-state values and source-volume failures, which are reported as `AdoptionError`."
+ },
+ {
+  "ref": "luna-r-high/1/1",
+  "severity": "CONCERN",
+  "title": "Adoption guide validation rejects CRLF profile files",
+  "location": "packages/core/src/adoption/adoptionResolver.ts#assertGuideSupportsAdoption",
+  "description": "The profile check relies on `ContextProfileParser.parseProfiles`, which searches for the exact string `context_profiles:\\n`. A guide with CRLF line endings contains `context_profiles:\\r\\n`, so parsing returns no profiles and this check rejects the guide as missing the `brownfield-adoption` profile\u2014even when the profile is present. Normalize line endings or make the profile parser accept CRLF, and cover this format in a test."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Normalize line endings before validating guide profiles",
+  "location": "packages/core/src/adoption/adoptionResolver.ts:76",
+  "description": "`parseProfiles` searches for the literal `context_profiles:\\n` in `ContextProfileParser.ts:10,134`, so a valid guide checked out with CRLF line endings is parsed as having no profiles. On such checkouts, adoption fails with a misleading \u201cno brownfield-adoption profile\u201d error. Normalize line endings before parsing or make the profile parser handle CRLF."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Remove the stale test backup that the test runner ignores",
+  "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:29",
+  "description": "This newly added file duplicates the old factory tests, including `createContextPipeline` calls that omit the now-required options. Its `.test.ts-E` suffix does not match the package\u2019s Vitest include pattern, so it is neither run as a test nor useful coverage. Delete it or turn it into a properly named, updated test file."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "CONCERN",
+  "title": "Remove the committed editor-backup test file",
+  "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+  "description": "This is an editor backup rather than a runnable `*.test.ts` file, so Vitest and TypeScript do not include it. It duplicates the maintained factory test and retains obsolete one-argument `createContextPipeline` calls that no longer match the required options API. Keeping the backup in source control adds dead, stale code and should be removed."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "CONCERN",
+  "title": "Operational adoption failures still become successful error-stub builds",
+  "location": "packages/core/src/services/ContextIntegrator.ts:119-123",
+  "description": "Only `AdoptionError` instances take the new rethrow path. However, the real resolver can throw ordinary errors: malformed `.context-forge.toml` parsing from `readAdoptionState` propagates a plain parser error, and guide reads/parsing in `assertGuideSupportsAdoption` can also fail with ordinary errors. Those failures fall through to the generic catch, producing an \u201cError generating context\u201d string while the CLI/MCP call still succeeds. Expected adoption boundary failures should be normalized to `AdoptionError` with their cause, and a pipeline-level test should verify that malformed project configuration or an unreadable guide rejects the build."
+ },
+ {
+  "ref": "minimax31-flash/1/2",
+  "severity": "CONCERN",
+  "title": "Centralize the adoption write-mode values",
+  "location": "packages/core/src/adoption/adoptionResolver.ts:25",
+  "description": "`AdoptionStateWrites` defines `'persist'` and `'read-only'`, but the resolver comparison and the CLI/MCP call sites repeat the literals directly. Renaming either mode therefore requires changing several files, contrary to the project rule that comparison values have one source of truth. Export a constant map and derive the type from it, then use the constants at every call site."
+ },
+ {
+  "ref": "qwen38-27b/1/0",
+  "severity": "CONCERN",
+  "title": "Stray backup test file `CoreServiceFactory.test.ts-E` committed with stale one-arg calls",
+  "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1",
+  "description": "A second copy of `CoreServiceFactory.test.ts` \u2014 an editor backup (the `-E` suffix is the classic Emacs `~`-style swap; `.gitignore` does not cover it) \u2014 was added to the tree. It is byte-identical to the pre-change test file and calls `createContextPipeline(FIXTURE_PROJECT_PATH)` / `createContextPipeline(checkout)` with the old single-argument signature (lines 29, 35, 59, 99, 119, 141), which no longer typechecks against `CoreServiceFactory.ts:29-33`. It is harmless at runtime only because `packages/core/vitest.config.ts` includes `tests/**/*.{test,spec}.{js,mjs,cjs,ts,...}` and the `-E` name matches nothing \u2014 but it is a duplicate of a live test with an API signature that predates this change. If anyone renames it, or a broader tsconfig/`tsc` invocation over `tests/` is introduced, it fails. Delete the file; it adds nothing."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "Stray sed backup file committed",
+  "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+  "description": "The diff adds `CoreServiceFactory.test.ts-E`, and a glob confirms it exists. It is a verbatim copy of the pre-change test file. The `-E` suffix is what BSD `sed -i -E` leaves behind on macOS, so it is a tooling artifact. The file is dead code. It also sits under `tests/`, so a broad test glob could pick it up. Delete it, and consider adding `*-E` to `.gitignore`."
+ },
+ {
+  "ref": "sonnet/1/1",
+  "severity": "CONCERN",
+  "title": "AdoptionError is swallowed or reported only through message text for non-ContextIntegrator callers",
+  "location": "packages/core/src/services/ContextIntegrator.ts:119-125",
+  "description": "`generateContextFromProject` rethrows `PermissivenessFragmentError` and `AdoptionError`. Every other error is logged and turned into an error-stub string that is returned as if it were valid context. That stub behavior predates this change. The new adoption path adds a second pass through the same catch, though. `persistInProgress` wraps write failures in `AdoptionError`, but the `readFile` and parse calls in `assertGuideSupportsAdoption`, `readHistory` and `measureSourceVolume` can throw plain errors. Those become a stub prompt instead of a failure. For a project that was meant to be adopted, that stub is a concept prompt, which is the misleading fallback the new comment says to avoid. The integration test at `adoptionBuild.integration.test.ts:63` asserts that no stub is produced, but only for the happy paths. Consider wrapping unexpected I/O failures in the resolver as `AdoptionError`."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "Stray sed backup file committed to the repo",
+  "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+  "description": "The diff adds `CoreServiceFactory.test.ts-E`, and a glob confirms it exists in the tree. It is a byte-for-byte copy of the pre-change test file (it still has `createContextPipeline(FIXTURE_PROJECT_PATH)` with no options argument). The `-E` suffix is what BSD `sed -i -E` leaves behind on macOS. Nothing in `.gitignore` matches it. Vitest and tsc don't pick it up, so nothing breaks. But it is dead code, and a grep for `createContextPipeline(` turns up six stale call sites that no longer match the real signature. Delete it. Consider adding `*-E` or `*.bak` to `.gitignore`."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "`'implementation'` default literal is now repeated in a fifth place",
+  "location": "packages/core/src/services/ContextIntegrator.ts:148",
+  "description": "The new line `const instruction = project.instruction || 'implementation';` adds another hard-coded copy of the default. The same literal already appears at lines 216, 244 and 289, and in `FileProjectStore.ts:104`. Line 148 and line 244 have to agree for the new adoption step to see the same instruction that profile filtering uses. If someone changes one default, the resolver and the profile filter can drift apart without anything failing. CLAUDE.md says to define such values once and not to hard-code magic defaults. Extract a `DEFAULT_INSTRUCTION` constant, for example next to `CONCEPT_PHASE` in `projectSchema.ts`. Use it at all of these sites, or at least resolve it once at the top of `generateWithTemplateEngine` and pass the result down."
+ }
+]

@@ -1,0 +1,351 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Readiness probes report any git failure as a specific deferral reason",
+      "description": "The `rev-parse --show-toplevel` catch (lines 43-46) maps every `gitExec` rejection to `NOT_A_CHECKOUT`. The `symbolic-ref -q HEAD` catch (lines 51-54) maps every rejection to `DETACHED_HEAD`. `gitExec` rejects on a 60 s timeout, on a missing `git` binary, and on any non-zero exit (`packages/core/src/guides/gitExec.ts:89-101`). It also does not expose the exit code, so the caller cannot tell exit 1 from a hang. The comment on line 52 says exit 1 is \"the signal being probed\", but the catch never checks for it. A hung or broken git on a sibling checkout is therefore reported as \"detached HEAD\" with the error discarded. CLAUDE.md requires catching a specific exception with a comment, and this does not do that. `checkoutReadiness.test.ts` covers only real repository states, so nothing exercises this path. Fix: have `gitExec` attach the exit code and the `killed` flag, catch only the expected code for each probe, and rethrow the rest.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/git/checkoutReadiness.ts:41-54"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An apply-time readiness probe can abort the run after earlier checkouts were written",
+      "description": "`applyPlanEntry` re-runs `gateByReadiness` for each non-invoking entry, and `applyFixPlan` (lines 296-298) processes entries in sequence with no `try`. The probes at `checkoutReadiness.ts:57` and `:66` are unguarded, so a git failure or timeout there throws out of `applyFixPlan`. Writes already made in earlier checkouts stay on disk, including the invoking checkout's uncommitted writes. No `ConsistencyFixResult` is returned, so neither `cf check` (`check.ts:281`) nor MCP `workflow_check` (`workflowTools.ts:295`) reports what was written. The plan-time probe at line 192 runs before any write and is safe. This contradicts the \"defer, don't fail\" intent of D5a. Fix: convert a probe failure at apply time into a deferral or a `fixErrors` entry for that view, then continue with the remaining entries.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:256-261"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--json --fix` without `--yes` writes human text to stdout and can block on the prompt",
+      "description": "`runRoutedFix` does not receive `opts.json`. In all-slices fix without `--yes`, it prints the findings (line 263), the fix plan (line 265), and the prompt (line 274), and prints \"Aborted.\" on EOF (line 275). In JSON mode this breaks stdout's JSON contract, and the prompt waits on stdin in an automated run. The single-checkout branch already behaved this way before slice 213. This change adds the multi-checkout plan to the same stream. `setReviewNoneAction` in the same file (lines 79-81) already rejects `--json` without `--yes`, so the convention exists. No test covers this combination. `check-worktree-fix.test.ts` pairs every `--json` case with `--yes` or `--slice`, and `check.test.ts:301` covers only the non-JSON prompt. Fix: pass a JSON flag into `runRoutedFix` and reject `--json` without `--yes` the same way, or send the preview to stderr.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/check.ts:262-276"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Routing orchestration is duplicated between the CLI and the MCP tool",
+      "description": "The `fileSlice` overlay, the `check` vs `checkAll` selection, and the view-to-result pairing repeat almost line for line in `packages/mcp-server/src/tools/workflowTools.ts:276-298`. The invoking-checkout resolution and the plan/apply pair are also repeated, with different error wrapping in each. CLAUDE.md says not to duplicate logic. The slice-scoping duplication predates this change, but the routing change extends it to both consumers. Fix: move the scope, run, and plan sequence into a core helper that both call.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/check.ts:173-198"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`ConsistencyChecker.fix` and `fixAll` are now dead production code",
+      "description": "Both the CLI and MCP now go through `planRoutedFixes` and `applyFixPlan`. A repo-wide search finds no production caller of `fix()` or `fixAll()`. The only callers are `ConsistencyChecker.test.ts` and `ConsistencyChecker.reviewGate.test.ts`. CLAUDE.md asks us to resist unnecessary complexity. Either remove the two methods and move their tests to `checkAll()` plus `applyFixes()`, or document them as deliberate public API.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:202-214"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fallback display strings that cannot be reached",
+      "description": "`d.owner?.name ?? 'another checkout'` and the `'?'` tag fallbacks (lines 33 and 37) run only when a worktree or owner is missing. Multi-checkout output cannot reach that state. `buildAttributedViews` attaches a worktree to every view when there are two or more, and `resolveFixOwner` returns only those views. CLAUDE.md prohibits silent fallbacks. Make the field required, or throw in the unreachable case.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/output/fixReport.ts:15"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The checkout root comes from two sources",
+      "description": "`printDeferred`, `formatLogLine`, and the invoking-checkout test at line 80 use `FindingWorktree.path`. That field is optional (`packages/core/src/types/worktree.ts:14`), and `applyWorktreeOverlay` keeps `projectPath` when `worktreePath` is absent. `routedFixes.ts:51` uses `view.view.projectPath`. For a worktree registered without a path, the invoking group loses its \"(invoking checkout, uncommitted)\" note and paths print as absolute. The effect is cosmetic, but one value has two sources. Fix: carry the checkout root on the attributed view or the log entry, and use that everywhere.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/output/fixReport.ts:50"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Path arguments reach git as pathspecs, so glob characters can widen the commit",
+      "description": "`status`, `add -A`, and `commit` receive the relative paths as pathspecs without `--literal-pathspecs`. A file name containing `*`, `?`, or `[` matches other files, so `add -A` could stage files outside the fix. That breaks the \"only these paths\" guarantee in this function's doc comment. The project's naming convention makes this unlikely. The fix is cheap: pass `--literal-pathspecs` as a global option.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts:165-169"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A failed `rev-parse HEAD` after a successful commit is reported as a failed commit",
+      "description": "The SHA lookup (`gitExec.ts:170`) sits inside `commitPathsIfChanged`, which `commitViewWrites` wraps in a single `try`. If the commit lands and the `rev-parse` then fails or times out, the catch restores the paths, reports `COMMIT_FAILED`, and removes the fixes from `fixed` and `fixLog`. The commit still exists. Nothing is lost, since restore only returns the files to HEAD, but the report is wrong and the user may rerun. Fix: get the SHA outside the rollback path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:224-228"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The MCP tool description omits the cwd requirement for fix mode",
+      "description": "With two or more worktrees, `fix: true` now fails with \"not a registered worktree\" unless the server process runs inside a registered checkout (lines 266-274). That is the intended D5b behavior, but the description does not mention it, so an MCP client cannot predict the error. Add one sentence to the description.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/workflowTools.ts:199-208"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Non-null assertions on `fixAction`",
+      "description": "`fixAction!` appears at lines 60 and 143. Both inputs are pre-filtered by `fixableOf` (line 171), which checks `f.fixAction`. A type guard on that filter would remove both assertions. The TypeScript rules discourage `!` and `as`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:143"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test file exports helpers and mutates shared module state",
+      "description": "`designPath`, `tasksPath`, `completeBeta`, `worktreeCtx`, `createRoutedSetup`, `dryRun` (line 125), and `aboutSubject` are exported, but no other file imports them. `createProjectFor` (line 448) reads the module-level `let setup` (line 136), and test 6 reassigns it. Make the helpers module-private and pass the project in explicitly.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/routedFixes.test.ts:54"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`routedFixes.ts` is at the size guideline and mixes three jobs",
+      "description": "The file is 301 lines, against the ~300-line guideline. It holds ownership-based routing, git commit and rollback, and apply orchestration. It also takes the concrete `ConsistencyChecker` class (`import type` on line 14, parameters on lines 250 and 291) when `applyFixPlan` needs only `applyFixes`. Moving commit and rollback into their own module, and typing the checker as an interface, would make both easier to test.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Readiness probes spawn one `git status` per path",
+      "description": "The loop runs `git status --porcelain -- <path>` once per target. `commitPathsIfChanged` makes one call for the whole set. A single `status` call with all paths would do the same job with fewer process spawns.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/core/src/git/checkoutReadiness.ts:64-68"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every fix action carries a typed `subjectIndex`",
+      "description": "`subjectIndex: number | null` is a required field, so the compiler rejects any `fixAction` literal that omits it. In `ConsistencyChecker.ts`, all 18 sites that build a fix action set it (grep, lines 333 through 1244). `ConsistencyChecker.subjectIndex.test.ts` pins the value for each fixable rule.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/types.ts:262-268"
+    },
+    {
+      "severity": "PASS",
+      "title": "Commits are scoped to the written paths, and hooks are not bypassed",
+      "description": "`commitPathsIfChanged` commits with `-- <paths>`, which keeps unrelated staged files out of the commit. It returns `null` when nothing changed, throws on any git failure, and never uses `--no-verify`. `commitPaths.test.ts` covers the unrelated-staged-file case, the rejecting pre-commit hook, and the not-a-repository case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts:157-172"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Readiness probes report any git failure as a specific deferral reason",
+      "location": "packages/core/src/git/checkoutReadiness.ts:41-54",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "An apply-time readiness probe can abort the run after earlier checkouts were written",
+      "location": "packages/core/src/introspection/routedFixes.ts:256-261",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`--json --fix` without `--yes` writes human text to stdout and can block on the prompt",
+      "location": "packages/cli/src/commands/check.ts:262-276",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Routing orchestration is duplicated between the CLI and the MCP tool",
+      "location": "packages/cli/src/commands/check.ts:173-198",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`ConsistencyChecker.fix` and `fixAll` are now dead production code",
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:202-214",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Fallback display strings that cannot be reached",
+      "location": "packages/cli/src/output/fixReport.ts:15",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The checkout root comes from two sources",
+      "location": "packages/cli/src/output/fixReport.ts:50",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Path arguments reach git as pathspecs, so glob characters can widen the commit",
+      "location": "packages/core/src/guides/gitExec.ts:165-169",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A failed `rev-parse HEAD` after a successful commit is reported as a failed commit",
+      "location": "packages/core/src/introspection/routedFixes.ts:224-228",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The MCP tool description omits the cwd requirement for fix mode",
+      "location": "packages/mcp-server/src/tools/workflowTools.ts:199-208",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Non-null assertions on `fixAction`",
+      "location": "packages/core/src/introspection/routedFixes.ts:143",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test file exports helpers and mutates shared module state",
+      "location": "packages/core/tests/introspection/routedFixes.test.ts:54",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`routedFixes.ts` is at the size guideline and mixes three jobs",
+      "location": "packages/core/src/introspection/routedFixes.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Readiness probes spawn one `git status` per path",
+      "location": "packages/core/src/git/checkoutReadiness.ts:64-68",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Every fix action carries a typed `subjectIndex`",
+      "location": "packages/core/src/introspection/types.ts:262-268",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Commits are scoped to the written paths, and hooks are not bypassed",
+      "location": "packages/core/src/guides/gitExec.ts:157-172",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:22:20.399472",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 27,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 28,
+  "prompt_tokens": 2422417,
+  "cached_tokens": 2084002,
+  "cache_write_tokens": 338391,
+  "completion_tokens": 81668,
+  "reasoning_tokens": null,
+  "duration_seconds": 351.35686420905404,
+  "cost_usd": 0.5844954200000001,
+  "cost_basis": "provider"
+}

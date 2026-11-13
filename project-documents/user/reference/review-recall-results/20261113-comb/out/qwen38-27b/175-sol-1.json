@@ -1,0 +1,33 @@
+{
+ "case": "175",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "verified that `_append_step` serializes only `step_result.action_results` (never `prior_rounds`) and `run_usage_report` reads only that file, so loop rounds before the final one are missing from the persisted records and the new report undercounts run totals."
+  ],
+  "F2": [
+   "KEEP",
+   "verified `_run_part` stamps a per-part usage record into each part's metadata, but `fold_review_parts._metadata` copies only `parts[0].metadata` (summing only tool calls), so the persisted combined record carries only the first part's tokens and cost."
+  ],
+  "F3": [
+   "KEEP",
+   "verified a ProviderError part returns from `_run_part` as a failed result with `outputs={}` and no verdict, which makes `fold_review_parts` raise TypeError, and the outer `except Exception` then returns a fresh `_exception_result` with no usage record, discarding all parts' captured spend and masking the original failure."
+  ]
+ },
+ "wall_seconds": 97.5,
+ "duration_seconds": 97.51717558293603,
+ "cost_usd": 0.053247600000000006,
+ "effort": null,
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=207980, cached=102720, cache_write=None, completion=10386, reasoning=10230)",
+ "raw_output": "\n\nF1: KEEP \u2014 verified that `_append_step` serializes only `step_result.action_results` (never `prior_rounds`) and `run_usage_report` reads only that file, so loop rounds before the final one are missing from the persisted records and the new report undercounts run totals.\nF2: KEEP \u2014 verified `_run_part` stamps a per-part usage record into each part's metadata, but `fold_review_parts._metadata` copies only `parts[0].metadata` (summing only tool calls), so the persisted combined record carries only the first part's tokens and cost.\nF3: KEEP \u2014 verified a ProviderError part returns from `_run_part` as a failed result with `outputs={}` and no verdict, which makes `fold_review_parts` raise TypeError, and the outer `except Exception` then returns a fresh `_exception_result` with no usage record, discarding all parts' captured spend and masking the original failure.\n\n\nF1: KEEP \u2014 `_append_step()` serializes only `action_results` (never `prior_rounds`) and `run_usage_report()` reads only that persisted field, so earlier loop iterations' spend is missing from the new run totals.\nF2: KEEP \u2014 each part's usage is stamped into its own metadata, but `fold_review_parts()` \u2192 `_metadata()` copies only `parts[0].metadata` (summing just tool calls), so the combined record persists only the first part's tokens/cost.\nF3: KEEP \u2014 a failed split part returns `_exception_result()` with `outputs={}` and no usable input file, making `fold_review_parts()` raise `TypeError`, which the outer handler converts into a fresh result that discards all parts' captured usage and masks the original provider failure."
+}

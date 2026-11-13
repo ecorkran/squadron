@@ -1,0 +1,243 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Process error listeners pass Node's second argument into handleError's exit code",
+      "description": "`handleError` now takes `exitCode = 1` as its second parameter (`errors.ts:46`), but `index.ts` registers it directly with `process.on('uncaughtException', handleError)` and `process.on('unhandledRejection', handleError)`. Node calls these listeners with a second argument: the origin string (`'uncaughtException'` or `'unhandledRejection'`) for the first event, and the rejected Promise for the second. Both values now become `exitCode`, so `process.exit(exitCode)` receives a string or object instead of `1`. On Node versions that validate `process.exitCode`, that assignment throws `ERR_INVALID_ARG_TYPE` inside the handler and the process ends with a secondary failure. On runtimes that coerce the value, the status can be wrong. The original message still prints first, so every unhandled error now has the wrong exit status. The pre-diff signature took one parameter, so this regression came with this change.\n\nFix: wrap both listeners, e.g. `process.on('uncaughtException', (err) => handleError(err));`, and add a test that the registered listeners exit 1. `errors.test.ts` only calls `handleError` with one argument, so nothing covers this today. I could not confirm whether `tsc` rejects the listener type without `node_modules`, so run the build after the change.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/index.ts:171-172"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "validate.ts reimplements the frontmatter fix loop and holds an oversized action",
+      "description": "The `--fix` loop (lines 109-134) repeats the frontmatter branch of `ConsistencyChecker.applyFixes` (`packages/core/src/introspection/ConsistencyChecker.ts:231-236`), which `cf check --fix` already uses: call `updateFrontmatterField`, record the entry, catch errors into `fixErrors`, keep unfixed findings. `FixLogRecord` (`validate.ts:26-31`) duplicates core's `FixLogEntry` (`packages/core/src/introspection/types.ts:259-266`). The action is 63 non-blank lines against CLAUDE.md's ~50, and it mixes project resolution, fixing, JSON, and exit logic. Move the apply step into core next to `validateFrontmatterFiles` (for example `applyFrontmatterFixes(findings, dateStamp)` returning `{ fixLog, fixErrors, remaining }`) and call it from `validate.ts`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:87-157"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Multi-fix files report a dateUpdated value the file does not keep",
+      "description": "Findings are applied in order. For a file that lacks `dateUpdated` and has an alias status such as `in-progress`, `validateFrontmatter` emits the backfill first (`frontmatterSchema.ts:243-244`, value = dateCreated, from the required-field step), then the status fix (`frontmatterSchema.ts:283-297`, value-constraint step). Applying the backfill sets `dateUpdated` to the dateCreated value. The status fix then calls `updateFrontmatterField`, which stamps `dateUpdated` with today's date on every write except when the key is `dateUpdated` (`markdownWriter.ts:138-140`). The file ends with today's date, but the fixLog and human output report the dateCreated value. The stamp is intentional under #71, but the log hides it: no entry records that `dateUpdated` was written as a second field. Apply the backfill last or stamp once after all fixes, and log the stamp. No test covers a file with more than one finding; the `--fix` test has a single status finding.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:113-131"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "JSON totals stay at pre-fix counts after --fix",
+      "description": "In `--json` mode, `totalFindings`, `errors`, `warnings`, and `findings` all come from the pre-fix `findings` array. Fixed findings still appear, and nothing in the payload gives the remaining count. A script that treats `totalFindings > 0` as failure will fail after a fully successful `--fix` run, while the exit code is 0. The command description says the command is meant for scripts. The fix-mode JSON test checks `fixed`, `fixLog`, and `fixErrors` but never the totals. Report the remaining count, define the totals explicitly, and replace the `Record<string, unknown>` payload with a named interface.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:136-149"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Schema test named \"a wrong docType literal is still caught\" asserts nothing is caught",
+      "description": "All three assertions expect `toHaveLength(0)`, so the test shows the opposite of its name. Its comments also claim the test proves the docType `values` constraint \"ties a document to its schema\". It does not. `validateFrontmatter` picks the schema with `FRONTMATTER_SCHEMAS[data.docType]` (`frontmatterSchema.ts:228`), so the value the `values` constraint checks is always the key it was looked up with, and that constraint cannot fire. Delete the test, or rewrite it to state the real behavior: unknown docTypes pass through unvalidated. The `values` entries on the docType fields can also go, since they have no effect.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:371-396"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The universal schema invariant now covers only a hand-kept list",
+      "description": "The test \"every canonical docType schema requires docType, status, dateCreated, dateUpdated\" was narrowed from `Object.entries(FRONTMATTER_SCHEMAS)` to the hand-kept `EXPECTED_DOC_TYPES` (lines 12-21). Nothing checks that every key in `FRONTMATTER_SCHEMAS` appears in that list or in the machine-artifact list. A future schema without `status` or `dateUpdated`, if left off the list, passes every test. Add a completeness check: the schema keys must equal the canonical plus machine-artifact sets, with the machine-artifact list defined once and shared with the test at lines 49-57.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:30-39"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Severity typing is loose and literals are scattered",
+      "description": "`SEVERITY_ICON` is `Record<string, string>`, which forces the `?? '?'` fallback at line 62. The `'error'` and `'warning'` literals repeat at lines 63, 140, and 141. Type the map as `Record<FrontmatterFinding['severity'], string>`, drop the fallback so the compiler enforces coverage, and derive the literals from one definition. `printHumanOutput` (lines 44-49) also takes four positional parameters; the TypeScript rules ask for an options object at three or more.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:15-18"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Exit-code contract and help text are incomplete",
+      "description": "Exit 1 means findings remain or fixes failed. Exit 2 means any thrown error, including unexpected I/O failures (line 180). I found no user-facing documentation of this contract, and every other command exits 1 through `handleError`'s default. The help text also says that, unlike `cf check --fix`, this command applies fixes without a prompt. That holds only for all-slices mode (`check.ts:243`). Single-slice `--fix` (`check.ts:232`) also applies without a prompt. Document the exit codes and correct the comparison.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:166-172"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unrestored spy and a weak assertion in the validate tests",
+      "description": "The \"exits 2\" test spies on `process.exit` and never restores it. I found no restoreMocks setting under `packages/cli`, so later tests run with `process.exit` stubbed and an unintended exit goes unnoticed. Restore it in an `afterEach`. The composed-guarantee test (lines 115-117) checks only that the date argument matches `/^\\d{8}$/`, which any 8-digit value passes. Compare it to `formatDateProject()` or inject a fixed date.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate.test.ts:83-88"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Schema source of truth is not present in this worktree",
+      "description": "The schema header says it is derived from `file-naming-conventions.md`, and the test at `frontmatterSchema.test.ts:11` says the eight canonical docTypes come from that file. I found no `file-naming-conventions*.md` in this worktree and no mention of the three new docTypes under `project-documents/ai-project-guide`. I could not check the new docTypes, or the decision to leave `dateUpdated` out of them, against the source. Confirm the document exists and lists these docTypes.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/core/src/schema/frontmatterSchema.ts:4"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Process error listeners pass Node's second argument into handleError's exit code",
+      "location": "packages/cli/src/index.ts:171-172",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "validate.ts reimplements the frontmatter fix loop and holds an oversized action",
+      "location": "packages/cli/src/commands/validate.ts:87-157",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Multi-fix files report a dateUpdated value the file does not keep",
+      "location": "packages/cli/src/commands/validate.ts:113-131",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "JSON totals stay at pre-fix counts after --fix",
+      "location": "packages/cli/src/commands/validate.ts:136-149",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Schema test named \"a wrong docType literal is still caught\" asserts nothing is caught",
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:371-396",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The universal schema invariant now covers only a hand-kept list",
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:30-39",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Severity typing is loose and literals are scattered",
+      "location": "packages/cli/src/commands/validate.ts:15-18",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Exit-code contract and help text are incomplete",
+      "location": "packages/cli/src/commands/validate.ts:166-172",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Unrestored spy and a weak assertion in the validate tests",
+      "location": "packages/cli/tests/commands/validate.test.ts:83-88",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Schema source of truth is not present in this worktree",
+      "location": "packages/core/src/schema/frontmatterSchema.ts:4",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:20:26.994469",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 33,
+  "prompt_tokens": 1482845,
+  "cached_tokens": 1302595,
+  "cache_write_tokens": 180226,
+  "completion_tokens": 54255,
+  "reasoning_tokens": null,
+  "duration_seconds": 238.05109945801087,
+  "cost_usd": 0.29808617,
+  "cost_basis": "provider"
+}

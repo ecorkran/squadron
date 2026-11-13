@@ -1,0 +1,32 @@
+{"case": "a122",
+ "matched": {
+  "hy4/1/0": "a122-I1",
+  "hy4/1/1": "a122-I4",
+  "hy4/1/4": "a122-I18",
+  "hy4/1/5": "a122-I5",
+  "hy4/1/7": "a122-I21",
+  "hy4/1/8": "a122-I11",
+  "luna-r-high/1/0": "a122-I4",
+  "luna-r-high/1/2": "a122-I5",
+  "deepseek4-flash/1/0": "a122-I1",
+  "deepseek4-flash/1/1": "a122-I13",
+  "deepseek4-flash/1/2": "a122-I5"
+ },
+ "new_issues": [
+  {"id": "a122-M1", "title": "STORE_FAILURES omits StoreIntegrityError and the other StoreError subclasses, so those reach the broad catch and are escalated instead of exiting the process.",
+   "members": ["hy4/1/2", "luna-r-high/1/1"], "grade": "MINOR", "confidence": "medium",
+   "why": "True: STORE_FAILURES lists only Busy, Corrupt, Permission, Schema and sqlite3.Error, and StoreIntegrityError, NodeNotFoundError and InvalidTransitionError fall to `except Exception` and escalate. That is exactly the set slice 122 D8 decided, which treats the other errors as per-project faults, and an escalation write that itself fails is not caught, so a really broken store still exits. A design disagreement, not a defect against intended behavior.",
+   "evidence": ["src/amoeba/runner/faults.py:48-56", "src/amoeba/runner/tenant.py:142-149", "project-documents/user/slices/122-slice.runner-tenant-and-control-surface.md:280-285"],
+   "known": null, "fail_justified": null},
+  {"id": "a122-M2", "title": "Launch-failure escalations store the child's raw stderr tail, which could carry secrets, in blocked_states and messages.",
+   "members": ["hy4/1/3"], "grade": "MINOR", "confidence": "medium",
+   "why": "True that _record_launch_failed persists up to 4 KiB of the child's stderr verbatim into the block context and payload. Slice 122 D6 specifies exactly this tail, and the claim that sq writes credentials to stderr is speculative. Hardening, not a defect.",
+   "evidence": ["src/amoeba/runner/finish.py:96-116", "src/amoeba/runner/launch.py:98-109", "project-documents/user/slices/122-slice.runner-tenant-and-control-surface.md:266"],
+   "known": null, "fail_justified": null},
+  {"id": "a122-M3", "title": "The sq stub that cli_environment now puts first on PATH shadows DetectionE2E's fake sq, so the expected start-up version label is lost.",
+   "members": ["hy4/1/6"], "grade": "FALSE", "confidence": "high",
+   "why": "DetectionE2E calls cli_environment and then prepends its own fake-bin to PATH, so its fake sq, which echoes FAKE_SQ_LABEL, comes before the stub. The label assertion is not shadowed. The stub does fail on `sq --version` for other CLI tests, but none of them asserts the label, so nothing breaks.",
+   "evidence": ["tests/detection_e2e_harness.py:99-114", "tests/cli_harness.py:40-58", "tests/cli/test_detection_end_to_end.py:130"],
+   "known": null, "fail_justified": null}
+ ],
+ "disputes": []}

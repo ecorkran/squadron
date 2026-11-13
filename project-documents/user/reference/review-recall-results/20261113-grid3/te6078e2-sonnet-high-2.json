@@ -1,0 +1,225 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Validation and coercion are centralized and consistent",
+      "description": "Name patterns, `as_integer`, `as_real` and `require_real` are each defined once. Declarations, `ConfidenceRange` and `SignalEvent` all go through them.\n- `as_integer` rejects `bool`, out-of-int64 values, NaN and infinity, and non-integral floats. It delegates to `as_real` for non-`Integral` values.\n- `as_real` catches `OverflowError` for huge integers. `require_name` and `require_dotted_id` use `fullmatch` on an exact `str`, so a trailing newline or a `str` subclass fails.\n- The `except OverflowError` has a comment explaining why returning `None` is correct, which satisfies the exception-handling rule.\n- The tests cover each boundary: `2**63`, `10**400`, NumPy scalars, `Decimal` and `UNKNOWN`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Confidence check is one vectorized rule shared by labels and signals",
+      "description": "`check_confidence` applies the mask and range once, and both `labels.py` and `signals.py` call it, so the rule is not duplicated. NaN fails both comparisons and is reported as out of range. Invalid slots are ignored whatever they hold, which matches the documented contract. The tests cover the boundaries, a NaN in an invalid slot, empty arrays and the lowest offending index. An AST test keeps `confidence.py` free of element loops.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/confidence.py:54-76"
+    },
+    {
+      "severity": "PASS",
+      "title": "Parameter binding collects every issue and canonicalizes deterministically",
+      "description": "`bind_parameters` returns a read-only mapping in declared order. Omitted values and explicit defaults produce equal canonical bytes. Issues are reported declared-first, then unknown names sorted. Non-`str` keys are named by `repr`. `InvalidParametersError` passes `issues` as its single `args` element, so copy, deepcopy and pickle round-trip, and the tests check this. Bounds and defaults are validated at declaration time.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py:176-199"
+    },
+    {
+      "severity": "PASS",
+      "title": "LabelSeries validation is mask-aware and index-consistent",
+      "description": "The checks run in a sensible order: series type, no `price_basis`, categories via a single `np.isin` on the valid slots, then confidence. The confidence checks are same index object, vocabulary publishes a range, no confidence valid where the label is invalid, and values inside the range. The fill value in an invalid slot is ignored even when it equals a category id, and a test covers this. `LabelVocabulary` rejects `bool`, `np.int64`, float and negative ids by checking `type(...) is int`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/labels.py:104-156"
+    },
+    {
+      "severity": "PASS",
+      "title": "SignalEvent and SignalSequence enforce time and range rules",
+      "description": "Events must carry `AVAILABLE_AT` times. The extra check on `time.ns` being an exact `int` closes a gap, since `Timestamp` only checks the int64 range. Time order compares neighbours instead of subtracting, so it cannot wrap at the int64 extremes. A `None` confidence is replaced by NaN only in slots the mask marks invalid. The tests cover ties, non-iterables, bad elements and out-of-range confidence.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/signals.py:60-140"
+    },
+    {
+      "severity": "PASS",
+      "title": "Display hints are structurally kept out of canonical keys",
+      "description": "`OutputDisplay` has no `CANONICAL_TYPE`, and a test shows `canonicalize` rejects it. Import-boundary tests assert that `display.py` does not import `series` or `declarations`. They also assert that none of the new modules defines or assigns `CANONICAL_TYPE`. The enum values are tested as permanent.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/display.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`errors.py` references `declarations.py` under `TYPE_CHECKING`",
+      "description": "There is no runtime cycle, because the import is type-only and says so in a comment. Still, the base error module now depends on a higher-level module for typing. If more error types start needing declaration types, define `ParameterIssue` in a lower module such as `errors.py` or a small `issues.py`. No action is needed now.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/errors.py:8-13"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Runtime union introspection and a redundant assert",
+      "description": "- `_output_tuple` uses `isinstance(item, OutputDeclaration.__value__)` plus a `cast`. This works on 3.12, but it is more obscure than a module-level tuple of the three classes, which `OutputDeclaration` could also be derived from.\n- `labels.py:114` has `assert isinstance(series, Series)` after `require_instance`. It exists only to narrow the type for pyright, and it disappears under `python -O`. That is harmless because the real check has already run.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py:203-212"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Several small classes share one module",
+      "description": "The Python rules prefer one class per file. `declarations.py` holds about eight small frozen types and is 277 lines, under the 300-line target. Grouping them is consistent with the existing `core_model` layout, and the design keeps them together deliberately. It needs no change unless the file keeps growing, in which case split the parameter types from the output types.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Validation and coercion are centralized and consistent",
+      "location": "src/manta_trading_engine/core_model/value_checks.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Confidence check is one vectorized rule shared by labels and signals",
+      "location": "src/manta_trading_engine/core_model/confidence.py:54-76",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Parameter binding collects every issue and canonicalizes deterministically",
+      "location": "src/manta_trading_engine/core_model/declarations.py:176-199",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "LabelSeries validation is mask-aware and index-consistent",
+      "location": "src/manta_trading_engine/core_model/labels.py:104-156",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "SignalEvent and SignalSequence enforce time and range rules",
+      "location": "src/manta_trading_engine/core_model/signals.py:60-140",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Display hints are structurally kept out of canonical keys",
+      "location": "src/manta_trading_engine/core_model/display.py",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`errors.py` references `declarations.py` under `TYPE_CHECKING`",
+      "location": "src/manta_trading_engine/core_model/errors.py:8-13",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Runtime union introspection and a redundant assert",
+      "location": "src/manta_trading_engine/core_model/declarations.py:203-212",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Several small classes share one module",
+      "location": "src/manta_trading_engine/core_model/declarations.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:30:05.071722",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 184609,
+  "cached_tokens": 74421,
+  "cache_write_tokens": 110184,
+  "completion_tokens": 5811,
+  "reasoning_tokens": null,
+  "duration_seconds": 47.26905379095115,
+  "cost_usd": 0.510375,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,219 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Blanket catches in checkoutReadiness report git failures as the wrong reason",
+  "location": "packages/core/src/git/checkoutReadiness.ts:41-54",
+  "description": "The `rev-parse --show-toplevel` catch (lines 43-45) returns `NOT_A_CHECKOUT` for any error from `gitExec`. The `symbolic-ref` catch (lines 51-53) returns `DETACHED_HEAD` for any error. The comments only justify the expected exit codes (1 for detached HEAD, non-zero outside a work tree). But `gitExec` also rejects when the 60s `FIX_GIT_TIMEOUT_MS` kills the process (`guides/gitExec.ts:89-101`, message \"timed out after 60s\"), when the git binary is missing, and on permission errors. So a hung hook or stuck lock in another checkout shows up as \"checkout missing or not a git checkout\" or \"checkout is on a detached HEAD\", and nothing is logged. The write is still skipped, so no data is lost, but the reason is wrong and there is no diagnostic. This is a catch-all with no specific-exception handling, which the exception rule in CLAUDE.md does not allow. No test covers the timeout path (`checkoutReadiness.test.ts` has six cases, none for it). Fix: have `gitExec` expose whether the kill was a timeout or the exit code, then rethrow everything except the expected exit."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Multi-checkout fix output reports each fix twice",
+  "location": "packages/cli/src/output/checkReport.ts:89-96",
+  "description": "`printCheckOutput` prints each finding through `formatFinding(finding, fixRes, showWorktree)` (line 90). For a fixed finding, `formatFinding` adds a `\u2192 Fixed: before \u2192 after in path` line (lines 26-39). Lines 95-96 then call `printRoutedFixResult(fixRes)`, which prints the same fix log again grouped by checkout. A two-checkout run therefore lists every applied fix twice, worded differently, under different headers. The test \"groups the invoking write, the committed write, and the deferral by checkout\" checks only that the lines are present, so it does not catch this. The fixErrors loop is also duplicated (lines 97-99 and 106-110). Fix: when `showWorktree` is true, drop the inline \"Fixed:\" line or the per-checkout lines, so the fix report appears in one place."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "The invoking checkout is resolved two different ways",
+  "location": "packages/cli/src/commands/check.ts:170",
+  "description": "`invokingPath` at line 170 comes from `resolveOperationPath(project, worktreeId)`. The `worktreeId` is set by `resolveProjectWorktree` through `resolveWorktreeForPath` (`cli/src/utils/project.ts:105`, `core/src/utils/worktree-overlay.ts:30`), which does string-prefix matching on cwd with no `realpath`. In fix mode with two or more views, `runRoutedFix` overwrites it at line 238 with `resolveInvokingCheckout`, which realpaths the git toplevel and each view root (`routedFixes.ts:74-96`). The two can disagree. On macOS, if a registered `worktreePath` uses the `/var` form and cwd resolves to `/private/var`, the string match fails. The read-only `projectPath` then reports the primary checkout while `--fix` routes to the worktree. The removed comment in `check-worktree-fix.test.ts` documented this same `/var` vs `/private/var` mismatch. The MCP tool has the same split (`workflowTools.ts:266-274`: read-only uses `project.projectPath`, fix uses git). No test uses a symlinked checkout path, which is the case the realpath matching exists for. Fix: use one resolver for both read and fix, or document why they differ."
+ },
+ {
+  "ref": "haiku-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "fix()/fixAll() remain as un-routed write entry points",
+  "location": "packages/core/src/introspection/ConsistencyChecker.ts:202-214",
+  "description": "Nothing in production code calls `ConsistencyChecker.fix()` or `fixAll()` after this diff. The CLI and MCP now go through `planRoutedFixes`/`applyFixPlan`. A grep of this checkout finds callers only in `ConsistencyChecker.test.ts` and `ConsistencyChecker.reviewGate.test.ts`. The methods still apply fixes to whatever view they receive, with no ownership routing and no commit. That is the per-view write behavior slice 213 replaced, so any caller that runs them once per worktree view reintroduces the duplicate-write bug. Fix: delete them and move their tests onto `applyFixes`/`applyFixPlan`, or make them refuse multi-view projects."
+ },
+ {
+  "ref": "hy4/1/0",
+  "severity": "CONCERN",
+  "title": "`--json` fix runs still emit prose and can skip JSON entirely",
+  "location": "packages/cli/src/commands/check.ts#runRoutedFix",
+  "description": "In `packages/cli/src/commands/check.ts:133-207`, `confirm` is computed without checking `opts.json`; in `runRoutedFix` (`packages/cli/src/commands/check.ts:229-276`), the no-fixable-findings branch always calls `printCheckOutput(...)` and `console.log(...)`, then returns `null`, so `registerCheckCommand` returns without calling `printJson`. The confirmation branch also prints the dry run and fix plan and calls `askConfirmation`; `packages/cli/src/utils/confirm.ts:7-17` writes the prompt to `process.stdout`. Thus `--json --fix --yes` with no fixable findings produces human text and no JSON, and `--json --fix` without `--yes` can prompt and pollute stdout. Treat `--json` as non-interactive/error early, and always emit a JSON result for no-op paths."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "CLI and MCP duplicate the routed-fix orchestration",
+  "location": "packages/cli/src/commands/check.ts:169-200",
+  "description": "`packages/cli/src/commands/check.ts:133-207` and `packages/mcp-server/src/tools/workflowTools.ts:259-298` now contain parallel implementations of fix-mode detection, `buildAttributedViews`, invoking-checkout resolution, `scopeViews`, `runCheck`, `runAttributed`, `planRoutedFixes`, and `applyFixPlan`. Only the low-level core helpers are shared, despite comments near `packages/mcp-server/src/tools/workflowTools.ts:254-259` explicitly aiming to prevent drift between the two consumers. This violates the project\u2019s DRY rule and makes future fixes \u2014 for example the JSON guard above or runtime validation of plan inputs \u2014 easy to apply to one consumer only. Extract one shared orchestration function for the common plan/apply sequence."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "Missing runtime validation of `subjectIndex` silently routes fixes to the primary checkout",
+  "location": "packages/core/src/introspection/routedFixes.ts#routeView",
+  "description": "In `packages/core/src/introspection/routedFixes.ts:141-168`, `fixableOf` only checks `f.fixable && f.fixAction`, and `routeView` passes `finding.fixAction!.subjectIndex` directly to `resolveFixOwner`. `packages/core/src/introspection/fixOwnership.ts:34-52` treats any non-null value as an index; if a serialized or mocked result supplies `undefined`, `isInIndexRange` comparisons fail and the function falls through to `findPrimaryView`. That is a silent fallback to the primary checkout \u2014 the project convention says to fail explicitly, and the slice design itself calls this out as the dangerous \"forgot `subjectIndex`\" case. Add a runtime guard that `subjectIndex` is `number | null` and a regression test for an invalid/missing value."
+ },
+ {
+  "ref": "hy4/1/3",
+  "severity": "CONCERN",
+  "title": "New fix tests rely on unconditional mocks with incomplete findings",
+  "location": "packages/mcp-server/tests/workflowTools.test.ts:498-520",
+  "description": "In `packages/mcp-server/tests/workflowTools.test.ts:498-520`, the fix-result tests use `MOCK_CHECK_RESULT` with `fixable: true` but no `fixAction`, while `mockApplyFixes` returns `MOCK_FIX_RESULT` unconditionally. With the real routing path, `planRoutedFixes` (`packages/core/src/introspection/routedFixes.ts:163-177`) filters out findings without `fixAction`, so a real checker would apply zero fixes; the tests pass only because the mock ignores its input. A similar pattern exists in `packages/cli/tests/commands/check.test.ts`. Update fixtures to include valid `fixAction` values with `subjectIndex`, and assert that `applyFixes` is called with the routed finding subset."
+ },
+ {
+  "ref": "hy4/1/4",
+  "severity": "CONCERN",
+  "title": "Public routed-fix API does not constrain fix target paths to the checkout root",
+  "location": "packages/core/src/introspection/routedFixes.ts#fixRelPath",
+  "description": "`planRoutedFixes` and `applyFixPlan` are exported from `packages/core/src/node.ts`, but their inputs are not validated at that boundary. `packages/core/src/introspection/routedFixes.ts:59-60` returns `relative(viewRoot(view), finding.fixAction!.filePath)` without checking that the result stays inside the root; `routeView` (`packages/core/src/introspection/routedFixes.ts:141-151`) then uses that value in `join(viewRoot(owner), ...)`, and single-checkout plans skip readiness checks entirely. `packages/core/src/introspection/ConsistencyChecker.ts#ConsistencyChecker.applyFixes` writes the original `fixAction.filePath`. A crafted or deserialized result with `../...` can therefore inspect or write paths outside the intended checkout. Validate containment at plan time and reject relative paths beginning with `..`."
+ },
+ {
+  "ref": "luna-r/1/0",
+  "severity": "CONCERN",
+  "title": "Readiness probe treats every symbolic-ref failure as a detached HEAD",
+  "location": "packages/core/src/git/checkoutReadiness.ts:50-53",
+  "description": "The catch handles every failure from `git symbolic-ref -q HEAD` as `DETACHED_HEAD`, not just Git\u2019s detached-HEAD exit. For example, the readiness probe is given a 60-second timeout by `gateByReadiness`; if that command times out or Git fails for another reason, the fix is reported as deferred because the checkout is detached. That misreports the cause and hides an operational failure. Distinguish the detached-HEAD result from other Git failures, and surface or defer those failures with an accurate reason."
+ },
+ {
+  "ref": "luna-r-high/1/0",
+  "severity": "CONCERN",
+  "title": "Identical checkout roots can apply the same fix more than once",
+  "location": "packages/core/src/introspection/routedFixes.ts:148",
+  "description": "`buildAttributedViews` can produce multiple views with the same root when a worktree has no `worktreePath`. In that case, `samePath` makes the finding eligible in both the owner\u2019s view and the other view. `applyFixPlan` then applies both entries to the same files, potentially duplicating fix-log entries and overstating the number of fixes. Deduplicate by checkout root or ensure each finding is kept in only one view for a shared checkout."
+ },
+ {
+  "ref": "luna-r-high/1/1",
+  "severity": "CONCERN",
+  "title": "Text output can label a deferred finding as fixed",
+  "location": "packages/cli/src/output/checkReport.ts:30-38",
+  "description": "The log lookup matches paths by suffix. In multi-worktree fix mode, the merged finding can come from a non-owner checkout while the fix log records the owner\u2019s checkout; matching their shared relative path can print \u201cFixed\u201d beside a finding whose copy was deferred. Use checkout attribution when matching, or leave per-finding fix status to the routed report."
+ },
+ {
+  "ref": "luna-r-high/1/2",
+  "severity": "CONCERN",
+  "title": "Git probe failures are mislabeled as checkout state",
+  "location": "packages/core/src/git/checkoutReadiness.ts:42-52",
+  "description": "These catches treat every `gitExec` failure as evidence of \u201cnot a checkout\u201d or \u201cdetached HEAD.\u201d A timeout or another operational failure is therefore returned as a misleading deferral reason instead of surfaced as a probe error. Distinguish the expected nonzero exit for each probe from timeouts and other failures."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Avoid applying fixes twice to views of the same checkout",
+  "location": "packages/core/src/introspection/routedFixes.ts:146",
+  "description": "When multiple worktree records resolve to the same filesystem root\u2014for example, a worktree without `worktreePath`, which falls back to the project root\u2014`buildAttributedViews` still creates a view for each record. This branch treats findings from both views as owned because their roots match, so `applyFixPlan` can apply the same fix twice to the same files and overcount `fixed` and `fixLog`. Deduplicate views by checkout root before planning, or ensure each physical checkout receives each fix only once."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Rollback can erase edits made after the readiness check",
+  "location": "packages/core/src/introspection/routedFixes.ts:232",
+  "description": "For non-invoking checkouts, readiness is checked immediately before applying fixes, but a concurrent edit can still occur before a commit failure triggers `restorePathsToHead`. That helper restores the entire target path to `HEAD`, potentially deleting the concurrent edit and its staged state. Preserve the pre-write state and roll back only this operation\u2019s changes, or otherwise avoid a destructive whole-path restore in this race."
+ },
+ {
+  "ref": "luna-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Readiness probes misclassify git failures as checkout state",
+  "location": "packages/core/src/git/checkoutReadiness.ts:41-53",
+  "description": "The broad catches treat every `gitExec` failure as an expected probe result. For example, a timeout or failure to launch Git during the symbolic-ref check is reported as `DETACHED_HEAD`; `gateByReadiness` then defers fixes under that misleading reason instead of surfacing the operational failure. Distinguish the expected nonzero exit for a detached HEAD from other errors, and propagate unexpected failures."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "CONCERN",
+  "title": "`cf check --fix` with `--slice` now silently skips the confirmation preview and prompt",
+  "location": "packages/cli/src/commands/check.ts:249-252",
+  "description": "In `runRoutedFix`, the `confirm` flag is computed as `singleSlice === null && explicitFix && !opts.yes`, and the entire preview/prompt block is additionally gated on `args.allSlices`. The previous code (visible in the diff) prompted for confirmation in **all** fix modes when `--yes` was absent \u2014 including `--slice N --fix`. Now `cf check --fix --slice 250` writes files with no confirmation and no preview at all, while `cf check --fix` (all slices) does prompt. This is a silent behavior change in a destructive path with no test covering it: the new test file only exercises `--slice ... --fix --json` and `--fix --yes`. The comment (\"Only an explicit all-slices `--fix` previews and prompts\") documents the new rule but nothing in the diff or tests explains why single-slice prompting was dropped. Either the old confirmation guarantee was intentional (and is now lost) or it was accidental (and should be pinned by a test)."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "CONCERN",
+  "title": "`cf check --fix` no longer prints the dry-run findings before applying fixes in the multi-checkout `--yes` path",
+  "location": "packages/cli/src/commands/check.ts:255-281",
+  "description": "`printCheckOutput(dryRun, ...)` is only called inside `if (args.confirm)`. With `--yes` (or with `workflow.auto_fix`), the dry-run result is computed and thrown away; the user sees only the post-fix output. In the old code the `--yes` path also skipped the pre-print, so this is consistent \u2014 but the new code adds `printFixPlan(plan)` (a routed preview) inside the same `confirm` block, so the multi-checkout preview is also skipped under `--yes`. `cf check --fix --yes` in a two-worktree project therefore reports neither the plan nor the deferrals before writing, and the deferral list only appears afterwards via `printRoutedFixResult` \u2014 which is only invoked when `showWorktree` is true *and* the result is a fix result. Note `printCheckOutput` calls `printRoutedFixResult` only in the `fixRes && showWorktree` branch, so the deferred list is reachable, but the routing preview is not."
+ },
+ {
+  "ref": "minimax31-flash/1/2",
+  "severity": "CONCERN",
+  "title": "`printRoutedFixResult` is only reached when `showWorktree` is true, so deferred fixes are silently dropped in the single-worktree case",
+  "location": "packages/cli/src/output/checkReport.ts:94-108",
+  "description": "`printCheckOutput` branches: `if (fixRes && showWorktree) { printRoutedFixResult(fixRes); ... } else if (fixRes) { ...summary... }`. `showWorktree` is computed as `projectViews.some((v) => v.worktree !== undefined)`, and `buildAttributedViews` only attaches a worktree when `worktrees.length > 1`. A project with a **single registered worktree** (the common \"migrated default\" shape described in `mergeCheckResults.ts`) therefore has `showWorktree === false`, and any `deferred` entries \u2014 which `planRoutedFixes` only produces for multi-view runs, so this is fine for deferrals \u2014 but also `commits` are only non-empty for multi-view runs. So this is currently unreachable. Still, the coupling \"routed report only when showWorktree\" is implicit and fragile: the `deferred`/`commits` fields on `ConsistencyFixResult` are now always present (even for single-checkout, as `[]`), and the report path keys off an unrelated flag. A more robust condition would be `fixRes.deferred.length > 0 || fixRes.commits.length > 0`."
+ },
+ {
+  "ref": "minimax31-flash/1/3",
+  "severity": "CONCERN",
+  "title": "Deferred findings are counted twice in the CLI's \"fixed\" accounting",
+  "location": "packages/core/src/introspection/routedFixes.ts:262-281",
+  "description": "In `applyPlanEntry`, when a commit fails and the restore succeeds (`outcome.restored === true`), the code does `fixed -= fixLog.length; fixLog = []`. But `fixed` came from `applied.fixed`, which counts *successful writes*, and `fixLog.length` equals the number of successful writes too. That part is consistent. The real problem is the **plan-time** deferral accounting: `planRoutedFixes` already removed plan-time-deferred findings from `entry.result.findings`, so `applyFixes` never sees them and `fixed` never counted them \u2014 correct. However `applyFixPlan` returns `{ ...merged, deferred: [...plan.deferred, ...merged.deferred] }`, and `merged.deferred` comes from `mergeFixResults(perView, ...)`, which sums `r.deferred` across views. `applyPlanEntry` returns `{ ...entry.checked, fixed, fixLog, fixErrors, deferred, commits }` where `deferred` is the *apply-time* deferrals only \u2014 so plan-time and apply-time deferrals are correctly separated and concatenated once. This is fine, but it is worth noting that `entry.checked` is spread into the per-view result, so `fixed`/`fixLog` are overwritten while `findings`/`totalFindings`/`summary` come from the full dry-run. `totalFindings` therefore counts findings that were deferred and never written, while `fixed` counts only written ones. The CLI prints `Fixed N of M findings`, where M includes deferred ones. There is no test asserting the \"fixed of total\" line for the deferred case, so this accounting is unverified."
+ },
+ {
+  "ref": "minimax31-flash/1/4",
+  "severity": "CONCERN",
+  "title": "`console.error` used for a non-error diagnostic in a library module",
+  "location": "packages/core/src/introspection/routedFixes.ts:229",
+  "description": "`commitViewWrites` calls `console.error('cf check --fix: commit failed in ...', commitErr)` directly from `@context-forge/core`, a library package. This hard-codes the CLI command name into the core package and writes to stderr even when the caller is MCP (where the caller then returns a JSON result containing the same failure). The MCP test `workflowCheckRouting.test.ts` does not cover a failing commit, so the double-reporting (stderr + JSON) is unverified. Core has no logger abstraction (the grep shows only `console.error` usage), so this matches existing convention, but the `cf check --fix:` prefix in a core module that is also driven by MCP is a naming-drift smell."
+ },
+ {
+  "ref": "minimax31-flash/1/5",
+  "severity": "CONCERN",
+  "title": "Fix-routing logic duplicated between the CLI and MCP server",
+  "location": "packages/mcp-server/src/tools/workflowTools.ts:270-296",
+  "description": "The MCP tool now re-implements the same plan-then-apply sequence as `packages/cli/src/commands/check.ts`: build scoped views, pick `check` vs `checkAll`, resolve the invoking checkout, call `planRoutedFixes`, then `applyFixPlan`. The CLI has this in `runRoutedFix`; the MCP has it inline in the tool handler. The project conventions explicitly call out \"Do not duplicate logic. Respect DRY\", and the existing codebase went out of its way to share `buildAttributedViews`/`runAttributed`/`mergeCheckResults` between exactly these two consumers \"so the invariant cannot drift\". The same argument applies here: the routing pipeline (scope views \u2192 resolve invoking checkout \u2192 plan \u2192 apply) is duplicated and can drift. Extracting a shared helper into `@context-forge/core/node` (e.g. `runRoutedCheck`) would match the established pattern."
+ },
+ {
+  "ref": "qwen38-27b/1/0",
+  "severity": "CONCERN",
+  "title": "Readiness probe misclassifies git timeouts/failures as NOT_A_CHECKOUT or DETACHED_HEAD",
+  "location": "packages/core/src/git/checkoutReadiness.ts:40-53",
+  "description": "Description: Both probe catches treat *any* `gitExec` rejection as the specific signal they are probing. `checkoutReadiness` passes `FIX_GIT_TIMEOUT_MS` to these calls, and the constant's own docstring says the bound exists \"to cover a hanging hook or a stuck lock\". When a read-only probe hits that bound (e.g. a stuck network filesystem, or any unexpected git failure), `rev-parse --show-toplevel` timing out is reported to the user as `NOT_A_CHECKOUT` (\"checkout missing or not a git checkout\") and `symbolic-ref -q HEAD` timing out as `DETACHED_HEAD` (\"checkout is on a detached HEAD\") \u2014 a wrong cause for exactly the failure mode the timeout was added for, violating the project rule to fail explicitly rather than substitute a misleading value. The behavior is still safe (the fix is deferred, nothing is written), and neither case has a test, so the misclassification is invisible in CI. Suggested fix: inspect the error (e.g. `gitExec`'s timeout message) and either rethrow, or block with a reason that says \"probe failed\" rather than asserting the checkout is missing/detached; add a test that stubs a rejecting `gitExec` to pin the label."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "Source and tests still carry `ConsistencyChecker.fix`/`fixAll`, but the CLI and MCP no longer call them",
+  "location": "packages/core/src/introspection/ConsistencyChecker.ts:202-211",
+  "description": "The CLI (`check.ts`) and MCP (`workflowTools.ts`) now call `check`/`checkAll`, then `planRoutedFixes`, then `applyFixPlan`. A grep of `packages/**/*.ts` finds `.fix(` and `.fixAll(` only in `ConsistencyChecker*.test.ts`. They are now an unrouted fix path that bypasses ownership and commit logic. Anyone who calls them writes into every checkout, which is the behavior slice 213 replaced. Remove them, or document them as low-level and not for worktree-aware use. I did not check whether other packages such as the electron app use them."
+ },
+ {
+  "ref": "sonnet/1/1",
+  "severity": "CONCERN",
+  "title": "CLI and MCP tests import a fixture from another package's `tests/` directory",
+  "location": "packages/cli/tests/commands/check-worktree-fix.test.ts:10-17",
+  "description": "`packages/cli` and `packages/mcp-server` tests import `../../../core/tests/helpers/gitWorktreeFixture.js` by relative path. That couples them to core's test layout and breaks package boundaries. The testing rules call for fixtures in each package's own `tests/fixtures/`. Export the helper from a shared test-utils location instead. `routedFixes.test.ts` also has `export`ed helpers (`designPath`, `completeBeta`, and others) that no other file appears to use. Those exports should be dropped or the helpers moved to the shared fixture."
+ },
+ {
+  "ref": "sonnet/1/2",
+  "severity": "CONCERN",
+  "title": "Commit failure and restore failure are logged and returned in the result instead of failing the run",
+  "location": "packages/core/src/introspection/routedFixes.ts:228-245",
+  "description": "Both catch blocks log with `console.error` and convert the error into a deferred entry or a `fixErrors` string. That is a reasoned design, since it reports per-checkout partial results. However, `console.error` writes to stderr even in `--json` mode, and in the MCP server it writes to the server's stderr. The project rule asks for ERROR-level logging with the original error and a comment explaining why swallowing is correct. Add a short comment at each catch saying the error is surfaced through the result, so it is not mistaken for a swallowed exception. The `catch {}` blocks in `checkoutReadiness.ts` already carry such comments."
+ },
+ {
+  "ref": "sonnet/1/3",
+  "severity": "CONCERN",
+  "title": "Non-null assertion on `fixAction` and a doc comment that may not match the code",
+  "location": "packages/core/src/introspection/routedFixes.ts:65 (`fixRelPath`)",
+  "description": "`fixRelPath` uses `finding.fixAction!`. Callers currently filter on `f.fixable && f.fixAction`, but nothing in the types enforces that. The same assertion appears in `routeView`. The `as`/`!` rule asks for a type guard or a documented reason. Take a `ConsistencyFinding & { fixAction: NonNullable<\u2026> }` type, or add a comment stating the precondition. Separately, the `FixLogEntry.worktree` doc says \"Present only with 2+ worktrees\". `applyPlanEntry` attaches `worktree` whenever the view has one, and `showWorktree` in the CLI is true for any worktree view. I did not confirm how `buildAttributedViews` behaves with exactly one worktree, so the comment may be wrong."
+ },
+ {
+  "ref": "sonnet/1/4",
+  "severity": "CONCERN",
+  "title": "Fix-mode orchestration is now duplicated between the CLI and the MCP tool",
+  "location": "packages/mcp-server/src/tools/workflowTools.ts:259-298",
+  "description": "`workflowTools.ts` and `check.ts` each build `scopeViews` and `runCheck`, resolve the invoking checkout, and call `planRoutedFixes` then `applyFixPlan`. They differ only in the prompt and in how errors are reported. A shared core helper, for example `runRoutedFix` without the prompt, would stop the two from drifting. The error-message handling for `resolveInvokingCheckout` is also copied across both."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "A git failure while applying one checkout aborts the run after earlier checkouts were already written",
+  "location": "packages/core/src/introspection/routedFixes.ts:248-301",
+  "description": "`applyFixPlan` loops over plan entries (lines 295-298) and awaits `applyPlanEntry` for each one with no per-entry isolation. Inside `applyPlanEntry`, `gateByReadiness` (lines 256-261) runs several git calls with `FIX_GIT_TIMEOUT_MS`. `checkoutReadiness` does not catch failures of `rev-parse --git-path` or `status --porcelain`, so a timeout or lock failure there throws.\n\nIf that happens on the second or later entry, the first entry's writes and its commit are already on disk. The caller gets a rejected promise with no `ConsistencyFixResult`, so the CLI and MCP report nothing about what was written or committed. The timeout exists to cover hangs and stuck locks, so this path is expected to be hit. Catch errors per entry and convert them into `deferred` entries or `fixErrors` (for example a new `DeferReason`), so the merged result always describes what happened."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "`fix()` and `fixAll()` are now dead production code with a stale comment",
+  "location": "packages/core/src/introspection/ConsistencyChecker.ts:199-216",
+  "description": "After this change neither the CLI nor `workflow_check` calls `checker.fix` or `checker.fixAll`. Both now go through `check`/`checkAll`, then `planRoutedFixes`, then `applyFixPlan`. The only remaining callers are tests. They return results with empty `deferred` and `commits`, so they bypass ownership routing and the readiness gate. A future caller could silently skip the 213 safety rules. The `applyFixes` doc comment (\"shared by fix() and fixAll()\") is also stale. Remove them, or document them as unrouted single-checkout helpers."
+ },
+ {
+  "ref": "sonnet-high/1/2",
+  "severity": "CONCERN",
+  "title": "Scope-narrowing and plan-then-apply glue is duplicated between the CLI and the MCP tool",
+  "location": "packages/cli/src/commands/check.ts:172-177",
+  "description": "The `scopeViews` construction (setting `fileSlice` to `` `${n}-slice` `` on every view) and the `runCheck` selector (`check` vs `checkAll`) are copied almost verbatim into `packages/mcp-server/src/tools/workflowTools.ts`. The invoking-checkout resolution and the `planRoutedFixes` then `applyFixPlan` sequence are repeated there too. The earlier code duplicated this as well, but this change had both call sites open and the comments already say the two must not drift. Extracting one helper into core, such as `runCheckScoped(project, views, sliceIndex)` and a routed-fix runner, would keep them aligned."
+ }
+]

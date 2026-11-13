@@ -1,0 +1,53 @@
+{
+ "case": "225",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "a passing in-repo integration test raises `psycopg_pool.PoolTimeout` through `except psycopg.OperationalError` and asserts `TickCalendarError` (and the slice's task notes state PoolTimeout *is* an OperationalError), so the calendar-unreachable path already maps to exit 4; the finding's core mechanism is refuted."
+  ],
+  "F2": [
+   "KEEP",
+   "with a tier set but no universe end and no edge row, `wanted` is None yet `caught_up` is called with `wanted=True`, so status can print \"caught up: yes\" (even over zero sessions) next to \"edge: never observed\", violating `caught_up`'s own n/a contract; the one-line fix is `wanted=wanted is not None`."
+  ],
+  "F3": [
+   "KEEP",
+   "raw_counts` has no product/unit scope, so once slice 231 ingests a second product, its rows inside shared CME session windows appear as ledger-0/raw-N mismatches and make `coverage --product ES` falsely exit 3; scoping the scan to the shape's current unit ids is a cheap fix to this slice's proof verb."
+  ],
+  "F4": [
+   "DROP",
+   "a negative age is a cosmetic rendering artifact requiring cross-host clock skew; the JSON payload carries the truthful negative value and no decision depends on it."
+  ],
+  "F5": [
+   "DROP",
+   "the only caller (the coverage CLI) already rejects `end <= start` with exit 1 before invoking `build_coverage`, so the vacuous-OK result is unreachable today and the requested library guard is hardening against a caller error the future API (230) must define itself."
+  ],
+  "F6": [
+   "DROP",
+   "the LLD explicitly defers tick_trade chunking/indexing/throughput measurement to slice 226, the walkthrough already ran this scan on real data, and no slow-or-wrong behavior is demonstrated."
+  ],
+  "F7": [
+   "KEEP",
+   "the tier-configured status path (`_wanted_end`, wanted-range scoping, caught-up/holed verdicts, the tier line) is the verb's main reporting, has zero end-to-end coverage, and the untested code is exactly where F2's `caught_up` bug lives; add an integration test that sets a tier and an edge."
+  ]
+ },
+ "wall_seconds": 423.5,
+ "duration_seconds": 423.4921840419993,
+ "cost_usd": 0.31828712000000003,
+ "effort": null,
+ "tool_calls_made": 29,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=1712646, cached=1435328, cache_write=None, completion=81802, reasoning=79427)",
+ "raw_output": "\n\nF1: DROP \u2014 a passing in-repo integration test raises `psycopg_pool.PoolTimeout` through `except psycopg.OperationalError` and asserts `TickCalendarError` (and the slice's task notes state PoolTimeout *is* an OperationalError), so the calendar-unreachable path already maps to exit 4; the finding's core mechanism is refuted.\nF2: KEEP \u2014 with a tier set but no universe end and no edge row, `wanted` is None yet `caught_up` is called with `wanted=True`, so status can print \"caught up: yes\" (even over zero sessions) next to \"edge: never observed\", violating `caught_up`'s own n/a contract; the one-line fix is `wanted=wanted is not None`.\nF3: KEEP \u2014 `raw_counts` has no product/unit scope, so once slice 231 ingests a second product, its rows inside shared CME session windows appear as ledger-0/raw-N mismatches and make `coverage --product ES` falsely exit 3; scoping the scan to the shape's current unit ids is a cheap fix to this slice's proof verb.\nF4: DROP \u2014 a negative age is a cosmetic rendering artifact requiring cross-host clock skew; the JSON payload carries the truthful negative value and no decision depends on it.\nF5: DROP \u2014 the only caller (the coverage CLI) already rejects `end <= start` with exit 1 before invoking `build_coverage`, so the vacuous-OK result is unreachable today and the requested library guard is hardening against a caller error the future API (230) must define itself.\nF6: DROP \u2014 the LLD explicitly defers tick_trade chunking/indexing/throughput measurement to slice 226, the walkthrough already ran this scan on real data, and no slow-or-wrong behavior is demonstrated.\nF7: KEEP \u2014 the tier-configured status path (`_wanted_end`, wanted-range scoping, caught-up/holed verdicts, the tier line) is the verb's main reporting, has zero end-to-end coverage, and the untested code is exactly where F2's `caught_up` bug lives; add an integration test that sets a tier and an edge.\n\n\nF1: DROP \u2014 the repo's own passing integration tests (e.g. test_tick_ingest_plan, test_tick_ingest_pass) and the slice-223 task note establish that psycopg_pool.PoolTimeout is a subclass of psycopg.OperationalError, so the existing `except (psycopg.OperationalError, ...)` handlers in `calendar_sessions`/`Calendars.frame` already catch it, wrap it in TickCalendarError, and exit_code_for maps it to 4.\nF2: KEEP \u2014 when a tier is set, the universe `end` is unset, and no edge row exists, `wanted` is None but `caught_up` is still called with `wanted=True`, so status can print \"caught up: yes\" (even with zero in-scope sessions) next to \"edge: never observed\", violating `caught_up`'s own \"n/a when no wanted range\" contract; the fix is `wanted=wanted is not None`.\nF3: KEEP \u2014 `raw_counts` has no product/unit scope, and since `tick_trade` is one table for all products, once slice 231 ingests GC its rows inside shared CME session windows will surface as ledger-0/raw-N mismatches that make `mt data tick coverage --product ES` falsely exit 3; scoping the scan to the shape's current unit ids is a small fix to this slice's proof verb.\nF4: DROP \u2014 a negative edge age only produces odd Rich text (\"observed -1d 23h ago\") under cross-host clock skew, while the `--json` payload still carries the truthful negative `edge_age_seconds`, so this is a cosmetic rendering nicety, not wrong data or a failure path.\nF5: DROP \u2014 the only caller, the coverage CLI, already rejects `end <= start` with exit 1 before `build_coverage` is reached, so the vacuous \"mismatched: false\" result is unreachable with today's code and guarding the library function is hardening against a future caller (230) that hasn't been written.\nF6: DROP \u2014 chunking, indexing, and throughput measurement of `tick_trade` are explicitly deferred to slice 226 in the LLD, and the completed walkthrough already ran this scan over multi-month real data (including the full 2024-08-30\u21922025-01-01 range in step 7) with no demonstrated problem.\nF7: KEEP \u2014 the tier-configured status path (`_wanted_end`, wanted-range scoping in `_scope`, and the \"caught up / holed\" reporting) has no end-to-end integration coverage because every test uses the tier=None ES entry, and it is the exact area containing the latent F2 bug; since 226 will set the tier shortly, a tier+edge integration test asserting the caught-up output is warranted before merge."
+}

@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Element-loop guard is defined three times with conflicting rules",
+      "description": "`ELEMENT_LOOP_NODES` appears in three test modules with different contents. `test_import_boundary.py:172-180` includes `ast.GeneratorExp`, and its own test (around line 199) requires `sum(x for x in y)` to be detected. `test_labels.py:27` and `test_confidence.py:25` omit `GeneratorExp`, with a comment saying generator expressions are allowed. The exemption was sanctioned for `labels.py`'s `all(...)` over category ids (`project-documents/user/tasks/105-tasks.labels-signals-and-declarations.md:167`). The copies apply it to every module they guard. `confidence.py` contains no generator, so its guard (`test_confidence.py:133-135`) allows a pattern it never needs, and a per-element `all(v for v in values)` would pass unnoticed. The 104 review (`project-documents/user/reviews/archive/104-review.code.series-and-point-series.20261110T153732.md:193`) fixed this same gap and required generator expressions to be detected. Fix: keep one shared guard with an explicit allowance for the category-id check, and drop the exemption from `confidence.py`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "tests/core_model/test_labels.py:27"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Module docstring overstates \"no element loops\" in labels.py",
+      "description": "The docstring says \"there are no element loops\". `labels.py:64-66` runs `all(... for category in self.category_ids)`. That check runs over the category-id set, not an array, and the design allows it, so the code is correct. The docstring should say \"no element loops over arrays\" or mention that one `all(...)`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/labels.py:7"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`LABELS_SIGNALS_DECLARATIONS_MODULES` names modules it does not describe",
+      "description": "The list includes `value_checks.py`, `confidence.py` and `display.py`. The name implies only labels, signals and declarations. It is used at lines 50, 143 and 160. Rename it to something like `SLICE_105_MODULES`, or split it.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/core_model/test_import_boundary.py:20"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`InvalidParametersError` breaks the `CoreModelError(message)` constructor contract",
+      "description": "`__init__(self, issues)` takes a tuple. Every other `CoreModelError` takes a message, and the helpers in `validation.py` and `value_checks.py` call `error(message)` on an `error: type[CoreModelError]`. If this class were ever passed as that factory, `InvalidParametersError(\"msg\")` would construct silently with `issues == \"msg\"`. `str()` would then raise `AttributeError`, because `__str__` iterates the string's characters. No current caller does this; `Declarations.bind_parameters` is the only raise site. A type check in `__init__` would make the trap fail at construction.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/errors.py:99-110"
+    },
+    {
+      "severity": "NOTE",
+      "title": "One parametrized test exercises no production code",
+      "description": "`test_match_selects_the_branch_for_each_form` builds the output dataclasses and runs a `match` written inside the test body. It checks that the classes expose `name`, which is the only thing it verifies. Nothing in `declarations.py` decides the branch. Delete it, or keep only the attribute check, and label it as such.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_declarations.py:154"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fixture types are weakened to `Any` in test_labels.py",
+      "description": "`make_bar_index: Any` also appears at line 233. Other test modules declare a local `MakeBarIndex` alias (`test_series_index.py:33`), and `conftest.py:59` defines the same type. Use that alias. Strict pyright accepts explicit `Any`, so this is weak typing, not a type error.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_labels.py:178"
+    },
+    {
+      "severity": "PASS",
+      "title": "Numeric coercion has a single path",
+      "description": "`as_integer` and `as_real` are the only numeric coercions. `confidence.py`, `signals.py` and `declarations.py` reach them through `require_real` or `_coerce`, and none defines its own. `as_real` catches only `OverflowError`, with a justifying comment. `10**400`, `2**63`, `True`, `Decimal` and NaN/inf all return `None`. `canonical.py:122-123` normalizes `-0.0` to `0.0`, so a bound `-0.0` canonicalizes the same as its default.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py#as_integer"
+    },
+    {
+      "severity": "PASS",
+      "title": "Parameter binding keeps order and collects every issue",
+      "description": "Declared parameters come first in declared order, then unknown names sorted. Every issue is collected before `InvalidParametersError` is raised. The returned `MappingProxyType` is read-only. `canonical.py:233` accepts any `Mapping`, so an omitted default and an explicit equal value canonicalize to the same bytes. Copy and pickle round-trips are covered by `test_declarations.py`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py#Declarations.bind_parameters"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Element-loop guard is defined three times with conflicting rules",
+      "location": "tests/core_model/test_labels.py:27",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Module docstring overstates \"no element loops\" in labels.py",
+      "location": "src/manta_trading_engine/core_model/labels.py:7",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`LABELS_SIGNALS_DECLARATIONS_MODULES` names modules it does not describe",
+      "location": "tests/core_model/test_import_boundary.py:20",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`InvalidParametersError` breaks the `CoreModelError(message)` constructor contract",
+      "location": "src/manta_trading_engine/core_model/errors.py:99-110",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "One parametrized test exercises no production code",
+      "location": "tests/core_model/test_declarations.py:154",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Fixture types are weakened to `Any` in test_labels.py",
+      "location": "tests/core_model/test_labels.py:178",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Numeric coercion has a single path",
+      "location": "src/manta_trading_engine/core_model/value_checks.py#as_integer",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Parameter binding keeps order and collects every issue",
+      "location": "src/manta_trading_engine/core_model/declarations.py#Declarations.bind_parameters",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:21:16.653584",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 4,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 24,
+  "prompt_tokens": 2467960,
+  "cached_tokens": 2197386,
+  "cache_write_tokens": 270546,
+  "completion_tokens": 68073,
+  "reasoning_tokens": null,
+  "duration_seconds": 287.5264922089409,
+  "cost_usd": 0.5069910200000001,
+  "cost_basis": "provider"
+}

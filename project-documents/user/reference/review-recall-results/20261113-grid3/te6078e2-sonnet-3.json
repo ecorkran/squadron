@@ -1,0 +1,153 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Shared confidence and numeric checks are written once",
+      "description": "`check_confidence` is one vectorized check. Label series and signal sequences both call it, so the range rule lives in one place. `as_integer`, `as_real` and `require_real` in `value_checks.py` are the only coercion path. Declarations, `ConfidenceRange` and `SignalEvent` all use them. `labels.py` and `signals.py` have no element loops. Tests enforce this by AST scan.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/confidence.py:58-76"
+    },
+    {
+      "severity": "PASS",
+      "title": "Declarations validate eagerly and bind with full issue reporting",
+      "description": "`bind_parameters` collects every issue in declared order, followed by the unknown names sorted. It rejects bools, fractional integers, NaN and infinity. It returns a read-only mapping. Omitted and explicit-default values bind to equal results, and the test asserts the canonical bytes match.\n\n`_output_tuple` uses `isinstance(item, OutputDeclaration.__value__)`. This works for a union-typed `type` alias. `require_iterable_of` (`validation.py:75-91`) names the bad index.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py:200-224"
+    },
+    {
+      "severity": "PASS",
+      "title": "Error type survives copy and pickle",
+      "description": "`InvalidParametersError` passes `issues` as its single `args` element, so copy and pickle rebuild it. There is a test for this. The `TYPE_CHECKING` import avoids a runtime cycle with `declarations.py`. No exceptions are swallowed anywhere in the diff. The one `except OverflowError` in `as_real` has a justifying comment.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/errors.py:99-110"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tests cover the boundaries and enforce structure",
+      "description": "The tests cover bounds, NaN and infinity, bool rejection, int64 limits, invalid-slot masking, ties and ordering, and non-canonical display hints. The import-boundary tests assert that the new modules define no `CANONICAL_TYPE`. They also keep `display.py` from importing `series` or `declarations`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_import_boundary.py:17-60"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor style points",
+      "description": "`_require_series` uses `assert isinstance(...)` to narrow the type after `require_instance`. This is acceptable, but `assert` is stripped under `python -O`. It only affects type narrowing, since `require_instance` already raises, so no change is required. The `# pyright: ignore` on the `isinstance` check in `LabelVocabulary.__post_init__` is justified by the comment above it.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/labels.py:112"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Shared confidence and numeric checks are written once",
+      "location": "src/manta_trading_engine/core_model/confidence.py:58-76",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Declarations validate eagerly and bind with full issue reporting",
+      "location": "src/manta_trading_engine/core_model/declarations.py:200-224",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Error type survives copy and pickle",
+      "location": "src/manta_trading_engine/core_model/errors.py:99-110",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests cover the boundaries and enforce structure",
+      "location": "tests/core_model/test_import_boundary.py:17-60",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Minor style points",
+      "location": "src/manta_trading_engine/core_model/labels.py:112",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:31:18.224754",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 1,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 178466,
+  "cached_tokens": 74421,
+  "cache_write_tokens": 104041,
+  "completion_tokens": 1693,
+  "reasoning_tokens": null,
+  "duration_seconds": 17.18603766709566,
+  "cost_usd": 0.444623,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Stale duplicate test file committed",
+      "description": "This is a second copy of the pre-change `CoreServiceFactory.test.ts`. The diff shows the same blob (`e6539010`), and it still calls `createContextPipeline(path)` with one argument. Its `.test.ts-E` name doesn't match a `*.test.ts` pattern, so it isn't the suite's file, and it will drift from the real one. Delete it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Adoption errors other than `AdoptionError` become a returned error stub",
+      "description": "The comment at `ContextIntegrator.ts:146-147` says adoption errors \"propagate\", and the `readAdoptionState` docstring says a malformed TOML \"propagates the parser's error\". Only `AdoptionError` is rethrown (line 123). A malformed `.context-forge.toml` makes `ConfigManager.readToml` throw the raw smol-toml error (`ConfigManager.ts:24-29`). The catch turns that into `getErrorContext`, and `cf build` (`build.ts:85`, `99-104`) puts the stub in its output without checking it, with no thrown error. The test \"keeps the error-stub behavior for any other resolver error\" (`ContextIntegrator.test.ts:434`) locks this in. Either rethrow resolver failures, or change the comment and docstring to describe what actually happens.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:119-125"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Explicit-instruction match is case-sensitive; every other path is not",
+      "description": "`explicit` uses `instruction === BROWNFIELD_ADOPTION_INSTRUCTION`. `resolvePhaseValue` lowercases (`projectSchema.ts:161`). The `--it` flag (`build.ts:35-36`) and the MCP `instruction` field (`contextTools.ts:112`) are both free-form strings. So `Brownfield-Adoption` returns `selected: false` here. The build still gets the brownfield prompt and profile, because `SystemPromptParser.ts:188` and `ContextProfileParser.ts:178-180` are case-insensitive. The result is that the spelling `Brownfield-Adoption` skips the guide check and the Adoption Facts section, while `brownfield-adoption` gets both. Lowercase the value once and compare that.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:120-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Catch-and-rethrow without logging",
+      "description": "`persistInProgress` wraps the write failure in an `AdoptionError` and rethrows without logging. CLAUDE.md requires an ERROR-level log before a re-raise, or a specific, commented case. The message carries the detail, so the user can see it, but the rule isn't met. `ContextIntegrator.ts:121-123` has the same gap for both rethrows. The existing `PermissivenessFragmentError` path does too, so fix the pattern once.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:86-97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parity test re-implements the CLI path rather than running it",
+      "description": "The header says the CLI path runs \"as build.ts does it\", but the test builds `workingCopy` by hand and calls `createContextPipeline(..., 'persist')` itself. It skips `resolveProjectWorktree`, `ensureGuideReady`, the `--phase` and `--it` overrides, and `checkGuideMinimum`. If `build.ts` stopped passing `'persist'`, this test would still pass. The only guard on the real wiring is the mocked argument assertion at `build.test.ts:227`. Either drive the command through the commander program, or rename the test so it doesn't claim to cover the CLI path.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/mcp-server/tests/integration/adoptionParity.test.ts:81-88"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`services/` and `adoption/` import each other's internals",
+      "description": "`ContextIntegrator.ts:9-10` says the `adoption/contracts.ts` import exists to keep the two directories from importing each other's internals. The resolver imports three services internals (`ContextProfileParser`, `promptFilePath`, `SystemPromptParser`), and `CoreServiceFactory.ts:12` imports the resolver back. I found no module cycle in the files I read, so this is a layering smell, not a bug. Consider moving the guide check into a module both sides can import.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:13-15"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Positional parameters grow and literal values repeat",
+      "description": "`generateContext` now takes five positional parameters, with a `'persist' | 'read-only'` literal in second position, so call sites read `generateContext(resolvedId, 'persist', ...)` (line 202). The TypeScript rules call for an options object at three or more parameters. The `ContextIntegrator` constructor is now seven positional parameters (`ContextIntegrator.ts:86-94`).",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:58-64"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Adoption-state literals and the remedy text are repeated",
+      "description": "`'in_progress'`, `'complete'`, and `'declined'` appear as comparison literals here, as a write argument at `adoptionResolver.ts:88`, and in output text at `adoptionFacts.ts:44-46`. The `as const` list in `ConfigKeys.ts:28` makes a typo a compile error, but CLAUDE.md asks for one definition. The decline remedy is written twice, as `DECLINE_REMEDY` (`adoptionResolver.ts:28`) and inline at `adoptionFacts.ts:93`, with different formatting.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionOutcome.ts:34-35"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No `projectPath` returns the concept prompt silently",
+      "description": "The guard `this.resolveAdoptionFn && project.projectPath && checkoutPath` skips adoption when `projectPath` is missing, and the concept prompt comes back. The CLI (`build.ts:51-56`) and MCP (`contextTools.ts:74-78`) both check it first, so production paths can't reach this. It is still a silent fallback to the exact prompt the feature exists to avoid. Throw an `AdoptionError` here instead.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:149-152"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`ContextIntegrator.ts` is 398 lines and grows further",
+      "description": "CLAUDE.md asks for source files around 300 lines where practical. This diff adds about 20 lines to a file already over that. The adoption wiring could move into a helper beside the other resolvers.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:1"
+    },
+    {
+      "severity": "PASS",
+      "title": "Guide check returns null with no fallback",
+      "description": "`SystemPromptParser.getPromptForInstruction` returns `match || null` (`SystemPromptParser.ts:211`), and matching is a substring test on `brownfield-adoption`, so an unrelated prompt doesn't satisfy it. The guard runs before `persistInProgress`, so a guide missing the prompt does not leave `in_progress` behind.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:74-83"
+    },
+    {
+      "severity": "PASS",
+      "title": "Browser entry does not reach the adoption resolver",
+      "description": "`index.ts` re-exports `services/index.js`, which exports only `ContextIntegrator` (`services/index.ts:16`). That imports `adoption/contracts.ts`, which has no imports. `adoption/` is exported only from `node.ts:61`, so the `fs`-dependent resolver stays out of the browser bundle.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/index.ts:3"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Stale duplicate test file committed",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E:1",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Adoption errors other than `AdoptionError` become a returned error stub",
+      "location": "packages/core/src/services/ContextIntegrator.ts:119-125",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Explicit-instruction match is case-sensitive; every other path is not",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:120-121",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Catch-and-rethrow without logging",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:86-97",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Parity test re-implements the CLI path rather than running it",
+      "location": "packages/mcp-server/tests/integration/adoptionParity.test.ts:81-88",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`services/` and `adoption/` import each other's internals",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:13-15",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Positional parameters grow and literal values repeat",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:58-64",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Adoption-state literals and the remedy text are repeated",
+      "location": "packages/core/src/adoption/adoptionOutcome.ts:34-35",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "No `projectPath` returns the concept prompt silently",
+      "location": "packages/core/src/services/ContextIntegrator.ts:149-152",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`ContextIntegrator.ts` is 398 lines and grows further",
+      "location": "packages/core/src/services/ContextIntegrator.ts:1",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Guide check returns null with no fallback",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:74-83",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Browser entry does not reach the adoption resolver",
+      "location": "packages/core/src/index.ts:3",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:20:28.640837",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 35,
+  "prompt_tokens": 2330271,
+  "cached_tokens": 2081469,
+  "cache_write_tokens": 248772,
+  "completion_tokens": 53830,
+  "reasoning_tokens": null,
+  "duration_seconds": 239.58900862489827,
+  "cost_usd": 0.45103977000000006,
+  "cost_basis": "provider"
+}

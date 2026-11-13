@@ -1,0 +1,53 @@
+{
+ "case": "175",
+ "matched": {
+  "hy4/1/0": "175-I23",
+  "hy4/1/2": "175-I4",
+  "hy4/1/3": "175-N2",
+  "luna-r-high/1/0": "175-I4",
+  "luna-r-high/1/1": "175-I1",
+  "luna-r-high/1/2": "175-I20",
+  "luna-r-high/1/3": "175-I19",
+  "luna-r-high/1/4": "175-I17",
+  "deepseek4-flash/1/0": "175-I2",
+  "deepseek4-flash/1/1": "175-N3"
+ },
+ "new_issues": [
+  {
+   "id": "175-M1",
+   "title": "sq stats reviews counts every frontmatter-bearing .md in the reviews directory as a review, including resolution artifacts.",
+   "members": [
+    "hy4/1/1"
+   ],
+   "grade": "REAL",
+   "confidence": "medium",
+   "why": "reviews_usage_report globs *.md in reviews_dir and makes a row for every file with readable frontmatter and no runId; it never checks docType or the -review. filename segment. save_resolution writes {index}-resolution.*.md with docType resolution and a slice key into the same REVIEWS_DIR, so each resolution appears as a review row with an empty usage record (and matches --slice by name and index), inflating the review count and the unpriced denominator.",
+   "evidence": [
+    "src/squadron/stats/reviews_report.py:66-80",
+    "src/squadron/review/resolution_artifact.py:26",
+    "src/squadron/review/resolution_artifact.py:89-96",
+    "src/squadron/review/resolution_artifact.py:177-190"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "175-M2",
+   "title": "sq stats run passes the raw run_id argument into the state path, so path-shaped ids can read .json files outside the runs directory.",
+   "members": [
+    "hy4/1/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "stats_run passes run_id to run_usage_report/StateManager, whose _state_path joins state_file_name(run_id) = f'{run_id}.json' to runs_dir without validation, so '../x' or an absolute path escapes. True, but this is a local CLI reading files the invoking user can already read; there is no privilege boundary, and state_file_name/_state_path predate the diff. Speculative hardening.",
+   "evidence": [
+    "src/squadron/cli/commands/stats.py:34-41",
+    "src/squadron/pipeline/state.py:279-281",
+    "src/squadron/pipeline/state.py:304-305"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
+ ],
+ "disputes": []
+}

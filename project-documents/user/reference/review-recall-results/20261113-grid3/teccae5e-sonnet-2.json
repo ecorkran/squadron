@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`_require_instance` is duplicated across two modules",
+      "description": "`_require_instance` in `instruments.py` is the same function as the one in `markets.py:136`. The only difference is the exception class raised (`InvalidInstrumentError` vs `InvalidMarketError`). The project rule says \"Do not duplicate logic\". `instruments.py` already imports from `markets.py`, so a shared helper would not add an import-boundary dependency. For example, a private `_validation.py` helper could take the error class as a parameter. The `_require_nonempty_str` and `_require_positive_decimal` helpers could move there too. If they stay duplicated, a fix to one copy (for example how it formats `{value!r}`) will silently miss the other.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/instruments.py:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unhashable inputs raise `TypeError` instead of the domain error",
+      "description": "`self.source_bar_stamping not in SOURCE_BAR_STAMPINGS` and `frozenset(bases)` in `_normalize_bases` both hash their inputs. A caller who passes a list or dict for `source_bar_stamping`, or a list of lists for `adjustment_bases`, gets a raw `TypeError`. It does not get `InvalidMarketError`. The tests cover wrong-typed scalar and element values but not unhashable ones. This is low risk, since the inputs come from trusted fixtures today. It matters once markets are built from served metadata at a trust boundary.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:107"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fixture modules ship inside the production package",
+      "description": "The new `fixtures/markets.py` and `fixtures/instruments.py` follow the existing `fixtures/calendars.py` layout. They are clearly labeled \"not served data\" and every id has a `fixture-` prefix, so this is consistent and acceptable. Moving fixtures out of `src/` into the test tree would stop them being importable as real data.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/fixtures/markets.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Market and instrument model, validation and test coverage",
+      "description": "- **Canonicalization:** `canonical.py` accepts `StrEnum` and `frozenset` (as `$set`). That matches how `Market` stores its enums and its adjustment bases.\n- **Normalization:** `Market.__post_init__` sorts the session calendars and freezes the adjustment bases. This makes equality, hashing and canonical bytes independent of input order. The tests check this.\n- **Validation:** the checks use `type(...) is str` and `Decimal` finiteness, which rejects `bool`, `float` and NaN, and `fullmatch` rejects `\"USD\\n\"`. Errors name the field and the offending type.\n- **Test coverage:**\n  - rejection cases for markets, terms and instruments;\n  - an identity matrix where each row changes exactly one fact and must change the hash;\n  - golden hashes for each fixture;\n  - a market-uniformity test with no per-market branching;\n  - import-boundary and type-id namespace checks.\n- **Other:** error classes are specific and subclass `CoreModelError`. There are no swallowed exceptions or magic defaults, and `FIXTURE_CALENDARS` is built from each calendar's own id and wrapped in `MappingProxyType`.\n\nI read `canonical.py` and `calendars.py` to check the canonicalization support and the calendar id and constructor behavior. I did not run the test suite.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_markets.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_require_instance` is duplicated across two modules",
+      "location": "src/manta_trading_engine/core_model/instruments.py:79",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Unhashable inputs raise `TypeError` instead of the domain error",
+      "location": "src/manta_trading_engine/core_model/markets.py:107",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Fixture modules ship inside the production package",
+      "location": "src/manta_trading_engine/core_model/fixtures/markets.py",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Market and instrument model, validation and test coverage",
+      "location": "tests/core_model/test_markets.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:30:23.870462",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 163793,
+  "cached_tokens": 67334,
+  "cache_write_tokens": 96455,
+  "completion_tokens": 2454,
+  "reasoning_tokens": null,
+  "duration_seconds": 22.99971849983558,
+  "cost_usd": 0.42046849999999997,
+  "cost_basis": "provider"
+}

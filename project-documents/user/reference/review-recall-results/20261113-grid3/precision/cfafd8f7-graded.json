@@ -1,0 +1,289 @@
+{
+  "case": "cfafd8f7",
+  "matched": {},
+  "new_issues": [
+    {
+      "id": "cfafd8f7-N1",
+      "title": "A git error or timeout inside checkoutReadiness during applyFixPlan rejects the whole run after earlier checkouts were written and committed, so those writes are never reported.",
+      "members": ["sonnet-high/1/0"],
+      "grade": "REAL",
+      "confidence": "high",
+      "why": "checkoutReadiness catches only the rev-parse --show-toplevel and symbolic-ref probes; the rev-parse --git-path and status --porcelain calls run with FIX_GIT_TIMEOUT_MS and throw on failure. gateByReadiness does not catch, and applyFixPlan awaits applyPlanEntry per entry with no isolation, so a throw on entry two or later rejects the promise after entry one's writes and commit are on disk, and the CLI and MCP get no ConsistencyFixResult. The fix commit afd8f74a wraps checkoutReadiness in gateByReadiness and defers as READINESS_FAILED, exactly this defect.",
+      "evidence": [
+        "packages/core/src/git/checkoutReadiness.ts:56-68",
+        "packages/core/src/introspection/routedFixes.ts:106-112",
+        "packages/core/src/introspection/routedFixes.ts:256-261",
+        "packages/core/src/introspection/routedFixes.ts:295-298"
+      ],
+      "known": "B1",
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N2",
+      "title": "checkoutReadiness's blanket catches report any git failure on the show-toplevel and symbolic-ref probes as NOT_A_CHECKOUT or DETACHED_HEAD, with nothing logged.",
+      "members": ["haiku-xhigh/1/0", "luna-r/1/0", "luna-r-high/1/2", "luna-xhigh/1/0", "qwen38-27b/1/0"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "Both catches are bare and gitExec rejects the same way for a timeout, a missing binary or a non-zero exit, so the claim is true. The outcome is still the safe one (the checkout's fixes are deferred, nothing is written), and these two read-only probes run no hooks and take no locks, so the timeout case the findings describe is very unlikely. The defect is a mislabeled deferral reason, not wrong data.",
+      "evidence": [
+        "packages/core/src/git/checkoutReadiness.ts:40-54",
+        "packages/core/src/guides/gitExec.ts:88-102"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N3",
+      "title": "In multi-checkout fix output each applied fix is printed twice: once as an inline 'Fixed:' line under its finding and again in the routed per-checkout report.",
+      "members": ["haiku-xhigh/1/1"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "printCheckOutput calls formatFinding with the fix result, which adds '→ Fixed: ...' for a matched log entry, then calls printRoutedFixResult when showWorktree is true, which lists the same fixLog entries by checkout. The repetition is real but only cosmetic.",
+      "evidence": [
+        "packages/cli/src/output/checkReport.ts:26-39",
+        "packages/cli/src/output/checkReport.ts:89-99",
+        "packages/cli/src/output/fixReport.ts:66-87"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N4",
+      "title": "The read-only path resolves the invoking checkout by string-prefix match while fix mode uses realpath, so the two can disagree on symlinked paths.",
+      "members": ["haiku-xhigh/1/2"],
+      "grade": "PREEXISTING",
+      "confidence": "medium",
+      "why": "invokingPath from resolveOperationPath(project, worktreeId) is the same line that existed at base; the diff only adds realpath-based resolveInvokingCheckout for multi-view fix mode, which is the more robust of the two. Any disagreement comes from the unchanged read-only resolution.",
+      "evidence": [
+        "packages/cli/src/commands/check.ts:170",
+        "packages/cli/src/commands/check.ts:233-242",
+        "packages/core/src/introspection/routedFixes.ts:74-96"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N5",
+      "title": "ConsistencyChecker.fix and fixAll are left with no production caller and still apply fixes without routing.",
+      "members": ["haiku-xhigh/1/3", "sonnet/1/0", "sonnet-high/1/1"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "After the diff the CLI and MCP call check/checkAll then planRoutedFixes/applyFixPlan; fix and fixAll are called only from tests. Nothing currently misbehaves; this is dead code and a stale comment. They were later removed in 5c282dc5.",
+      "evidence": [
+        "packages/core/src/introspection/ConsistencyChecker.ts:202-216"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N6",
+      "title": "With --json, cf check --fix prints prose and no JSON when there are no fixable findings, and can prompt on stdout without --yes.",
+      "members": ["hy4/1/0"],
+      "grade": "PREEXISTING",
+      "confidence": "high",
+      "why": "The claim is true at head, but base already had the same all-slices fix branch: no-fixable printed printCheckOutput plus 'No fixable findings' and returned, and the !opts.yes branch prompted, neither checking opts.json. The diff moved this logic into runRoutedFix without changing it.",
+      "evidence": [
+        "packages/cli/src/commands/check.ts:254-278",
+        "packages/cli/src/commands/check.ts:193"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N7",
+      "title": "The CLI and the MCP tool each carry their own copy of the routed-fix orchestration (scope views, pick check, resolve invoking checkout, plan, apply).",
+      "members": ["hy4/1/1", "minimax31-flash/1/5", "sonnet/1/4", "sonnet-high/1/2"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "check.ts runRoutedFix and workflowTools.ts both build scopeViews, choose check vs checkAll, call resolveInvokingCheckout, planRoutedFixes and applyFixPlan. Both copies behave correctly today; this is a DRY and drift-risk point. It was later extracted in c89f7767.",
+      "evidence": [
+        "packages/cli/src/commands/check.ts:172-252",
+        "packages/mcp-server/src/tools/workflowTools.ts:259-298"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N8",
+      "title": "routeView does not check at runtime that subjectIndex is number or null, so an undefined value would route to the primary checkout.",
+      "members": ["hy4/1/2"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "The type is number | null and every fixAction is built by ConsistencyChecker, so undefined only arrives from a mock or hand-built input. An undefined index would fall through to findPrimaryView as described, but that input cannot arrive in production; this is speculative hardening.",
+      "evidence": [
+        "packages/core/src/introspection/routedFixes.ts:143",
+        "packages/core/src/introspection/fixOwnership.ts:35-53"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N9",
+      "title": "MCP fix tests use findings without fixAction and an applyFixes mock that ignores its input, so they pass without exercising routing.",
+      "members": ["hy4/1/3"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "The fix-result tests feed MOCK_CHECK_RESULT and have mockApplyFixes resolve MOCK_FIX_RESULT unconditionally, asserting only that applyFixes was called. This is a weak test of correct code; routing has its own tests in workflowCheckRouting.test.ts and routedFixes.test.ts.",
+      "evidence": [
+        "packages/mcp-server/tests/workflowTools.test.ts:404-430",
+        "packages/mcp-server/tests/workflowTools.test.ts:504-522"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N10",
+      "title": "planRoutedFixes and applyFixPlan do not check that a fix target path stays inside its checkout root.",
+      "members": ["hy4/1/4"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "fixRelPath uses path.relative with no containment check, but fixAction.filePath is produced by ConsistencyChecker from files it discovered under the view root; no caller passes deserialized or user-built results. This is hardening against input that cannot arrive.",
+      "evidence": [
+        "packages/core/src/introspection/routedFixes.ts:59-61",
+        "packages/core/src/introspection/routedFixes.ts:148"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N11",
+      "title": "Two views with the same checkout root (a worktree with no worktreePath) both keep the same fix, so it is applied twice and fixed/fixLog are overcounted.",
+      "members": ["luna-r-high/1/0", "luna-r-xhigh/1/0"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "applyWorktreeOverlay keeps project.projectPath for a worktree with no worktreePath, and routeView keeps a finding in any view whose root equals the owner's, so both views apply it. The second write sets the same field or checkbox to the same value with the same date stamp, so files end up correct; the only effect is a doubled count and log. It also needs a multi-worktree project with a path-less worktree, which fixOwnership's own comment treats as an edge case.",
+      "evidence": [
+        "packages/core/src/introspection/routedFixes.ts:146-147",
+        "packages/core/src/utils/worktree-overlay.ts:73",
+        "packages/core/src/introspection/fixOwnership.ts:5-13"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N12",
+      "title": "Inline 'Fixed' status matches the fix log by path suffix, so a merged finding attributed to a non-owner checkout can show as fixed.",
+      "members": ["luna-r-high/1/1"],
+      "grade": "MINOR",
+      "confidence": "low",
+      "why": "formatFinding matches a log entry by rule and suffix of location, so a deduplicated finding kept from a non-owner view can pick up the owner's log entry. The printed line still names the owner's real file path and the fix was in fact applied there, so the output is ambiguous rather than false, and the routed report below lists the deferral correctly.",
+      "evidence": [
+        "packages/cli/src/output/checkReport.ts:30-38",
+        "packages/core/src/introspection/mergeCheckResults.ts:146-156"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N13",
+      "title": "On a commit failure, restorePathsToHead restores the whole written path to HEAD and can erase an edit made concurrently after the readiness check.",
+      "members": ["luna-r-xhigh/1/1"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "The restore covers only paths that readiness found clean just before writing, so loss needs a user edit to the same file in the other checkout within the window between the readiness probe and a failed commit. True in principle, but a narrow race.",
+      "evidence": [
+        "packages/core/src/introspection/routedFixes.ts:256-261",
+        "packages/core/src/introspection/routedFixes.ts:228-233"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N14",
+      "title": "cf check --slice N --fix no longer previews or prompts before writing.",
+      "members": ["minimax31-flash/1/0"],
+      "grade": "FALSE",
+      "confidence": "high",
+      "why": "At base the --slice fix path called checker.fix per view with no preview or prompt; only the all-slices fix path prompted. Head keeps the same rule (confirm only when singleSlice is null), so there is no behavior change.",
+      "evidence": [
+        "packages/cli/src/commands/check.ts:187-190"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N15",
+      "title": "With --yes the multi-checkout fix plan preview is skipped, so routing is shown only after writing.",
+      "members": ["minimax31-flash/1/1"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "printFixPlan runs only inside the confirm branch, so --yes skips it, as the finding says. That is what --yes means here, base also skipped the preview under --yes, and the post-write routed report lists the deferrals. True, but low value.",
+      "evidence": [
+        "packages/cli/src/commands/check.ts:262-278"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N16",
+      "title": "The routed fix report is keyed on showWorktree rather than on deferred or commits being non-empty.",
+      "members": ["minimax31-flash/1/2"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "The finding itself concludes the path is unreachable: deferrals and commits occur only with two or more views, and buildAttributedViews attaches worktrees exactly then, so showWorktree is true whenever they can be non-empty. This is a coupling and readability point.",
+      "evidence": [
+        "packages/cli/src/output/checkReport.ts:95-110",
+        "packages/core/src/introspection/mergeCheckResults.ts:31-42"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N17",
+      "title": "'Fixed N of M' counts deferred findings in M.",
+      "members": ["minimax31-flash/1/3"],
+      "grade": "FALSE",
+      "confidence": "medium",
+      "why": "The 'Fixed N of M' line is printed only when showWorktree is false, which means a single view, and planRoutedFixes produces no deferrals for a single view. The multi-view case prints printRoutedFixResult's 'Fixed N finding(s)' instead. The described miscount cannot appear.",
+      "evidence": [
+        "packages/cli/src/output/checkReport.ts:95-105",
+        "packages/core/src/introspection/routedFixes.ts:173-180"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N18",
+      "title": "commitViewWrites logs with console.error naming 'cf check --fix' from the core library, and its catches carry no comment saying the error is surfaced in the result.",
+      "members": ["minimax31-flash/1/4", "sonnet/1/2"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "Both catch blocks log via console.error with the CLI command name and convert the error into a COMMIT_FAILED deferral or a fixErrors entry. The error is not lost; the points are naming, stderr noise under MCP and a missing comment.",
+      "evidence": [
+        "packages/core/src/introspection/routedFixes.ts:228-245"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N19",
+      "title": "CLI and MCP tests import the git worktree fixture from core's tests directory by relative path.",
+      "members": ["sonnet/1/1"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "check-worktree-fix.test.ts and workflowCheckRouting.test.ts import ../../core/tests/helpers/gitWorktreeFixture.js. That couples test layouts across packages, which is a test-structure point.",
+      "evidence": [
+        "packages/cli/tests/commands/check-worktree-fix.test.ts:16",
+        "packages/mcp-server/tests/workflowCheckRouting.test.ts:17"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfafd8f7-N20",
+      "title": "fixRelPath and routeView use a non-null assertion on fixAction, and the FixLogEntry.worktree doc comment may be wrong.",
+      "members": ["sonnet/1/3"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "Both callers filter on fixable && fixAction before the assertion, so it holds. The doc comment saying worktree is present only with 2+ worktrees is correct, because buildAttributedViews attaches a worktree only when there is more than one. Style only.",
+      "evidence": [
+        "packages/core/src/introspection/routedFixes.ts:59-61",
+        "packages/core/src/introspection/routedFixes.ts:171",
+        "packages/core/src/introspection/mergeCheckResults.ts:35-41"
+      ],
+      "known": null,
+      "fail_justified": null
+    }
+  ],
+  "disputes": []
+}

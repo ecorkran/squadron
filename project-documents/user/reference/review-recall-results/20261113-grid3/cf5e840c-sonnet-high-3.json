@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Stray `sed -i` backup file committed",
+      "description": "The diff adds `CoreServiceFactory.test.ts-E`, and I confirmed the file exists on disk. This is the backup file BSD/macOS `sed -i` leaves behind, probably from the bulk edit of `createContextPipeline(...)` call sites. It is a full copy of the test file as it was before the edit, so it still calls `createContextPipeline(FIXTURE_PROJECT_PATH)` with one argument. It does not match the vitest `*.test.ts` pattern, so it won't run. It is still dead code that will mislead anyone grepping for call sites. Delete it, and consider adding `*-E` to `.gitignore`. The grep for that pattern in `.gitignore` found nothing.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`'implementation'` default literal duplicated again",
+      "description": "The new line `const instruction = project.instruction || 'implementation';` adds a fourth copy of the default. Copies already exist at lines 216, 244 and 289, and `FileProjectStore.ts:104` has another. The project rules say a value used in conditionals or lookups should be defined once and referenced everywhere, and that magic defaults belong at the config level. This new copy must stay in sync with `mapProjectToEnhancedContext`, because the resolver is handed this value and the mapper later applies its own default. If they drift, the resolver would judge eligibility on a different instruction than the one that selects the prompt. Extract a constant such as `DEFAULT_INSTRUCTION`. A fuller fix would resolve the instruction once and pass it down, but that goes beyond this slice.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:148"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Resolver ordering and error propagation are consistent",
+      "description": "I checked the resolver's step order against its doc comments.\n- The guide check runs before any state write, so a guide without the profile leaves `adoption.state` unset. Test 12 and the \"rejects a guide without the profile, before writing\" test cover this.\n- A write failure is wrapped as `AdoptionError` with `cause`, and the message names the escape hatch.\n- `ContextIntegrator` rethrows `AdoptionError` before its blanket catch.\n- The `isSelected` switch is exhaustive, with a `never` check in the default branch.\n\n`createContextPipeline` now requires `adoptionStateWrites`, and every call site I found passes it. That covers `cf build` and `context_build` with `persist`, and `template_preview` and the existing tests with `read-only`. The parity test and the `contextTools` tests assert the persist/read-only split directly.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:111-136"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Stray `sed -i` backup file committed",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`'implementation'` default literal duplicated again",
+      "location": "packages/core/src/services/ContextIntegrator.ts:148",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Resolver ordering and error propagation are consistent",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:111-136",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:31:42.154785",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 397633,
+  "cached_tokens": 290428,
+  "cache_write_tokens": 107197,
+  "completion_tokens": 3288,
+  "reasoning_tokens": null,
+  "duration_seconds": 35.61878858297132,
+  "cost_usd": 0.49418690000000004,
+  "cost_basis": "provider"
+}

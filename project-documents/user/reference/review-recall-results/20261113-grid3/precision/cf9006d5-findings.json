@@ -1,0 +1,184 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "FAIL",
+  "title": "Manifest-driven deletion lost its containment guard",
+  "location": "packages/cli/src/ideInstall/manifest.ts:187-199",
+  "description": "`finish()` builds its stale list from `.context-forge/<target>.manifest` plus the hard-coded legacy entries, then runs `fs.rmSync(path.join(this.targetRoot, rel))` at line 192. Before that it checks only `isFile` and a CRC+size match. Nothing stops `rel` from escaping the root: `path.join` resolves `../`, and nothing checks whether a parent directory is a symlink pointing out of the root. `removeEmptyInstallDirs` (lines 212-220) has the same gap and can `rmdir` outside the root.\n\nThe manifests are real files in this repo (`.context-forge/claude.manifest` and `agents.manifest` exist in the worktree), so this input comes from the checkout, not only from the user.\n\nThe removed `worktreePrune.ts` had `escapesLexically` and an `isWithin` check on realpaths. The diff deletes the tests that pinned them: `keeps ../ and absolute paths with reason \"containment\"` and the symlinked-directory case. A grep for `realpath|escapesLexically|isWithin|containment` in `packages/cli/src/ideInstall` returns nothing, and no ideInstall test uses `../` or a symlink.\n\nThe CRC+size match means an attacker must know the target file's exact bytes, so exposure is narrow. The old code required that match and still layered containment on top, so removing the containment layer is the regression. In a worktree, `../main/...` reaches the main checkout.\n\nFix: reject absolute and `..` paths, compare the realpath of each parent with the realpath of `targetRoot` before `rm`, and restore the deleted containment tests against the installer, plus a symlinked-install-directory case."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Report-only lint fails when a guide template is missing",
+  "location": "packages/cli/src/ideInstall/lint.ts:116",
+  "description": "`writeOrSuggest`'s third argument is evaluated before the call, so `fs.readFileSync(this.source('python', 'ruff.toml'))` runs even when `writeLint` is false. The same eager read happens at lines 151, 178, and 196 for dart, typescript, and csharp. The bash `lint_write_or_suggest` reads `$src` only inside the `WRITE_LINT=true` branch (`setup-ide-lint.sh:55-62`).\n\nIn this worktree, `project-documents/ai-project-guide/project-guides/lint/python/ruff.toml` does not exist. The guide's own `setup-ide-lint.sh:98` and `readme.setup-ide.md:127` both reference it, and the fixture guide has it. So a Python project with no `[tool.ruff]` gets an ENOENT, which `isFilesystemError` turns into exit 1, even in default mode. `.gitmodules` also reads as empty in this worktree, so confirm the guide checkout is the intended version.\n\nFix: read the template inside the write branch, or pass a loader. Add a test for report-only mode when the template is absent."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "Dry run can write into the real tree through a symlinked install directory",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:37-48",
+  "description": "`copyInstallPaths` calls `fs.cpSync` without `dereference`, so a symlinked install directory such as `.claude/rules` is copied as a symlink. The sandbox install then writes through it. If the link target is absolute, `verbatimSymlinks: true` keeps it absolute, so writes land in the real project. The docstring says \"The project is never touched,\" and the `projectTree` check in `flags.test.ts` covers only regular directories.\n\nThis is from reading Node's `cpSync` semantics, not from running it.\n\nFix: dereference install paths into the sandbox, or refuse to dry-run through symlinked install directories with a clear error. Add a test with a symlinked install directory."
+ },
+ {
+  "ref": "haiku-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "Node errors with a `code` property are treated as environment failures",
+  "location": "packages/cli/src/ideInstall/installer.ts:59-62",
+  "description": "`isFilesystemError` accepts any `Error` with a string `code`. Node programmer errors such as `ERR_INVALID_ARG_TYPE` also carry `code`. The doc comment at lines 64-67 says \"anything else is a bug and propagates,\" and the worktree loop in `setup-ide.ts` relies on that. A bug with a code becomes exit 1, prints only its message, and the loop continues with the next worktree.\n\nFix: check for an errno-style error (`'errno' in err` or `code` matching `^E[A-Z]+$`), and let `ERR_*` errors propagate. Add a test that an `ERR_INVALID_ARG_TYPE`-style error propagates out of `installIde`."
+ },
+ {
+  "ref": "haiku-xhigh/1/4",
+  "severity": "CONCERN",
+  "title": "Lint filenames and language keys are repeated literals",
+  "location": "packages/cli/src/ideInstall/lint.ts:137",
+  "description": "`ruff.toml`, `analysis_options.yaml`, `eslint.config.mjs`, `.editorconfig`, and `Directory.Build.props` are typed out in several places in `lint.ts` (for example lines 116 and 137), and the language keys `'python'`, `'dart'`, and so on are repeated in each method and in `source(...)` lookups. `LINT_WRITE_PATHS` (`paths.ts:44`) and `LANGUAGES` already exist. `LINT_WRITE_PATHS` is what keeps the dry-run sandbox in sync. If a literal changes without the constant, dry-run reports will show the wrong `+`/`~` results.\n\nCLAUDE.md requires each comparison or lookup value to be defined once. Fix: derive the write names and language keys from one definition in `lint.ts`/`paths.ts`."
+ },
+ {
+  "ref": "hy4/1/0",
+  "severity": "FAIL",
+  "title": "Manifest pruning can delete files outside the checkout",
+  "location": "packages/cli/src/ideInstall/manifest.ts:177-192",
+  "description": "`InstallManifest.finish()` builds stale paths from the old manifest and then joins them to `targetRoot` and deletes them at `packages/cli/src/ideInstall/manifest.ts:177-192` without `..`, absolute-path, or resolved-parent containment checks. The new worktree loop in `packages/cli/src/commands/setup-ide.ts:179-193` calls `installCheckout()` for every registered worktree, so this writer is now the only prune path for all checkouts. A hand-edited or corrupt `.context-forge/<target>.manifest` entry such as `1 1 ../important.txt` can escape `targetRoot`; `isFile()` follows symlinks, and `removeEmptyInstallDirs()` can also remove outside empty directories. The deleted `packages/cli/tests/commands/worktreePrune.test.ts` pinned traversal and symlink containment cases, but the remaining `packages/cli/tests/ideInstall/manifest.test.ts` no longer covers them. Restore lexical plus realpath containment checks before deletion and add regression tests for traversal and symlink manifest entries."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "Dry run can write through symlinked install paths",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:37-45",
+  "description": "`copyInstallPaths()` copies top-level install paths with `verbatimSymlinks: true` at `packages/cli/src/ideInstall/dryRun.ts:37-45`, while the module states that the project is never touched at `packages/cli/src/ideInstall/dryRun.ts:1-4`. `regularFilesUnder()` uses `lstatSync()` at `packages/cli/src/ideInstall/dryRun.ts:51-59`, so symlinked install files are excluded from the before/after report. During the sandbox install, `InstallManifest.installFile()` at `packages/cli/src/ideInstall/manifest.ts:133-140` and lint writes at `packages/cli/src/ideInstall/lint.ts:74-80` use `writeFileSync()` on paths whose symlinks were preserved. If `.claude/rules/foo.md` or a lint write path is an absolute symlink, a dry run can write through the symlink to the real file outside the sandbox. Handle symlinks explicitly\u2014skip, dereference into the sandbox, or reject them\u2014and add a dry-run regression test using a symlinked install path."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "Native lint check breaks valid guide.exclude language removals",
+  "location": "packages/cli/src/ideInstall/lint.ts:224-237",
+  "description": "`guide.exclude` explicitly allows removing individual language lint subtrees (`packages/core/src/config/ConfigKeys.ts:46`, `packages/core/src/config/guideExclude.ts:23-24`), but `checkLintConfigs()` at `packages/cli/src/ideInstall/lint.ts:224-237` only checks that the parent `lint` directory exists and skips a language only when `rules.exclude` contains `<lang>.md`. The language checks still read `<guide.lint>/<lang>/required` through `source()` at `packages/cli/src/ideInstall/lint.ts:60-63` and `missingRequirements()` at `packages/cli/src/ideInstall/lint.ts:46-52`. A tarball guide that excludes `project-guides/lint/python` while leaving `python.md` installed therefore aborts a Python project\u2019s setup with ENOENT; `installIde()` converts filesystem errors to exit 1 at `packages/cli/src/ideInstall/installer.ts:91-96`. The new `packages/cli/tests/ideInstall/lint.test.ts` and `packages/cli/tests/ideInstall/rulesExclude.test.ts` cover `rules.exclude` but not this `guide.exclude`/`rules.exclude` combination. Skip missing language lint sources or fail with a user-facing config error, and add a regression test."
+ },
+ {
+  "ref": "hy4/1/3",
+  "severity": "CONCERN",
+  "title": "rules.exclude is parsed without validating on read",
+  "location": "packages/cli/src/commands/setup-ide.ts:75-80",
+  "description": "`readRulesExclude()` at `packages/cli/src/commands/setup-ide.ts:75-80` trusts `ConfigManager.get()` and then calls `parseRulesExclude()`. `ConfigManager.get()` at `packages/core/src/config/ConfigManager.ts:121-168` returns the raw stored value; validation is only invoked by `set()` at `packages/core/src/config/ConfigManager.ts:180-193`. The key validator rejects whitespace and empty entries at `packages/core/src/config/ConfigKeys.ts:164-185`, but `parseRulesExclude()` explicitly does neither at `packages/core/src/config/ConfigKeys.ts:190-194`. A legacy or hand-edited `.context-forge.toml` containing `dart.md, swift*.md` therefore becomes `['dart.md', ' swift*.md']`; `packages/cli/src/ideInstall/exclusions.ts#RuleExclusions` matches patterns literally and silently reports an unmatched pattern instead of failing explicitly, contrary to the project convention. `packages/core/tests/config/ConfigKeys.test.ts:21-60` only exercises direct validation calls, not a stored invalid value read through `ConfigManager`. Validate on read or parse defensively, and add a regression test using a real stored config value."
+ },
+ {
+  "ref": "luna-r/1/0",
+  "severity": "FAIL",
+  "title": "Dry run can write through copied symlinks into real directories",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:44",
+  "description": "`verbatimSymlinks: true` preserves symlinks when copying install paths into the sandbox. The installer then operates on those paths in the sandbox, but filesystem operations follow the preserved links. If an install directory or file in the project points outside the sandbox, a dry run can modify or delete files at the symlink\u2019s destination, contradicting the guarantee that the project is never touched. Ensure dry-run operations cannot follow links back to real locations\u2014for example, reject or safely dereference symlinks when constructing the sandbox."
+ },
+ {
+  "ref": "luna-r-high/1/0",
+  "severity": "FAIL",
+  "title": "Dry runs can write through preserved symlinks",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:39-45",
+  "description": "`copyInstallPaths` preserves symlinks with `verbatimSymlinks: true`, then runs the installer against the sandbox. Installer writes through symlinked directories can therefore reach the original project or another location outside the sandbox, violating the guarantee that a dry run writes nothing. Add coverage for symlinked install paths and ensure the sandbox cannot follow links back to real destinations."
+ },
+ {
+  "ref": "luna-r-high/1/1",
+  "severity": "FAIL",
+  "title": "Manifest paths can delete files outside the checkout",
+  "location": "packages/cli/src/ideInstall/manifest.ts:188-192",
+  "description": "`finish()` joins manifest-controlled paths to `targetRoot` and can unlink a stale file after its contents match the manifest, without checking lexical or real-path containment. A crafted manifest path such as `../...`, or a path through a symlinked directory, can target a matching file outside the checkout. The new setup-ide flow runs this installer directly on project and worktree roots; validate containment before reading or deleting stale paths."
+ },
+ {
+  "ref": "luna-r-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Dry run can write through absolute symlinks into real files",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:41-45",
+  "description": "`copyInstallPaths` preserves symlinks when copying install paths into the sandbox. If a copied path is an absolute symlink (for example, `.claude/rules` pointing outside the sandbox), the installer can follow it and modify files at the symlink\u2019s real destination. That breaks the `--dry-run` guarantee that nothing is written. Reject or safely dereference symlinks before running the installer in the sandbox, and add a regression test."
+ },
+ {
+  "ref": "luna-r-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "Dry-run failures discard the diagnostics explaining them",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:114-120",
+  "description": "The install\u2019s stdout is buffered, but buffered lines are replayed only after `install(...)` returns successfully. If the install aborts after printing a diagnostic\u2014for example, because managed-section markers are broken\u2014the exception skips replay, and the outer installer returns failure without showing that explanation. Replay relevant buffered diagnostics when the install throws as well."
+ },
+ {
+  "ref": "luna-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Dry run can write through copied symlinks",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:42-45",
+  "description": "`copyInstallPaths` preserves symlinks with `verbatimSymlinks: true`. If an install path such as `.claude` is a symlink to an external directory, the sandbox retains that link; the installer can then follow it and write to the real destination during a dry run. This contradicts the guarantee that the project is never touched. Avoid following or preserving install-path symlinks in the sandbox, or explicitly reject them before running the installer."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "FAIL",
+  "title": "Dry-run writes can escape through copied symlinks",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:43-47",
+  "description": "`copyInstallPaths` uses `fs.cpSync` with `verbatimSymlinks: true`. If an install directory such as `.claude`, `.github`, or a nested rules directory is a symlink, the sandbox receives a symlink with the same target. `installTarget` subsequently writes through that link, so an absolute link can modify the real project or another external directory during a supposedly non-writing dry run. Relative links can likewise resolve outside the sandbox. Since `regularFilesUnder` ignores symlinks, the resulting mutation may also be omitted from the change report. Materialize copied content into non-symlink sandbox paths or explicitly reject unsafe symlinks, with tests for absolute and relative links."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "FAIL",
+  "title": "The lint port requires a Ruff baseline absent from the production guide",
+  "location": "packages/cli/src/ideInstall/lint.ts:112",
+  "description": "The no-Ruff-config branch eagerly evaluates `fs.readFileSync(this.source('python', 'ruff.toml'))` before calling `writeOrSuggest`. The checked-in guide at `project-documents/ai-project-guide/project-guides/lint/python/` contains only `required`; it has no `ruff.toml`. Consequently, any detected Python project without an existing Ruff configuration fails with `ENOENT` and exits 1\u2014even in report-only mode. The fixture guide supplies a baseline file that the actual installed guide does not contain, so this production failure is currently masked."
+ },
+ {
+  "ref": "minimax31-flash/1/2",
+  "severity": "CONCERN",
+  "title": "Dry-run aborts discard the buffered diagnostic",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:114-119",
+  "description": "The sandbox install is invoked before the buffered stdout is replayed. If the install throws `InstallAbort`, execution never reaches the replay loop, and `installIde` catches the abort outside `dryRunInstall`. Errors written through the buffered `Printer`, such as the missing lint-directory message from `checkLintConfigs`, are therefore discarded, leaving only the generic \u201csetup-ide failed\u201d message. Replay the captured diagnostics when the install aborts, or report abort details through stderr."
+ },
+ {
+  "ref": "minimax31-flash/1/3",
+  "severity": "CONCERN",
+  "title": "The fixture-only Ruff baseline hides the production failure",
+  "location": "packages/cli/tests/ideInstall/lint.test.ts:15",
+  "description": "`PYTHON_BASELINE` is loaded from `fixture_guide/lint/python/ruff.toml`, a file that exists only in the fixture. The real-guide smoke test does not create a Python project or exercise `--write-lint`, so every lint test passes while the production guide cannot supply the required baseline. Add a lint case using the installed guide with a Python marker file and no existing Ruff configuration."
+ },
+ {
+  "ref": "qwen38-27b/1/0",
+  "severity": "CONCERN",
+  "title": "In-process manifest prune has no path-containment guard (port dropped it)",
+  "location": "packages/cli/src/ideInstall/manifest.ts#finish",
+  "description": "The new `InstallManifest.finish()` prune loop computes `const file = path.join(this.targetRoot, rel)` for each stale `rel` read from the on-disk manifest (`oldLines.map(pathField)`), then `fs.rmSync(file)` when the file's CRC matches. `rel` is attacker/ user-controllable text: the module doc and the config key both treat `.context-forge/<target>.manifest` as a user-editable, guide-readable file, and a `pathField` value containing `..` (or an absolute path) makes `path.join` resolve outside `targetRoot`, so `isFile` + CRC-match + `rmSync` will delete a file outside the checkout. The pre-port cf `pruneStaleFiles` explicitly guarded this with `escapesLexically` / `isWithin` (realpath containment) and reported it as `reason: 'containment'` instead of deleting; that guard was not carried into the port. This is reachable in normal cf flow: worktree manifests are written by cf during worktree installs, so a user who edits a worktree manifest to add a `../<something>.md` entry gets that file deleted on the next `cf setup-ide`. Recommend adding the same lexical + realpath containment check before the `rmSync` and treating a violation as a \"kept, warn\" entry."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "Dry-run output filtered by emoji glyphs in user-facing text",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:35",
+  "description": "`DRY_RUN_KEEP = /\u26a0\ufe0f|\u2298|\u274c/` decides which sandbox-run lines to replay by matching the decorative glyphs inside message text. Project rules say \"NEVER use user-accessible labels as logical structure.\" Rewording a message, or changing the `Printer` status icons, silently drops warnings from dry-run output. The glyph literals are also repeated elsewhere (`lint.ts` writes `\u26a0\ufe0f`). `Printer` and `StdoutBuffer` should record each line's severity, for example from the `status('yellow'|'red', \u2026)` colour. `dryRunInstall` can then replay by that field."
+ },
+ {
+  "ref": "sonnet/1/1",
+  "severity": "CONCERN",
+  "title": "A bad worktree config aborts the worktree loop, contrary to the documented behavior",
+  "location": "packages/cli/src/commands/setup-ide.ts:88-101",
+  "description": "`installWorktrees` documents that a failing worktree is recorded and the loop continues, and that any other exception is a bug. `installCheckout` awaits `readRulesExclude(root)` before calling the installer. A worktree-specific problem, such as an unreadable config or an unexpected `rules.exclude` type, throws a plain `Error` from there. That aborts the remaining worktrees and skips the \"failed in worktree(s)\" summary. These are environment or config failures, not bugs. Catch config-read failures per worktree and count them as failed, or wrap them in a `UserError`."
+ },
+ {
+  "ref": "sonnet/1/2",
+  "severity": "CONCERN",
+  "title": "Smoke test depends on the repo's installed guide checkout",
+  "location": "packages/cli/tests/ideInstall/realGuide.test.ts:12",
+  "description": "The test reads `project-documents/ai-project-guide/project-guides` from `REPO_ROOT`. It fails, with a confusing message, in any checkout where the guide submodule is not initialized, such as a fresh clone or CI without submodule fetch. Skip it explicitly when the directory is missing (`describe.skipIf`). Alternatively, assert that the directory exists first with a clear error."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "Scoped-rule index path goes absolute when the target root isn't the guide's parent",
+  "location": "packages/cli/src/ideInstall/targets/agents.ts:24",
+  "description": "`scopedRuleIndex` builds its rule paths with `relativeToRoot(ctx.targetRoot, ctx.guide.rules)`. `relativeToRoot` (`paths.ts:38-41`) returns the path unchanged when it isn't under the root. This change creates two cases where the guide isn't under `targetRoot`:\n- **Worktrees.** `installWorktrees` passes the main checkout's `guideDir` with `targetRoot = wtPath`. The worktree's `AGENTS.md` then lists scoped rules by absolute path into the main checkout. Before this change, the worktree got a copy of the root's `AGENTS.md`, which has relative paths.\n- **Dry run.** `dryRunInstall` swaps `targetRoot` for a temp sandbox, so the sandbox `AGENTS.md` has absolute paths while the real one is relative. `reportChanges` will then always list `~ AGENTS.md` as modified for the `agents` target, even on an up-to-date project.\n\nNeither case is tested. The dry-run tests in `flags.test.ts` only use `claude`, which doesn't call `scopedRuleIndex`. The worktree tests in `setup-ide.test.ts` mock `installIde`. The scoped-rule path should be computed against the checkout the guide is installed into, not `targetRoot`. For worktrees that means the worktree root. For a dry run it means the real root."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "Install-output paths are now hard-coded in several unlinked lists",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:18-30",
+  "description": "Removing `propagateDirs` from `TargetDescriptor` took away the one place that said what each target writes. The dry run now keeps its own `INSTALL_PATHS` list, which has `.agents` as a literal even though `AGENT_SKILLS_DIR` exists. `paths.ts:44` adds `LINT_WRITE_PATHS`, which duplicates the filenames passed to `writeOrSuggest` in `lint.ts`. `tests/ideInstall/harness.ts:26-41` has a third copy. The targets write to literal `.claude`, `.github`, `.cursor` paths too.\n\nIf a target or lint check starts writing somewhere new, the dry-run sandbox won't copy that location. The preview will then be wrong with no error. This breaks the \"define once\" rule in CLAUDE.md. Derive the list from the target definitions and the lint check, or add a test that fails when an install writes outside the list."
+ },
+ {
+  "ref": "sonnet-high/1/2",
+  "severity": "CONCERN",
+  "title": "Dry-run and worktree paths are thinly covered",
+  "location": "packages/cli/tests/ideInstall/flags.test.ts:30-76",
+  "description": "- **Dry run:** only `claude` is exercised. There is no dry run combined with `--write-lint`, which is why `LINT_WRITE_PATHS` exists, and none for `agents`, `copilot` or `cursor`. That gap hid the first finding.\n- **Worktree installs:** `setup-ide.test.ts` mocks `installIde` entirely, so no test installs a worktree root from a guide in a different directory. The one test with a separate root (`test_flags_root_outside_guide`) only covers `claude`.\n- **`--root` argument:** in `harness.ts:109`, the `--root` arg is only used to pick the target out of the args and for the snapshot label. The root actually comes from the `root` parameter, so the argument doesn't exercise anything.\n- **Sandbox leak test:** `sandboxes()` compares `os.tmpdir()` listings before and after, which could flake if another test file runs a dry run in parallel. That's unlikely today."
+ }
+]

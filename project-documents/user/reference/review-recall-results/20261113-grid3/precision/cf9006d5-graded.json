@@ -1,0 +1,255 @@
+{
+  "case": "cf9006d5",
+  "matched": {},
+  "new_issues": [
+    {
+      "id": "cf9006d5-N1",
+      "title": "Manifest prune in InstallManifest.finish deletes manifest-listed paths with no lexical or realpath containment check, now also for worktrees.",
+      "members": [
+        "haiku-xhigh/1/0",
+        "hy4/1/0",
+        "luna-r-high/1/1",
+        "qwen38-27b/1/0"
+      ],
+      "grade": "REAL",
+      "confidence": "high",
+      "why": "finish() joins each stale manifest path to targetRoot and rmSync's it when the CRC line matches, with no check for '..', absolute paths or a symlinked parent; removeEmptyInstallDirs likewise rmdir's. This diff routes worktree installs through installCheckout/installIde and deletes worktreePropagation's pruneStaleFiles, which had escapesLexically and realpath isWithin checks plus tests. The main-checkout path never had the guard (the bash finish_manifest lacked it too), and an exact CRC+size match limits what can be deleted, so it is a real containment regression on a delete path driven by a committed, user-editable file, but narrow. The fix commit 9006d54c later added exactly this check (escapesTargetRoot).",
+      "evidence": [
+        "packages/cli/src/ideInstall/manifest.ts:187-194",
+        "packages/cli/src/ideInstall/manifest.ts:212-220",
+        "packages/cli/src/commands/setup-ide.ts:179-195",
+        "acbe4590a3:packages/cli/src/commands/worktreePropagation.ts:33-78"
+      ],
+      "known": null,
+      "fail_justified": false
+    },
+    {
+      "id": "cf9006d5-N2",
+      "title": "Dry run copies install paths with verbatimSymlinks, so an absolute symlinked install directory lets the sandbox install write into real files.",
+      "members": [
+        "haiku-xhigh/1/2",
+        "hy4/1/1",
+        "luna-r/1/0",
+        "luna-r-high/1/0",
+        "luna-r-xhigh/1/0",
+        "luna-xhigh/1/0",
+        "minimax31-flash/1/0"
+      ],
+      "grade": "REAL",
+      "confidence": "medium",
+      "why": "copyInstallPaths uses fs.cpSync(recursive, verbatimSymlinks: true) without dereference, so a top-level install path that is a symlink (e.g. .claude -> /abs/shared) is recreated in the sandbox as the same absolute link. The installer then writeFileSync's and rmSync's through it, modifying the real destination while the module doc and output say nothing was written. Requires a symlinked install directory, which is plausible for shared agent config; not reproduced by running.",
+      "evidence": [
+        "packages/cli/src/ideInstall/dryRun.ts:1-4",
+        "packages/cli/src/ideInstall/dryRun.ts:37-48",
+        "packages/cli/src/ideInstall/dryRun.ts:114",
+        "packages/cli/src/ideInstall/manifest.ts:139"
+      ],
+      "known": null,
+      "fail_justified": false
+    },
+    {
+      "id": "cf9006d5-N3",
+      "title": "Python lint check reads the guide's ruff.toml eagerly, which reviewers say the production guide lacks, so report-only mode fails with ENOENT.",
+      "members": [
+        "haiku-xhigh/1/1",
+        "minimax31-flash/1/1",
+        "minimax31-flash/1/3"
+      ],
+      "grade": "FALSE",
+      "confidence": "medium",
+      "why": "The read is eager (lint.ts:116), but the failure premise is wrong. The upstream ai-project-guide release (v0.20.1 and v0.20.10 tags) ships project-guides/lint/python/ruff.toml and has no export-ignore for lint, so installed guides carry it. Only context-forge's own vendored copy at head happens to lack the file (re-added in a later guide update), and context-forge's .context-forge.toml excludes python.md, so its Python check is skipped anyway.",
+      "evidence": [
+        "packages/cli/src/ideInstall/lint.ts:114-117",
+        "ai-project-guide v0.20.1:project-guides/lint/python/ruff.toml",
+        ".context-forge.toml:6"
+      ],
+      "known": null,
+      "fail_justified": false
+    },
+    {
+      "id": "cf9006d5-N4",
+      "title": "isFilesystemError treats any Error with a string code, including Node ERR_* programmer errors, as an environment failure.",
+      "members": [
+        "haiku-xhigh/1/3"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True: the predicate checks only for a string `code`, so ERR_INVALID_ARG_TYPE would be reported as exit 1 with its message instead of propagating. The bug is still surfaced to the user; this is classification hardening.",
+      "evidence": [
+        "packages/cli/src/ideInstall/installer.ts:59-62",
+        "packages/cli/src/ideInstall/installer.ts:92-95"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf9006d5-N5",
+      "title": "Lint filenames and language keys are repeated literals in lint.ts.",
+      "members": [
+        "haiku-xhigh/1/4"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True that names like ruff.toml and 'python' appear in several places alongside LINT_WRITE_PATHS and LANGUAGES. Currently consistent; define-once style point.",
+      "evidence": [
+        "packages/cli/src/ideInstall/lint.ts:116",
+        "packages/cli/src/ideInstall/paths.ts:44-50"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf9006d5-N6",
+      "title": "Excluding a language's lint subtree via guide.exclude while keeping its rule makes the lint check fail with ENOENT.",
+      "members": [
+        "hy4/1/2"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "True that checkLintConfigs skips a language only on rules.exclude, so a tarball guide with project-guides/lint/python excluded and a Python project gets ENOENT and exit 1. The carve-out is documented for languages the project does not use, the failure is explicit with the missing path, and it needs a contradictory configuration. Low value.",
+      "evidence": [
+        "packages/cli/src/ideInstall/lint.ts:224-238",
+        "packages/core/src/config/guideExclude.ts:18-23"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf9006d5-N7",
+      "title": "readRulesExclude trusts the stored rules.exclude value without re-validating whitespace or empty entries.",
+      "members": [
+        "hy4/1/3"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "True that ConfigManager.get does not run the key validator and parseRulesExclude does not trim. A hand-edited ' swift*.md' then never matches, but warnUnmatched reports unmatched patterns, so it is not silent. Speculative hardening against hand edits.",
+      "evidence": [
+        "packages/cli/src/commands/setup-ide.ts:75-81",
+        "packages/core/src/config/ConfigKeys.ts:190-194",
+        "packages/cli/src/ideInstall/installer.ts:88"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf9006d5-N8",
+      "title": "When the sandbox install aborts, the dry run discards the buffered stdout that holds the abort's diagnostic.",
+      "members": [
+        "luna-r-xhigh/1/1",
+        "minimax31-flash/1/2"
+      ],
+      "grade": "REAL",
+      "confidence": "medium",
+      "why": "dryRunInstall buffers the install's stdout in a StdoutBuffer and replays it only after install() returns. Abort paths print their reason with out.status (stdout), e.g. requireRulesDir, the CLAUDE.md compile failure and the lint-directory check, then throw InstallAbort; the replay is skipped, installIde returns exit 1, and the user gets 'setup-ide failed ... Check the output above for details' with the reason lost. A failure path that hides its cause in new code.",
+      "evidence": [
+        "packages/cli/src/ideInstall/dryRun.ts:113-120",
+        "packages/cli/src/ideInstall/output.ts:42-44",
+        "packages/cli/src/ideInstall/output.ts:63-74",
+        "packages/cli/src/ideInstall/context.ts:35-41",
+        "packages/cli/src/commands/setup-ide.ts:161-163"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf9006d5-N9",
+      "title": "Dry run decides which sandbox lines to replay by matching emoji glyphs in message text.",
+      "members": [
+        "sonnet/1/0"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True: DRY_RUN_KEEP = /⚠️|⊘|❌/ filters by display text. Fragile design, but all current warning/error lines carry those glyphs, so no output is lost today.",
+      "evidence": [
+        "packages/cli/src/ideInstall/dryRun.ts:35",
+        "packages/cli/src/ideInstall/dryRun.ts:117-119"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf9006d5-N10",
+      "title": "A worktree config-read failure in readRulesExclude aborts the whole worktree loop instead of being counted as that worktree's failure.",
+      "members": [
+        "sonnet/1/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "True: readRulesExclude runs outside installIde's try, so a malformed or unreadable worktree .context-forge.toml throws out of installWorktrees, skipping the remaining worktrees and the summary, contrary to the doc comment. The error is still reported explicitly and the root install has completed; a rerun after fixing the config recovers. Low impact.",
+      "evidence": [
+        "packages/cli/src/commands/setup-ide.ts:75-81",
+        "packages/cli/src/commands/setup-ide.ts:89-101",
+        "packages/cli/src/commands/setup-ide.ts:173-196"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf9006d5-N11",
+      "title": "The real-guide smoke test fails in a checkout without an initialized guide submodule.",
+      "members": [
+        "sonnet/1/2"
+      ],
+      "grade": "FALSE",
+      "confidence": "high",
+      "why": "In context-forge the guide is committed as an ordinary tree (git ls-tree shows project-documents/ai-project-guide as a tree, not a submodule gitlink), so every clone and CI checkout has it.",
+      "evidence": [
+        "packages/cli/tests/ideInstall/realGuide.test.ts:11",
+        "git ls-tree 291dabe401 project-documents/ (tree c1012a5e)"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf9006d5-N12",
+      "title": "scopedRuleIndex renders absolute guide paths when targetRoot is not the guide's parent, so worktree AGENTS.md gets machine-absolute paths and dry run always reports AGENTS.md modified.",
+      "members": [
+        "sonnet-high/1/0"
+      ],
+      "grade": "REAL",
+      "confidence": "medium",
+      "why": "relativeToRoot(ctx.targetRoot, ctx.guide.rules) returns the path unchanged when it is not under targetRoot. This diff installs worktrees from the main checkout's guideDir with targetRoot = worktree path, and dry run swaps targetRoot for a temp sandbox while the guide stays in the real root. In both cases the scoped-rule index lists absolute paths: a worktree's (usually committed) AGENTS.md points into the main checkout instead of its own guide copy, and for the agents target the sandbox AGENTS.md differs from the real one, so reportChanges shows '~ AGENTS.md' even on an up-to-date project.",
+      "evidence": [
+        "packages/cli/src/ideInstall/targets/agents.ts:23-35",
+        "packages/cli/src/ideInstall/paths.ts:38-41",
+        "packages/cli/src/commands/setup-ide.ts:89-99",
+        "packages/cli/src/commands/setup-ide.ts:190",
+        "packages/cli/src/ideInstall/dryRun.ts:114"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf9006d5-N13",
+      "title": "Install output paths are hard-coded in separate lists (INSTALL_PATHS, LINT_WRITE_PATHS, test harness) not derived from the targets.",
+      "members": [
+        "sonnet-high/1/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True that dry run keeps its own INSTALL_PATHS with '.agents' as a literal and the lists are unlinked. They currently cover every path the targets write, so the preview is correct today; drift risk only.",
+      "evidence": [
+        "packages/cli/src/ideInstall/dryRun.ts:21-32",
+        "packages/cli/src/ideInstall/paths.ts:44-50"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cf9006d5-N14",
+      "title": "Dry-run and worktree install paths have thin test coverage.",
+      "members": [
+        "sonnet-high/1/2"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "Missing-test observations: dry run is exercised only for claude, and setup-ide worktree tests mock installIde. Coverage gaps, not a defect themselves.",
+      "evidence": [
+        "packages/cli/tests/ideInstall/flags.test.ts:30-76"
+      ],
+      "known": null,
+      "fail_justified": null
+    }
+  ],
+  "disputes": []
+}

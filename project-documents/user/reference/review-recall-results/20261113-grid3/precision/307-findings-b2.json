@@ -1,0 +1,58 @@
+[
+ {
+  "ref": "hy4/1/0",
+  "severity": "FAIL",
+  "title": "Purchase estimate is read and judged against a fabricated payload contract",
+  "location": "scripts/cutover_304_first_purchase.py:152",
+  "description": "`fetch_estimate()` at `scripts/cutover_304_first_purchase.py:152-162` returns `json.loads(result.stdout)` unchanged and the cutover treats it as a flat purchase summary. The real `mt data tick pass --estimate-only --json` writer emits a pass report whose purchase fields are nested under a phase summary; `scripts/cutover_234_checks.py:145` demonstrates the expected `estimate[\"phases\"]` lookup, and `src/manta_trading/cli/commands/tick_pass_render.py:213-228` renders those fields from a phase `summary`, not from the document root.\n\nThere is a second contract break even after unwrapping: `src/manta_trading/data/tick/spend_guard.py:266-269` sets the spend verdict to `estimate_only` for any non-empty estimate run, and `src/manta_trading/data/tick/purchase_plan.py:277-303` emits that value, while `judge_estimate()` at `scripts/cutover_304_checks.py:208-237` only accepts `allowed` or `nothing_to_buy`. The `--estimate` path avoids this by passing `check_ceilings=False`, but `_steps()` at `scripts/cutover_304_first_purchase.py:279-306` uses the default check and will either raise on missing top-level keys or refuse `verdict estimate_only` before buying. `main()` at `scripts/cutover_304_first_purchase.py:229-247` turns that into a recorded failure, so the full cutover cannot proceed against real CLI output."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "Ceiling math diverges from the runtime spend guard",
+  "location": "scripts/cutover_304_checks.py:88",
+  "description": "`ceiling_values()` and `ceiling_command()` at `scripts/cutover_304_checks.py:88-96` derive the 30-day cap from only `planned + trailing`; `_estimate_only()` at `scripts/cutover_304_first_purchase.py:255-274` passes only `summary[\"trailing_30d_usd\"]`, and `judge_estimate()` uses the same formula around `scripts/cutover_304_checks.py:225-237`. The actual guard in `src/manta_trading/data/tick/spend_guard.py:232-269` evaluates `trailing + unheld + planned_new`, excluding resubmits already counted in trailing and including provider jobs that the manifest does not hold; `src/manta_trading/data/tick/purchase_plan.py:277-303` exposes those `unheld_jobs` separately.\n\nAs a result, the printed cap can be too low when unheld jobs exist, and the local cap check can disagree with the runtime guard when resubmits are present. The tests at `test/unit/scripts/test_cutover_304_first_purchase.py#test_estimate_prints_the_command_and_buys_nothing` use no unheld jobs and no resubmits, so this divergence is not covered."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "Tests pin the wrong estimate contract and miss production payload shapes",
+  "location": "test/unit/scripts/test_cutover_304_checks.py#_summary",
+  "description": "The new estimate tests use flat synthetic dictionaries such as `test/unit/scripts/test_cutover_304_checks.py#_summary` and `test/unit/scripts/test_cutover_304_first_purchase.py#NOTHING` with `verdict: \"allowed\"`. That is neither the pass-report shape consumed from `mt-run` nor the `estimate_only` verdict produced by `src/manta_trading/data/tick/spend_guard.py:266-269`. `scripts/cutover_234_checks.py:145` shows the repository already has a parser that reads the purchase phase from `phases`.\n\nThis violates the project convention that parser fixtures include the actual production format. A regression test built from `PassResult.to_dict()` plus `plan_summary()` nested under `phases[].summary`, including the `estimate_only` verdict, would have caught the broken full-cutover path at `scripts/cutover_304_first_purchase.py:279-306`."
+ },
+ {
+  "ref": "hy4/1/3",
+  "severity": "CONCERN",
+  "title": "New external JSON and env boundaries are untyped and unvalidated",
+  "location": "scripts/cutover_304_evidence.py#mt_json",
+  "description": "`mt_json()` returns `Any` from `json.loads`; `fetch_estimate()` at `scripts/cutover_304_first_purchase.py:152-162`, `check_gate_issue()`/`check_dataset_edge()` at `scripts/purchase_verdicts.py:43-113`, and `accounting_rows()`/`over_sessions()` in `scripts/purchase_accounting.py` all consume production command output or file/env text via `Mapping[str, Any]` and direct key access. Missing keys are translated to `CutoverError`, but value types are not validated at the boundary.\n\nThe Python rules require Pydantic for external boundaries, including output/file/env parsing. Without schema models, a changed field type (for example `records` as a string, `edge_available_end` as a number, or `caught_up` as a string) can flow into comparisons, f-strings, or int-annotated DTOs before failing with an unhelpful `TypeError`/`ValueError`; `scripts/purchase_accounting.py#accounting_rows` and `scripts/purchase_verdicts.py:93-113` are the primary trust boundaries."
+ },
+ {
+  "ref": "hy4/1/4",
+  "severity": "CONCERN",
+  "title": "Translated exceptions lose ERROR-level stack observability",
+  "location": "scripts/purchase_verdicts.py:43",
+  "description": "Several new `try/except` blocks catch specific failures and translate them to `CutoverError` without logging at ERROR level: `scripts/purchase_verdicts.py:43-61` and `:93-113`, `scripts/cutover_304_checks.py:143-164`, and `scripts/purchase_accounting.py#accounting_rows` and `#over_sessions`. These modules import no logger. Using `raise ... from exc` preserves the cause object, but the process-boundary handler at `scripts/cutover_304_first_purchase.py:229-247` only records the final message via `say()`.\n\nThe exception-handling rule requires non-swallowing catches to re-raise after `logger.exception`, or to be documented top-level process-boundary handlers. These helper functions are not the process boundary, so malformed CLI JSON, `gh` failures, missing accounting keys, and bad timestamps lose stack-level diagnostics in the cutover log."
+ },
+ {
+  "ref": "hy4/1/5",
+  "severity": "CONCERN",
+  "title": "New test helpers use loose generic types under strict test checking",
+  "location": "test/unit/scripts/test_purchase_verdicts.py#_request",
+  "description": "New test helpers such as `test/unit/scripts/test_purchase_verdicts.py#_request`, `#_unit`, `#_report`, and `#_status` use bare `dict`, `list`, and `object` return/parameter types; `test/unit/scripts/test_purchase_accounting.py#_line` returns `Any`; `test/unit/scripts/test_cutover_304_first_purchase.py#_fake_mt_run` also relies on loosely typed lambdas. The Python rules require strict checking with tests included, so these generic types create missing-type-argument/unknown-type debt on the changed test paths.\n\nThe production DTOs are typed with `FamilyRow`, `ExhaustedRequest`, and `SessionReport`, but the tests that build their inputs do not mirror those contracts. That weakens the static guarantee that the tests are exercising the same shapes as the scripts."
+ },
+ {
+  "ref": "luna-r-high/1/0",
+  "severity": "CONCERN",
+  "title": "Ceiling command omits unheld provider spend",
+  "location": "scripts/cutover_304_checks.py#ceiling_command",
+  "description": "The 30-day cap command is calculated from `planned + trailing` only. However, the spend guard also includes unheld provider jobs in its 30-day total, and the estimate exposes those costs in `unheld_jobs` (`purchase_plan.py#plan_summary`, `spend_guard.py#evaluate_spend`). If an estimate has $89 planned, $0 trailing, and $20 unheld, this command sets the cap to $90 even though the spend guard needs at least $109. Following the printed command can therefore leave the purchase refused. Include unheld spend and align the cap calculation with the guard\u2019s treatment of resubmits."
+ },
+ {
+  "ref": "luna-r-high/1/1",
+  "severity": "CONCERN",
+  "title": "Slice argument can escape the notes directory",
+  "location": "scripts/cutover_304_first_purchase.py#start_file",
+  "description": "`--slice` is only checked for non-empty text, but it is interpolated into paths used for the baseline and start files. A value containing path traversal, such as `../../../../tmp/run`, can make those writes target files outside `NOTES_DIR`. Validate the slice as a safe identifier (for example, digits only) before using it in paths."
+ }
+]

@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Project and worktree resolution is duplicated across two validate commands",
+      "description": "`resolveTemplatePath` repeats the sequence in `validate.ts:155-166`. Both call `resolveProjectWorktree`, then `store.getById`, then throw the same \"Project not found\" and \"No projectPath configured\" `UserError`s, then call `resolveOperationPath`. The messages are duplicated string literals, so a wording change has to be made in two places. This breaks the project's DRY rule. Extract a shared helper such as `resolveCheckoutRoot(opts)` in `utils/project.ts` or `utils/worktree-overlay.ts`. Both commands would call it, and `validate.ts` would keep its `?? project.projectPath` fallback.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:33-45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Frontmatter errors can be reported as a docType failure",
+      "description": "`parseFrontmatter` wraps everything in `catch { return empty; }`, which I confirmed at `frontmatterParser.ts:63`. It also returns empty when the closing `---` is missing. In both cases `validateFile` reports \"frontmatter must declare docType\", not the real cause. `preflight` covers most unreadable-file cases. A file with an unterminated frontmatter block gets a misleading message, though. `validateFile` then reads the file a second time with `readFile`, so a race between preflight and read is possible, and the file is read twice. Read the file once, then pass the text to a frontmatter parse and to the heading check. Alternatively, accept the current behavior and document it. If the second read ever fails, the explicit `SliceDesignValidationError` there is correct.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:93-97"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Heading parsing is narrower than the \"lenient parsing\" convention",
+      "description": "`documentHeadingKeys` only recognizes fences that start with three backticks at column 0. Tilde fences and indented fences are not handled, so headings inside them would count as real headings. The comment stripper `/<!--.*-->/g` is greedy, so two comments on one line remove the text between them. The module header says this is a port of the guide script, so these may be parity choices. If so, say that in a comment. Otherwise add small tests for these cases.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:33-70"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Usage error uses a core error class from the CLI layer",
+      "description": "The empty-files usage error throws `SliceDesignValidationError`, but the rest of the CLI uses `UserError` for user mistakes. Both exit with code 2 through `handleError`, so behavior is correct. A `UserError` would be more consistent here.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:69-73"
+    },
+    {
+      "severity": "NOTE",
+      "title": "CLI tests depend on specific repo documents",
+      "description": "The tests use real slice designs (212, 213, 214 and 928) as fixtures. This follows the \"real-world input\" convention and exercises the actual template. But renaming or editing those documents, or a template change in the guide submodule, will break unrelated test runs. The core tests also rely on slice 214 alone. The test file name `validate-design.test.ts` also does not mirror the `validateDesign.ts` module as the testing rules ask. Both points are minor.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:44-50"
+    },
+    {
+      "severity": "PASS",
+      "title": "Typing, error contracts and test coverage are solid",
+      "description": "The code has no `any`, and exported functions have return types. `DesignFailureReason` is an `as const` object plus a union, as the rules prefer. Error causes are preserved through `{ cause }`. The preflight-before-results design is tested for partial-result suppression and for exit code 2 with empty stdout in both plain and `--json` modes. The tests cover CRLF input, level mismatch, fenced headings, the missing template and a template with no markers. The tests also cover worktree-aware template resolution and a skip-guarded unreadable-file case. The shared constants (`SLICE_DESIGN_TEMPLATE_RELATIVE_PATH`, `DOC_TYPE_FAILURE_MESSAGE`) are defined once and reused.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Project and worktree resolution is duplicated across two validate commands",
+      "location": "packages/cli/src/commands/validateDesign.ts:33-45",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Frontmatter errors can be reported as a docType failure",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:93-97",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Heading parsing is narrower than the \"lenient parsing\" convention",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:33-70",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Usage error uses a core error class from the CLI layer",
+      "location": "packages/cli/src/commands/validateDesign.ts:69-73",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "CLI tests depend on specific repo documents",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:44-50",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Typing, error contracts and test coverage are solid",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:29:09.073316",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 236867,
+  "cached_tokens": 147512,
+  "cache_write_tokens": 89349,
+  "completion_tokens": 3258,
+  "reasoning_tokens": null,
+  "duration_seconds": 29.70899416692555,
+  "cost_usd": 0.4068962,
+  "cost_basis": "provider"
+}

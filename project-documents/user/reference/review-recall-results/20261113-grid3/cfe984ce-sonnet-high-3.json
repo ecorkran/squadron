@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Frontmatter parser swallows read errors, and each file is read twice",
+      "description": "`validateFile` calls `parseFrontmatter(file)` and then `readFile(file)` again. `parseFrontmatter` (`frontmatterParser.ts:63-65`) catches every error and returns an empty result. If a read fails after `preflight` succeeds (file removed, permissions changed, EIO), the failure is reported as a missing `docType`. The user then sees \"frontmatter must declare 'docType: slice-design'\" for a file that was never read. The explicit `try/catch` around the second `readFile` is the only real guard, and it is unreachable in that scenario because the docType check returns first. This also violates the project rule against swallowing errors without a reason. Read the file once and derive the frontmatter from that text, or call `readFile` first and let its error propagate as `SliceDesignValidationError`. That removes the double I/O and the misleading failure.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts#validateFile"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Usage and template errors have no machine-readable error code in `--json` mode",
+      "description": "The empty-file-list case and every error from core (missing template, no required headings, missing or unreadable file) throw `SliceDesignValidationError`, which extends `Error`, not the CLI's `UserError`. In `handleError` (`errors.ts:46-59`) this takes the generic `Error` branch. JSON consumers get `code: \"UNKNOWN\"` with no `suggestion`. The command's description promises \"exit 2 usage or template error\" as a contract. Other commands, such as `validateFrontmatterAction`, raise `UserError` with an `ErrorCode`. Catch `SliceDesignValidationError` in the CLI action and rethrow as `UserError` with an appropriate code, for example `INVALID_ARGUMENT` or `ARTIFACT_NOT_FOUND`. The empty-args check in particular belongs in the CLI layer as a `UserError`, not a core error class.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts#validateDesignAction"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Project and worktree resolution duplicated from the frontmatter command",
+      "description": "`resolveTemplatePath` repeats the sequence in `validate.ts:154-166`: construct the store, call `resolveProjectWorktree`, call `getById`, throw \"Project not found\", then resolve the operation path. The two copies already differ: frontmatter falls back to `project.projectPath`, while design throws. A shared helper would keep the \"not found\" message and the worktree rules in one place.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts#resolveTemplatePath"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fence detection only recognises column-0 triple-backtick fences",
+      "description": "`line.startsWith('```')` ignores `~~~` fences and fences indented inside list items. It also toggles on any backtick line regardless of the opening fence length. Headings inside such blocks are counted as real, so a design could pass with a required heading that exists only in an example block. This matches the ported bash script, so it is not a regression. It does conflict with the project's \"lenient parsing\" guidance, and a short test would document the limits.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts#documentHeadingKeys"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Parameter mutability annotations are inconsistent",
+      "description": "The TypeScript rules ask for `readonly` on parameters that are not mutated. `preflight` and `validateSliceDesignFiles` take `readonly string[]`. `missingHeadings(required, docKeys)` and `validateFile(..., required: RequiredHeading[])` take mutable arrays and never mutate them.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts#missingHeadings"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tests are coupled to live repository documents",
+      "description": "The tests hard-code slices 212, 213, 214 and 928 and the installed guide template. This follows the project's real-input fixture rule and is valuable. But an unrelated edit to one of those designs, or a guide update that adds a required heading, will fail these tests for reasons unrelated to the validator. Keep the 214 design as the single real-world anchor and use synthetic fixtures elsewhere, or add a comment saying the dependency is intentional.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:44-52"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering, exports and test coverage",
+      "description": "The pure validator is exported from the browser-safe `index.ts`. The fs-dependent layer is exported from `node.ts`. `SLICE_DESIGN_TEMPLATE_RELATIVE_PATH` reaches `@context-forge/core/node` through `guides/index.ts`, so the CLI imports resolve. Tests cover heading normalisation, CRLF, level mismatch, fences, docType failure, preflight all-or-nothing behaviour, exit codes with empty stdout in both output modes, and worktree-specific template resolution.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/node.ts:30-37"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Frontmatter parser swallows read errors, and each file is read twice",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts#validateFile",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Usage and template errors have no machine-readable error code in `--json` mode",
+      "location": "packages/cli/src/commands/validateDesign.ts#validateDesignAction",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Project and worktree resolution duplicated from the frontmatter command",
+      "location": "packages/cli/src/commands/validateDesign.ts#resolveTemplatePath",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fence detection only recognises column-0 triple-backtick fences",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts#documentHeadingKeys",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Parameter mutability annotations are inconsistent",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts#missingHeadings",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests are coupled to live repository documents",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:44-52",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Layering, exports and test coverage",
+      "location": "packages/core/src/node.ts:30-37",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:31:00.022017",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 343964,
+  "cached_tokens": 250695,
+  "cache_write_tokens": 93261,
+  "completion_tokens": 6190,
+  "reasoning_tokens": null,
+  "duration_seconds": 53.72766170813702,
+  "cost_usd": 0.462187,
+  "cost_basis": "provider"
+}

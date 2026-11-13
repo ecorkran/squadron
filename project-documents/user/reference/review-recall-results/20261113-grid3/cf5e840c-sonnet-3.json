@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Stray sed backup file committed",
+      "description": "A file named `CoreServiceFactory.test.ts-E` is in the tree. It is the usual byproduct of `sed -i -E` on macOS. It holds the pre-change copy of `CoreServiceFactory.test.ts`, which still calls `createContextPipeline(path)` without the new required options argument. The name doesn't match `*.test.*`, so test runners won't pick it up. It is still dead duplicate content. It should be deleted, and `*-E` could be added to `.gitignore`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Magic default `'implementation'` duplicated in the integrator",
+      "description": "The new line `const instruction = project.instruction || 'implementation';` hard-codes a fallback instruction. It is computed before `mapProjectToEnhancedContext`, which presumably applies its own default for the same field. This breaks the project rules against magic defaults and against scattering comparison values. Neither the adoption eligibility check (`resolvePhaseValue(instruction)`) nor the mapping step should carry a private copy. Define the default once as a constant, or reuse the value the mapper already resolves. If the two defaults ever drift, adoption would be judged against an instruction different from the one that gets rendered.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Required `adoptionStateWrites` option forces every caller to decide",
+      "description": "Making the option required means a caller can't forget it. I found three non-test callers (`build.ts:84`, `contextTools.ts:94`, and the `generateContext` wrapper). Each passes a value, and the tests assert `persist` for `cf build` and `context_build` and `read-only` for `template_preview`. In `generateContext`, the new positional `adoptionStateWrites` parameter sits before the optional ones. That is acceptable, but with 5+ positional parameters an options object would be more readable.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/services/CoreServiceFactory.ts:29"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Error handling and test coverage are sound",
+      "description": "`AdoptionError` is rethrown explicitly instead of falling back to an error stub, and a test covers this. `persistInProgress` wraps the write failure with `cause` and a remedy. The guide check runs before the state write, and a test asserts the state stays unset when the check fails. The `isSelected` switch uses an exhaustive `never` check. The tests cover selection, overrides, resume, shallow clones, monorepo subfolders, read-only previews, and CLI/MCP parity. No `any` was introduced.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Stray sed backup file committed",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Magic default `'implementation'` duplicated in the integrator",
+      "location": "packages/core/src/services/ContextIntegrator.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Required `adoptionStateWrites` option forces every caller to decide",
+      "location": "packages/core/src/services/CoreServiceFactory.ts:29",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Error handling and test coverage are sound",
+      "location": "packages/core/src/adoption/adoptionResolver.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:31:27.512840",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 157964,
+  "cached_tokens": 62758,
+  "cache_write_tokens": 95202,
+  "completion_tokens": 1570,
+  "reasoning_tokens": null,
+  "duration_seconds": 18.36540549993515,
+  "cost_usd": 0.4062534,
+  "cost_basis": "provider"
+}

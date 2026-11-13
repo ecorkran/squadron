@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Checkout resolution is copied from the frontmatter command",
+      "description": "`resolveTemplatePath` repeats the store lookup, the `resolveProjectWorktree` call, the `getById` not-found check, and the `projectPath` check from `validateFrontmatterAction` (`packages/cli/src/commands/validate.ts:154-166`). The \"Project not found\" and \"No projectPath configured\" messages are now verbatim duplicates. The two copies also disagree on a rule. `validate frontmatter` requires `project.projectPath` even when the worktree has its own path (`validate.ts:161`). The design command does not. Extract one helper, such as `resolveCheckoutRoot(opts)`, next to `resolveProjectWorktree` in `packages/cli/src/utils/project.ts`, pick one rule, and call it from both commands.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:34-46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A read failure in `validateFile` is reported as a missing docType",
+      "description": "`validateFile` calls `parseFrontmatter(file)` before its own `readFile`. `parseFrontmatter` is documented as \"Never throws \u2014 returns { found: false, data: {} } on any error\" (`packages/core/src/introspection/parsers/frontmatterParser.ts:7-9, 63-65`). If the read fails, `docType` is undefined. The file then comes back as `{ pass: false, reason: 'doctype' }` with the message \"frontmatter must declare 'docType: slice-design'\". That blames the document for an I/O error and skips the `SliceDesignValidationError` wrapping that the later `readFile` (lines 102-105) provides. This is the silent fallback the project rules prohibit. `preflight` (lines 73-88) covers the usual cases (missing, directory, no read permission), so the exposure is a race between preflight and this read. The file is also read twice. Fix: read the text once inside a wrapped `readFile`, then parse frontmatter from that text. That needs a text-based variant of `parseFrontmatter`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:95-98"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The slice-design docType is defined in two places",
+      "description": "The new `SLICE_DESIGN_DOC_TYPE = 'slice-design'` is compared at line 96. The frontmatter schema already uses the same value as a literal in a conditional (`packages/core/src/schema/frontmatterSchema.ts:185`) and in its `slice-design` entry (`frontmatterSchema.ts:76`). The project rules require a value used in conditionals to be defined once. Changing the docType now means editing both files, and the new constant looks like the single source when it is not. Export one constant from the schema module and reference it from both places.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:21"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests assert PASS against mutable working documents",
+      "description": "`PASSING_DESIGNS` (212, 213, 214, 928), `DESIGN_214`, and `REAL_TEMPLATE` read live files: the slice documents under `project-documents/user/slices/` and the guide's template. The core test does the same at `packages/core/tests/schema/sliceDesignFiles.test.ts:14-21` and `:54-56`. Using real input follows the project's parser guidance, but these are working documents. The assertions will fail for reasons unrelated to the validator: a slice is renamed or archived, a section is edited out, or the template gains a required heading that 212, 213, and 928 lack. I checked that all four files currently contain `docType: slice-design` and every required heading, so the assertions should pass today. I did not execute them. Fix: copy the 214 design and a snapshot of the template into `tests/fixtures/` for the assertions, and keep the live-corpus check as a separate, explicitly named test.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:43-53"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Public exports with no consumer",
+      "description": "`requiredHeadings`, `documentHeadingKeys`, and `missingHeadings` are exported from the root barrel. Nothing outside core's own tests imports them. `ValidateDesignJson` (`packages/cli/src/commands/validateDesign.ts:25`) and `SLICE_DESIGN_DOC_TYPE` (`packages/core/src/node.ts:34`) are exported but used only inside their own modules. The package is published, so each export is a compatibility commitment. Confirm an intended consumer, or drop the exports.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/index.ts:41-47"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Heading and fence detection match only column 0",
+      "description": "`HEADING_PATTERN` requires `#` at column 0, and fence detection (line 63) uses `startsWith('```')` only. CommonMark allows up to three leading spaces before an ATX heading, and fences may be indented. A heading indented one to three spaces is reported as missing. The bash script has the same limit, so the port is faithful, but the project's parsing rule asks for lenient handling of indentation. Separately, `~~~` fences are not recognized, so a heading inside one is counted and can produce a false PASS.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:22"
+    },
+    {
+      "severity": "NOTE",
+      "title": "An empty heading key matches every heading at its level",
+      "description": "If a template heading's text is only a placeholder, such as `### {Feature}`, `headingKey` truncates it to `''`. `doc.text.startsWith('')` is always true, so any same-level heading in the document satisfies it. No current template heading is affected, and the bash script's prefix match behaves the same way. Reject an empty key in `requiredHeadings`, or require a non-empty key to match.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:80-82"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The empty-arguments test does not check the usage message",
+      "description": "The exit-2 matrix asserts the exit code, empty stdout, and empty `logLines`. It never checks `errors`, so the \"no files given. Usage: cf validate design\" path could regress to a different error and still pass. Only the missing-template test checks `errors`. Assert the usage text for the no-argument case.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:198-214"
+    },
+    {
+      "severity": "PASS",
+      "title": "Validator matches the guide script's matching rules and exit codes",
+      "description": "I compared the port with `project-documents/ai-project-guide/scripts/validate-slice-design`. Heading normalization (script lines 36-45), the `{placeholder}` prefix match (91-100), fence skipping (66-77), the marker-after-heading rule (55-63), and the exit-2 cases (141-152) all line up. There are three deliberate differences. Files are preflighted before any output, where the script prints earlier results and then exits 2 on a missing file (script lines 155-159). A quoted `docType` is accepted, where the script requires the exact line `docType: slice-design` (script lines 23, 81-86). CRLF input is tolerated, and the core test covers that.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Checkout resolution is copied from the frontmatter command",
+      "location": "packages/cli/src/commands/validateDesign.ts:34-46",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A read failure in `validateFile` is reported as a missing docType",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:95-98",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The slice-design docType is defined in two places",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:21",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests assert PASS against mutable working documents",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:43-53",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Public exports with no consumer",
+      "location": "packages/core/src/index.ts:41-47",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Heading and fence detection match only column 0",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:22",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "An empty heading key matches every heading at its level",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:80-82",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The empty-arguments test does not check the usage message",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:198-214",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Validator matches the guide script's matching rules and exit codes",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:24:28.509930",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 31,
+  "prompt_tokens": 1347708,
+  "cached_tokens": 1182379,
+  "cache_write_tokens": 165309,
+  "completion_tokens": 54797,
+  "reasoning_tokens": null,
+  "duration_seconds": 238.6282784170471,
+  "cost_usd": 0.3599547299999999,
+  "cost_basis": "provider"
+}

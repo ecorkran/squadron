@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Bare `np.ndarray` return annotations will fail strict pyright",
+      "description": "`_array` and `_mask` are annotated `-> np.ndarray` with no type arguments. `pyproject.toml` sets `typeCheckingMode = \"strict\"` and includes `tests`, and the Python rules make zero pyright errors a merge blocker. Strict mode reports `reportMissingTypeArgument` for the bare generic. The sibling helpers in `tests/core_model/test_labels.py` already use `NDArray[np.float64]` and `NDArray[np.bool_]`. Use those types here too.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_confidence.py:69-74"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test exercises Python's `match` statement, not project code",
+      "description": "The test builds a local `match output:` with its own branches and asserts on the strings it built. It calls no production code, so it passes whatever `declarations.py` does. If the intent is to prove the three output forms support structural matching, it only shows that dataclasses with `slots=True` have `__match_args__`. That is language behavior. Either remove it, or move the `match` into a real consumer (for example a describe helper in the catalog slice) and test that.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_declarations.py#test_match_selects_the_branch_for_each_form"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Output validation depends on `OutputDeclaration.__value__`",
+      "description": "`isinstance(item, OutputDeclaration.__value__)` works today because the alias is a `|` union. It relies on the `type`-statement alias internals, and pyright strict may not model it well. A module-level constant would be clearer: `_OUTPUT_TYPES: Final = (SeriesOutput, LabelOutput, SignalOutput)`. The alias could then be written in terms of it. That would also keep the list of output forms in one place, as the \"define once\" rule asks.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py:_output_tuple"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`assert` used for type narrowing in production code",
+      "description": "`assert isinstance(series, Series)` follows a `require_instance` call that has already raised for any non-`Series`. It exists only to narrow the type. It is stripped under `python -O` and is harmless at runtime. A `cast`, or having `require_instance` return a narrowed value, would avoid assert-as-control-flow.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/labels.py:_require_series"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Several classes per module versus the one-class-per-file rule",
+      "description": "The module holds seven small, closely related frozen dataclasses and enums, and stays under 300 lines. This is a reasonable grouping and matches the \"group related tiny utilities\" exception. It is recorded only because the Python rules say one class per file for models.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Shared validation, vectorized checks and boundary tests",
+      "description": "`check_confidence` is written once and reused by both label series and signal sequences. `as_integer` and `as_real` are the single coercion path, and `bind_parameters` collects every issue instead of failing on the first. The AST-based tests that forbid element loops and `CANONICAL_TYPE` give mechanical enforcement of design decisions D4 and D10. The import-boundary test list was extended to cover the new modules.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/confidence.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Bare `np.ndarray` return annotations will fail strict pyright",
+      "location": "tests/core_model/test_confidence.py:69-74",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test exercises Python's `match` statement, not project code",
+      "location": "tests/core_model/test_declarations.py#test_match_selects_the_branch_for_each_form",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Output validation depends on `OutputDeclaration.__value__`",
+      "location": "src/manta_trading_engine/core_model/declarations.py:_output_tuple",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`assert` used for type narrowing in production code",
+      "location": "src/manta_trading_engine/core_model/labels.py:_require_series",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Several classes per module versus the one-class-per-file rule",
+      "location": "src/manta_trading_engine/core_model/declarations.py",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Shared validation, vectorized checks and boundary tests",
+      "location": "src/manta_trading_engine/core_model/confidence.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:28:15.280427",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 301720,
+  "cached_tokens": 136258,
+  "cache_write_tokens": 165456,
+  "completion_tokens": 5291,
+  "reasoning_tokens": null,
+  "duration_seconds": 44.4182645000983,
+  "cost_usd": 0.7324497,
+  "cost_basis": "provider"
+}

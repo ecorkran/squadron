@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "the ledger read and the raw scan are separate autocommit snapshots on a lock-free connection, so an ingest commit landing between them makes a valid database report mismatch and exit 3 (the design explicitly lets ingest run concurrently with coverage), and the fix is a single read-only repeatable-read transaction around the report's reads."
+  ],
+  "F2": [
+   "KEEP",
+   "ledger_totals` is scoped to the product's request shape while `raw_counts` counts every `tick_trade` row in the session window, and ingestion does not check universe membership (any rooted parent request passes `planning_product`/the shape check), so rows from a non-universe request (and the second product planned for 231, which shares the trading window) make `_session_row` report ledger=0/raw=n mismatches and exit 3 on valid data."
+  ],
+  "F3": [
+   "KEEP",
+   "_session_row` materializes `(*ledger, *raw)` and filters it for every session, making assembly quadratic in session count as synchronous work on the event loop inside `async build_coverage`; with ~45 instruments per session the dicts reach ~100k keys on multi-year ranges (reviewer's probe: 4.4 ms per session), violating the project's mandated <1 ms worst-case rule for sync code in async functions, and grouping the counts by session once is a trivial fix in changed code."
+  ]
+ },
+ "wall_seconds": 351.3,
+ "duration_seconds": 351.3195975420531,
+ "cost_usd": 0.17824864,
+ "effort": null,
+ "tool_calls_made": 17,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=466901, cached=392000, cache_write=None, completion=63942, reasoning=62392)",
+ "raw_output": "\n\nF1: KEEP \u2014 the ledger read and the raw scan are separate autocommit snapshots on a lock-free connection, so an ingest commit landing between them makes a valid database report mismatch and exit 3 (the design explicitly lets ingest run concurrently with coverage), and the fix is a single read-only repeatable-read transaction around the report's reads.\n\nF2: KEEP \u2014 `ledger_totals` is scoped to the product's request shape while `raw_counts` counts every `tick_trade` row in the session window, and ingestion does not check universe membership (any rooted parent request passes `planning_product`/the shape check), so rows from a non-universe request (and the second product planned for 231, which shares the trading window) make `_session_row` report ledger=0/raw=n mismatches and exit 3 on valid data.\n\nF3: KEEP \u2014 `_session_row` materializes `(*ledger, *raw)` and filters it for every session, making assembly quadratic in session count as synchronous work on the event loop inside `async build_coverage`; with ~45 instruments per session the dicts reach ~100k keys on multi-year ranges (reviewer's probe: 4.4 ms per session), violating the project's mandated <1 ms worst-case rule for sync code in async functions, and grouping the counts by session once is a trivial fix in changed code.\n\n\nF1: KEEP \u2014 the coverage reads run on the lock-free autocommit connection as separate snapshots (no read-only repeatable-read transaction anywhere), and ingest commits concurrently by design (TD4/TD8: disjoint locks, disjoint unit states, an integration requirement that both run at once), so a commit landing between `ledger_totals` and `raw_counts` makes a valid database report mismatch and exit 3, breaking the \"mismatch \u21d2 out-of-band edit or defect\" guarantee the slice's TD10 and docstrings promise.\nF2: KEEP \u2014 `ledger_totals` is scoped to the product's request shape (`r.dataset = ... AND r.symbols = ... AND r.stype_in = ...` in `_SHAPE_WHERE`) while `raw_counts` filters only on `ts_event` with no unit/request join, and nothing gates `tick_trade` contents to the configured universe (`build_plan` accepts any rooted stype, adopt takes any job, slice 231 adds GC to the same `CME_EQUITY` calendar), so a second product's rows in the shared window surface as `mismatch` with ledger 0 and false exit 3 on valid data.\nF3: KEEP \u2014 `_session_row` synchronously expands `(*ledger, *raw)` (a 2n materialization plus a full scan of both dicts) for every session inside `async def build_coverage`, which the project's python rule (and 225's own L167) requires stay under 1 ms in the worst case; the reviewer's probe (~4.4 ms per session at 100,000 keys, reachable at ~45 instruments/session over a multi-year range) shows the quadratic assembly blocks the loop for seconds and is trivially avoidable by grouping counts by session once."
+}

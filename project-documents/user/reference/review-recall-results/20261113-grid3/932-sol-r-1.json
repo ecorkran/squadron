@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Check session usability before switching models",
+      "description": "After a reconnect fails, `_reconnect()` sets `unusable_reason` and resets `current_model` to `None`. However, `set_model()` does not call `_require_usable()`.\n\n`DispatchAction._dispatch_via_session()` calls `set_model()` **before** `dispatch()`, so subsequent batch items can issue control requests against the disconnected client instead of immediately reporting the recorded reconnect failure. Depending on SDK behavior, this can produce another connection error or wait for a control-request timeout.\n\nAdd the usability guard before either the model comparison or SDK call. Extend the failed-reconnect test to call `set_model()` and assert that the underlying client is not contacted; the current fake permits that call and therefore masks this path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession.set_model"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Move configuration file reads off the event loop",
+      "description": "The new calls to `get_typed_config()` synchronously resolve paths, check files, and open and parse user/project TOML files through `load_config()`. These operations run directly inside `open_pipeline_session()`, one-shot dispatch, and the background-wait loop.\n\nFilesystem operations cannot guarantee the required sub-millisecond worst-case execution, particularly for network-mounted home directories or cold storage. They can stall unrelated I/O on the same event loop. Repeated typed reads also reload both files separately.\n\nLoad and validate a settings snapshot off-thread, then pass the resolved values into session and dispatch construction. Resolve the idle timeout before entering the response-reading loop rather than performing synchronous file I/O while collecting messages.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#open_pipeline_session"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Add load coverage for persistent-session message collection",
+      "description": "The new scripted tests cover individual lifecycle events, timeouts, and follow-up turns, but do not exercise realistic message volumes or assert latency, throughput, or resource bounds.\n\nInspection of `tests/load/` found only grep-timeout and worktree-concurrency tests; neither exercises the modified SDK session path. The additional review rules explicitly require load coverage for network and concurrency changes.\n\nAdd a load test using realistic task/message counts across repeated dispatches, asserting bounded completion latency and resource usage. Include timed-out background work followed by another dispatch to exercise stream reuse and leftover-turn handling.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/test_sdk_session.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Check session usability before switching models",
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession.set_model",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Move configuration file reads off the event loop",
+      "location": "src/squadron/pipeline/sdk_session.py#open_pipeline_session",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Add load coverage for persistent-session message collection",
+      "location": "tests/pipeline/test_sdk_session.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:24:34.456262",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 1913,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 499652,
+  "cached_tokens": 416379,
+  "cache_write_tokens": null,
+  "completion_tokens": 2176,
+  "reasoning_tokens": 1206,
+  "duration_seconds": 67.38067587511614,
+  "cost_usd": 0.2299439,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,117 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Observing one project deletes every other project's polling state",
+      "description": "`RunnerTenant` shares one `RunObserver` across all projects, but each `ProjectTick` supplies only its own entries. These cleanup operations therefore discard `_last_poll`, `_overdue`, and `_faulted` records belonging to other projects.\n\nWith two projects visited on each tick, confirmed runs can be polled every tick instead of respecting `run_poll_interval_seconds`. Standing faults and overdue-launch state are also lost between visits. Scope observer state and cleanup by project, or give each project its own observer. Add a multi-project regression test covering polling cadence and fault persistence.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:108-111"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The launch budget is checked before potentially blocking journal work",
+      "description": "The budget check in `_act` occurs before `_launch` validates arguments and commits `journal_issue`. The SQLite write can wait for contention or durable storage, allowing the deadline to expire\u2014or a stop request to arrive\u2014before `launch` starts `Popen`. Neither `_launch` nor `launch` checks the budget again.\n\nThis violates the stated guarantee that no subprocess starts after the deadline or a stop request. Recheck immediately before spawning and explicitly handle an entry that was journaled but not launched. Add a regression test where journal issuance advances the clock past the deadline or requests shutdown.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py:170-187"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unconfirmed launches do not replay standing poll failures",
+      "description": "When an unconfirmed launch receives a `PollFailure`, `_fault` saves it in `_faulted`. On the next tick before another poll is due, this branch calls `_still_overdue`, which does not replay that saved observation fault.\n\nConsequently, `ProjectTick._close_recovered` can close the `run_observation_failed` escalation even though no successful observation has occurred. Persistent failures can repeatedly open and close escalations at the polling cadence. Replay standing poll faults for unconfirmed launches, as `_confirmed` already does, and test consecutive ticks with fresh `TickFaults` instances.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:186-187"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Observing one project deletes every other project's polling state",
+      "location": "src/amoeba/runner/observe.py:108-111",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The launch budget is checked before potentially blocking journal work",
+      "location": "src/amoeba/runner/tick.py:170-187",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unconfirmed launches do not replay standing poll failures",
+      "location": "src/amoeba/runner/observe.py:186-187",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:24:10.499482",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 1897,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 512036,
+  "cached_tokens": 428222,
+  "cache_write_tokens": null,
+  "completion_tokens": 1492,
+  "reasoning_tokens": 500,
+  "duration_seconds": 43.41970487497747,
+  "cost_usd": 0.2253702,
+  "cost_basis": "alias_pricing"
+}

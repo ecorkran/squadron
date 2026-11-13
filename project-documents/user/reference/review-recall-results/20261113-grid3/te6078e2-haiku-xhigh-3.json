@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`as_real` silently rounds integers above 2**53",
+      "description": "`as_real` calls `float(value)` on any `Integral`, so integers that a float cannot hold are rounded with no signal. `float(2**53 + 1)` is `9007199254740992.0`. Two effects follow. A REAL parameter supplied as `9007199254740993` binds to `\u2026992.0` with no issue raised. `ConfidenceRange(2**53, 2**53 + 1)` is refused with \"low must be less than high\", although the input range is valid. The docstring does not mention rounding, and no test in `test_value_checks.py` covers an integer above 2**53. Fix: for an exact `Integral`, return `None` when `float(value) != value`, or document the rounding and add a test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py:85"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_coerce` has no fallthrough arm, so a new `ParameterType` fails silently",
+      "description": "The `match` covers `INTEGER` and `REAL` with no `case _`. A new member would fall through and return `None`. `_coerce` already uses `None` to mean \"uncoercible value\", so a valid supplied value would be reported as `WRONG_TYPE`, and a declaration of the new type would fail with \"is not a valid <type>\". The message would point at the value, not the missing arm. The return type includes `None`, so the type checker does not flag the gap. `test_parameter_type_has_two_members` catches the new member but does not require the new arm. Fix: add `case _: assert_never(parameter_type)`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py:50-60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The element-loop guard is copied three times with different node sets",
+      "description": "`ELEMENT_LOOP_NODES` and the AST walk are repeated in `tests/core_model/test_confidence.py:25` (loop check at 133-136) and `tests/core_model/test_labels.py:27` (loop check at 283-285). The copies disagree. `test_import_boundary.py` counts `ast.GeneratorExp` as a loop. The other two exclude it so that `all(...)` over category ids passes. The guard's meaning therefore depends on which file it sits in, and the project rule against duplicated logic applies. Fix: one shared helper that takes the generator rule as a parameter.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "tests/core_model/test_import_boundary.py:172-188"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`LabelVocabulary` is annotated `frozenset[int]` but accepts `set`",
+      "description": "The field is annotated `frozenset[int]`, but `__post_init__` also accepts `set` and converts it. The `# pyright: ignore[reportUnnecessaryIsInstance]` on line 56 hides that the annotation is narrower than the runtime contract. Callers that pass a set need a `reportArgumentType` ignore, as in `test_labels.py:66`. Fix: annotate the field `AbstractSet[int]` and drop the ignore.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/labels.py:50-56"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Module docstring says there are no element loops, but one exists",
+      "description": "The docstring says \"there are no element loops\". `LabelVocabulary.__post_init__` runs an element-wise `all(...)` over `category_ids` (lines 64-67). The loop-guard test exempts generator expressions, which is why the claim looks true. Fix: narrow the docstring to the array checks and name the category-id pass.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/labels.py:6-7"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D10 \"no canonical type\" is checked only by a source-name scan",
+      "description": "`test_labels_signals_declarations_define_no_canonical_type` looks for a `CANONICAL_TYPE` name in each module's AST and checks no behaviour. Only `display.py` has a behavioural test: `tests/core_model/test_display.py#test_display_hint_is_not_canonical` asserts that `canonicalize` raises. `LabelVocabulary`, `LabelSeries`, `SignalEvent`, `SignalSequence`, `Declarations`, and `ParameterDeclaration` have no such test. Fix: add one parametrized test asserting that `canonicalize` raises `CanonicalFormError` for each new type, matching `test_display.py`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_import_boundary.py:160-165"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`errors.py` imports upward, and `InvalidParametersError` breaks the error constructor contract",
+      "description": "Under `TYPE_CHECKING`, `errors.py` imports `ParameterIssue` from `declarations.py`, so the leaf error module depends on a higher layer. Separately, `InvalidParametersError.__init__` (lines 99-110) takes `issues` instead of a message. Helpers typed `error: type[CoreModelError]`, such as `require_instance` in `validation.py`, call `error(message)`. With this class, the string is stored as `issues`, and `str()` then fails with `AttributeError`. No call site does this today. Fix: move `ParameterIssue` and `ParameterIssueKind` into a leaf module, and keep this error out of helper signatures or give it a message-first constructor.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/errors.py:8-12"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Duplicated name and order logic across modules",
+      "description": "`_require_time_order` repeats the neighbour-order check in `series_index.py#_time_array`. `declarations.py` repeats `require_name(self.name, ...)` in `SeriesOutput`, `LabelOutput`, and `SignalOutput` (lines 126, 140, 154). `value_checks._require_pattern` and `validation.require_nonempty_str` both perform the `type(value) is not str` check. Each repeat is small, but together they break the rule against duplicated logic. Fix: share one non-decreasing check that takes an int64 array, and one name check.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/signals.py#_require_time_order"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`bind_parameters` takes external input and the module does not say which layer validates it",
+      "description": "The Python rules require Pydantic at external boundaries, and `supplied` is external input. Core Model is kept dependency-free: `tests/core_model/test_import_boundary.py:19` allows only numpy. Validation here is therefore hand-written, and the module docstring does not say which layer applies Pydantic before values reach `bind_parameters`. Fix: state that layer in the module docstring.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py#Declarations.bind_parameters"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`as_real` silently rounds integers above 2**53",
+      "location": "src/manta_trading_engine/core_model/value_checks.py:85",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`_coerce` has no fallthrough arm, so a new `ParameterType` fails silently",
+      "location": "src/manta_trading_engine/core_model/declarations.py:50-60",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The element-loop guard is copied three times with different node sets",
+      "location": "tests/core_model/test_import_boundary.py:172-188",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`LabelVocabulary` is annotated `frozenset[int]` but accepts `set`",
+      "location": "src/manta_trading_engine/core_model/labels.py:50-56",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Module docstring says there are no element loops, but one exists",
+      "location": "src/manta_trading_engine/core_model/labels.py:6-7",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "D10 \"no canonical type\" is checked only by a source-name scan",
+      "location": "tests/core_model/test_import_boundary.py:160-165",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`errors.py` imports upward, and `InvalidParametersError` breaks the error constructor contract",
+      "location": "src/manta_trading_engine/core_model/errors.py:8-12",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Duplicated name and order logic across modules",
+      "location": "src/manta_trading_engine/core_model/signals.py#_require_time_order",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`bind_parameters` takes external input and the module does not say which layer validates it",
+      "location": "src/manta_trading_engine/core_model/declarations.py#Declarations.bind_parameters",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:26:24.224631",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 26,
+  "prompt_tokens": 1408260,
+  "cached_tokens": 1217107,
+  "cache_write_tokens": 191135,
+  "completion_tokens": 57032,
+  "reasoning_tokens": null,
+  "duration_seconds": 242.586843540892,
+  "cost_usd": 0.39545829,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,79 @@
+[
+ {
+  "ref": "hy4/1/0",
+  "severity": "FAIL",
+  "title": "Ceiling-sized Kalshi responses are built and serialized on the event loop",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:123-126",
+  "description": "The DB work is correctly offloaded with `run_in_executor`, but immediately after it returns, `get_candlesticks` calls `CandlesResponse.build(...)` and `timeseries_response(...)` directly inside the coroutine. The trades route repeats the same pattern at `src/manta_trading/api_server/routes/kalshi_timeseries.py:166-174`. `CandlesResponse.build` / `TradesResponse.build` construct up to 75,000 Pydantic row models, and `src/manta_trading/api_server/serialization.py:37-43` then performs `model_dump(mode=\"json\")` plus `orjson.dumps` or `msgpack.packb`. The new load tier itself records a 34.80 MB candle response and a ~1.034 s ceiling-sized trades request in `test/load/test_188_kalshi_api_nfr.py:120-129`, so this is not sub-millisecond work. This violates the async rule that CPU-bound work in `async def` must use an executor and will block all other I/O while large responses are built. Move model construction and serialization into `run_in_executor`/`asyncio.to_thread`, or produce the bytes on a worker before returning the `Response`; add a concurrent ceiling-sized time-series load assertion."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "The statement-recording load cursor stores bytes and then filters them as strings",
+  "location": "test/load/test_188_kalshi_api_nfr.py:132-145",
+  "description": "`_RecordingCursor.statements` is annotated `list[str]`, but on the locked psycopg 3.3.3, `ClientCursor.mogrify(...)` returns `bytes`; `type(self).statements.append(rendered)` at `test/load/test_188_kalshi_api_nfr.py:142` therefore records byte strings for every parameterized query. The critical no-fetch assertion in `test_over_ceiling_is_refused_without_fetching_rows` then performs `\"kalshi.trades\" in s` and `\"count(*)\" in s` against those entries (around `test/load/test_188_kalshi_api_nfr.py:286-291`), which raises `TypeError: a bytes-like object is required, not 'str'`. Decode `mogrify` results, or make the filters byte-aware; add a small unit test for the recorder with a parameterized `sql.Composed` query so this regression is caught without needing the full load tier."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "The shared row-ceiling admission check is duplicated across two route modules",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:66-79",
+  "description": "`_admit_rows` here is a near-copy of `src/manta_trading/api_server/routes/kalshi_catalog.py:81-94`; only the advice text differs (`\"narrow start/end\"` vs `\"narrow the filter\"`). Both enforce the same `API_MAX_BARS_PER_REQUEST` policy and the same `{\"error\": ...}` contract via the app handler, so the status code, numeric formatting, and ceiling comparison now have two definition sites that can drift. This conflicts with the project\u2019s DRY / \u201cone value, one source\u201d rules. Extract one helper, e.g. `admit_rows(count, max_rows, *, advice: str)`, and have both routers call it."
+ },
+ {
+  "ref": "hy4/1/3",
+  "severity": "CONCERN",
+  "title": "The candle mapping abstraction does not provide the automatic extension its docs claim",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:58-99",
+  "description": "The module docstring at `src/manta_trading/api_server/models/kalshi_timeseries.py:1-9` says \u201cNeither direction restates the other, so a column added there is served here without an edit.\u201d The implementation does not do that: `_CANDLE_OBJECTS` maps object names to model classes at `:58-62`, but its values are never used; only the keys initialize `nested`. `CandleRecord.from_row` at `:92-99` hardcodes `CandleBidAsk`, `CandlePrice`, `volume_fp`, and `open_interest_fp`, while the Pydantic models have fixed field sets. A new nested column in `CANDLE_COLUMNS` is ignored or raises, a new flat column is placed in `flat` but never served, and a new nested object causes a `KeyError`. The added `TestCandleRecord` coverage in `test/unit/api_server/test_kalshi_models.py:168-220` actually fails on such a change rather than proving \u201cserved without an edit.\u201d Either correct the comment and remove the dead class values, or implement the mapping-driven construction the docstring promises."
+ },
+ {
+  "ref": "hy4/1/4",
+  "severity": "CONCERN",
+  "title": "The load tier\u2019s prod-URL guard is still line-only and does not cover the new shared helper",
+  "location": "test/load/test_167_data_status_nfr.py:214-230",
+  "description": "The new `test/load/test_188_kalshi_api_nfr.py` docstring claims `test_load_tier_never_references_prod_db_url` \u201cenforces it mechanically,\u201d but the guard at `test/load/test_167_data_status_nfr.py:214-230` scans line by line and only flags lines containing both the prod URL name and an environment-read marker. The Additional Review Rules require a multiline-aware scan because `os.environ.get(\\n \"VAR\")` defeats a per-line grep; `test/_prod_url_guard.py:27-33` already implements the required regex predicate, but the load tier does not use it. The guard also only globs `test/load/*.py`, while `test/load/conftest.py` now imports `apply_kalshi_track` from the new `test/kalshi_support/schema.py`, which performs DDL against a supplied URL and is outside that scan. Use the shared multiline-aware `prod_url_readers`/`assert_ratchet` helper over the load tier and its support package, or explicitly extend the guard to cover `test/kalshi_support/`."
+ },
+ {
+  "ref": "hy4/1/5",
+  "severity": "CONCERN",
+  "title": "New load tests are documented as manual-only despite the CI gating rule",
+  "location": "test/load/test_188_kalshi_api_nfr.py:34-86",
+  "description": "The module docstring at `test/load/test_188_kalshi_api_nfr.py:34-43` explicitly says CI wiring is deferred to slice 907 and \u201cNothing here is enforced by CI today\u201d; `pytestmark` at `:77-86` also skips the whole module unless `MT_RUN_LOAD_TESTS=1`. The Additional Review Rules state that load tests for network/concurrency/environment-layer paths must be gated by CI. This slice adds API network and pool-contention paths, so manual-only NFR tests cannot prevent regressions in normal CI runs. Wire the load tier into CI with the required environment and dedicated test database, or update the project rule explicitly if the deferral is accepted."
+ },
+ {
+  "ref": "luna-r-high/1/0",
+  "severity": "CONCERN",
+  "title": "Concurrent inserts can bypass the row ceiling",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:160-163",
+  "description": "The trades route counts rows and then fetches them in separate statements, but the pooled connection does not set a repeatable-read isolation level. Under PostgreSQL\u2019s default READ COMMITTED isolation, a concurrent insert between those statements can make the fetch return more than `max_rows`, even though the count passed admission. The candles route has the same count-then-fetch pattern at lines 112\u2013119. This makes the configured response-size ceiling unreliable during concurrent collection; use a consistent snapshot or another approach that enforces the limit without silently truncating results."
+ },
+ {
+  "ref": "luna-r-high/1/1",
+  "severity": "CONCERN",
+  "title": "Trades watermark is documented as the newest stored trade",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188-192",
+  "description": "The `tape_complete_through` description says it is the \u201cCreated time of the newest stored trade,\u201d but the route populates it from the trades sync watermark. That watermark represents the end of the last fully walked window, not necessarily the timestamp of any stored trade. Clients relying on the response description could misinterpret a window-completeness watermark as a trade timestamp."
+ },
+ {
+  "ref": "deepseek4-flash/1/0",
+  "severity": "CONCERN",
+  "title": "`tape_complete_through` is documented as \"the newest stored trade\" \u2014 the exact phrasing the schema comment was rewritten to remove",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradesResponse",
+  "description": "`TradesResponse.tape_complete_through` carries `Field(description=\"Created time of the newest stored trade. Null means the trades phase has never run \u2014 not that the tape is empty today.\")`. That is the inverse of what the field holds. It is populated from `TradesResponse.build(... facts.tape_complete_through ...)`, which `serve_timeseries.tape_facts` fills with `sync_state['trades'].watermark_ts` \u2014 the end of the last fully walked window, which is typically *later* than the newest stored trade because quiet periods produce no rows.\n\nThe project has an explicit, mechanically enforced stance that this phrasing is wrong: `src/manta_trading/market/schema/migrations/kalshi.py` (kalshi_006) rewrites the column comment to \"the tape is complete through this instant (end of the last fully walked window) - NOT the newest stored trade (slice 265, Decision 1)\", and `test/integration/test_kalshi_migrations.py:533` asserts the string `\"created_time of the newest stored trade\"` is **absent** from that comment. Slice design D5 restates the same thing.\n\nThe consequence is not cosmetic: D5 exists so a `count: 0` is unambiguous. A client reading \"newest stored trade\" interprets the field as a *floor on stored rows* rather than a *ceiling on completeness*, and will read a legitimately quiet window as a collection gap \u2014 the precise misreading D5 was written to prevent. Since the value is correct and only the description is wrong, this is a doc defect, but it is on the published contract of the field the slice singles out.\n\nTwo related sites repeat the same claim and should be corrected together:\n- `src/manta_trading/data/kalshi/serve_timeseries.py#tape_facts` \u2014 module-level docstring opens \"The trades tape's floor and its newest stored trade.\"\n- `README.md:621` (outside this diff, but it is the same sentence and ships to consumers).\n\nFor contrast, `coverage_from`'s description (\"Oldest instant the trades tape reaches, across the live and historical surfaces\") is accurate."
+ },
+ {
+  "ref": "deepseek4-flash/1/1",
+  "severity": "CONCERN",
+  "title": "The trades re-nesting is positional and untyped, so a new stored column would be fetched and silently dropped",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row",
+  "description": "`TradeRecord.from_row` reads `values[0]` \u2026 `values[7]` positionally, and `TradeRow.values` is declared `tuple[Any, ...]` (`src/manta_trading/data/kalshi/serve_timeseries.py#TradeRow`). `fetch_trades` selects `TRADE_VALUE_COLUMNS`, derived from `TRADE_COLUMNS`, so adding a column to `TRADE_COLUMNS` widens the fetched tuple without changing the mapping code \u2014 the extra value is read, ignored, and never served, with no error anywhere.\n\nThe candle path deliberately does not have this property (its docstring: \"a column added there is served here without an edit\"), and the unit tests defend it structurally \u2014 `test/unit/api_server/test_kalshi_models.py::TestCandleRecord::test_nested_field_set_is_exactly_what_candle_columns_describes` asserts the served field set equals the set `CANDLE_COLUMNS` describes.\n\nThere is no analogous assertion for trades, and the integration test that looks like one cannot catch it: `test/integration/test_kalshi_serving.py::TestTradeWindow::test_value_count_matches_the_repository_mapping` asserts `len(r.values) == len(TRADE_COLUMNS) - 1`, which auto-adjusts to whatever `TRADE_COLUMNS` becomes, so it passes for 8 values or 9. The `Any` element type is what removes the last line of defence (a typed tuple or a `TRADE_COLUMNS`-driven mapping would make the omission a type error or a test failure)."
+ },
+ {
+  "ref": "deepseek4-flash/1/2",
+  "severity": "CONCERN",
+  "title": "`_admit_rows` is duplicated verbatim between the two Kalshi route modules",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#_admit_rows",
+  "description": "`_admit_rows` exists in `src/manta_trading/api_server/routes/kalshi_catalog.py#_admit_rows` and is copied into the new `kalshi_timeseries.py` with the same body, the same docstring, the same `count > max_rows` comparison, and the same `HTTP_422_UNPROCESSABLE_CONTENT` code. Only the trailing advice differs (`\"narrow the filter\"` vs `\"narrow start/end\"`), which is a parameter, not a reason to fork the function.\n\nThis is the rule the project states most plainly (\"Do not duplicate logic. Respect DRY\"; \"Never scatter comparison values across code \u2026 define it once\"), and it is the same shape the slice already got right elsewhere \u2014 `serialization.timeseries_response` and `routes/windows.resolve_window` were both extracted precisely because a second consumer appeared. The ceiling comparison now has two definition sites free to drift: a change to the comparison (e.g. `>=`) or to the status code must be made twice, and nothing fails if only one is made."
+ }
+]

@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Tests assert against living project docs and a guide-managed template",
+      "description": "`PASSING_DESIGNS` hard-codes four real slice documents under `project-documents/user/slices/` (212, 213, 214 and 928). Both new test files copy or read `project-documents/ai-project-guide/.../slice-design.md`. That guide directory is managed by `cf guides update`.\n\n- **Slice docs:** an ordinary edit to one of these slice docs, such as renaming a heading, would fail the CLI suite even though the validator is correct.\n- **Template:** a template change published to the guide would do the same. It could also change the expected `missing: ['## Value']` output, or the `## Overview` and `### Verification Walkthrough` assertions in `packages/core/tests/schema/sliceDesignFiles.test.ts:44-50`.\n- **Missing checkout:** the tests also fail if the guide isn't checked out, for example in a tarball-style install.\n\nThe project rule that fixtures must contain the real production format is a good reason to keep one real-world case. The rest should use a small committed fixture, for example `tests/fixtures/`, for both the template and the designs. That would let the broken-heading and docType cases be built from a frozen design instead of regex-editing 214 (`/^## Value\\n[\\s\\S]*?(?=^## Technical Scope$)/m`). This regex also depends on 214's section order. A single \"passes the real template and a real design\" smoke test can stay.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:36-47"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Project and worktree resolution is duplicated from `validate frontmatter`",
+      "description": "`resolveTemplatePath` repeats the sequence in `validate.ts:154-166`:\n\n1. construct `FileProjectStore`\n2. call `resolveProjectWorktree`\n3. call `getById`\n4. throw the same \"Project not found\" `UserError`\n5. check `projectPath`\n6. call `resolveOperationPath`\n\nThe \"Project not found\" message string is also duplicated. The project's DRY rule applies here. Extract a shared helper, for example `resolveCheckoutRoot(opts)` in `utils/`, and use it from both commands. The new code also differs from `validate.ts` in one way. It throws when `resolveOperationPath` returns nothing, where the frontmatter command falls back to `project.projectPath`. Failing explicitly matches the \"no silent fallback\" rule, but a shared helper would settle which behaviour is intended.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:31-44"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter parser swallows read errors, so read order hides them",
+      "description": "`validateFile` calls `parseFrontmatter`, whose blanket `catch { return empty }` (`frontmatterParser.ts:63`) turns any read failure into \"no docType\". Only afterwards does it do its own `readFile` with an explicit `SliceDesignValidationError`. If a file becomes unreadable after `preflight`, the result is a misleading `doctype` failure. The guard that follows would only fire on a later read.\n\nThe window is tiny and `preflight` covers the normal cases. Still, the file is read twice. Reading the text once and extracting the frontmatter from it would remove both the double read and the ordering problem. Alternatively, do the explicit read first.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:92-104"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fence and heading matching is narrower than CommonMark",
+      "description": "`documentHeadingKeys` only treats lines that start with ` ``` ` at column 0 as fences. It does not handle:\n\n- indented fences\n- `~~~` fences\n- longer fences that contain shorter ones\n\nA heading inside one of those would count as present. A template heading whose normalized text is empty, such as `## {placeholder}`, would match any same-level heading, because `startsWith('')` is true. This is documented as a port of the guide's bash script, so parity may be the goal. Say so in the header comment if it is. Otherwise tighten the matching.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:54-70"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering, typing and error contract",
+      "description": "- **Layering:** the pure validator is exported from the browser-safe `index.ts`. The fs-dependent layer is exported only from `node.ts`.\n- **Typing:** `DesignFailureReason` follows the `as const` pattern. Return types are annotated on exported functions, with no `any` and no unchecked assertions. The caught error is narrowed through `instanceof`.\n- **Errors:** all usage and template problems are checked before any result is produced, so callers never see partial results alongside an error. `SliceDesignValidationError` preserves `cause`.\n- **CLI:** `validateDesign.ts` handles errors only at the process boundary through `handleError(err, 2)`. The JSON contract is a typed exported interface.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests assert against living project docs and a guide-managed template",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:36-47",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Project and worktree resolution is duplicated from `validate frontmatter`",
+      "location": "packages/cli/src/commands/validateDesign.ts:31-44",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Frontmatter parser swallows read errors, so read order hides them",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:92-104",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fence and heading matching is narrower than CommonMark",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:54-70",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Layering, typing and error contract",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:25:55.458012",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 346347,
+  "cached_tokens": 219104,
+  "cache_write_tokens": 127235,
+  "completion_tokens": 5340,
+  "reasoning_tokens": null,
+  "duration_seconds": 47.59924037498422,
+  "cost_usd": 0.5864239,
+  "cost_basis": "provider"
+}

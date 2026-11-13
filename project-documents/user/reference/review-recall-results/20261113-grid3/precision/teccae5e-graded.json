@@ -1,0 +1,162 @@
+{
+  "case": "teccae5e",
+  "matched": {},
+  "disputes": [],
+  "new_issues": [
+    {
+      "id": "teccae5e-N1",
+      "title": "Market construction raises raw TypeError instead of InvalidMarketError for non-iterable session_calendars, unhashable adjustment_bases or unhashable source_bar_stamping.",
+      "members": [
+        "haiku-xhigh/1/1",
+        "minimax31-flash/1/1",
+        "luna/1/0"
+      ],
+      "grade": "REAL",
+      "confidence": "high",
+      "why": "Verified at head: session_calendars=None raises TypeError from tuple(refs), adjustment_bases=[[1]] raises TypeError from frozenset(bases), and source_bar_stamping=[1] raises TypeError from the membership test, all before any typed check. This is the case's known bug, fixed in ccae5e3. haiku also notes the tuple/frozenset annotations, and luna adds that lookup methods do not type-check arguments; the main claim of each is this TypeError leak.",
+      "evidence": [
+        "src/manta_trading_engine/core_model/markets.py:94",
+        "src/manta_trading_engine/core_model/markets.py:144",
+        "src/manta_trading_engine/core_model/markets.py:161"
+      ],
+      "known": "B1",
+      "fail_justified": null
+    },
+    {
+      "id": "teccae5e-N2",
+      "title": "Market.source_bar_stamping accepts a plain str such as 'period_start' because the StrEnum membership test has no type check, unlike every other enum field.",
+      "members": [
+        "haiku-xhigh/1/0",
+        "hy4/1/0",
+        "luna-r/1/0",
+        "luna-r-high/1/0",
+        "luna-r-xhigh/1/0",
+        "luna-xhigh/1/0",
+        "minimax31-flash/1/0",
+        "sol/1/0",
+        "sol-high/1/0"
+      ],
+      "grade": "REAL",
+      "confidence": "medium",
+      "why": "Verified: replacing a fixture market's stamping with its .value constructs a Market storing a str. Canonical bytes are unchanged (so luna-r's encoding point does not hold), but the canonical type now holds a value outside its declared TimeMeaning contract, so .value or identity checks downstream break, while session_mode, continuity_kind and adjustment_bases all reject strings via _require_instance. The project's fix ccae5e3 added exactly that isinstance check. No consumer reads the field at head, hence medium.",
+      "evidence": [
+        "src/manta_trading_engine/core_model/markets.py:94-98",
+        "src/manta_trading_engine/core_model/markets.py:102-104",
+        "src/manta_trading_engine/core_model/timestamps.py:37-43"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "teccae5e-N3",
+      "title": "_normalize_bases deduplicates via frozenset before validating, so [RAW, 'raw'] passes while ['raw', RAW] raises.",
+      "members": [
+        "sol/1/1",
+        "sol-high/1/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "Verified: the forward order returns frozenset({AdjustmentBasis.RAW}) and the reverse raises InvalidMarketError. The accepted case stores the correct enum value, so no wrong data results; only validation of a malformed input is order-dependent.",
+      "evidence": [
+        "src/manta_trading_engine/core_model/markets.py:160-166"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "teccae5e-N4",
+      "title": "Market field annotations (tuple, frozenset) contradict the docstring and helpers that accept any iterable.",
+      "members": [
+        "hy4/1/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True: the fields are annotated tuple[...] and frozenset[...] while the docstring and _normalize_* accept Iterable, so typed callers passing a list get a pyright error. Typing/doc mismatch; runtime behavior is correct.",
+      "evidence": [
+        "src/manta_trading_engine/core_model/markets.py:74-85"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "teccae5e-N5",
+      "title": "_require_instance and the nonempty-str check are duplicated between markets.py and instruments.py.",
+      "members": [
+        "haiku-xhigh/1/2",
+        "sonnet-high/1/0"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True: both new modules define the same guard differing only in the error class (later extracted to validation.py in ccae5e3). Duplication, no behavior defect.",
+      "evidence": [
+        "src/manta_trading_engine/core_model/instruments.py:79-86",
+        "src/manta_trading_engine/core_model/markets.py:123-138"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "teccae5e-N6",
+      "title": "UNIFORM_ROWS hard-codes the five fixture instruments instead of deriving from ALL_INSTRUMENT_FIXTURES.",
+      "members": [
+        "hy4/1/2"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True: the uniformity test lists the fixtures by hand with no assertion tying it to ALL_INSTRUMENT_FIXTURES. Test maintenance point; the current list covers all five.",
+      "evidence": [
+        "tests/core_model/test_market_uniformity.py:36-48"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "teccae5e-N7",
+      "title": "SIXTY_SECONDS_NS is declared but never used in test_market_uniformity.py.",
+      "members": [
+        "hy4/1/3"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True: the constant has no other reference in tests; BarSpec.time(60) hard-codes the width. Dead test code.",
+      "evidence": [
+        "tests/core_model/test_market_uniformity.py:34",
+        "tests/core_model/test_market_uniformity.py:56"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "teccae5e-N8",
+      "title": "Test-only fixture modules live in the shipped src package.",
+      "members": [
+        "qwen38-27b/1/0"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "True that fixtures/ is under src and documented as test fixtures, but the directory (calendars.py) already existed at base and the new modules follow that established layout, which the import-boundary test guards. Packaging/design preference, no wrong behavior.",
+      "evidence": [
+        "src/manta_trading_engine/core_model/fixtures/calendars.py",
+        "tests/core_model/test_import_boundary.py"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "teccae5e-N9",
+      "title": "A make_market test helper is defined in two test modules.",
+      "members": [
+        "qwen38-27b/1/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "Substance true: make_market exists in test_markets.py:36 and test_instruments.py:43 with different defaults. The cited test_market_uniformity.py has no make_market. Test scaffolding duplication only.",
+      "evidence": [
+        "tests/core_model/test_markets.py:36",
+        "tests/core_model/test_instruments.py:43"
+      ],
+      "known": null,
+      "fail_justified": null
+    }
+  ]
+}

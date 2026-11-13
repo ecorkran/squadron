@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "uncaught exceptions (IndexError/FileNotFoundError on the health log read, ValueError from `int(psql(...))`, StopIteration in `conf_sums`) escape `run_steps`/`main` and skip the report, breaking the script's documented \"the report is still written\" contract after the apply step has already run."
+  ],
+  "F2": [
+   "DROP",
+   "the `all(\"manta \" not in c.split(\"/\")[0] ...)` assertion is indeed vacuous and the report test never calls `main()`, but these are test-quality observations that cause no product defect, and the `main()` coverage gap is subsumed by F1's fix."
+  ],
+  "F3": [
+   "DROP",
+   "the `\\if :{?with_replication}` branch is well-formed and mirrors the file's other `\\gexec` blocks, so this is a true but low-value \"missing database test\" coverage gap, not a demonstrated defect in the changed code."
+  ]
+ },
+ "wall_seconds": 108.7,
+ "duration_seconds": 108.65359249990433,
+ "cost_usd": 0.05799432,
+ "effort": null,
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=94935, cached=60992, cache_write=None, completion=21272, reasoning=20562)",
+ "raw_output": "\n\nF1: KEEP \u2014 uncaught exceptions (IndexError/FileNotFoundError on the health log read, ValueError from `int(psql(...))`, StopIteration in `conf_sums`) escape `run_steps`/`main` and skip the report, breaking the script's documented \"the report is still written\" contract after the apply step has already run.\nF2: DROP \u2014 the `all(\"manta \" not in c.split(\"/\")[0] ...)` assertion is indeed vacuous and the report test never calls `main()`, but these are test-quality observations that cause no product defect, and the `main()` coverage gap is subsumed by F1's fix.\nF3: DROP \u2014 the `\\if :{?with_replication}` branch is well-formed and mirrors the file's other `\\gexec` blocks, so this is a true but low-value \"missing database test\" coverage gap, not a demonstrated defect in the changed code.\n\n\nF1: KEEP \u2014 uncaught exceptions (IndexError/FileNotFoundError on the health-log `.splitlines()[-1]` read, ValueError from `int(psql(...))` in `tick_locks_held`, StopIteration in `conf_sums`'s unguarded `next()`) escape `run_steps`/`main` so the report is never written, breaking the docstring's \"the report is still written\" promise after the apply step has already changed the host.\nF2: DROP \u2014 the vacuous `\"manta \" not in c.split(\"/\")[0]` assertion and the test's failure to reach `main()` are true test-quality observations but cause no product defect, and the crash-path coverage gap they note is addressed by F1's recommended fix and test.\nF3: DROP \u2014 the `\\if :{?with_replication}` branch is well-formed (correct guard, `%I`, `\\gexec` mirroring the file's already-executed blocks, variable with a set default) and its production invocation in `ensure_databases` matches the script, so this is a true but low-value missing-database-test point for a path that works, not a demonstrated defect."
+}

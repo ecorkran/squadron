@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Prefix matching applies to every required heading, not only placeholder headings",
+      "description": "`missingHeadings` passes a document heading when its normalized text starts with the template heading's text. The bash script's comment says prefix matching is for headings that carry a `{placeholder}` (`project-documents/ai-project-guide/scripts/validate-slice-design:89-90`), but `key_matches` (lines 91-100) applies it to every required heading. The port copies that behavior and its header documents it (`sliceDesignValidator.ts:4-7`). As a result, `## Technical Decisions Log` satisfies a required `## Technical Decisions`, and `## Values` satisfies `## Value`. This is a validator whose job is to catch missing sections, so it produces false passes. No test covers the sibling-prefix case in either direction. Decide which behavior the guide intends, make the port follow it, and add a test for the sibling case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:81"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Required-marker detection fails open",
+      "description": "`requiredHeadings` treats a heading as required only when the next line, trimmed, is exactly `<!-- required -->`. A blank line between the heading and the marker, or a marker written as `<!--required-->`, silently drops that requirement. The only guard is `required.length === 0` (`packages/core/src/schema/sliceDesignFiles.ts:63-68`), which fires only when every marker is lost. The template comes from the guide and changes with `cf guides update`, so one edited marker turns the check off for that heading with no error. The project's parser rules call for lenient matching and for explicit failures over silent defaults. Count marker-like lines with a lenient pattern (for example `/<!--\\s*required\\s*-->/`) and throw when that count exceeds the number of headings matched. Add a test with a detached marker that asserts the error.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:50"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Project resolution is duplicated from `validateFrontmatterAction`",
+      "description": "`resolveTemplatePath` repeats the store construction, `resolveProjectWorktree`, `getById`, the not-found `UserError`, and `resolveOperationPath` sequence from `validateFrontmatterAction` (`packages/cli/src/commands/validate.ts:154-166`). The two copies already disagree. Frontmatter throws when `project.projectPath` is unset (`validate.ts:161`), even if the resolved worktree has its own path. Design throws only when `resolveOperationPath` returns nothing (`validateDesign.ts:42-44`). The same project setup therefore works for one `cf validate` subcommand and fails for the other. Extract a shared helper such as `resolveCheckoutRoot(opts)` into `packages/cli/src/utils/project.ts` and decide the one correct rule for both.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:34"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Usage and template errors bypass the CLI's error mapping",
+      "description": "The \"no files given\" usage error is thrown as core's `SliceDesignValidationError` rather than the CLI's `UserError`. `handleError` prints a `UserError` with its code and suggestion. Any other error gets `code: 'UNKNOWN'` in `--json` mode (`packages/cli/src/utils/errors.ts:46-70`). The existing pattern converts core errors into `UserError` with an `ErrorCode` at the boundary: `packages/cli/src/commands/guides.ts:67` maps `GuideExcludeError` to `UserError(..., 'INVALID_VALUE')`. So `cf validate design --json` reports an invalid argument as `UNKNOWN`. The missing-template error (`sliceDesignFiles.ts:57-61`) is also `UNKNOWN`, although `MISSING_CONFIG` or `ARTIFACT_NOT_FOUND` fit it. Throw `UserError` with `INVALID_ARGUMENT` for usage, and map the template error at the CLI boundary the same way `guides.ts:67` does.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests depend on live user slice documents and one document's section layout",
+      "description": "`PASSING_DESIGNS` hardcodes four real slices (212, 213, 214, 928) under `project-documents/user/slices/`, and `DESIGN_214` feeds most fixtures (line 53). `brokenCopy` (lines 141-142) and `withoutValueSection` (`packages/core/tests/schema/sliceDesignFiles.test.ts:42-44`) remove a section with a regex that requires `## Technical Scope` to follow `## Value` in document 214. Renaming or archiving one of these slices, or changing its headings, fails tests that are unrelated to the validator's behavior. The repo's testing rules place fixtures in `tests/fixtures/`. Real-format coverage is worth keeping, so copy the real designs into `tests/fixtures/` in their exact format instead of reading live user documents.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:47"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`parseFrontmatter` swallows read errors on the first read",
+      "description": "`parseFrontmatter` never throws (`packages/core/src/introspection/parsers/frontmatterParser.ts:9`, catch at lines 63-65). A read failure on line 95 therefore comes back as \"no docType\", and the file is reported as a doctype failure instead of an I/O error. The second read (lines 100-105) is wrapped as `SliceDesignValidationError`, so the author meant read errors to surface. `preflight` narrows the window but cannot close it, since the file can disappear between the two calls. The file is also read twice. Wrap this call the same way as the second read, or read once and parse the frontmatter from that text.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:95"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Core exports and a CLI type have no consumers outside their own files",
+      "description": "`requiredHeadings`, `documentHeadingKeys`, `missingHeadings`, and their types are added to the browser-safe `index.ts`, and nothing outside `packages/core` imports them. `SLICE_DESIGN_DOC_TYPE` is exported from `packages/core/src/node.ts:34`, and `ValidateDesignJson` from `validateDesign.ts:25`, with no importers either. Each one is public surface to maintain. Export only what the CLI uses (`validateSliceDesignFiles`, `SliceDesignValidationError`, `DesignFailureReason`, `DOC_TYPE_FAILURE_MESSAGE`, `DesignValidationResult`), or keep the rest internal until something needs them.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/index.ts:42"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The TypeScript port and the bash script will drift",
+      "description": "The port is documented as ported from `scripts/validate-slice-design`. That script ships in the guide, and the test comment describes it as the reference (\"the guide's bash script passes today\"). The two already differ. The port accepts quoted and unspaced `docType` values and marker whitespace variants, and it preflights every file before printing (the bash script exits mid-run on a missing file). Those differences are reasonable, and the preflight one is documented in `sliceDesignFiles.ts:6-8`. Each one is still a place where the guide and the CLI can disagree, so retiring the script should be a deliberate decision.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:4"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exit-code and output-stream contract is covered end to end",
+      "description": "The `exit 2 with empty stdout` cases cover the no-argument, nonexistent-path, and valid-then-missing usage failures, in both human and `--json` modes, and assert that stdout stays empty. The missing-template case is covered separately. The pass/fail `--json` shape is checked with `toEqual`. The worktree test (`reads the template from the invoking worktree's guide`) asserts the exact path string, so a wrong-checkout bug would fail it. I read the helpers these tests depend on. `handleError` calls `process.exit`, which the test mocks to throw. `printJson` writes through `process.stdout.write`, which the test spies on. The mocks match the real call paths.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:198"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Prefix matching applies to every required heading, not only placeholder headings",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:81",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Required-marker detection fails open",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:50",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Project resolution is duplicated from `validateFrontmatterAction`",
+      "location": "packages/cli/src/commands/validateDesign.ts:34",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Usage and template errors bypass the CLI's error mapping",
+      "location": "packages/cli/src/commands/validateDesign.ts:62",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests depend on live user slice documents and one document's section layout",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:47",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`parseFrontmatter` swallows read errors on the first read",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts:95",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Core exports and a CLI type have no consumers outside their own files",
+      "location": "packages/core/src/index.ts:42",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The TypeScript port and the bash script will drift",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:4",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Exit-code and output-stream contract is covered end to end",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:198",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:20:38.054420",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 31,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 32,
+  "prompt_tokens": 1589245,
+  "cached_tokens": 1379577,
+  "cache_write_tokens": 209646,
+  "completion_tokens": 56615,
+  "reasoning_tokens": null,
+  "duration_seconds": 249.0043178331107,
+  "cost_usd": 0.39261946999999997,
+  "cost_basis": "provider"
+}

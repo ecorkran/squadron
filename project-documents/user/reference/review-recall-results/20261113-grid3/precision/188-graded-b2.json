@@ -1,0 +1,52 @@
+{
+ "case": "188",
+ "matched": {
+  "hy4/1/0": "188-I2",
+  "hy4/1/2": "188-I11",
+  "hy4/1/3": "188-I5",
+  "hy4/1/5": "188-I15",
+  "luna-r-high/1/0": "188-I9",
+  "luna-r-high/1/1": "188-I6",
+  "deepseek4-flash/1/0": "188-I6",
+  "deepseek4-flash/1/1": "188-I3",
+  "deepseek4-flash/1/2": "188-I11"
+ },
+ "new_issues": [
+  {
+   "id": "188-M1",
+   "title": "The load test's recording cursor stores mogrify() bytes and then filters them with str membership, raising TypeError.",
+   "members": [
+    "hy4/1/1"
+   ],
+   "grade": "FALSE",
+   "confidence": "high",
+   "why": "_RecordingCursor.execute appends self.mogrify(query, params) and the over-ceiling test filters with \"kalshi.trades\" in s. In the locked psycopg 3.3.3, ClientCursor.mogrify is declared -> str and returns pgq.query.decode(self._tx.encoding), so the recorded entries are str and the filters work.",
+   "evidence": [
+    "test/load/test_188_kalshi_api_nfr.py:132-145",
+    "test/load/test_188_kalshi_api_nfr.py:286-291",
+    "uv.lock:1193-1194 (psycopg 3.3.3)",
+    "psycopg 3.3.3 client_cursor.py:36-46 (mogrify -> str, decodes)"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "188-M2",
+   "title": "The load tier's prod-URL guard is a per-line scan and does not cover the new test/kalshi_support package.",
+   "members": [
+    "hy4/1/4"
+   ],
+   "grade": "PREEXISTING",
+   "confidence": "medium",
+   "why": "test_load_tier_never_references_prod_db_url in test_167_data_status_nfr.py scans test/load/*.py line by line, and that file is not touched in base..head. The new test/kalshi_support/schema.py takes the URL as a parameter and reads no environment variable, and the new load conftest/test do not read the prod URL either, so the diff adds no read the guard misses; the weakness of the guard itself predates the diff.",
+   "evidence": [
+    "test/load/test_167_data_status_nfr.py:214-232",
+    "test/kalshi_support/schema.py:18-44",
+    "test/load/test_188_kalshi_api_nfr.py:49-50"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
+ ],
+ "disputes": []
+}

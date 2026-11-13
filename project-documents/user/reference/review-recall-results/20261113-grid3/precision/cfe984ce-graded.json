@@ -1,0 +1,122 @@
+{
+  "case": "cfe984ce",
+  "matched": {},
+  "new_issues": [
+    {
+      "id": "cfe984ce-N1",
+      "title": "validateFile uses parseFrontmatter, which swallows read errors, so a read failure after preflight is reported as a docType FAIL (exit 1) instead of an error, and the file is read twice.",
+      "members": ["hy4/1/0", "sonnet/1/0"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "parseFrontmatter catches every error and returns found:false, and validateFile only compares data.docType, so a read failure on that first read yields a doctype failure and the later readFile catch is reachable only if the second read alone fails. But preflight has just run stat and access(R_OK) on the same file, so this needs the file to vanish or change permissions in the milliseconds between preflight and validateFile, or an EIO. The claim is true; the trigger is a narrow race, so it is hardening rather than a merge blocker.",
+      "evidence": [
+        "packages/core/src/schema/sliceDesignFiles.ts:73-88",
+        "packages/core/src/schema/sliceDesignFiles.ts:95-105",
+        "packages/core/src/introspection/parsers/frontmatterParser.ts:63-64"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe984ce-N2",
+      "title": "resolveTemplatePath duplicates validateFrontmatterAction's project and worktree resolution, including the 'Project not found' message.",
+      "members": ["haiku-xhigh/1/0", "minimax31-flash/1/1", "sonnet-high/1/1"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "Both functions build a FileProjectStore, call resolveProjectWorktree and getById, throw the same UserError text, then call resolveOperationPath. The duplication is real and the two differ slightly (validate.ts falls back to projectPath), but both behave correctly; this is a DRY point, not a defect.",
+      "evidence": [
+        "packages/cli/src/commands/validateDesign.ts:34-46",
+        "packages/cli/src/commands/validate.ts:153-166"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe984ce-N3",
+      "title": "SLICE_DESIGN_DOC_TYPE redefines the 'slice-design' literal that frontmatterSchema.ts still hardcodes in three places.",
+      "members": ["haiku-xhigh/1/1", "minimax31-flash/1/0"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "The new constant duplicates 'slice-design' already present at frontmatterSchema.ts:74/76, 148 and 185, which do not use it. The values agree today, so behavior is correct; this is a single-source-of-truth style point.",
+      "evidence": [
+        "packages/core/src/schema/sliceDesignFiles.ts:21",
+        "packages/core/src/schema/frontmatterSchema.ts:76",
+        "packages/core/src/schema/frontmatterSchema.ts:148",
+        "packages/core/src/schema/frontmatterSchema.ts:185"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe984ce-N4",
+      "title": "The no-files usage error throws SliceDesignValidationError rather than UserError, so it prints with an 'Error:' prefix and reports code UNKNOWN in JSON mode.",
+      "members": ["haiku-xhigh/1/2"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "handleError gives only UserError the clean message and its code; any other Error gets 'Error: ' in human mode and code UNKNOWN in JSON mode. The exit code is still 2 and the message is still printed, so the effect is cosmetic error formatting and a less specific machine code.",
+      "evidence": [
+        "packages/cli/src/commands/validateDesign.ts:62-66",
+        "packages/cli/src/utils/errors.ts:46-71"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe984ce-N5",
+      "title": "JSON error mode is enabled only by sniffing '--json' in argv, so 'cf validate design -j' prints plain-text errors on failure.",
+      "members": ["hy4/1/1"],
+      "grade": "PREEXISTING",
+      "confidence": "medium",
+      "why": "index.ts calls setJsonMode only when process.argv includes '--json' or CF_JSON=1, while withJsonOption registers '-j, --json', so the claim is true. That detection lives in index.ts and errors.ts, unchanged in base..head, and applies to every command using withJsonOption; the new command only inherits it.",
+      "evidence": [
+        "packages/cli/src/index.ts:178-180",
+        "packages/cli/src/utils/errors.ts:28-39",
+        "packages/cli/src/options.ts:5"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe984ce-N6",
+      "title": "The new command tests never assert the JSON stderr error payload, because the harness never enables JSON error mode.",
+      "members": ["hy4/1/2"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "The test harness registers the command on a bare Command without the entrypoint, so setJsonMode is never called and the --json exit-2 cases only check exit code and empty stdout. This is a coverage gap for paths that otherwise work through shared, pre-existing handleError code.",
+      "evidence": [
+        "packages/cli/tests/commands/validate-design.test.ts:127-131",
+        "packages/cli/tests/commands/validate-design.test.ts:198-222"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe984ce-N7",
+      "title": "An inline YAML comment on the docType line makes the docType comparison fail because parseFrontmatter keeps the comment in the value.",
+      "members": ["sol-high/1/0"],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "parseFrontmatter takes everything after the first colon and strips only quotes, so 'docType: slice-design # note' yields 'slice-design # note' and fails the strict comparison. The claim is true, but the parser is pre-existing and shared by every frontmatter check, and project docs do not put comments on docType lines; it is an unlikely input rather than a defect introduced here.",
+      "evidence": [
+        "packages/core/src/schema/sliceDesignFiles.ts:95-97",
+        "packages/core/src/introspection/parsers/frontmatterParser.ts:37-50"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "cfe984ce-N8",
+      "title": "The tests read live slice documents and the guide-managed slice-design template, so ordinary doc or guide edits can break them.",
+      "members": ["sonnet-high/1/0"],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "PASSING_DESIGNS points at four real files under project-documents/user/slices and REAL_TEMPLATE at the guide checkout, so the claim is true. It is test fragility, not wrong product behavior.",
+      "evidence": [
+        "packages/cli/tests/commands/validate-design.test.ts:40-53"
+      ],
+      "known": null,
+      "fail_justified": null
+    }
+  ],
+  "disputes": []
+}

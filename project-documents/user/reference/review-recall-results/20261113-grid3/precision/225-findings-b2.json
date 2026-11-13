@@ -1,0 +1,79 @@
+[
+ {
+  "ref": "hy4/1/0",
+  "severity": "CONCERN",
+  "title": "Coverage's raw count is not scoped to the selected product shape",
+  "location": "src/manta_trading/data/tick/status_reads.py:154-174",
+  "description": "`raw_counts` receives only `(session_date, open_ns, close_ns)` triples and counts every `tick_trade` row in those intervals, with no join to `tick_archive_unit`/`tick_request` and no shape parameters. By contrast, `ledger_totals` at `src/manta_trading/data/tick/status_reads.py:96-107` uses `_SHAPE_WHERE` from `src/manta_trading/data/tick/status_reads.py:55-59` to filter by dataset, symbols, `stype_in`, stored tiers, and the current-unit predicate. `build_coverage` therefore compares a shape-filtered ledger at `src/manta_trading/data/tick/tick_coverage.py:108-109` against unfiltered raw rows at `src/manta_trading/data/tick/tick_coverage.py:110-112`. The current ES-only universe and tests mask this, but a second universe product will make `coverage --product` count other products' rows that fall in the same session windows; `_session_row` in `src/manta_trading/data/tick/tick_coverage.py:72-86` then reports those instruments as ledger `0`, raw `>0` mismatches, causing a false exit 3. Filter raw rows by current units of the same shape, or carry product/shape identity into the raw table."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "The new raw-count scan has no statement timeout or backend cancellation",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:99-115",
+  "description": "`coverage --start --end` has no maximum range beyond the required dates in `src/manta_trading/cli/commands/tick_store_cmds.py:205-237`; `build_coverage` passes every session in the requested range to `raw_counts` at `src/manta_trading/data/tick/tick_coverage.py:106-112`. The SQL at `src/manta_trading/data/tick/status_reads.py:164-171` scans `tick_trade` over `min(opens)..max(closes)` and joins to arrays, but neither `_read` at `src/manta_trading/cli/commands/tick_store_cmds.py:156-168` nor `_connect` at `src/manta_trading/data/tick/store_context.py:157-167` sets `statement_timeout`, and there is no `pg_cancel_backend` path for a client-side timeout/interrupt. The SQL rules require a statement timeout for long-running queries and server-side cancellation after a client timeout; without it, a wide coverage range can tie up a backend after the CLI has gone away. Add an explicit bounded `SET LOCAL statement_timeout` and cancellation envelope for this read path."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "Status/coverage DB read paths have no load-test bound or gate",
+  "location": "test/load/test_225_tick_ingest_nfr.py:1-15",
+  "description": "The only slice-225 load test is `test/load/test_225_tick_ingest_nfr.py:1-15`, whose docstring and assertions cover ingest unit time and event-loop gap. The new status/coverage path adds the raw-count proof at `src/manta_trading/data/tick/tick_coverage.py:99-115` and the `tick_trade` scan at `src/manta_trading/data/tick/status_reads.py:154-174`, both on the DB/network path, but `test/load/` has no status/coverage load module and no latency, throughput, or resource bound for a realistic range. The Python rules require a load test and CI gate for slices touching network/environment-layer paths; integration tests such as `test/integration/data/test_tick_status_cli.py:99-115` assert functional JSON shape only. Add a load test that runs `build_coverage`/`coverage` over a representative range and asserts a latency or resource ceiling."
+ },
+ {
+  "ref": "hy4/1/3",
+  "severity": "CONCERN",
+  "title": "Calendar-horizon refusals are reported as storage outages",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:63-75",
+  "description": "`calendar_sessions` catches `OutOfPopulatedRangeError` at `src/manta_trading/data/tick/tick_status_build.py:73-74` and re-raises it as `TickCalendarError`. `exit_code_for` maps every `TickCalendarError` to `EXIT_STORAGE` at `src/manta_trading/cli/commands/tick_exit.py:55-58`, while `READ_EPILOG` at `src/manta_trading/cli/commands/tick_store_cmds.py:37-43` reserves exit 4 for an unreachable tick/calendar database and exit 1 for preflight/input problems. Thus a valid `--start/--end` that lies outside the populated calendar horizon, reached via `src/manta_trading/data/tick/tick_coverage.py:99-104`, exits 4 as if production storage were down instead of a preflight refusal naming the horizon. Keep `TickCalendarError` for actual calendar outages, but classify `OutOfPopulatedRangeError` as preflight for these read verbs and add a regression test."
+ },
+ {
+  "ref": "hy4/1/4",
+  "severity": "CONCERN",
+  "title": "New SQL reads do not follow the project SQL style rules",
+  "location": "src/manta_trading/data/tick/status_reads.py:50-59",
+  "description": "The new SQL module defines single-letter aliases `u`, `r`, and `l` in `_UNITS`, `_LEDGER_UNITS`, and `_SHAPE_WHERE` at `src/manta_trading/data/tick/status_reads.py:50-59`, then reuses `h`, `d`, `t`, and `s` throughout queries at `src/manta_trading/data/tick/status_reads.py:81-151` and `src/manta_trading/data/tick/status_reads.py:154-174`. SELECT lists are compressed inline rather than one column per line with leading commas. The SQL rules require meaningful aliases and the prescribed SELECT layout. Use descriptive aliases such as `archive_unit`, `ingest_ledger`, `held`, `definition`, `trade`, and `session`, and format the SELECT lists consistently."
+ },
+ {
+  "ref": "hy4/1/5",
+  "severity": "CONCERN",
+  "title": "CLI documentation and public API docstrings drift from the new renderer structure",
+  "location": "src/manta_trading/cli/commands/tick.py:1-10",
+  "description": "The top-level `tick.py` docstring at `src/manta_trading/cli/commands/tick.py:1-10` still says Rich rendering lives in `tick_render.py` and `tick_pass_render.py`, but status/coverage rendering is now in `src/manta_trading/cli/commands/tick_status_render.py:1-7` and ingest rendering is imported separately in `src/manta_trading/cli/commands/tick_store_cmds.py` around the ingest command body. Public functions such as `print_status`, `coverage_to_dict`, and `print_coverage` in `src/manta_trading/cli/commands/tick_status_render.py:114-161` also have no docstrings, while the Python rules require docstrings for public APIs. Update the module documentation and add concise Google/NumPy-style docstrings for the new public rendering helpers."
+ },
+ {
+  "ref": "luna-r-high/1/0",
+  "severity": "CONCERN",
+  "title": "Caught-up can be reported when the wanted range is unknown",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:217",
+  "description": "When an entry has a configured tier and start but neither a configured end nor an availability edge, `_wanted_end` returns `None` and `_scope` can return no sessions. This call still passes `wanted=True` to `caught_up`; because `all([])` is true, status reports \u201ccaught up\u201d despite having no known range to assess. Base this value on whether a wanted range was actually established, and cover the missing-edge case in a test."
+ },
+ {
+  "ref": "luna-r-high/1/1",
+  "severity": "CONCERN",
+  "title": "Coverage counts raw rows outside the requested product shape",
+  "location": "src/manta_trading/data/tick/status_reads.py:154-172",
+  "description": "`raw_counts` counts every `tick_trade` row in the session intervals, while `ledger_totals` is filtered to the requested `Shape`. If another product is ingested on the same calendar, coverage for one product will include the other product\u2019s raw-only instrument rows and report false mismatches. Restrict the raw count to the requested shape\u2019s current units. The current universe contains only ES, but the coverage API and product model are intended to support additional products."
+ },
+ {
+  "ref": "luna-r-high/1/2",
+  "severity": "CONCERN",
+  "title": "The new coverage database scan has no load test",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:77-92",
+  "description": "Coverage adds a database-bound raw-table count whose cost grows with the requested date range, but the added load test exercises ingest only (`test/load/test_225_tick_ingest_nfr.py`). The Python review rules require a load test for network paths. Add a realistic coverage-range load test with a latency, throughput, or resource bound, and gate it in CI."
+ },
+ {
+  "ref": "deepseek4-flash/1/0",
+  "severity": "CONCERN",
+  "title": "A coverage range at the populated span's edge exits 4 as \"database unreachable\"",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:99-105",
+  "description": "`build_coverage` asks the calendar for `[utc_midnight(start - timedelta(days=1)), utc_midnight(end))` (lines 103-104) so a session that opens the previous evening is included. `TradingCalendar.sessions_between` calls `_require_populated` on **both** bounds (`data/base/trading_calendar.py:310-317`), and `calendar_sessions` (`tick_status_build.py:63-75`) converts `OutOfPopulatedRangeError` into `TickCalendarError`. `exit_code_for` maps `TickCalendarError` to `EXIT_STORAGE` (`cli/commands/tick_exit.py`), so `mt data tick coverage --start <first populated session date>` \u2014 a legitimate request \u2014 prints the calendar's \"outside calendar \u2026 Run 'mt data extend'\" refusal and exits **4**, which `READ_EPILOG` (`tick_store_cmds.py:37-42`) documents as \"the tick or production (calendar) database is unreachable.\" The operator gets a storage-outage diagnosis and a storage exit code for what is an out-of-range input. Either clamp the lookback to the populated span's first open, or map this refusal to exit 1 and say so in the epilog. (The share of this that is genuinely a storage outage \u2014 a dead connection \u2014 already reaches exit 4 through `psycopg.OperationalError`.)"
+ },
+ {
+  "ref": "deepseek4-flash/1/1",
+  "severity": "CONCERN",
+  "title": "`caught_up` is computed on a different condition than the `wanted` range it reports on",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:217",
+  "description": "The in-scope `wanted` tuple is built at lines 187-192 and is `None` whenever `_wanted_end` cannot produce an end (`entry.end is None` **and** no `tick_dataset_edge` row \u2014 `_wanted_end`, lines 140-144). But the `caught_up` flag at line 217 tests only `wanted_start is not None`. So a product with `tier` set but an unknown/absent dataset edge falls into `_scope`'s held-units-only branch (no wanted bounds added, line 158), yet reports `caught up: yes/no` instead of the `n/a` that `caught_up`'s own docstring reserves for \"the product has no wanted range\" (`tick_status.py`, `caught_up`). Concretely, it can print `caught up: yes` over a scope that contains only days already held, which is precisely the reading TD9's \"n/a (no wanted range)\" branch exists to prevent. Today `TICK_UNIVERSE` has `tier=None`, so this is latent until 226 sets a tier \u2014 but it is the state 226 immediately lands in. Keying the flag off `wanted is not None` (the same value used for scope) makes the two agree."
+ }
+]

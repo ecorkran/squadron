@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Stray sed backup file committed",
+      "description": "`packages/core/tests/services/CoreServiceFactory.test.ts-E` is a new 146-line file in the diff. It is the pre-edit copy of `CoreServiceFactory.test.ts`, left behind by a macOS `sed -i -E` call. It still calls `createContextPipeline(...)` with the old one-argument signature. The file is outside the `*.test.ts` glob, so vitest won't run it, but it is dead duplicate code. `grep` for it already returns stale `createContextPipeline(` hits. The `.gitignore` has no pattern for it, so it will stay in the repo until someone deletes it. Delete it from the commit.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Default instruction `'implementation'` is now repeated four times",
+      "description": "The new line `const instruction = project.instruction || 'implementation';` adds a fourth copy of the literal. The others are at lines 216, 244 and 289. The project rules say \"never scatter comparison values\" and \"do not hard-code magic defaults\". The duplication also carries a correctness risk: the resolver and `mapProjectToEnhancedContext` must agree on the default, or adoption eligibility could be decided on a different instruction than the one that selects the prompt. Define the default once (a constant in `constants.ts` or the schema module). Use it here and, ideally, at the three existing sites.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:148"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Adoption failure intentionally bypasses the error-stub fallback",
+      "description": "`AdoptionError` is rethrown alongside `PermissivenessFragmentError`, which follows the no-silent-fallback rule. `ContextIntegrator.test.ts` covers both the rethrow and the unchanged stub behavior for unrelated errors. `persistInProgress` in `adoptionResolver.ts` catches a write failure and rethrows it as `AdoptionError` with `cause`, so the catch complies with the exception-handling rule.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:122-123"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Required `adoptionStateWrites` option forces every caller to decide",
+      "description": "Making the option required and typed as a `'persist' | 'read-only'` union is a good contract. I grepped every `createContextPipeline(` caller in `src` and `tests`: `cf build` and `context_build` pass `persist`, `template_preview` passes `read-only`, and all test callers are updated. `isSelected` uses a `never` exhaustiveness check. The mcp-server imports `AdoptionStateWrites` through `@context-forge/core/node`, which re-exports `adoption/index.js`, so that import resolves.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/services/CoreServiceFactory.ts:29-35"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test coverage of the selection rule and the persist/read-only split is thorough",
+      "description": "The 13 integration scenarios use real temp projects, covering greenfield, scaffold-only, brownfield, shallow clone, monorepo, resume, overrides, a missing guide profile and read-only mode. The unit tests cover the resolver's laziness (the source walk never runs when planning artifacts exist) and the failed-write path. The CLI/MCP parity test checks that both entry points produce identical prompts. The `chmod` test is gated by `skipIf` for Windows and root. The integration tests use a temporary `CONTEXT_FORGE_DATA_DIR`, so they cannot touch real user config.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Stray sed backup file committed",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Default instruction `'implementation'` is now repeated four times",
+      "location": "packages/core/src/services/ContextIntegrator.ts:148",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Adoption failure intentionally bypasses the error-stub fallback",
+      "location": "packages/core/src/services/ContextIntegrator.ts:122-123",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Required `adoptionStateWrites` option forces every caller to decide",
+      "location": "packages/core/src/services/CoreServiceFactory.ts:29-35",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test coverage of the selection rule and the persist/read-only split is thorough",
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:29:59.741714",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 406976,
+  "cached_tokens": 298583,
+  "cache_write_tokens": 108385,
+  "completion_tokens": 2907,
+  "reasoning_tokens": null,
+  "duration_seconds": 27.285986166913062,
+  "cost_usd": 0.4959459,
+  "cost_basis": "provider"
+}

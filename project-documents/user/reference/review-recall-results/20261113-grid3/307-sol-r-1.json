@@ -1,0 +1,117 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Tick-tier gaps bypass the per-session exit rule",
+      "description": "`coverage_reads()` includes only `entry.history`, excluding each product\u2019s configured `tbbo` tier. Consequently, `_family_evidence()` never evaluates not-caught-up tick-tier sessions, although accounting includes those families and D6 requires evidence for every family.\n\nA pre-existing tick-tier gap can therefore remain unaccounted for while the cutover reports success: narration prints `caught_up=False`, but no failure is added if health\u2019s exit code remains unchanged. Include the configured tier and its range in coverage reads, and add a regression test where only the tick tier has an unexplained missing session.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py:72-93"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Ingest failures are incorrectly classified as acquisition failures",
+      "description": "`retry_exhausted_requests()` treats any retry-exhausted unit as evidence that its entire request failed acquisition. However, `ingest_pass._fail()` also records deterministic ingest failures as `RETRY_EXHAUSTED`, leaving the unit in `verified` state after successful acquisition.\n\nThose units cause delivered requests to be narrated as \u201cthe provider will not serve\u201d and labelled `acquisition failed` across the request\u2019s entire range. This confuses provider failures with the ingest findings the report is meant to distinguish. Identify acquisition exhaustion using acquisition state or other explicit manifest evidence, and test a delivered request containing a deterministic ingest failure.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:149-176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Over-session names lose their volume-family identity",
+      "description": "Statistics coverage emits volume verdicts for both tick-tier and bar families, including a `family` field. `over_sessions()` discards that field, and `_family_evidence()` accumulates all names under the product alone. `over_failures()` then attaches that combined list to every family with an over count.\n\nWhen the two families have different over sessions, each failure message names sessions belonging to the other family, making the evidence misleading. Preserve and group names by `(product, family)`, and test distinct tick-tier and bar over sessions for the same product.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py:105-128"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Tick-tier gaps bypass the per-session exit rule",
+      "location": "scripts/cutover_304_evidence.py:72-93",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Ingest failures are incorrectly classified as acquisition failures",
+      "location": "scripts/purchase_verdicts.py:149-176",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Over-session names lose their volume-family identity",
+      "location": "scripts/purchase_accounting.py:105-128",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:24:36.627336",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 1533,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 863270,
+  "cached_tokens": 737863,
+  "cache_write_tokens": null,
+  "completion_tokens": 2168,
+  "reasoning_tokens": 857,
+  "duration_seconds": 69.59288266696967,
+  "cost_usd": 0.3462803,
+  "cost_basis": "alias_pricing"
+}

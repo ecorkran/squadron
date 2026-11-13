@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`--fix` leaves `dateUpdated` depending on finding order",
+      "description": "With `--fix`, findings are applied in array order. `updateFrontmatterField` stamps `dateUpdated` with the run date on every write except when the key is `dateUpdated` (markdownWriter.ts:138-140). The backfill finding writes `dateCreated` into `dateUpdated` (frontmatterSchema.ts:243-244). The final value therefore depends on which fix runs last on the same file:\n\n- **Missing `status` and missing `dateUpdated`:** step 3 emits findings in schema field order (frontmatterSchema.ts:37-43), so the status fix runs first and stamps today. The backfill then overwrites `dateUpdated` with `dateCreated`. The file was mutated in this run, but its `dateUpdated` is not today.\n- **Missing `dateUpdated` and invalid `status`:** step 3 emits the backfill before step 4 emits the status fix, so the stamp wins and `dateUpdated` ends as today.\n\nThe same kind of edit yields different results. The slice spec asks for both \"stamps `dateUpdated` on every document whose frontmatter it mutates\" and \"the `dateUpdated`-backfill fixAction still writes the `dateCreated` value\" (project-documents/user/slices/923-slice.frontmatter-validate-command-dateupdated-stamp.md:196). Those conflict when both apply, and the code resolves the conflict by finding order. No test covers a file that receives two fixes. The integration test (`ConsistencyChecker.applyFixesIntegration.test.ts`) covers only the single-finding case. `ConsistencyChecker.applyFixes` (ConsistencyChecker.ts:218-233) has the same ordering.\n\nSuggested: get the PM to confirm which value is correct. Then either apply `dateUpdated` backfills first within a file, or drop the backfill when another fix mutates that file. Add a test for each ordering.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:113-124"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fix loop duplicates core `applyFixes` and sits in the CLI layer",
+      "description": "The fix loop repeats the update-frontmatter branch of `ConsistencyChecker.applyFixes` (ConsistencyChecker.ts:231-241): one date stamp, a call to `updateFrontmatterField` per finding, a fix log, and collected errors. Fix application is business logic, so it belongs in core. Keeping it in the CLI means core cannot reuse it, and the two copies can drift.\n\nThe catch at validate.ts:126-130 converts every exception, including programming errors such as `TypeError`, into a report line with no log or stack. CLAUDE.md requires narrowing or re-raising.\n\n`validateFrontmatterAction` is about 70 lines (validate.ts:87-157), above the ~50-line guideline. Extracting the loop would fix both.\n\nSuggested: move the loop into core beside `validateFrontmatterFiles`, for example `applyFrontmatterFixes(findings, dateStamp)`, export it through `node.ts`, and narrow the catch to expected failures.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:109-134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unmatched paths are dropped silently, and an all-dropped run exits 0",
+      "description": "Explicit paths that are out of the document root, not `.md`, or nonexistent are dropped without a message (frontmatterFileValidator.ts:52-66; the behavior is documented at validate.ts:164-172). When every path is dropped, validate.ts:53-55 prints \"No inconsistencies found (0 files checked)\", and the process exits 0. A misspelled path in a pre-commit hook therefore passes.\n\nSkipping staged deletions is reasonable. But the caller cannot tell a deletion from a typo, and CLAUDE.md says to fail explicitly rather than fall back silently. Adjacent: frontmatterFileValidator.ts:60 (`rel.startsWith('..')`) also drops in-root files whose names begin with `..`.\n\nSuggested: list skipped paths in the human output and as a `skipped` array in `--json`, so a script can see what was not checked.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:53-55"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Schema test named \"still caught\" asserts pass-through, and its comment misstates the mechanism",
+      "description": "The test is titled \"a wrong docType literal is still caught by the value-constraint logic\", but all three assertions expect zero findings. Nothing is caught.\n\nThe comments at lines 372-374 and 387-390 say the docType `values` constraint is what ties a document to its schema. The code does not work that way. `validateFrontmatter` looks up `FRONTMATTER_SCHEMAS[data.docType]` (frontmatterSchema.ts:228). The docType `values` check in step 4 (lines 269-298) compares against a list containing only that same key, so it can never fire.\n\nThe pass-through assertion for unknown docTypes is worth keeping, but under an accurate name. The \"mismatched\" case at lines 381-385 is a valid document, not a mismatch.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:371-396"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Help text overstates the difference from `cf check --fix` and omits the exit-code contract",
+      "description": "The description says \"Unlike cf check --fix, --fix here applies without a confirmation prompt.\" `cf check --fix` prompts only in the all-slices branch (check.ts:243-251). With `--slice` it applies without a prompt (check.ts:227-232), so the comparison holds for one mode only.\n\nThe description also omits the exit-code contract (0 clean, 1 findings, 2 invocation error). That contract appears only in the slice doc (923-slice\u2026md:141 and :199), so a script author reading `--help` cannot learn it.\n\nSuggested: state the exit codes in the description and scope the comparison to the all-slices mode.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:164-172"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Loose typing on a machine-consumed JSON surface",
+      "description": "- `jsonOutput` is `Record<string, unknown>`, so the compiler does not check the shape that squadron slice 172 consumes. A named interface would pin it.\n- The JSON `findings`, `errors`, and `warnings` describe the state before fixes, while the exit code reflects the state after. A consumer must derive remaining = `totalFindings` \u2212 `fixed`, and nothing says so.\n- `SEVERITY_ICON: Record<string, string>` (validate.ts:15-18) loses exhaustiveness, which forces the `?? '?'` fallback at line 62. `Record<FrontmatterFinding['severity'], string>` removes both.\n- `printHumanOutput` takes four positional parameters (validate.ts:44-49), against the TypeScript rule to prefer named parameters at three or more.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:136-148"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test spies on `process.exit` and `stdout.write` are never restored",
+      "description": "The spies at line 58 (`process.stdout.write`) and line 85 (`process.exit`) are never restored. The file has no `afterEach`, and `vi.clearAllMocks()` does not undo spies. Today the leak is harmless. But after the exit-2 test, `process.exit` stays mocked for later tests in the file, so an unexpected `handleError` call in a later test would pass silently. `project.test.ts` in the same package uses `vi.restoreAllMocks()`; follow that pattern.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate.test.ts:58"
+    },
+    {
+      "severity": "PASS",
+      "title": "`handleError` default keeps existing call sites unchanged",
+      "description": "`handleError(err, exitCode = 1)` is backward compatible. All 39 existing call sites pass a single argument (checked by grep), and only validate.ts passes 2. The message and JSON paths are untouched.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/errors.ts:46"
+    },
+    {
+      "severity": "PASS",
+      "title": "New docType schemas match their stated rationale",
+      "description": "The comment says the three new schemas omit `status`, `project`, and `dateUpdated`, and gives the reason. I checked the reason against the code: the step-3 backfill (frontmatterSchema.ts:243-244) would copy `dateCreated` into a required `dateUpdated`, which would make a false edit claim. The universal-field tests now iterate only the eight canonical docTypes (`EXPECTED_DOC_TYPES`, frontmatterSchema.test.ts:12-21), so they no longer fail on the new schemas.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/core/src/schema/frontmatterSchema.ts:118-141"
+    },
+    {
+      "severity": "PASS",
+      "title": "Compile-level references resolve against the source",
+      "description": "These resolve by reading: `FileProjectStore`, `validateFrontmatterFiles`, and `updateFrontmatterField` are exported from core/node (node.ts:23, 40). `formatDateProject` and `FrontmatterFinding` are exported from the core index (index.ts:26, 37). `label`, `dim`, `error`, and `warn` are exported from styles.ts. `printJson` writes to stdout (formatter.ts:4-6), which is what the JSON tests read. `FixLogEntry.before` is a required string (types.ts:259-266), matching `FixLogRecord`. I did not run `tsc`, so this is confirmed by reading only.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:1-13"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`--fix` leaves `dateUpdated` depending on finding order",
+      "location": "packages/cli/src/commands/validate.ts:113-124",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Fix loop duplicates core `applyFixes` and sits in the CLI layer",
+      "location": "packages/cli/src/commands/validate.ts:109-134",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unmatched paths are dropped silently, and an all-dropped run exits 0",
+      "location": "packages/cli/src/commands/validate.ts:53-55",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Schema test named \"still caught\" asserts pass-through, and its comment misstates the mechanism",
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:371-396",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Help text overstates the difference from `cf check --fix` and omits the exit-code contract",
+      "location": "packages/cli/src/commands/validate.ts:164-172",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Loose typing on a machine-consumed JSON surface",
+      "location": "packages/cli/src/commands/validate.ts:136-148",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test spies on `process.exit` and `stdout.write` are never restored",
+      "location": "packages/cli/tests/commands/validate.test.ts:58",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`handleError` default keeps existing call sites unchanged",
+      "location": "packages/cli/src/utils/errors.ts:46",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "New docType schemas match their stated rationale",
+      "location": "packages/core/src/schema/frontmatterSchema.ts:118-141",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Compile-level references resolve against the source",
+      "location": "packages/cli/src/commands/validate.ts:1-13",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:25:06.712946",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 31,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 32,
+  "prompt_tokens": 1480829,
+  "cached_tokens": 1321583,
+  "cache_write_tokens": 159224,
+  "completion_tokens": 52073,
+  "reasoning_tokens": null,
+  "duration_seconds": 228.81141875009052,
+  "cost_usd": 0.26899825,
+  "cost_basis": "provider"
+}

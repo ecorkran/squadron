@@ -1,0 +1,315 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit-failure restore can discard edits the user made while hooks ran",
+      "description": "The apply path gates each non-invoking checkout for clean target files (routedFixes.ts:258), writes the fixes (:263), then runs `git add` and `git commit`. The commit runs the target repo's pre-commit hooks for up to `FIX_GIT_TIMEOUT_MS` (60 s; gitExec.ts:165-170). If the commit fails, the catch calls `restorePathsToHead`, which runs `git restore --source=HEAD --staged --worktree -- <paths>` (gitExec.ts:179-186) and overwrites each written file's working-tree content. Any edit saved to one of those files during the hook window is lost, and nothing reports it.\n\nD5a justifies the restore as \"safe because readiness proved those paths clean immediately before the write.\" The restore runs after the hook, so that proof no longer covers the content being overwritten. The same section promises \"Failure leaves the checkout as found,\" which this violates.\n\nFix: snapshot each written file's content right after `applyFixes`, and before restoring, restore only files whose current content still matches the snapshot. Report the others as COMMIT_FAILED and leave them. routedFixes.test.ts case 5 covers a rejecting hook with no edit during it, so this race is untested.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:232"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Git failures are classified as deferral reasons, including timeouts",
+      "description": "Two probes catch every rejection. Lines 43-46 map any `rev-parse --show-toplevel` failure to NOT_A_CHECKOUT, and lines 51-54 map any `symbolic-ref -q HEAD` failure to DETACHED_HEAD. `gitExec` also rejects on a 60 s timeout, a spawn error, or a lock (gitExec.ts:89-101). A hung git is therefore reported as \"checkout missing or not a git checkout\" or \"checkout is on a detached HEAD.\" The comment justifies only symbolic-ref's exit code 1, and the catch doesn't check it. The probes at lines 56-62 and 65-68 have no catch and throw instead, so one function handles the same kind of failure in two ways.\n\nCLAUDE.md requires each catch to handle a specific exception with a comment. These don't.\n\nFix: have `gitExec` attach the exit code to the error it rejects with, then narrow the two catches to it (exit 1 for symbolic-ref; git's fatal 128 for not-a-repository) and let everything else propagate. checkoutReadiness.test.ts has no timeout or spawn-failure case.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/git/checkoutReadiness.ts:43-46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Errors escape mid-apply and can misreport a commit that landed",
+      "description": "(a) `applyFixPlan` (lines 296-298) processes checkouts one at a time with no try. The apply-time gate at 256-261 also sits outside any try. A git timeout on the second checkout therefore throws after the first checkout's commit has landed. The rejection reaches `handleError`, the first checkout's log and sha are dropped, and the user is never told a commit was made.\n\n(b) In `commitViewWrites` (lines 224-245), the try also wraps `commitPathsIfChanged`, which runs `rev-parse HEAD` after the commit (gitExec.ts:170). If that lookup fails, the code takes the failure path: restore runs against a HEAD that already holds the fix (a no-op), the log entries are cleared, and the fixes are reported as COMMIT_FAILED for a commit that exists.\n\nFix: catch per checkout and fold each outcome into `fixErrors`/`deferred` so one failure can't drop the rest. Treat a failure after the commit as a success with an unknown sha, not as a commit failure.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:256-261"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Multi-checkout fix output lists every fix twice",
+      "description": "`printCheckOutput` prints each finding under its slice group (lines 85-93; `formatFinding` adds a `\u2192 Fixed:` line for each applied fix). It then calls `printRoutedFixResult`, which lists the same fixLog entries again under each checkout (lines 95-96).\n\nThe design sample for \"CLI text output (multi-checkout)\" (213-slice doc, around line 296) shows only the checkout-grouped form, with no slice listing. The output is longer than specified and each change appears twice. The \"groups the invoking write\u2026\" test in check-worktree-fix.test.ts uses `search` for ordering, so it passes with the duplication.\n\nFix: in the multi-checkout fix case, print the routed report alone, after the header.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/output/checkReport.ts:85-96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope-and-apply orchestration is duplicated between CLI and MCP",
+      "description": "The CLI and MCP each implement the same steps:\n- building `scopeViews` with the `fileSlice` override and choosing check vs checkAll (workflowTools.ts:276-281; check.ts:173-177);\n- resolving the invoking checkout for multi-view fix (workflowTools.ts:266-274; check.ts:233-242);\n- running `planRoutedFixes` then `applyFixPlan` (workflowTools.ts:290-295; check.ts:247-252, 281).\n\nThe two copies must agree on error handling and on when the invoking checkout is resolved. CLAUDE.md prohibits duplicated logic, and the codebase already shares this kind of step through `buildAttributedViews` and `runAttributed` (mergeCheckResults.ts:31, 71).\n\nFix: move \"scope, check, resolve invoking, plan\" into one core function. Each consumer keeps its own prompt and error mapping.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/workflowTools.ts:266-295"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "One test depends on the developer's user-level config",
+      "description": "This suite doesn't mock `ConfigManager` and doesn't set `CONTEXT_FORGE_DATA_DIR`. So `workflow.auto_fix` is read from the developer's real `config.toml` (storagePaths.ts:66-80). If that key is `true` on the machine running the tests, `run('--json')` in the read-only test enters fix mode, hits the D5b error from the unregistered checkout, and fails, even though the code is correct.\n\nFix: point `CONTEXT_FORGE_DATA_DIR` at a per-test temp directory in `beforeEach` and restore it afterward, or mock `ConfigManager` as check.test.ts does.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/check-worktree-fix.test.ts:216"
+    },
+    {
+      "severity": "NOTE",
+      "title": "fix() and fixAll() have no production callers left",
+      "description": "The CLI and MCP no longer call `fix()` or `fixAll()`. Only ConsistencyChecker.test.ts and reviewGate.test.ts call them, and CLI tests still stub them (check.test.ts:20-45, check-worktree-attribution.test.ts:33-35). Their behavior matches check+applyFixes, so this is cleanup, not a bug. Either delete them and the stubs, or keep them as a documented convenience.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:202-214"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Non-null assertions on the optional fixAction in new code",
+      "description": "`fixRelPath` (exported) accepts any `ConsistencyFinding` and asserts `finding.fixAction!.filePath`. `routeView` asserts `finding.fixAction!.subjectIndex` at line 143. Callers are safe because `fixableOf` (line 171) filters on `fixAction`, but the types don't say so. Returning a narrowed type with a required `fixAction` from `fixableOf` removes both assertions. The TypeScript rules discourage `!` without a comment.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:60"
+    },
+    {
+      "severity": "NOTE",
+      "title": "routedFixes.ts is at the file-size guideline and mixes four responsibilities",
+      "description": "The file is 301 lines against CLAUDE.md's ~300. It combines invoking-checkout resolution, pure routing (`routeView`, `planRoutedFixes`), git readiness gating (`gateByReadiness`), git commit and restore (`commitViewWrites`), and the apply loop. Separating planning from the commit/restore side would bring it under the guideline and keep the destructive git calls in one reviewable place.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:1-301"
+    },
+    {
+      "severity": "NOTE",
+      "title": "--json is not honored on several fix paths (pre-existing)",
+      "description": "With `--fix` (all slices) and no fixable findings, `runRoutedFix` prints text and returns null, so `cf check --json --fix` writes no JSON. With `--json --fix` and no `--yes`, the preview and y/N prompt go to stdout and mix into the JSON stream. The original code had the same branches (they are the removed lines in this diff), so this predates the change. The block was rewritten here and no test covers the JSON case.\n\nFix: honor `opts.json` on these branches. The `--set-review-none` path already refuses `--json` without `--yes` (check.ts:79-81); copy that pattern.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/check.ts:257-260"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Routing fixtures are duplicated across two test suites",
+      "description": "`seed` and `entryState` duplicate check-worktree-fix.test.ts:67-95. Both files also contain an `expectRoutedToOwner` (check-worktree-fix.test.ts:172; workflowCheckRouting.test.ts:122). The MCP test imports core's helper via `../../core/tests/helpers/gitWorktreeFixture.js`, and the CLI test uses a three-level path. Moving the shared seed and the 213 contract assertion into the core helper would leave one copy of the contract. Also confirm these cross-package test imports work with each package's tsconfig and build; I could not run either here.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/mcp-server/tests/workflowCheckRouting.test.ts:48-73"
+    },
+    {
+      "severity": "PASS",
+      "title": "Single-checkout behavior matches the design",
+      "description": "With one view, `planRoutedFixes` keeps every fixable finding and returns before any git call. `applyFixPlan` adds only empty `deferred` and `commits` arrays, and `fixLog` gets no `worktree` key when the view has none. The replaced calls are equivalent: `fix()` is check then applyFixes, and `fixAll()` is checkAll then applyFixes (ConsistencyChecker.ts:202-214). routedFixes.test.ts asserts no `execFile` call for the single-checkout case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:173-180"
+    },
+    {
+      "severity": "PASS",
+      "title": "Git calls take paths after `--`, and no user text becomes a git option",
+      "description": "`status`, `add`, `commit`, and `restore` all receive the relative paths after `--`. The `--git-path` names are constants (checkoutReadiness.ts:13, 56). `gitExec` uses `execFile`, not a shell. The commit message is a constant (routedFixes.ts:23). The new code adds no `--no-verify`, so hooks stay on, as the design requires.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts:165-170"
+    },
+    {
+      "severity": "PASS",
+      "title": "subjectIndex is required on every fixable finding",
+      "description": "`subjectIndex: number | null` is a required field on `fixAction`, so TypeScript rejects any fixable finding literal in ConsistencyChecker.ts that omits it. ConsistencyChecker.subjectIndex.test.ts asserts the key is present on every fixable finding and checks the expected index for each rule.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/types.ts:262-268"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Commit-failure restore can discard edits the user made while hooks ran",
+      "location": "packages/core/src/introspection/routedFixes.ts:232",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Git failures are classified as deferral reasons, including timeouts",
+      "location": "packages/core/src/git/checkoutReadiness.ts:43-46",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Errors escape mid-apply and can misreport a commit that landed",
+      "location": "packages/core/src/introspection/routedFixes.ts:256-261",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Multi-checkout fix output lists every fix twice",
+      "location": "packages/cli/src/output/checkReport.ts:85-96",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Scope-and-apply orchestration is duplicated between CLI and MCP",
+      "location": "packages/mcp-server/src/tools/workflowTools.ts:266-295",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "One test depends on the developer's user-level config",
+      "location": "packages/cli/tests/commands/check-worktree-fix.test.ts:216",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "fix() and fixAll() have no production callers left",
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:202-214",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Non-null assertions on the optional fixAction in new code",
+      "location": "packages/core/src/introspection/routedFixes.ts:60",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "routedFixes.ts is at the file-size guideline and mixes four responsibilities",
+      "location": "packages/core/src/introspection/routedFixes.ts:1-301",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "--json is not honored on several fix paths (pre-existing)",
+      "location": "packages/cli/src/commands/check.ts:257-260",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Routing fixtures are duplicated across two test suites",
+      "location": "packages/mcp-server/tests/workflowCheckRouting.test.ts:48-73",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Single-checkout behavior matches the design",
+      "location": "packages/core/src/introspection/routedFixes.ts:173-180",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Git calls take paths after `--`, and no user text becomes a git option",
+      "location": "packages/core/src/guides/gitExec.ts:165-170",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "subjectIndex is required on every fixable finding",
+      "location": "packages/core/src/introspection/types.ts:262-268",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:27:48.203963",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 36,
+  "prompt_tokens": 3623547,
+  "cached_tokens": 3350255,
+  "cache_write_tokens": 273260,
+  "completion_tokens": 99693,
+  "reasoning_tokens": null,
+  "duration_seconds": 429.09158800006844,
+  "cost_usd": 0.63891505,
+  "cost_basis": "provider"
+}

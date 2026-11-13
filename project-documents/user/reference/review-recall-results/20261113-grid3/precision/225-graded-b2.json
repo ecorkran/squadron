@@ -1,0 +1,84 @@
+{
+ "case": "225",
+ "matched": {
+  "hy4/1/0": "225-I1",
+  "luna-r-high/1/1": "225-I1",
+  "hy4/1/2": "225-N2",
+  "luna-r-high/1/2": "225-N2",
+  "hy4/1/3": "225-I6",
+  "luna-r-high/1/0": "225-I2",
+  "deepseek4-flash/1/1": "225-I2"
+ },
+ "new_issues": [
+  {
+   "id": "225-M1",
+   "title": "The coverage raw-count scan over tick_trade runs with no statement_timeout or server-side cancel.",
+   "members": [
+    "hy4/1/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "Neither _read in tick_store_cmds nor store_context._connect sets statement_timeout, and raw_counts scans tick_trade over min(open)..max(close) for an unbounded --start/--end range; the repo's sql.md asks for a statement_timeout on long-running queries and other CLI reads (data.py, minute_session_mass.py) set one. True as a rule gap, but this is an operator-run local read with no evidence the scan is slow (its cost is the open question in 225-I4), so it is hardening rather than a demonstrated hang.",
+   "evidence": [
+    "src/manta_trading/data/tick/status_reads.py:154-174",
+    "src/manta_trading/cli/commands/tick_store_cmds.py:156-168",
+    "src/manta_trading/data/tick/store_context.py:157-167",
+    ".claude/rules/sql.md:62"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-M2",
+   "title": "The new status_reads SQL uses single-letter aliases and inline SELECT lists against the project SQL style rule.",
+   "members": [
+    "hy4/1/4"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "status_reads.py's fragments and queries alias tables as u, r, l, h, d, t, s, and sql.md says 'Meaningful table aliases, avoid single letters'. True, but pure style with no behavioral effect.",
+   "evidence": [
+    "src/manta_trading/data/tick/status_reads.py:50-59",
+    "src/manta_trading/data/tick/status_reads.py:154-174",
+    ".claude/rules/sql.md:22"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-M3",
+   "title": "tick.py's module docstring still names only tick_render.py and tick_pass_render.py for rendering, and the new public render helpers lack docstrings.",
+   "members": [
+    "hy4/1/5"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "tick.py's docstring was edited in this diff to mention status and coverage but still says Rich rendering lives in tick_render.py and tick_pass_render.py, while status/coverage rendering is in the new tick_status_render.py; print_status, coverage_to_dict and print_coverage have no docstrings. Documentation only.",
+   "evidence": [
+    "src/manta_trading/cli/commands/tick.py:1-11",
+    "src/manta_trading/cli/commands/tick_status_render.py:113-130"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "225-M4",
+   "title": "build_coverage's one-day lookback makes coverage --start <first populated session date> fail the calendar's populated-span check and exit 4.",
+   "members": [
+    "deepseek4-flash/1/0"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
+   "why": "build_coverage asks calendar_sessions for [utc_midnight(start - 1 day), utc_midnight(end)), and sessions_between calls _require_populated on both bounds, which requires first_open <= ts. The first populated session opens the prior evening, so midnight of the day before it is outside the span, and a start equal to that first session date is refused with OutOfPopulatedRangeError mapped to exit 4. True, but it affects only the single first session date of the calendar's populated history, and the refusal message names the horizon; the exit-code misclassification itself is 225-I6.",
+   "evidence": [
+    "src/manta_trading/data/tick/tick_coverage.py:99-105",
+    "src/manta_trading/data/base/trading_calendar.py:278-286",
+    "src/manta_trading/data/base/trading_calendar.py:311-321",
+    "src/manta_trading/data/tick/tick_status_build.py:63-75"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
+ ],
+ "disputes": []
+}

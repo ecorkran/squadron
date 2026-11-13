@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`source_bar_stamping` accepts plain strings and fails with `TypeError` on unhashable input",
+      "description": "`Market.__post_init__` checks `self.source_bar_stamping not in SOURCE_BAR_STAMPINGS`. `TimeMeaning` is a `StrEnum` (`timestamps.py:37`), and a `StrEnum` member hashes and compares equal to its string value. So the plain string `\"period_start\"` passes the membership test and is stored as a `str`, not a `TimeMeaning`.\n\nThe other enum fields (`continuity_kind`, `session_mode`, `adjustment_bases`) go through `_require_instance`. The tests cover that gap for `continuity_kind` (`\"adjusted\"` is rejected) but not for `source_bar_stamping`. The two canonicalize to the same bytes, so the hash does not change. Any caller that uses `is TimeMeaning.PERIOD_START`, or a `match` on the member, would behave differently for a value that passed validation.\n\nAn unhashable value such as a list also raises a raw `TypeError` from the `in` check, not `InvalidMarketError`. Add `_require_instance(self.source_bar_stamping, TimeMeaning, ...)` before the membership check. Add test rows for `\"period_start\"` and for an unhashable value.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:96-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_require_instance` is duplicated across `markets.py` and `instruments.py`",
+      "description": "The two helpers have the same body and differ only in the exception class they raise (`InvalidMarketError` and `InvalidInstrumentError`). The project rules say not to duplicate logic. A single helper that takes the error type, or a shared private validation module, would fix this. Both modules must still avoid importing `calendars` and `canonical`, so a small `_validation` module would fit the import-boundary test. The `_require_nonempty_str` and `_require_positive_decimal` checks have the same shape and could move there too.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/instruments.py:80-86"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Declared field types do not match what the constructor accepts",
+      "description": "`session_calendars` is annotated `tuple[SessionCalendarRef, ...]` and `adjustment_bases` as `frozenset[AdjustmentBasis]`. The docstring says both accept any iterable, and the tests pass lists, generators and sets. Under the strict pyright the project requires, a typed caller passing a list gets an error. The tests avoid this by building the fields as `dict[str, Any]`, which hides the mismatch. Either annotate the constructor inputs honestly (for example with `InitVar` or a factory classmethod), or drop the \"any iterable\" claim and require a tuple and frozenset. A non-iterable value, such as a single `SessionCalendarRef`, gives a raw `TypeError` from `tuple(refs)` instead of `InvalidMarketError`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:84-91"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Timezone name is not checked against any zone database",
+      "description": "`timezone_name` is only checked for being a non-empty `str`. The module docstring says it is opaque (D2), so this is by design. A typo such as `\"America/New_Yrok\"` therefore only fails when something resolves it later. If trading-data is meant to be the validating authority, a one-line note in the docstring would make that explicit.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:94"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fixture modules ship inside the `src` package",
+      "description": "The new fixture markets and instruments follow the existing `fixtures/calendars.py` pattern. Their `fixture-` prefixes and docstrings mark them as non-served data, and the module-level construction validates them at import time. No action is needed. This is only a reminder that production imports are not blocked from reaching them.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/fixtures/markets.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Golden coverage for markets and instruments is hash-only",
+      "description": "The market and instrument rows pin only the hash, with `None` for the bytes. The comment says the hashes were computed independently from 101's rules, which I could not verify. The \"order does not change bytes\" test and the one-fact-changes-the-hash tests cover the main risks. A single byte-level golden row for one instrument would also pin the embedded-market layout (`$set` ordering and session-ref ordering) in readable form.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_canonical_golden.py:292-345"
+    },
+    {
+      "severity": "PASS",
+      "title": "Contract-terms validation and error taxonomy",
+      "description": "`ContractTerms` uses exact-type checks (`type(value) is Decimal`), so `bool`, `float` and `int` are rejected. It checks `is_finite()` before comparing to zero, which keeps signaling NaN from raising. The currency check uses `fullmatch`, so `\"USD\\n\"` fails, and the tests cover that case. The four new errors all subclass `CoreModelError`. The `UNKNOWN` handling goes through `is_known` and never takes a truth test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/instruments.py:41-53"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test structure and uniformity",
+      "description": "One parameterized test body runs every fixture through calendar resolution, `period_end` and terms with no branching on market, which enforces the \"a market is a market\" rule. The tests are parameterized and independent. The import-boundary test is extended to the new modules, and the new `FIXTURE_CALENDARS` mapping is read-only and keyed by each calendar's own id, with tests for both.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_market_uniformity.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`source_bar_stamping` accepts plain strings and fails with `TypeError` on unhashable input",
+      "location": "src/manta_trading_engine/core_model/markets.py:96-100",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_require_instance` is duplicated across `markets.py` and `instruments.py`",
+      "location": "src/manta_trading_engine/core_model/instruments.py:80-86",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Declared field types do not match what the constructor accepts",
+      "location": "src/manta_trading_engine/core_model/markets.py:84-91",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Timezone name is not checked against any zone database",
+      "location": "src/manta_trading_engine/core_model/markets.py:94",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Fixture modules ship inside the `src` package",
+      "location": "src/manta_trading_engine/core_model/fixtures/markets.py",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Golden coverage for markets and instruments is hash-only",
+      "location": "tests/core_model/test_canonical_golden.py:292-345",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Contract-terms validation and error taxonomy",
+      "location": "src/manta_trading_engine/core_model/instruments.py:41-53",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test structure and uniformity",
+      "location": "tests/core_model/test_market_uniformity.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:30:40.855189",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 296572,
+  "cached_tokens": 187233,
+  "cache_write_tokens": 109333,
+  "completion_tokens": 5058,
+  "reasoning_tokens": null,
+  "duration_seconds": 42.676897666882724,
+  "cost_usd": 0.5100179,
+  "cost_basis": "provider"
+}

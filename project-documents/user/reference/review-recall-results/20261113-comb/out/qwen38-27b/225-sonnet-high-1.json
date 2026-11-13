@@ -1,0 +1,38 @@
+{
+ "case": "225",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "raw_counts` scans all of `tick_trade` with no shape filter while `ledger_totals` is shape-filtered, so any second ingested shape or product (adopt/pass don't restrict it, and slice 231 adds GC) produces ledger-0/raw-N instruments that report as mismatch and exit 3."
+  ],
+  "F2": [
+   "KEEP",
+   "caught_up` is called with `wanted=wanted_start is not None` rather than `wanted is not None`, so a tier-set product whose edge is unobserved (e.g., a rebuild database after ingest, no pass) gets a vacuous \"caught up: yes\" over an empty verdict list."
+  ],
+  "F3": [
+   "DROP",
+   "duplicate call to a small manifest read is a performance point with no real effect, and the hypothesized snapshot divergence between two sequential reads is harmless."
+  ],
+  "F4": [
+   "DROP",
+   "the import-time assert matches an established codebase pattern (the same guard exists in kalshi.py, tick_exit.py, tick_pass_render.py, tick_render.py, overview.py, minute.py, outcomes.py), and the -O stripped-assert hazard is hypothetical for this CLI."
+  ]
+ },
+ "wall_seconds": 279.0,
+ "duration_seconds": 278.9621801660396,
+ "cost_usd": 0.14005124000000002,
+ "effort": null,
+ "tool_calls_made": 15,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=426291, cached=364480, cache_write=None, completion=48633, reasoning=47308)",
+ "raw_output": "\n\nF1: KEEP \u2014 `raw_counts` scans all of `tick_trade` with no shape filter while `ledger_totals` is shape-filtered, so any second ingested shape or product (adopt/pass don't restrict it, and slice 231 adds GC) produces ledger-0/raw-N instruments that report as mismatch and exit 3.\nF2: KEEP \u2014 `caught_up` is called with `wanted=wanted_start is not None` rather than `wanted is not None`, so a tier-set product whose edge is unobserved (e.g., a rebuild database after ingest, no pass) gets a vacuous \"caught up: yes\" over an empty verdict list.\nF3: DROP \u2014 duplicate call to a small manifest read is a performance point with no real effect, and the hypothesized snapshot divergence between two sequential reads is harmless.\nF4: DROP \u2014 the import-time assert matches an established codebase pattern (the same guard exists in kalshi.py, tick_exit.py, tick_pass_render.py, tick_render.py, overview.py, minute.py, outcomes.py), and the -O stripped-assert hazard is hypothetical for this CLI.\n\n\nF1: KEEP \u2014 `raw_counts` has no shape filter while `ledger_totals` does, so any second ingested shape or product in the same `tick_trade` (GC arrives in slice 231; adopt/ingest never restrict shapes) yields ledger-0/raw-N instruments that coverage reports as a mismatch and exits 3 on.\nF2: KEEP \u2014 with a tier configured and `end=None`, an unobserved edge makes `wanted` None but `wanted_start is not None` True, so `caught_up` returns a vacuous `True` over only held sessions and status prints \"caught up: yes\" instead of the design's \"n/a\", a silent-fallback violation of the project rule.\nF3: DROP \u2014 `shape_units` is a cheap bounded manifest read, so the duplicate call is a performance nit with no real effect, and the hypothesized two-snapshot divergence is a read-only status race with no demonstrated harm.\nF4: DROP \u2014 the import-time set-equality assert is an established codebase pattern (eight identical guards in kalshi.py, tick_exit.py, tick_pass_render.py, tick_render.py, overview.py, minute.py, outcomes.py), and the `python -O` stripping hazard is hypothetical for this CLI."
+}

@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Test file exports helpers that nothing imports",
+      "description": "The test file marks `designPath`, `tasksPath`, `completeBeta`, `worktreeCtx`, `createRoutedSetup`, `dryRun`, `aboutSubject` and the `RoutedSetup` interface as `export`. A repo-wide grep for `routedFixes.test` found no importer. Exporting from a `*.test.ts` file is also risky because importing it re-registers its `describe` blocks. Either drop the `export` keywords or move the helpers to `tests/helpers/`, where `gitWorktreeFixture.ts` already lives.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/routedFixes.test.ts:75-148"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "CLI and MCP tests import a fixture from another package's tests directory",
+      "description": "`packages/cli/tests/commands/check-worktree-fix.test.ts` and `packages/mcp-server/tests/workflowCheckRouting.test.ts` import `../../../core/tests/helpers/gitWorktreeFixture.js`. The fixture is not part of core's public surface, and the relative path breaks if the package layout changes. Share it through a test-support package or a dev-only export instead.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/check-worktree-fix.test.ts:10-17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Single-slice fix path has no coverage in the mocked CLI check tests",
+      "description": "`check.test.ts` still declares `mockFix` and `mockFixAll`, and the `ConsistencyChecker` mock still returns them. The new code never calls `checker.fix` or `checker.fixAll`: fix mode now runs `check` or `checkAll`, then `planRoutedFixes`, then `applyFixes`. The mocks are dead, and any remaining assertions on them check behaviour the code no longer has. A grep shows `packages/cli/tests/commands/check.test.ts:311` still has a comment about \"NOT fixAll\". Remove the stale mocks and assertions. The behaviour is covered by the real-git integration tests, but the mocked suite should not imply otherwise.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/check.test.ts:25-53"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`fixAction!` non-null assertions rely on filtering done elsewhere",
+      "description": "`fixRelPath` and `routeView` use `finding.fixAction!`. Today every caller pre-filters with `f.fixable && f.fixAction`. That invariant is not encoded in the type, so a future caller of the exported `fixRelPath` or `gateByReadiness` could crash at runtime. Make `fixRelPath` take a finding type with `fixAction` required, or throw an explicit error when it is missing. The TypeScript rules also discourage assertions without a documented reason.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:55-57"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fix-mode check and confirm flow is duplicated between CLI and MCP",
+      "description": "Both `packages/cli/src/commands/check.ts` and `packages/mcp-server/src/tools/workflowTools.ts` build `scopeViews` and `runCheck` with the same slice-narrowing logic. Both also resolve the invoking checkout and call `planRoutedFixes` then `applyFixPlan`. The project's DRY rule says to extract this into one core helper. The CLI and MCP paths can drift, for example in how errors are mapped (`UserError` in the CLI, `errorResult` in MCP).",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/workflowTools.ts:259-298"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Display-layer coupling to `showWorktree`",
+      "description": "`printCheckOutput` picks the routed report with `fixRes && showWorktree`. That flag means \"show worktree prefixes\", not \"multi-checkout fix\". The two currently coincide. If the display flag is ever decoupled from the number of checkouts, this branch will pick the wrong report. A comment, or a check on `fixRes.commits` and `fixRes.deferred`, would make the intent explicit.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/output/checkReport.ts:92"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Failed-restore case leaves `fixed` counting uncommitted writes",
+      "description": "When the commit fails and the restore also fails, the log entries and `fixed` stay, and `fixErrors` carries the message. This is deliberate and covered by test 7. The failures are also logged with `console.error` in a library module. This is acceptable, but a structured logger would be better if one exists in core.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:200-212"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Test file exports helpers that nothing imports",
+      "location": "packages/core/tests/introspection/routedFixes.test.ts:75-148",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "CLI and MCP tests import a fixture from another package's tests directory",
+      "location": "packages/cli/tests/commands/check-worktree-fix.test.ts:10-17",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Single-slice fix path has no coverage in the mocked CLI check tests",
+      "location": "packages/cli/tests/commands/check.test.ts:25-53",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`fixAction!` non-null assertions rely on filtering done elsewhere",
+      "location": "packages/core/src/introspection/routedFixes.ts:55-57",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Fix-mode check and confirm flow is duplicated between CLI and MCP",
+      "location": "packages/mcp-server/src/tools/workflowTools.ts:259-298",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Display-layer coupling to `showWorktree`",
+      "location": "packages/cli/src/output/checkReport.ts:92",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Failed-restore case leaves `fixed` counting uncommitted writes",
+      "location": "packages/core/src/introspection/routedFixes.ts:200-212",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:30:50.083891",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 233361,
+  "cached_tokens": 99728,
+  "cache_write_tokens": 133629,
+  "completion_tokens": 2462,
+  "reasoning_tokens": null,
+  "duration_seconds": 25.018142707878724,
+  "cost_usd": 0.5764151,
+  "cost_basis": "provider"
+}

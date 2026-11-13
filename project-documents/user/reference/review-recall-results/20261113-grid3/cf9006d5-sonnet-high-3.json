@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A config read failure in one worktree aborts the whole worktree loop",
+      "description": "`installCheckout` awaits `readRulesExclude(root)` before calling `installIde`. That calls `ConfigManager.get`, which rethrows any non-ENOENT error from `readToml` (`packages/core/src/config/ConfigManager.ts:21-31`), such as a malformed TOML file. It also throws a plain `Error` if the value is not a string.\n\nThe `installWorktrees` doc comment says \"any other exception is a bug and propagates\". A broken `.toml` in one worktree is a user-environment error, not a bug. It escapes the loop, so the remaining worktrees are never installed. `installCommandsForTarget` is also skipped. The user gets only a generic `handleError` message with no worktree name.\n\nThis conflicts with the loop's stated contract that \"a failing worktree does not stop the others\". Catch config-read failures inside `installCheckout`, or inside the loop. Name the worktree, record it in `failed`, and continue.\n\nNo test covers this path. The new worktree tests only exercise `installIde` returning exit 1 and `installIde` throwing.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:73-96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dry run hard-codes the set of paths a target can write",
+      "description": "`INSTALL_PATHS` repeats `CLAUDE.md`, `AGENTS.md`, `.claude`, `.cursor`, `.github` and `.agents` as bare literals. These are the same paths already described by `TARGETS[...].markerFiles` and by `AGENT_SKILLS_DIR` in `ideTargets.ts`.\n\nThe old `propagateDirs` descriptor field was removed. As a result, the \"which paths does a target write\" knowledge now lives in two unconnected places. The project rules say a value should be defined once, so that changing it means editing one place.\n\nIf a target starts writing a new top-level path, the sandbox will not copy it. The dry-run report will then show it as added when it already exists, or miss modifications to it. Nothing fails or warns when that happens. Derive the list from a per-target descriptor, or add a test that every path an install writes is covered by `INSTALL_PATHS`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:18-29"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Positional parameter lists on the new helpers",
+      "description": "`installCheckout(guideDir, root, target, flags)` and `installWorktrees(project, guideDir, target, flags)` take four positional arguments. The TypeScript rules prefer a destructured options object for three or more. `guideDir` and `root` are both plain strings, so swapping them would compile without error. Low risk, but cheap to fix.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:93-100"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stray formatting and a stale header comment",
+      "description": "There is a leftover double blank line before `describe('cf setup-ide', ...)`. Separately, the `ideTargets.ts` header comment (lines 5-7) still frames the module around `worktreePropagation` acyclicity. That module no longer imports it.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/setup-ide.test.ts:203"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test coverage and structure for the new installer",
+      "description": "The new tests cover the main paths:\n- Dry run: fresh, no-changes and guide-changed cases, plus sandbox cleanup when the install aborts.\n- Lint: check and write behaviour, including the C# depth boundary.\n- `rules.exclude`: patterns, prune and warnings.\n- `missingRequirements` edge cases.\n- A real-guide smoke test.\n\nTests live in `tests/`, follow the `{module}.test.ts` naming and use Vitest. The installer is mocked at the `installIde` boundary in `setup-ide.test.ts`, which avoids duplicating its behaviour tests. The `describe.each` over the four targets for the overwrite prompt is compact and checks behaviour.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/ideInstall/flags.test.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A config read failure in one worktree aborts the whole worktree loop",
+      "location": "packages/cli/src/commands/setup-ide.ts:73-96",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Dry run hard-codes the set of paths a target can write",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:18-29",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Positional parameter lists on the new helpers",
+      "location": "packages/cli/src/commands/setup-ide.ts:93-100",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Stray formatting and a stale header comment",
+      "location": "packages/cli/tests/commands/setup-ide.test.ts:203",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test coverage and structure for the new installer",
+      "location": "packages/cli/tests/ideInstall/flags.test.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:32:22.141242",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 844863,
+  "cached_tokens": 668449,
+  "cache_write_tokens": 176404,
+  "completion_tokens": 6727,
+  "reasoning_tokens": null,
+  "duration_seconds": 67.18812875007279,
+  "cost_usd": 0.849565,
+  "cost_basis": "provider"
+}

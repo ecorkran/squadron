@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Test named for docType value enforcement asserts nothing of the kind",
+      "description": "The last test in the \"squadron machine-artifact docTypes (#73)\" block is named \"a wrong docType literal is still caught by the value-constraint logic\". Every assertion in it is `toHaveLength(0)`. It validates `devlog`, `gate-evidence` and an unknown docType, and all three come back clean. The `mismatched` variable is just a valid `gate-evidence` document. Nothing here exercises a failing `values` check, so the test passes whether or not the constraint works. The comments describe a guarantee the test doesn't provide. Replace it with a case that should fail, for example a schema-registered docType whose `docType` field holds a different value. Alternatively, delete it, since the three \"validates clean\" tests already cover the happy path.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Silent fallback and loosely typed output in the validate command",
+      "description": "`SEVERITY_ICON` is typed `Record<string, string>` and read as `SEVERITY_ICON[finding.severity] ?? '?'` (line 62). This is a silent placeholder fallback that the project rules forbid. `finding.severity` is a closed union (`'error' | 'warning'`), so key the map on that type, e.g. `Record<FrontmatterFinding['severity'], string>`. The compiler then enforces exhaustiveness and the `?? '?'` goes away. The `colorFn` selection on line 63 has the same flaw. It treats every non-`'error'` severity as a warning, so a new severity would be coloured as a warning without any error. Similarly, `jsonOutput` is built as `Record<string, unknown>` and mutated conditionally for fix mode. A small interface with optional `fixed`, `fixLog` and `fixErrors` would document the JSON contract, which tests and scripts consume.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:14-17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fix loop applies any fixAction without checking its type",
+      "description": "The `--fix` loop checks only that `finding.fixAction` exists, then always calls `updateFrontmatterField(field, value)`. The test fixtures give `fixAction` a `type: 'update-frontmatter'` discriminator. If the core service ever emits another action type, this code would apply it as a frontmatter edit without complaint. Either narrow on `fixAction.type`, or add an exhaustive switch so unsupported actions are counted as unfixed. The fix loop also overwrites the file once per finding, so a file with several findings gets several writes and several `dateUpdated` stamps. This is harmless, but it is worth knowing about.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:112-135"
+    },
+    {
+      "severity": "NOTE",
+      "title": "validateFrontmatterAction exceeds the function-size guideline",
+      "description": "`validateFrontmatterAction` is about 75 lines. It handles project resolution, validation, the fix loop and output selection. Extracting `applyFixes(findings, dateStamp)` would cut it under the ~50-line guideline and make the fix logic unit-testable on its own. `printHumanOutput` also does a linear `fixLog.find` per finding. That is fine at this scale.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:87-165"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Exit-code handling and schema additions look sound",
+      "description": "The `handleError(err, exitCode = 1)` extension is backward compatible, because existing callers keep exit code 1. Exit 2 for operational errors versus exit 1 for findings is covered by tests. The three new squadron docType schemas intentionally omit `status` and `dateUpdated`, and the comment explains why. The existing universal-field tests were correctly narrowed to `EXPECTED_DOC_TYPES`. The CLI tests mock core at the module boundary, which is appropriate. I read the first 100 lines of `validate.ts` and did not read the core service implementations, so I haven't checked the behavior of `validateFrontmatterFiles` or `updateFrontmatterField` themselves.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/errors.ts:47"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test named for docType value enforcement asserts nothing of the kind",
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Silent fallback and loosely typed output in the validate command",
+      "location": "packages/cli/src/commands/validate.ts:14-17",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fix loop applies any fixAction without checking its type",
+      "location": "packages/cli/src/commands/validate.ts:112-135",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "validateFrontmatterAction exceeds the function-size guideline",
+      "location": "packages/cli/src/commands/validate.ts:87-165",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Exit-code handling and schema additions look sound",
+      "location": "packages/cli/src/utils/errors.ts:47",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:27:40.942983",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 119283,
+  "cached_tokens": 40573,
+  "cache_write_tokens": 78706,
+  "completion_tokens": 2732,
+  "reasoning_tokens": null,
+  "duration_seconds": 25.202999165980145,
+  "cost_usd": 0.3477245,
+  "cost_basis": "provider"
+}

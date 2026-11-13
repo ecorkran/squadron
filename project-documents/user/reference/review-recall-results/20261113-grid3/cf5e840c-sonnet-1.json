@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Stray sed backup file committed",
+      "description": "The diff adds `CoreServiceFactory.test.ts-E`, and a glob confirms it exists. It is a verbatim copy of the pre-change test file. The `-E` suffix is what BSD `sed -i -E` leaves behind on macOS, so it is a tooling artifact. The file is dead code. It also sits under `tests/`, so a broad test glob could pick it up. Delete it, and consider adding `*-E` to `.gitignore`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "AdoptionError is swallowed or reported only through message text for non-ContextIntegrator callers",
+      "description": "`generateContextFromProject` rethrows `PermissivenessFragmentError` and `AdoptionError`. Every other error is logged and turned into an error-stub string that is returned as if it were valid context. That stub behavior predates this change. The new adoption path adds a second pass through the same catch, though. `persistInProgress` wraps write failures in `AdoptionError`, but the `readFile` and parse calls in `assertGuideSupportsAdoption`, `readHistory` and `measureSourceVolume` can throw plain errors. Those become a stub prompt instead of a failure. For a project that was meant to be adopted, that stub is a concept prompt, which is the misleading fallback the new comment says to avoid. The integration test at `adoptionBuild.integration.test.ts:63` asserts that no stub is produced, but only for the happy paths. Consider wrapping unexpected I/O failures in the resolver as `AdoptionError`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:119-125"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Required `adoptionStateWrites` parameter is applied consistently",
+      "description": "Making the option required forces each caller to decide. All production callers are updated. `build.ts` and `context_build` use `persist`. `template_preview` and the tests that don't test adoption use `read-only`. A grep of `createContextPipeline(` found no caller left on the old signature.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/services/CoreServiceFactory.ts:29"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Resolver design and test coverage look sound",
+      "description": "The `never` exhaustiveness check in `isSelected`, the ordering of the guide check before the state write, and the lazy fact-gathering are all reasonable. Coverage is good. The resolver unit tests cover D4 selection, D9 guide rejection and the read-only file case. The integration tests cover the 13 listed scenarios, and there is a CLI and MCP parity test. The `canChmod` skip is conditional on platform and uid, not a blanket skip. In `ContextIntegrator.ts`, `project.instruction || 'implementation'` duplicates an existing default string, so it should reference a shared constant if one exists. That is minor.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Stray sed backup file committed",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "AdoptionError is swallowed or reported only through message text for non-ContextIntegrator callers",
+      "location": "packages/core/src/services/ContextIntegrator.ts:119-125",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Required `adoptionStateWrites` parameter is applied consistently",
+      "location": "packages/core/src/services/CoreServiceFactory.ts:29",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Resolver design and test coverage look sound",
+      "location": "packages/core/src/adoption/adoptionResolver.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:28:04.650391",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 159148,
+  "cached_tokens": 62148,
+  "cache_write_tokens": 96996,
+  "completion_tokens": 1553,
+  "reasoning_tokens": null,
+  "duration_seconds": 15.539737790822983,
+  "cost_usd": 0.4131974,
+  "cost_basis": "provider"
+}

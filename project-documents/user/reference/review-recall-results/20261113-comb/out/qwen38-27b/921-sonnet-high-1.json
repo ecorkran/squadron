@@ -1,0 +1,48 @@
+{
+ "case": "921",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "the MT_INSTALL rule lets `manta` run an operator-writable script from its own home checkout as root, a real privilege-escalation hole in the new sudoers file (the `*`-matches-spaces claim is wrong since sudoers requires exact argv counts, but the install-script part stands)."
+  ],
+  "F2": [
+   "KEEP",
+   "the `[WAIT]`/`FAIL` verdict markers are emitted as inline literals by the repair script and substring-matched in conditionals across the cutover script and tests, violating the project's define-once rule for a three-way verdict the cutover depends on."
+  ],
+  "F3": [
+   "DROP",
+   "starting the log before preflight only creates a stray notes file in the CWD when the operator runs from the wrong directory, a path that still fails loudly; the rest is docstring wording, no wrong behavior."
+  ],
+  "F4": [
+   "KEEP",
+   "stale` compares the refresh job's `last_successful_finish` to bar `created_at`, so bars written while the hourly refresh is running pass the freshness gate and the acceptance verdict is judged against a cagg missing them; `last_successful_start` (exposed by `job_stats`) would close the race."
+  ],
+  "F5": [
+   "DROP",
+   "unsorted import blocks are a lint/style issue with no effect on behavior; the blocks parse and run correctly."
+  ],
+  "F6": [
+   "DROP",
+   "copy-pasted mock harnesses in test setup are a test-refactor/DRY observation; the tests exercise real behavior and no production defect is implicated."
+  ]
+ },
+ "wall_seconds": 371.3,
+ "duration_seconds": 371.3351467498578,
+ "cost_usd": 0.25458576,
+ "effort": null,
+ "tool_calls_made": 14,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=862047, cached=500288, cache_write=None, completion=64886, reasoning=63902)",
+ "raw_output": "\n\nF1: KEEP \u2014 the MT_INSTALL rule lets `manta` run an operator-writable script from its own home checkout as root, a real privilege-escalation hole in the new sudoers file (the `*`-matches-spaces claim is wrong since sudoers requires exact argv counts, but the install-script part stands).\nF2: KEEP \u2014 the `[WAIT]`/`FAIL` verdict markers are emitted as inline literals by the repair script and substring-matched in conditionals across the cutover script and tests, violating the project's define-once rule for a three-way verdict the cutover depends on.\nF3: DROP \u2014 starting the log before preflight only creates a stray notes file in the CWD when the operator runs from the wrong directory, a path that still fails loudly; the rest is docstring wording, no wrong behavior.\nF4: KEEP \u2014 `stale` compares the refresh job's `last_successful_finish` to bar `created_at`, so bars written while the hourly refresh is running pass the freshness gate and the acceptance verdict is judged against a cagg missing them; `last_successful_start` (exposed by `job_stats`) would close the race.\nF5: DROP \u2014 unsorted import blocks are a lint/style issue with no effect on behavior; the blocks parse and run correctly.\nF6: DROP \u2014 copy-pasted mock harnesses in test setup are a test-refactor/DRY observation; the tests exercise real behavior and no production defect is implicated.\n\n\nF1: KEEP \u2014 the MT_INSTALL rule lets `manta` run the install script from its own operator-writable checkout as root (verified: `cutover_common.install()` executes the checkout's `deploy/install-production.sh` via sudo, and the file is in the repo), a real privilege-escalation path; the sub-claim that `mt-*` matches multi-argument commands is wrong since sudoers requires exact argv counts, but the core defect stands.\nF2: KEEP \u2014 `[WAIT]` is emitted as an inline f-string at repair_921_minute_sessions.py:288 and matched as a bare substring in the cutover's verdict conditionals (lines 204, 265, 273) and repeated in tests, violating the project's define-once rule; a producer wording change would make the cutover read a stale-cagg run as passing and print \"CUTOVER COMPLETE\" on unverified data.\nF3: DROP \u2014 opening the log before preflight at worst creates a stray `project-documents/user/notes/` tree in the CWD when run from the wrong directory, and preflight still fails explicitly with a clear error; the remainder is docstring wording, with no wrong behavior, crash, or silent failure.\nF4: KEEP \u2014 `stale = last_successful_finish < max(created_at)` is soundly wrong for this policy: minute_4hour_ohlcv's refresh runs hourly with `end_offset => 4 hours` (migrations 035/053), so a refresh that finishes after the bars were written still does not have materialized them, and the probe declares \"fresh\" exactly in the cutover's post-firing case, letting the acceptance verdict be measured against an incomplete cagg \u2014 the wrong verdict #22 was added to prevent.\nF5: DROP \u2014 import ordering is a lint/style issue with no effect on behavior (the imports resolve and the tests pass), fixable by `ruff --fix` without touching logic.\nF6: DROP \u2014 copy-pasted mock harnesses in test setup are a test-maintenance/DRY observation on tests that already exercise real behavior; no production defect is implicated."
+}

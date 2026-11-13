@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Stray sed backup file committed to the repo",
+      "description": "The diff adds `CoreServiceFactory.test.ts-E`, and a glob confirms it exists in the tree. It is a byte-for-byte copy of the pre-change test file (it still has `createContextPipeline(FIXTURE_PROJECT_PATH)` with no options argument). The `-E` suffix is what BSD `sed -i -E` leaves behind on macOS. Nothing in `.gitignore` matches it. Vitest and tsc don't pick it up, so nothing breaks. But it is dead code, and a grep for `createContextPipeline(` turns up six stale call sites that no longer match the real signature. Delete it. Consider adding `*-E` or `*.bak` to `.gitignore`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`'implementation'` default literal is now repeated in a fifth place",
+      "description": "The new line `const instruction = project.instruction || 'implementation';` adds another hard-coded copy of the default. The same literal already appears at lines 216, 244 and 289, and in `FileProjectStore.ts:104`. Line 148 and line 244 have to agree for the new adoption step to see the same instruction that profile filtering uses. If someone changes one default, the resolver and the profile filter can drift apart without anything failing. CLAUDE.md says to define such values once and not to hard-code magic defaults. Extract a `DEFAULT_INSTRUCTION` constant, for example next to `CONCEPT_PHASE` in `projectSchema.ts`. Use it at all of these sites, or at least resolve it once at the top of `generateWithTemplateEngine` and pass the result down.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:148"
+    },
+    {
+      "severity": "NOTE",
+      "title": "State is persisted before the facts are rendered",
+      "description": "`persistInProgress` writes `in_progress` before `renderFacts` runs. If `readHistory` or another fact reader then throws something that isn't an `AdoptionError`, `generateContextFromProject` swallows it into an error-stub string, but the state file has already been changed. The effect is mild: the next build resumes the brownfield prompt, which is the intended result anyway. The ordering is still worth a comment, or you could render the facts first and write the state last.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:124-131"
+    },
+    {
+      "severity": "PASS",
+      "title": "Mode flag is required and covered at every call site",
+      "description": "`createContextPipeline` now requires `adoptionStateWrites`, so every caller has to pick `persist` or `read-only`. I grepped all call sites. The CLI `build` command and MCP `context_build` use `persist`. MCP `template_preview` uses `read-only` with a comment saying why. All tests pass an explicit value, and `contextTools.test.ts` and `build.test.ts` assert the choice. A missing or misspelled mode is a compile error, not a silent fallback.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/src/services/CoreServiceFactory.ts:29-35"
+    },
+    {
+      "severity": "PASS",
+      "title": "Adoption failures propagate instead of falling back silently",
+      "description": "`AdoptionError` is rethrown, matching how `PermissivenessFragmentError` is handled. `persistInProgress` wraps the underlying failure and keeps it as `cause`. The guide-support check runs before any write, and test 12 and the resolver tests confirm the state stays unset on rejection. `isSelected` has an exhaustive `never` check on the outcome kinds. The new tests cover the happy path, both guide-rejection cases, the read-only file case, the explicit instruction, the Phase 2 no-op (no I/O at all), and CLI/MCP prompt parity.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:119-123"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Stray sed backup file committed to the repo",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`'implementation'` default literal is now repeated in a fifth place",
+      "location": "packages/core/src/services/ContextIntegrator.ts:148",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "State is persisted before the facts are rendered",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:124-131",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Mode flag is required and covered at every call site",
+      "location": "packages/core/src/services/CoreServiceFactory.ts:29-35",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Adoption failures propagate instead of falling back silently",
+      "location": "packages/core/src/services/ContextIntegrator.ts:119-123",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:28:14.914064",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 280268,
+  "cached_tokens": 128565,
+  "cache_write_tokens": 151697,
+  "completion_tokens": 3162,
+  "reasoning_tokens": null,
+  "duration_seconds": 32.64560145884752,
+  "cost_usd": 0.6547391,
+  "cost_basis": "provider"
+}

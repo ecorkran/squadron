@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Vacuous test claims to prove the docType value constraint",
+      "description": "The last test is named \"a wrong docType literal is still caught by the value-constraint logic\". Every assertion in it expects zero findings. `validateFrontmatter` picks the schema by `data.docType` (`frontmatterSchema.ts:228`), so a document can never fail the `docType` `values` constraint of its own schema. The test cannot fail for the reason in its name. It repeats the \"validates clean\" cases already covered above it, and its comments overstate what it proves. Delete it, or rename it to say what it checks (unknown docTypes pass through), and drop the claim about value constraints.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts#validateFrontmatter \u2014 squadron machine-artifact docTypes (#73)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`SEVERITY_ICON` uses a loose type and a silent `'?'` fallback",
+      "description": "`FrontmatterFinding.severity` is the closed union `'warning' | 'error'` (`frontmatterSchema.ts:25`). `SEVERITY_ICON` is typed `Record<string, string>`, and the lookup falls back with `?? '?'`. This breaks the project rule against silent fallback values and the TypeScript rule against loose types. Type it as `Record<FrontmatterFinding['severity'], string>` so the compiler enforces exhaustiveness and the fallback can go. Line 63 has the same problem: any non-`'error'` severity is treated as a warning.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:15-18, 62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Machine-readable `--json` contract is untyped, and `FixLogRecord` duplicates a core type",
+      "description": "The documented `--json` output is built as `Record<string, unknown>`, with `fixed`, `fixLog` and `fixErrors` added conditionally. The shape that scripts depend on is therefore not checked by the compiler. Define an interface with the fix fields optional, or a discriminated type. `FixLogRecord` (lines 26-31) also restates a subset of core's `FixLogEntry` (`introspection/types.ts:259`). Use `Pick<FixLogEntry, ...>`, or map from `FixLogEntry`, so the two cannot drift apart. In the JSON output, `findings` and `totalFindings` are pre-fix values, and there is no field for the number of findings still unresolved. Callers have to work that out themselves from `totalFindings` minus `fixed`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:136-149"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New `UserError`s omit error codes, so JSON-mode errors report `UNKNOWN`",
+      "description": "`handleError` emits `code: err.code ?? 'UNKNOWN'` in JSON mode (`errors.ts:50`). The \"Project not found\" and \"No projectPath configured\" errors are thrown without a code. The `ErrorCode` union already has `PROJECT_NOT_FOUND` and `MISSING_CONFIG`, and `build.ts:46` passes `'PROJECT_NOT_FOUND'` for the same condition. This command is meant for scripts, so its error codes should be machine-readable. Pass the codes, and put the \"run cf project list\" hint in the `suggestion` argument as `build.ts` does.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:92-97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`process.exit` spy leaks across tests in `validate.test.ts`",
+      "description": "The \"unresolvable project exits 2\" test calls `vi.spyOn(process, 'exit').mockImplementation(...)`. `beforeEach` only calls `vi.clearAllMocks()`. The CLI package has no vitest config (the only configs are in core, electron and mcp-server), so there is no `restoreMocks`. The stubbed `process.exit` therefore stays in place for later tests in the file. If a later test hit `handleError`, it would carry on silently instead of failing. Call `vi.restoreAllMocks()` in `afterEach`, or restore the spy inside that test. Separately, `tests/utils/errors.test.ts` only asserts exit code 1, so the new `exitCode` parameter on `handleError` is tested only indirectly through this command.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate.test.ts:75-83"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`validateFrontmatterAction` is over the ~50-line guideline, and exit codes are literals",
+      "description": "The function is about 70 lines and mixes project resolution, validation, the fix loop and output. The fix loop (lines 109-134) could be extracted as `applyFrontmatterFixes(findings, dateStamp)` returning `{ fixLog, fixErrors, remaining }`, which would also make it testable on its own. The exit codes `1` (findings remain) and `2` (usage or system error) appear as bare literals here and in `handleError(err, 2)`. Naming them once, for example as `EXIT_FINDINGS` and `EXIT_ERROR`, would follow the \"define a value once\" rule and document the contract. The human-output fix lookup at line 66 matches on file plus field only. Two findings for the same file and field would both display the same \"Fixed\" entry. This is unlikely, since the validator emits one finding per field.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:87-157"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Schema additions are sound and the design rationale is documented",
+      "description": "I read `validateFrontmatter` (lines 202-300). The three new docTypes require only `docType` and `dateCreated`. Missing `dateCreated` produces a finding with no `fixAction`, so `--fix` cannot invent a date. The comment explains why `dateUpdated` is deliberately omitted. The existing universal-field and status tests were correctly narrowed to `EXPECTED_DOC_TYPES`, so the new schemas do not break them. `validateFrontmatterFiles` and `updateFrontmatterField` are exported from `@context-forge/core/node`, and `formatDateProject` and `FrontmatterFinding` from the core index. The new command's imports resolve, and its exit-code semantics (0 clean or all fixed, 1 findings remain or a fix failed, 2 error) match the tests.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/core/src/schema/frontmatterSchema.ts:118-141"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Vacuous test claims to prove the docType value constraint",
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts#validateFrontmatter \u2014 squadron machine-artifact docTypes (#73)",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`SEVERITY_ICON` uses a loose type and a silent `'?'` fallback",
+      "location": "packages/cli/src/commands/validate.ts:15-18, 62",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Machine-readable `--json` contract is untyped, and `FixLogRecord` duplicates a core type",
+      "location": "packages/cli/src/commands/validate.ts:136-149",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "New `UserError`s omit error codes, so JSON-mode errors report `UNKNOWN`",
+      "location": "packages/cli/src/commands/validate.ts:92-97",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`process.exit` spy leaks across tests in `validate.test.ts`",
+      "location": "packages/cli/tests/commands/validate.test.ts:75-83",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`validateFrontmatterAction` is over the ~50-line guideline, and exit codes are literals",
+      "location": "packages/cli/src/commands/validate.ts:87-157",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Schema additions are sound and the design rationale is documented",
+      "location": "packages/core/src/schema/frontmatterSchema.ts:118-141",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:30:05.389890",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 19,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 20,
+  "prompt_tokens": 649013,
+  "cached_tokens": 550973,
+  "cache_write_tokens": 98026,
+  "completion_tokens": 8795,
+  "reasoning_tokens": null,
+  "duration_seconds": 75.96347716706805,
+  "cost_usd": 0.5366945000000001,
+  "cost_basis": "provider"
+}

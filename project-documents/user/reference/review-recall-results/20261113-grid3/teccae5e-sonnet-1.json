@@ -1,0 +1,153 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Markets and instruments are plain data with validation at construction",
+      "description": "`Market`, `SessionCalendarRef`, `ContractTerms` and `Instrument` are frozen, slotted dataclasses. Each declares `CANONICAL_TYPE` and `SCHEMA_VERSION`, which `canonical.py` requires for dataclasses.\n\n`__post_init__` rejects bad input with specific `CoreModelError` subclasses. Examples are `float` or `bool` for numeric terms, `Decimal` NaN or infinity, lowercase or newline-suffixed currency codes, and `str` subclasses as instrument ids.\n\n`Market` normalizes its unordered inputs into canonical order. `session_calendars` becomes a tuple sorted by mode, and `adjustment_bases` becomes a frozenset. Equal markets therefore hash and canonicalize identically, and `test_equal_markets_in_different_order_canonicalize_to_equal_bytes` covers this.\n\nAll enums are `StrEnum`, which `canonical.py` accepts. Values such as the source-bar-stamping set are defined once, in `SOURCE_BAR_STAMPINGS`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py#Market"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tests cover behavior, identity and the module boundary",
+      "description": "The tests are parametrized over rejection cases and fixture values. Identity is tested one fact at a time: each row of `CHANGED_FACTS` changes exactly one fact and must change the hash.\n\n`test_market_uniformity.py` runs one code path for every market. The golden vectors were computed independently of `canonical_hash`. `test_import_boundary.py` now covers `markets.py` and `instruments.py`. The fixture calendar mapping is checked for immutability and for keys matching each calendar's own id.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_instruments.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_require_instance` is duplicated across modules",
+      "description": "`instruments.py` and `markets.py` each define a private `_require_instance`. The two differ only in which exception they raise. A shared helper that takes the error type would remove the copy. The cost of leaving it is small, but it is a DRY drift risk if the message format changes in one file only.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/instruments.py:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unhashable input to `Market` raises `TypeError`, not `InvalidMarketError`",
+      "description": "`self.source_bar_stamping not in SOURCE_BAR_STAMPINGS` and `frozenset(bases)` both hash their input. Unhashable values, such as a list passed as the stamping or as an element of `adjustment_bases`, raise a bare `TypeError` instead of the module's own `InvalidMarketError`. Checking `isinstance(..., TimeMeaning)` first would give a consistent error contract. This only affects callers that already violate the static types.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:108"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`Market` field annotations are narrower than the accepted inputs",
+      "description": "The docstring says `session_calendars` and `adjustment_bases` accept any iterable. The field annotations are `tuple[...]` and `frozenset[...]`, so strict pyright flags list and generator arguments. The tests work around this by building kwargs as `dict[str, Any]`. This is acceptable because the stored form is the annotated one, but a custom `__init__` or a factory classmethod would make the contract explicit.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/markets.py:84"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Markets and instruments are plain data with validation at construction",
+      "location": "src/manta_trading_engine/core_model/markets.py#Market",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests cover behavior, identity and the module boundary",
+      "location": "tests/core_model/test_instruments.py",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_require_instance` is duplicated across modules",
+      "location": "src/manta_trading_engine/core_model/instruments.py:79",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unhashable input to `Market` raises `TypeError`, not `InvalidMarketError`",
+      "location": "src/manta_trading_engine/core_model/markets.py:108",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`Market` field annotations are narrower than the accepted inputs",
+      "location": "src/manta_trading_engine/core_model/markets.py:84",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/teccae5e",
+    "diff": "21829cf5742a5639fca72d992802642d2f636e70...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:28:38.207263",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 1,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 51075,
+  "diff_chars_injected": 51075,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 163288,
+  "cached_tokens": 26932,
+  "cache_write_tokens": 136352,
+  "completion_tokens": 2259,
+  "reasoning_tokens": null,
+  "duration_seconds": 21.87053137505427,
+  "cost_usd": 0.5740698,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,135 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Previously designed items cannot resume from slices-plan",
+      "description": "`_select_item()` requires the item to remain selected by the original source. However, `slices-plan` uses `cf.undesigned_slices(...)`: once its design step writes and commits a design, the item disappears from that source\u2014even when its subsequent review loop fails.\n\nBoth retry and accept therefore reject a normal `review_unresolved` item. The reconciliation fallback does not help because it requires a complete slice with a merged implementation branch, which is not the state of a failed design review.\n\nThe planning-batch test masks this by always returning `design_file=None` for plan-scoped queries. Add coverage using the actual post-failure state, and resolve eligible recorded items without requiring them to satisfy an initial-work selection predicate.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:288-313"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Resume preparation and source evaluation block the event loop",
+      "description": "`_resume_locked()` directly performs synchronous state loading, git precondition checks, dependency queries, and report writes inside an async function. Git calls can block for up to 30 seconds; Context Forge subprocess calls currently have no timeout.\n\nThe new `_cf_slices_ready_to_implement()` source likewise directly invokes synchronous CF subprocesses and reads review/design files inside its async body. These operations cannot satisfy the required worst-case runtime below 1 ms and can prevent cancellation and other scheduled I/O from progressing.\n\nMove blocking preparation and persistence into explicitly awaited worker-thread operations, or use asynchronous subprocess/file boundaries. Add bounded CF execution and a test demonstrating that slow external operations do not stall the event loop.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:146-155"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Deferred dependencies are treated as satisfied during batch execution",
+      "description": "`open_in_plan` excludes both complete and deferred slices. Deferred slices are also omitted from the returned items, so a dependent slice receives neither a source dependency flag nor a later executor dependency flag. It can consequently be implemented despite its prerequisite never being completed.\n\nThis also differs from item resume: `_open_dependencies()` blocks any in-plan dependency whose status is not complete, including deferred dependencies.\n\nSeparate \u201cnot selected for execution\u201d from \u201csatisfies a dependency.\u201d Flag dependents of deferred prerequisites and add a regression test covering this case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sources.py:257-280"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed report items escape the documented load-error boundary",
+      "description": "The `cast` does not validate `report[\"items\"]` or its elements. For example, a report containing `\"items\": [null]` reaches `BatchItemRecord.from_json()`, where `data.get(...)` raises `AttributeError`. That exception is not converted to `BatchReportLoadError`, so item resume crashes instead of returning its expected rejected outcome.\n\nOther invalid shapes are silently coerced: missing indices become `\"None\"`, and a string `unsavedParts` becomes a list of characters. Validate the external report with a Pydantic schema before constructing internal dataclasses, and test malformed containers, elements, and required fields.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:330-340"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Previously designed items cannot resume from slices-plan",
+      "location": "src/squadron/pipeline/item_resume.py:288-313",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Resume preparation and source evaluation block the event loop",
+      "location": "src/squadron/pipeline/item_resume.py:146-155",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Deferred dependencies are treated as satisfied during batch execution",
+      "location": "src/squadron/pipeline/sources.py:257-280",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Malformed report items escape the documented load-error boundary",
+      "location": "src/squadron/pipeline/batch_report.py:330-340",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:24:27.560787",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 944,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 677649,
+  "cached_tokens": 470581,
+  "cache_write_tokens": null,
+  "completion_tokens": 1869,
+  "reasoning_tokens": 746,
+  "duration_seconds": 60.495075709186494,
+  "cost_usd": 0.4798841,
+  "cost_basis": "alias_pricing"
+}

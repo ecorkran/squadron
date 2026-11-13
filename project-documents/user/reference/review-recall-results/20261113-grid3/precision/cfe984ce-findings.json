@@ -1,0 +1,86 @@
+[
+ {
+  "ref": "haiku-xhigh/1/0",
+  "severity": "CONCERN",
+  "title": "Checkout resolution is copied from `validate frontmatter`",
+  "location": "packages/cli/src/commands/validateDesign.ts:34-46",
+  "description": "`resolveTemplatePath` repeats the project lookup in `validateFrontmatterAction` (validate.ts:154-166): `resolveProjectWorktree`, `store.getById`, the \"Project not found\" and \"No projectPath configured\" UserErrors, then `resolveOperationPath`. Other commands (build, plan, task, slice, arch, check, prompt) carry the same block too. The copy is not identical: validate.ts adds `?? project.projectPath`, which is redundant because `resolveOperationPath` already falls back to `projectPath` (worktree-overlay.ts:24). CLAUDE.md prohibits duplicated logic. Extract one helper in `utils/project.ts` and call it from both validate commands."
+ },
+ {
+  "ref": "haiku-xhigh/1/1",
+  "severity": "CONCERN",
+  "title": "`'slice-design'` is defined a second time",
+  "location": "packages/core/src/schema/sliceDesignFiles.ts:21",
+  "description": "`SLICE_DESIGN_DOC_TYPE = 'slice-design'` duplicates a value that already exists as the schema key and docType value in `FRONTMATTER_SCHEMAS` (frontmatterSchema.ts:74-76) and in `FILENAME_SEGMENT_TO_DOCTYPE` (frontmatterSchema.ts:148). CLAUDE.md requires a value used in comparisons to be defined once. Export one constant from `frontmatterSchema.ts`, reference it there, and import it here."
+ },
+ {
+  "ref": "haiku-xhigh/1/2",
+  "severity": "CONCERN",
+  "title": "The usage error bypasses the CLI error contract",
+  "location": "packages/cli/src/commands/validateDesign.ts:61-66",
+  "description": "The no-files check throws `SliceDesignValidationError`. The same file uses `UserError` for its other two failures, and `ErrorCode` already defines `INVALID_ARGUMENT` for this case (utils/errors.ts:5; used at project.ts:416). Effects: in human mode the message gets an `Error:` prefix (errors.ts:66) instead of the clean UserError form, and in JSON mode `code` is `UNKNOWN` instead of `INVALID_ARGUMENT`. Use `new UserError('no files given. Usage: cf validate design <file...>', 'INVALID_ARGUMENT')`."
+ },
+ {
+  "ref": "hy4/1/0",
+  "severity": "CONCERN",
+  "title": "A swallowed read error is reported as a doctype failure (exit 1), not exit 2",
+  "location": "packages/core/src/schema/sliceDesignFiles.ts:91-105",
+  "description": "`validateFile` calls `parseFrontmatter(file)` at line 95 and never checks `frontmatter.found`. That parser has a blanket catch that converts *any* read failure into `{ found: false, data: {} }` (`packages/core/src/introspection/parsers/frontmatterParser.ts:63-64`). So if a file disappears, changes permissions, or errors on read after `preflight` (`:72-86`) succeeded, the early return at `:96-98` emits `{ pass: false, missing: [], reason: 'doctype' }` instead of an error. The CLI then prints `FAIL <file>` plus the frontmatter message and exits 1 \u2014 exactly the \"partial results alongside an error\" and wrong-exit-code case the file header (`:1-8`) and slice 214's success criteria say must be exit 2 with empty stdout. The `readFile` catch at `:102-105` cannot help: it is unreachable on this path. The same file is also read twice (`:95`, `:102`), which widens that race; a legitimate no-frontmatter document also returns `found: false`, so checking `found` alone cannot separate it from an I/O failure. Read the file once with explicit error handling and parse frontmatter from that text, then add a fault-injection regression test for a read failure after preflight (the existing `sliceDesignFiles.test.ts` only covers failures caught by preflight)."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "`--json` error mode is derived from raw argv, so the command's `-j` alias emits plain-text errors",
+  "location": "packages/cli/src/commands/validateDesign.ts:98-104",
+  "description": "`withJsonOption` (`packages/cli/src/options.ts`) registers `-j, --json`, but `handleError` at `:104` decides its output format from a module-level flag (`packages/cli/src/utils/errors.ts:32-38,47`) that is set only by `packages/cli/src/index.ts:178` via `process.argv.includes('--json')`. `cf validate design -j missing.md` therefore produces JSON results on stdout for successful runs but a human `Error: ...` line on stderr for exit-2 failures, contradicting the structured-error contract in `docs/AGENT-INTEGRATION.md:16` that makes this command a machine gate. `CF_JSON=1` hides the problem, which is why it only shows up for flag-driven use. There are now two sources of truth for \"is this a JSON invocation\" (parsed `opts.json` vs. global argv sniffing); derive the error mode from the parsed option (or detect `-j` as well) so the alias behaves identically."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "The machine-readable failure path is never asserted by the new command tests",
+  "location": "packages/cli/tests/commands/validate-design.test.ts:198-222",
+  "description": "The `run()` helper (`:127-131`) registers `registerValidateCommand` on a bare `Command` and never imports `packages/cli/src/index.ts`, so `setJsonMode()` is never called and `handleError` always takes its plain-text branch in this suite. The six `--json` exit-2 cases (`:205-211`) assert only `cf exited 2`, empty stdout and empty `console.log`; no test asserts that stderr carries `{ \"error\": true, ... }`, and the one error-message assertion (`:216-222`) runs without `--json`. Consequently neither the documented JSON error payload nor the post-preflight I/O failure mode from the first finding has any regression coverage, even though `--json` is the primary agent/CI interface for this command. Add a case that enables JSON error mode (as the real entrypoint does) and pins the stderr payload for `--json` and `-j` failures, plus a case that fails a read after preflight."
+ },
+ {
+  "ref": "minimax31-flash/1/0",
+  "severity": "CONCERN",
+  "title": "The `slice-design` docType literal is now scattered across four places instead of one",
+  "location": "packages/core/src/schema/sliceDesignFiles.ts:21",
+  "description": "The change introduces `SLICE_DESIGN_DOC_TYPE = 'slice-design'` as a canonical constant, but the same literal is still hardcoded in the pre-existing frontmatter registry: `packages/core/src/schema/frontmatterSchema.ts:76` (`values: ['slice-design']`), `packages/core/src/schema/frontmatterSchema.ts:148` (`slice: 'slice-design'`), and `packages/core/src/schema/frontmatterSchema.ts:185` (`docType === 'slice-design'`). AGENTS.md is explicit: \"Never scatter comparison values across code. If a value is used in conditionals, switch cases, or lookups, define it once \u2026 Changing a value should require editing exactly one place.\" As written, renaming the docType requires editing four files, and the new constant is dead weight because nothing else consumes it. Either have `frontmatterSchema.ts` import `SLICE_DESIGN_DOC_TYPE` (or move the constant into a shared, browser-safe module both can import without a cycle), or drop the new constant and reuse the registry's existing spelling \u2014 but do not leave both spellings live."
+ },
+ {
+  "ref": "minimax31-flash/1/1",
+  "severity": "CONCERN",
+  "title": "Project resolution and the \"Project not found\" message are duplicated across two command files",
+  "location": "packages/cli/src/commands/validateDesign.ts:34",
+  "description": "`resolveTemplatePath` in `packages/cli/src/commands/validateDesign.ts:34-46` repeats the project-resolution preamble that already exists in `packages/cli/src/commands/validate.ts:160-172`: constructing a `FileProjectStore`, calling `resolveProjectWorktree({ project: opts.project }, store)`, calling `store.getById(id)`, and throwing the byte-identical user-facing string `Project not found: '${id}'. Run cf project list to see available projects.` The only real difference between the two is the final step (one checks `project.projectPath`, the other checks the resolved checkout root). AGENTS.md requires \"Do not duplicate logic. Respect DRY\" and defines shared values once. Extracting a single helper into `packages/cli/src/utils/project.ts` \u2014 e.g. `resolveProjectCheckout(opts)` returning `{ project, checkoutRoot }` and owning the not-found error \u2014 would remove the duplicated message and keep the two `validate` subcommands from drifting as resolution rules evolve."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "CONCERN",
+  "title": "Valid YAML comments cause false docType failures",
+  "location": "packages/core/src/schema/sliceDesignFiles.ts:95-97",
+  "description": "Valid frontmatter such as `docType: slice-design # design document` is rejected. The reused `parseFrontmatter` retains the inline comment in the value, so this comparison reports a missing docType even when correctly declared.\n\nUse YAML-aware parsing that handles comments without corrupting quoted values, and add regression tests for commented plain and quoted docType declarations."
+ },
+ {
+  "ref": "sonnet/1/0",
+  "severity": "CONCERN",
+  "title": "Frontmatter read errors are swallowed, so the later read-error handling is unreachable",
+  "location": "packages/core/src/schema/sliceDesignFiles.ts:95-105",
+  "description": "`validateFile` calls `parseFrontmatter(file)`. I read that function: it never throws, and any read error returns `{ found: false, data: {} }`. If a file becomes unreadable or disappears after `preflight`, the user gets a `docType` failure (\"frontmatter must declare 'docType: slice-design'\"). That message points at the wrong cause. The explicit `readFile` try/catch a few lines later, which throws `cannot read file`, can then only fire if the read fails after the first read succeeded.\n\nThe file is also read twice, once in `parseFrontmatter` and once in `readFile`. Reading it once and parsing the frontmatter from that text, or reading first and then calling the parser, would give one read and consistent errors."
+ },
+ {
+  "ref": "sonnet-high/1/0",
+  "severity": "CONCERN",
+  "title": "Tests assert against living project docs and a guide-managed template",
+  "location": "packages/cli/tests/commands/validate-design.test.ts:36-47",
+  "description": "`PASSING_DESIGNS` hard-codes four real slice documents under `project-documents/user/slices/` (212, 213, 214 and 928). Both new test files copy or read `project-documents/ai-project-guide/.../slice-design.md`. That guide directory is managed by `cf guides update`.\n\n- **Slice docs:** an ordinary edit to one of these slice docs, such as renaming a heading, would fail the CLI suite even though the validator is correct.\n- **Template:** a template change published to the guide would do the same. It could also change the expected `missing: ['## Value']` output, or the `## Overview` and `### Verification Walkthrough` assertions in `packages/core/tests/schema/sliceDesignFiles.test.ts:44-50`.\n- **Missing checkout:** the tests also fail if the guide isn't checked out, for example in a tarball-style install.\n\nThe project rule that fixtures must contain the real production format is a good reason to keep one real-world case. The rest should use a small committed fixture, for example `tests/fixtures/`, for both the template and the designs. That would let the broken-heading and docType cases be built from a frozen design instead of regex-editing 214 (`/^## Value\\n[\\s\\S]*?(?=^## Technical Scope$)/m`). This regex also depends on 214's section order. A single \"passes the real template and a real design\" smoke test can stay."
+ },
+ {
+  "ref": "sonnet-high/1/1",
+  "severity": "CONCERN",
+  "title": "Project and worktree resolution is duplicated from `validate frontmatter`",
+  "location": "packages/cli/src/commands/validateDesign.ts:31-44",
+  "description": "`resolveTemplatePath` repeats the sequence in `validate.ts:154-166`:\n\n1. construct `FileProjectStore`\n2. call `resolveProjectWorktree`\n3. call `getById`\n4. throw the same \"Project not found\" `UserError`\n5. check `projectPath`\n6. call `resolveOperationPath`\n\nThe \"Project not found\" message string is also duplicated. The project's DRY rule applies here. Extract a shared helper, for example `resolveCheckoutRoot(opts)` in `utils/`, and use it from both commands. The new code also differs from `validate.ts` in one way. It throws when `resolveOperationPath` returns nothing, where the frontmatter command falls back to `project.projectPath`. Failing explicitly matches the \"no silent fallback\" rule, but a shared helper would settle which behaviour is intended."
+ }
+]

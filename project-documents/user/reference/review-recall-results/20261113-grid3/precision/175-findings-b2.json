@@ -1,0 +1,86 @@
+[
+ {
+  "ref": "hy4/1/0",
+  "severity": "CONCERN",
+  "title": "Missing review directory breaks `stats reviews --json`",
+  "location": "src/squadron/cli/commands/stats.py:59-65",
+  "description": "`stats_reviews` returns the human message at `src/squadron/cli/commands/stats.py:61-63` before checking `as_json` at `src/squadron/cli/commands/stats.py:64-65`. In a project without `project-documents/user/reviews`, `sq stats reviews --json` prints `No review directory at ...`, which is not JSON, despite the option help and the `reviews_report_json` serializer in `src/squadron/cli/stats_views.py#reviews_report_json`. `tests/cli/test_stats.py#test_reviews_missing_dir_exits_0_with_message` only covers the non-JSON path, so this machine-facing contract is untested."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "Review report counts any frontmatter-bearing markdown as a review",
+  "location": "src/squadron/stats/reviews_report.py:67-80",
+  "description": "The loop at `src/squadron/stats/reviews_report.py:67-80` accepts every top-level `*.md` with parseable YAML frontmatter; it only filters on slice, `runId`, and unreadable frontmatter. It does not check `docType: review`, `reviewType`, or a review filename pattern. `src/squadron/review/resolution_artifact.py:179-183` writes resolution artifacts into the same `REVIEWS_DIR`, so a sibling frontmatter document can become a bogus review row with an empty `UsageRecord`, inflating the denominator in the totals. Add a review-artifact predicate and a test with a real non-review sibling document."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "SDK compact failures discard provider telemetry",
+  "location": "src/squadron/pipeline/actions/compact.py:70-96",
+  "description": "`SDKExecutionSession.dispatch` attaches completed telemetry to `ProviderError` in `src/squadron/pipeline/sdk_session.py#dispatch`, but `src/squadron/pipeline/actions/compact.py:78-91` catches every exception and returns a failure `ActionResult` with no `metadata`; only the success path at `src/squadron/pipeline/actions/compact.py:93-96` stamps usage. A failed compact that spent tokens therefore has no usage row in `sq stats run`, contradicting the slice\u2019s \u201cfailed actions record what they spent\u201d requirement. The new tests in `tests/pipeline/actions/test_compact.py#Usage records` cover success, no-spend, and missing capture, but not this failure mode."
+ },
+ {
+  "ref": "hy4/1/3",
+  "severity": "CONCERN",
+  "title": "`stats reviews` cannot identify subscription aliases from real review artifacts",
+  "location": "src/squadron/stats/reviews_report.py#_record",
+  "description": "`src/squadron/stats/reviews_report.py#_record` reconstructs `UsageRecord.alias` from frontmatter `requestedModel` only when that value is itself a known alias. In production, `src/squadron/review/review_client.py#run_review_with_profile` sets `result.requested_model` to the resolved model id, and `src/squadron/review/persistence.py#format_review_markdown` writes `requestedModel` only when `model_substituted` is true. The alias passed to `run_review_with_profile` is used for cost resolution but never persisted. As a result, `src/squadron/cli/stats_views.py#cost_cell` usually sees `alias=None` and prints subscription provider costs as `$... prov` instead of `$... api-rate equiv.`. `tests/stats/test_reviews_report.py#test_requested_model_maps_to_alias_only_when_known` uses synthetic `requestedModel: opus` frontmatter rather than the real artifact shape."
+ },
+ {
+  "ref": "hy4/1/4",
+  "severity": "CONCERN",
+  "title": "`stats run` accepts path-shaped run IDs",
+  "location": "src/squadron/cli/commands/stats.py:34-41",
+  "description": "The CLI passes the raw `run_id` argument to `run_usage_report` at `src/squadron/cli/commands/stats.py:34-41`. `src/squadron/pipeline/state.py#state_file_name` simply returns `f\"{run_id}.json\"` with no validation, and `src/squadron/pipeline/state.py#StateManager._state_path` joins that name to `runs_dir`. Absolute paths and `..` segments can therefore escape the configured state directory and read arbitrary readable `.json` files; malformed files also leak the resolved path in the error message. Validate `run_id` at the CLI boundary by rejecting separators/absolute paths or by resolving and confirming the parent is `runs_dir`, then add regression tests for absolute and traversal-shaped IDs."
+ },
+ {
+  "ref": "luna-r-high/1/0",
+  "severity": "CONCERN",
+  "title": "Compact actions do not record usage on all execution paths",
+  "location": "src/squadron/pipeline/actions/compact.py:107-158",
+  "description": "The SDK-rotation path stamps usage only after a successful `compact()` call; its exception handler returns a failed result without the telemetry attached to provider errors. The prompt-only path also returns without recording usage on success: it calls `claude_agent_sdk.query()` directly and never reads result usage or stamps a record. Since `compact` is counted as an LLM action by `sq stats run`, spend from these calls is omitted."
+ },
+ {
+  "ref": "luna-r-high/1/1",
+  "severity": "CONCERN",
+  "title": "Split-review totals keep only the first part\u2019s usage",
+  "location": "src/squadron/pipeline/actions/review_fold.py:85-88",
+  "description": "Each review part receives its own usage record, but `_metadata()` copies only the first part\u2019s metadata when folding multiple parts. The persisted step therefore reports just the first part\u2019s spend, undercounting tokens, turns, and cost for split pipeline reviews."
+ },
+ {
+  "ref": "luna-r-high/1/2",
+  "severity": "CONCERN",
+  "title": "Fan-out branch usage is discarded before persistence",
+  "location": "src/squadron/pipeline/intelligence/fan_in/reducers.py:62-75",
+  "description": "The executor passes the run\u2019s usage capture into fan-out branches, but the `collect` reducer serializes branch action results without their metadata. The other reducers also return selected outputs without branch usage metadata. Consequently, the resulting `fan_out` action has no usage record, and `sq stats run` cannot include those branch calls in its totals."
+ },
+ {
+  "ref": "luna-r-high/1/3",
+  "severity": "CONCERN",
+  "title": "Earlier loop iterations are absent from run usage totals",
+  "location": "src/squadron/stats/usage_report.py:113-115",
+  "description": "The report reads only persisted `completed_steps[*].action_results`. Earlier loop iterations are held in `StepResult.prior_rounds`, but `StateManager._append_step()` serializes only `action_results`. Thus, for loops that run more than once, the persisted state\u2014and consequently this report\u2014omits spend from earlier rounds."
+ },
+ {
+  "ref": "luna-r-high/1/4",
+  "severity": "CONCERN",
+  "title": "Malformed cost basis can abort the reviews report",
+  "location": "src/squadron/stats/reviews_report.py:151-156",
+  "description": "`_basis()` checks an unvalidated frontmatter value for membership in a set. If YAML parses `costBasis` as a list or mapping, that membership check raises `TypeError`; the report then aborts instead of warning and treating the malformed field as unreported, as it does for other invalid fields."
+ },
+ {
+  "ref": "deepseek4-flash/1/0",
+  "severity": "CONCERN",
+  "title": "A failed part in a split review loses the provider's error and the loop keeps paying for later parts",
+  "location": "src/squadron/pipeline/actions/review.py:493",
+  "description": "`_run_part` used to `raise` on `ProviderError`; it now returns `self._exception_result(...)`, whose `ActionResult` carries `outputs={}` and (for a non-judge template) `verdict=None`. `_review` then feeds every part result into `fold_review_parts` (`src/squadron/pipeline/actions/review.py` \u2192 `fold_review_parts(results)`), and for `count > 1` that function calls `_part_input` first, which is `review_input_files(part)` \u2192 `[]` \u2192 `raise TypeError(\"review part must name exactly one input file, got []\")` (`src/squadron/pipeline/actions/review_fold.py`). That `TypeError` propagates out of `_review` into `execute`'s generic `except Exception`, so the operator sees a fold-internal message instead of the provider's failure text \u2014 the exact \"why did the step fail\" evidence #84's failure artifact exists to preserve is still on disk, but the reported error no longer names it.\n\nSecond effect of the same change: the part loop has no early exit, so a provider failure in part 1 of a 3-part breakdown now dispatches parts 2 and 3 anyway, each a paid model call that previously never happened. The existing test (`tests/pipeline/actions/test_review_action_parts.py::TestPartLoop::test_provider_failure_on_part_two_keeps_part_one`) only asserts `result.success is False`, so it passes under both behaviours and does not catch either. Worth a test that a mid-sequence failure preserves the provider message and stops the loop."
+ },
+ {
+  "ref": "deepseek4-flash/1/1",
+  "severity": "CONCERN",
+  "title": "`sq stats reviews` hardcodes one of four reviews-directory rules and uses the process cwd, so it silently reports nothing",
+  "location": "src/squadron/cli/commands/stats.py:58",
+  "description": "`reviews_dir = Path.cwd() / REVIEWS_DIR` implements only rule 2 of the four-rule precedence that `src/squadron/review/reviews_dir.py` documents as fixed and calls \"a decision rather than a constant\": `--reviews-dir`, the project directory, `review.external_reviews_dir`, then `~/.config/squadron/reviews/<host>/<owner>/<repo>/`. A project whose reviews land under the config key or the per-user root gets `No review directory at \u2026` and exit 0 \u2014 a silently empty report presented as a successful one, which is the failure mode that module's docstring says the precedence chain exists to make visible (\"Falling through would silently write somewhere the operator did not ask for\u2026 the review would appear to succeed while landing somewhere nobody looks\"). Every other review entry point also anchors at the git root via `resolve_repo_cwd` (`src/squadron/cli/commands/cwd_resolution.py`), so invoking `sq stats reviews` from a subdirectory reports nothing even for rule 2. Routing through `resolve_reviews_dir` (or at minimum `resolve_repo_cwd`) would keep one source of truth; the tests only cover the cwd-relative project case (`tests/cli/test_stats.py::test_reviews_missing_dir_exits_0_with_message`)."
+ }
+]

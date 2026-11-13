@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Non-null assertions on `fixAction` bypass the type system",
+      "description": "`fixRelPath` and `routeView` (line 143) use `finding.fixAction!` with no comment. The TypeScript rules treat assertions as a smell that needs a documented reason. The invariant is real: `fixableOf` filters on `f.fixable && f.fixAction`. But `fixRelPath` is exported and takes any `ConsistencyFinding`, so a caller that skips the filter gets a runtime crash. `gateByReadiness`, which is also exported, calls it too. Define a `FixableFinding = ConsistencyFinding & { fixAction: NonNullable<ConsistencyFinding['fixAction']> }` type guard. Use it for `fixableOf`, `routeView`, `gateByReadiness` and `fixRelPath`. The assertions then go away.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Display flag `showWorktree` decides which fix report is printed",
+      "description": "`printCheckOutput` picks `printRoutedFixResult` over the legacy summary with `fixRes && showWorktree`. `showWorktree` is a presentation toggle, derived in `check.ts:165` from `projectViews.some(v => v.worktree !== undefined)`. It is also used as a proxy for \"this result carries routed data\" (`worktree` on log entries, `commits`, `deferred`). The two only agree because `buildAttributedViews` attaches worktrees only when there are two or more. If that rule changes, the output path changes without warning. Branch on the result itself, or pass an explicit `multiCheckout` argument.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/output/checkReport.ts#printCheckOutput"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope/runCheck construction duplicated between CLI and MCP",
+      "description": "The `--slice` narrowing logic is copied into `packages/mcp-server/src/tools/workflowTools.ts`. Both build `scopeViews` with `fileSlice: \\`${n}-slice\\`` and pick `checker.check` or `checker.checkAll`. Both also wrap `resolveInvokingCheckout` in similar try/catch error translation. The fix-mode plan-then-apply sequence is duplicated too. The previous code already had this duplication, and this change was a chance to remove it. A shared core helper, for example `scopeViewsToSlice(views, index)`, would stop the two consumers drifting. Their parity is currently enforced only by tests.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/check.ts:172-177"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`checker.fix` and `checker.fixAll` are now unused in production code",
+      "description": "Neither the CLI nor the MCP tool calls `fix` or `fixAll` any more. Only tests do. They are also the unrouted, per-view-write path, which is the one this slice replaced. If they are not a deliberate public API, remove them or mark them deprecated. Otherwise a future caller may use them and skip ownership routing.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:202-211"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`workflow.auto_fix` now commits into other checkouts without a prompt",
+      "description": "Previously an all-slices fix prompted whenever `--yes` was absent, including when `auto_fix` was the trigger. Now only an explicit `--fix` prompts. Plain `cf check` with `auto_fix` writes and commits in non-invoking worktrees silently. The comment cites slice 213 SC 11, so this appears to be a deliberate design decision. Make sure the README and CHANGELOG say plainly that `auto_fix` can create commits in sibling worktrees.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/check.ts:187-190"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slice index is parsed from a user-visible description string",
+      "description": "This is moved code, not new code. It groups findings by regex-matching `[175]` at the start of `description`. That conflicts with the project rule against using user-visible labels as logical structure. `fixAction.subjectIndex` now exists for fixable findings. A structured `sliceIndex` on `ConsistencyFinding` would fix the problem properly.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/output/checkReport.ts#extractFindingSliceIndex"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test file exports helpers and defines a function that reads module state",
+      "description": "This file exports `designPath`, `tasksPath`, `completeBeta`, `worktreeCtx`, `createRoutedSetup`, `dryRun` and `aboutSubject`. A grep found no importer of the test file. The exports are unused and make the file look like a shared helper module. `createProjectFor` sits at the bottom of the file and reads the module-level `setup` variable. Drop the `export` keywords, or move the helpers into `tests/helpers/`. Make `createProjectFor` take its base project as an argument.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/routedFixes.test.ts"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fix routing, readiness gating and commit rollback are covered with real git",
+      "description": "The tests use real git worktrees through `gitWorktreeFixture`. They cover owner and non-owner routing, overlapping ranges, an owner that lacks the file, and dirty, busy, detached and missing checkouts. They also cover a dirty target between plan and apply, staged-file isolation, and a rejecting pre-commit hook followed by restore. The case where restore also fails is covered as well. A passthrough spy asserts that the single-checkout path runs no git. Exception handling in `checkoutReadiness.ts` and `routedFixes.ts` follows the project rules: each catch is specific, commented, and either logged or converted into an explicit `DeferReason` or `fixErrors` entry. Nothing is swallowed silently.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/routedFixes.test.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Non-null assertions on `fixAction` bypass the type system",
+      "location": "packages/core/src/introspection/routedFixes.ts:60",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Display flag `showWorktree` decides which fix report is printed",
+      "location": "packages/cli/src/output/checkReport.ts#printCheckOutput",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Scope/runCheck construction duplicated between CLI and MCP",
+      "location": "packages/cli/src/commands/check.ts:172-177",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`checker.fix` and `checker.fixAll` are now unused in production code",
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:202-211",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`workflow.auto_fix` now commits into other checkouts without a prompt",
+      "location": "packages/cli/src/commands/check.ts:187-190",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Slice index is parsed from a user-visible description string",
+      "location": "packages/cli/src/output/checkReport.ts#extractFindingSliceIndex",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test file exports helpers and defines a function that reads module state",
+      "location": "packages/core/tests/introspection/routedFixes.test.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Fix routing, readiness gating and commit rollback are covered with real git",
+      "location": "packages/core/tests/introspection/routedFixes.test.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:31:13.790033",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 390305,
+  "cached_tokens": 250050,
+  "cache_write_tokens": 140249,
+  "completion_tokens": 5559,
+  "reasoning_tokens": null,
+  "duration_seconds": 50.339207416865975,
+  "cost_usd": 0.6489013,
+  "cost_basis": "provider"
+}

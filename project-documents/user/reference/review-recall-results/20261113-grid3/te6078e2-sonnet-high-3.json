@@ -1,0 +1,153 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Shared coercion and range checks keep each rule in one place",
+      "description": "`as_integer`, `as_real` and `require_real` are the only numeric coercion path. They are reused by `ConfidenceRange`, `SignalEvent` and `ParameterDeclaration`. `check_confidence` is shared by `LabelSeries` and `SignalSequence`. `_coerce` in `declarations.py` is shared by declaration construction and `bind_parameters`. This follows the DRY and \"define once\" rules.\n\nThe edge cases I traced are handled:\n- `bool`, NaN and infinity return `None`.\n- Integers above int64 return `None`.\n- An `Integral` too large for `float` is caught as `OverflowError` and returns `None`.\n- `2.0**63` returns `None` for `as_integer`, because the range check runs after conversion.\n- Names and ids use `fullmatch` on an exact `str`, so a trailing newline and `str` subclasses are rejected.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exception handling, typing and error contracts conform to the Python rules",
+      "description": "The only `try/except` is in `as_real`. It catches the specific `OverflowError` and has a comment explaining why returning `None` is correct. There are no bare or blanket catches.\n\n`InvalidParametersError` passes `issues` as its single argument to `super().__init__`. Copy and pickle therefore rebuild the error correctly, and the tests cover `copy.copy`, `copy.deepcopy` and pickle. The `TYPE_CHECKING`-only import of `ParameterIssue` avoids a runtime cycle between `errors.py` and `declarations.py`.\n\nThe code uses `|` unions and built-in generics, and `StrEnum` for permanent string values. `LabelSeries[I: (BarIndex, PointIndex)]` uses PEP 695 syntax, which matches the Python 3.12 target. I checked `require_iterable_of` and `require_instance` in `validation.py`. Their behavior matches how `Declarations` and `SignalSequence` call them. This includes naming a bad position as `field[index]` and rejecting a non-iterable.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/errors.py:97-110"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tests cover the new behavior and the design constraints",
+      "description": "The tests are parametrized and cover each of these:\n- boundary and rejection cases;\n- error ordering, with declared parameters first and unknown names sorted;\n- non-`str` keys;\n- read-only bound mapping;\n- canonical-byte equality between an omitted default and an explicit one;\n- the `OutputDisplay` non-canonical guarantee;\n- the \"no element loops\" AST guards for `confidence.py` and `labels.py`;\n- the import-boundary tests for the new modules.\n\nThe fixtures the tests use (`make_series`, `make_bar_index`, `point_index`) exist in `tests/core_model/conftest.py`. The imported `CanonicalFormError` and `UNKNOWN` also exist.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_declarations.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Runtime `assert` used only for type narrowing",
+      "description": "`_require_series` calls `require_instance(...)` and then `assert isinstance(series, Series)` to narrow the type for pyright. The assert is redundant at runtime and is stripped under `python -O`. This is harmless, because `require_instance` has already raised. A `cast` or a typed return from the require helper would avoid asserts in production code. No action is required.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/labels.py:107"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Coupling of `_output_tuple` to `OutputDeclaration.__value__`",
+      "description": "`_output_tuple` uses `isinstance(item, OutputDeclaration.__value__)`, which relies on the `type` alias exposing its union at runtime. This keeps the allowed forms defined in one place, which is good. It does depend on a less common feature, and `test_declarations_reject` covers it. A new output form added to the alias is picked up automatically. No change is needed.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/declarations.py:241-250"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Shared coercion and range checks keep each rule in one place",
+      "location": "src/manta_trading_engine/core_model/value_checks.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Exception handling, typing and error contracts conform to the Python rules",
+      "location": "src/manta_trading_engine/core_model/errors.py:97-110",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests cover the new behavior and the design constraints",
+      "location": "tests/core_model/test_declarations.py",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Runtime `assert` used only for type narrowing",
+      "location": "src/manta_trading_engine/core_model/labels.py:107",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Coupling of `_output_tuple` to `OutputDeclaration.__value__`",
+      "location": "src/manta_trading_engine/core_model/declarations.py:241-250",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:31:40.730794",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 303258,
+  "cached_tokens": 193958,
+  "cache_write_tokens": 109294,
+  "completion_tokens": 5672,
+  "reasoning_tokens": null,
+  "duration_seconds": 49.48720408300869,
+  "cost_usd": 0.5173827,
+  "cost_basis": "provider"
+}

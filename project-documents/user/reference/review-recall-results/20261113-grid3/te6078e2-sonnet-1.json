@@ -1,0 +1,171 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Shared validation and coercion paths are written once",
+      "description": "`as_integer` and `as_real` are the only numeric coercions. `_coerce` in `declarations.py` dispatches to them, and `ConfidenceRange`, `SignalEvent` and `bind_parameters` all go through the same helpers. `check_confidence` serves both `LabelSeries` and `SignalSequence`, and `require_optional_range` removes the repeated range check. I read `validation.py` and confirmed `require_instance`, `require_nonempty_str` and `require_iterable_of` behave as these modules assume. For example, `require_iterable_of` names the bad index as `field[index]`, which the tests match on. `value_checks.py` covers the edge cases: bool is rejected, int64 bounds are enforced, and `OverflowError` on huge ints is turned into `None`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Error handling follows the project exception rules",
+      "description": "The new code has no blanket catches. The only `except` clauses are `except OverflowError` in `as_real`, which has a justifying comment, and `except TypeError` in `require_iterable_of`, which re-raises. `InvalidParametersError` takes a single argument, so copy and pickle rebuild it, and the tests cover `copy.copy`, `copy.deepcopy` and pickle. The `TYPE_CHECKING`-only import of `ParameterIssue` avoids a runtime cycle between `errors.py` and `declarations.py`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/errors.py:97-110"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`assert isinstance` used for type narrowing in production code",
+      "description": "`_require_series` calls `require_instance(...)` and then `assert isinstance(series, Series)` only to narrow the type for the checker. Python strips assertions under `-O`. That is harmless here because `require_instance` has already raised, but a `cast` or a `TypeGuard`-style helper would state the intent without relying on `assert`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/labels.py:114"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tests use unparameterized `np.ndarray` and `Any` helper types",
+      "description": "`_array` and `_mask` return bare `np.ndarray`. The Python rules require strict pyright over `tests` as well, and bare `np.ndarray` normally triggers `reportMissingTypeArgument` in strict mode. `test_labels.py` already uses `NDArray[np.float64]` and `NDArray[np.bool_]`, so aligning would remove the inconsistency. I did not run pyright, so this is unconfirmed.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_confidence.py:62-67"
+    },
+    {
+      "severity": "NOTE",
+      "title": "AST-based \"no element loops\" tests assert implementation, not behavior",
+      "description": "`test_confidence_module_has_no_element_loops` and its twin in `test_labels.py` pin a code-style property of the source (no `for`/`while`/list comprehension). They do not check observable behavior. They do enforce the slice's vectorization requirement mechanically. A load or latency test would be the more durable guard for that requirement. The AST tests are cheap and acceptable, but they will fail on harmless refactors such as a helper that adds a loop over a handful of names.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_confidence.py:130-135"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test coverage is thorough and tied to the contracts",
+      "description": "The tests parametrize the rejection cases (NaN, bool, out-of-range, wrong type, bad names). They also check that the permanent enum string values do not change, that bound mappings are read-only, that issue order is deterministic and that non-`str` keys are named by `repr`. The import-boundary tests assert that none of the new types is canonical (`CANONICAL_TYPE`) and that `display.py` stays independent of `series` and `declarations`, which mechanically backs D10 and D11.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/core_model/test_declarations.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Shared validation and coercion paths are written once",
+      "location": "src/manta_trading_engine/core_model/value_checks.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Error handling follows the project exception rules",
+      "location": "src/manta_trading_engine/core_model/errors.py:97-110",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`assert isinstance` used for type narrowing in production code",
+      "location": "src/manta_trading_engine/core_model/labels.py:114",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Tests use unparameterized `np.ndarray` and `Any` helper types",
+      "location": "tests/core_model/test_confidence.py:62-67",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "AST-based \"no element loops\" tests assert implementation, not behavior",
+      "location": "tests/core_model/test_confidence.py:130-135",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test coverage is thorough and tied to the contracts",
+      "location": "tests/core_model/test_declarations.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:28:07.994432",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 1,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 179158,
+  "cached_tokens": 73812,
+  "cache_write_tokens": 105342,
+  "completion_tokens": 2921,
+  "reasoning_tokens": null,
+  "duration_seconds": 27.080315499799326,
+  "cost_usd": 0.4620451,
+  "cost_basis": "provider"
+}

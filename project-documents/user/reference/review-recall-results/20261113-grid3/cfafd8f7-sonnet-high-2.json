@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Silent `''` fallback when a view has no projectPath",
+      "description": "`viewRoot` returns `stripTrailingSeparator(view.view.projectPath ?? '')`. If a view ever lacks a `projectPath`, `fixRelPath` computes `relative('', abs)`, which resolves against the process cwd. `gateByReadiness` and `commitViewWrites` would then run git against a root of `''`. Project rules forbid silent fallback values. `check.ts` and `workflowTools.ts` guard only the invoking path, not each view's root. Throw an explicit error when a view's `projectPath` is missing. `fixOwnership.ts` already handles the same case by returning `null`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts#viewRoot"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Git failures misclassified as NOT_A_CHECKOUT / DETACHED_HEAD",
+      "description": "The `catch {}` around `rev-parse --show-toplevel` maps every failure to `NOT_A_CHECKOUT`. That includes a `FIX_GIT_TIMEOUT_MS` timeout, a spawn error, or a lock problem. The `symbolic-ref -q` catch likewise maps every failure to `DETACHED_HEAD`. The comments justify the expected exit codes, but the catches are not narrowed to them. The user would be told a worktree is \"missing\" or \"detached\" when git simply hung or errored. Inspect the error's exit code and rethrow or defer with a distinct reason for anything else. The `DeferredFix.detail` field could carry the text.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/git/checkoutReadiness.ts:45-60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplicated scope/invoking-checkout orchestration between CLI and MCP",
+      "description": "`workflowTools.ts` repeats the scope-view construction (the `fileSlice: \\`${n}-slice\\`` overlay), the `runCheck` selection, the `resolveInvokingCheckout` call and the plan-then-apply sequence from `check.ts:172-198` and `runRoutedFix`. The `-slice` suffix literal and the \"multi \u2192 resolve invoking checkout\" rule now live in two places and can drift. The existing comments already say the merge logic is shared so it cannot drift. Move `scopeViews`/`runCheck` and the invoking-checkout resolution into `@context-forge/core`, next to `planRoutedFixes`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/workflowTools.ts:259-297"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test code reaches across packages into core's test directory",
+      "description": "The CLI and MCP tests import `../../../core/tests/helpers/gitWorktreeFixture.js` by relative path. That couples package test trees and depends on tsconfig `include` and build exclusion. A refactor in core's `tests/` breaks the other packages silently. Publish the fixture as a dev-only workspace test-utils package or export, or keep a shared `tests/` location outside any single package.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/check-worktree-fix.test.ts:10-17"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unused exports and out-of-order helper in routedFixes.test.ts",
+      "description": "`designPath`, `tasksPath`, `completeBeta`, `worktreeCtx`, `createRoutedSetup`, `dryRun`, `aboutSubject` and `RoutedSetup` are `export`ed. A grep of `packages/**/tests` shows no other file imports them. `createProjectFor` is declared at the bottom and reads module-level `setup`. Drop the `export`s, or move the helpers to `tests/helpers` if they are meant to be shared. Make `createProjectFor` take the base project as a parameter.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/routedFixes.test.ts:55-130"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Human text can reach stdout under `--json` when nothing is fixable",
+      "description": "In the all-slices path with zero fixable findings, `runRoutedFix` calls `printCheckOutput` and `console.log(dim(...))` before returning `null`, regardless of `opts.json`. A JSON consumer gets prose instead of a result object. The same shape existed before this change for explicit `--fix`, so it is not a regression. It now also covers `workflow.auto_fix`, so it is worth fixing while the function is being reworked.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/check.ts:253-258"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Previously `fix`/`fixAll` are now unreachable from production code",
+      "description": "A grep of `packages/**/src` finds no `.fix(` or `.fixAll(` callers after the CLI and MCP moved to `planRoutedFixes` + `applyFixPlan`. The methods still exist and now return empty `deferred`/`commits`. Confirm whether they are public API. If not, remove them, since they bypass the ownership routing this change introduces.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fix ownership, deferral and commit flow",
+      "description": "Ownership resolution is a pure function with a table-driven test. `DeferReason` uses an `as const` map with a compile-time exhaustive label table, and a test asserts every reason has a label. Commits are path-scoped and run no `--no-verify`. A failed commit restores the written paths and defers them rather than leaving partial writes. Readiness is re-checked after the prompt. Single-checkout runs are asserted to spawn no git process. `subjectIndex` is a required field set from parsed indices, never from labels.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Silent `''` fallback when a view has no projectPath",
+      "location": "packages/core/src/introspection/routedFixes.ts#viewRoot",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Git failures misclassified as NOT_A_CHECKOUT / DETACHED_HEAD",
+      "location": "packages/core/src/git/checkoutReadiness.ts:45-60",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Duplicated scope/invoking-checkout orchestration between CLI and MCP",
+      "location": "packages/mcp-server/src/tools/workflowTools.ts:259-297",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test code reaches across packages into core's test directory",
+      "location": "packages/cli/tests/commands/check-worktree-fix.test.ts:10-17",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Unused exports and out-of-order helper in routedFixes.test.ts",
+      "location": "packages/core/tests/introspection/routedFixes.test.ts:55-130",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Human text can reach stdout under `--json` when nothing is fixable",
+      "location": "packages/cli/src/commands/check.ts:253-258",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Previously `fix`/`fixAll` are now unreachable from production code",
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Fix ownership, deferral and commit flow",
+      "location": "packages/core/src/introspection/routedFixes.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:29:37.945735",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 399529,
+  "cached_tokens": 254129,
+  "cache_write_tokens": 145394,
+  "completion_tokens": 6198,
+  "reasoning_tokens": null,
+  "duration_seconds": 54.538479125127196,
+  "cost_usd": 0.6762792,
+  "cost_basis": "provider"
+}

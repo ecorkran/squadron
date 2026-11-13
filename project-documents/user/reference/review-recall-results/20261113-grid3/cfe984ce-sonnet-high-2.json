@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Usage errors use a core error type, so `--json` mode loses the error code",
+      "description": "`validateDesignAction` throws `SliceDesignValidationError` from the CLI layer for the \"no files given\" usage error. The same file throws `UserError` for \"Project not found\" and \"No projectPath configured\".\n\n`handleError` in `utils/errors.ts:46-71` only reads `code` and `suggestion` from `UserError`. Every `SliceDesignValidationError` therefore gets `code: 'UNKNOWN'` in JSON mode. That includes a missing template, a missing file, and no arguments. In plain mode, the output is prefixed with `Error: `, unlike `UserError` messages.\n\nThe sibling `validate frontmatter` handler uses `UserError` for these conditions. Wrap or convert these errors at the CLI boundary into `UserError` with `INVALID_ARGUMENT` or `ARTIFACT_NOT_FOUND`, and keep `SliceDesignValidationError` as the core-level type.\n\nThe CLI tests don't catch this. `setJsonMode()` is only called from `index.ts:178`, which the tests never load. The `--json` exit-2 cases therefore exercise the plain-text error path only.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts#validateDesignAction"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`parseFrontmatter` swallows read errors, so a read failure is reported as a docType failure",
+      "description": "`validateFile` calls `parseFrontmatter(file)` first. That function never throws and returns `{ found: false, data: {} }` on any error (`frontmatterParser.ts:9-66`). It then reads the file a second time with `readFile`.\n\nIf the file becomes unreadable between `preflight` and `validateFile`, the first call masks the failure. The file is reported as `FAIL ... frontmatter must declare 'docType: slice-design'`, which is wrong. The explicit `cannot read file` handler in `validateFile` is only reachable after that masking.\n\nThe file is also read twice per validation. Read the text once, then derive the frontmatter from that text. That keeps all I/O errors on the typed-error path and removes the redundant read. This matches the project rule against silent fallbacks.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts#validateFile"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Template lookup duplicates the project and path resolution in `validate.ts`",
+      "description": "`resolveTemplatePath` repeats the `resolveProjectWorktree`, `getById`, \"Project not found\" and \"No projectPath\" sequence from `validateFrontmatterAction` (`validate.ts:153-166`). The two copies already differ: `validate.ts` uses `?? project.projectPath`, while this one has its own null check. A small shared helper for \"resolve the project and its operation path\" would remove the duplication.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts#resolveTemplatePath"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A required heading whose normalized text is empty matches any heading of that level",
+      "description": "`missingHeadings` uses `doc.text.startsWith(key.text)`. If a template marks a heading like `## {placeholder}` or `## (optional)` as required, normalization yields `''`. `startsWith('')` is always true, so the requirement is silently satisfied.\n\n`requiredHeadings` could reject or throw on an empty key. Separately, `documentHeadingKeys` only recognizes ```` ``` ```` fences, so `~~~` fences are not skipped. Both are inherited from the bash script, but the empty-key case is worth guarding.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:82"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tests are coupled to living project documents",
+      "description": "`PASSING_DESIGNS` and `DESIGN_214` point at real slice documents (212, 213, 214, 928) and the real guide template. This follows the repo's \"use real-world input\" parsing rule, and I confirmed all four files and the template exist. Any later edit to those slice designs that drops a required heading will fail these tests with no code change.\n\nThe tests also copy 214 and mutate it, so they depend on `## Value` followed by `## Technical Scope` staying in that document. A frozen fixture copy for the pass and mutate cases, plus one test against the real template, would be more stable.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/cli/tests/commands/validate-design.test.ts:46-53"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering, typing and test coverage are solid",
+      "description": "The pure and file-I/O layers are separated, and the exports are split between `index.ts` and `node.ts` correctly. The failure reason is an `as const` object plus a derived union rather than an enum. Exported functions have explicit return types. There is no `any` and no `as` assertion on the production path.\n\nThe template path and message constants are defined once. All file arguments are checked before any results are produced, which avoids partial output alongside an error. The tests cover the following:\n- CRLF line endings\n- fenced code blocks\n- level mismatch\n- quoted `docType`\n- worktree-specific template resolution\n- exit-2 with empty stdout in both output modes",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignFiles.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Usage errors use a core error type, so `--json` mode loses the error code",
+      "location": "packages/cli/src/commands/validateDesign.ts#validateDesignAction",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`parseFrontmatter` swallows read errors, so a read failure is reported as a docType failure",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts#validateFile",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Template lookup duplicates the project and path resolution in `validate.ts`",
+      "location": "packages/cli/src/commands/validateDesign.ts#resolveTemplatePath",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A required heading whose normalized text is empty matches any heading of that level",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:82",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests are coupled to living project documents",
+      "location": "packages/cli/tests/commands/validate-design.test.ts:46-53",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Layering, typing and test coverage are solid",
+      "location": "packages/core/src/schema/sliceDesignFiles.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T14:29:28.936910",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 446831,
+  "cached_tokens": 353850,
+  "cache_write_tokens": 92971,
+  "completion_tokens": 6218,
+  "reasoning_tokens": null,
+  "duration_seconds": 52.822640208061785,
+  "cost_usd": 0.471626,
+  "cost_basis": "provider"
+}

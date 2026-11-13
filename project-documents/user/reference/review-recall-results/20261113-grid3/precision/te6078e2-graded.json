@@ -1,0 +1,157 @@
+{
+  "case": "te6078e2",
+  "matched": {},
+  "disputes": [],
+  "new_issues": [
+    {
+      "id": "te6078e2-N1",
+      "title": "SignalEvent raises AttributeError instead of InvalidSignalError when Timestamp.meaning is not a TimeMeaning.",
+      "members": [
+        "hy4/1/0",
+        "hy4/1/1",
+        "luna-r/1/0",
+        "luna-r-high/1/0",
+        "luna-r-xhigh/1/1",
+        "minimax31-flash/1/0"
+      ],
+      "grade": "REAL",
+      "confidence": "medium",
+      "why": "Timestamp.__post_init__ validates only ns, so Timestamp(100, 'available_at') constructs. SignalEvent's identity check at signals.py:76 then fails and the message formats self.time.meaning.value, which raises AttributeError on a str/int/None. Slice 105 says a time whose meaning is not AVAILABLE_AT raises InvalidSignalError, and the same constructor already guards malformed time and time.ns types; this is the same raw-exception-instead-of-typed-error class the project fixed elsewhere (teccae5e). Still present at repo HEAD. hy4/1/1 asks for the regression test for this same crash.",
+      "evidence": [
+        "src/manta_trading_engine/core_model/signals.py:76-80",
+        "src/manta_trading_engine/core_model/timestamps.py:54-58",
+        "project-documents/user/slices/105-slice.labels-signals-and-declarations.md:144"
+      ],
+      "known": null,
+      "fail_justified": false
+    },
+    {
+      "id": "te6078e2-N2",
+      "title": "as_integer converts a non-Integral Real to float before the integrality check, so a high-precision Fraction rounds to an integer and is accepted.",
+      "members": [
+        "luna-r-xhigh/1/0",
+        "minimax31-flash/1/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "medium",
+      "why": "True: as_integer calls as_real (float(value)) then is_integer(), so Fraction(2**53+1, 2**53) becomes 1.0 and returns 1. Only a non-float Real with more than 53 bits of precision triggers it (Fraction, longdouble); parameter values come from floats/ints in practice. The fix commit for the case's bug kept 'other reals take the nearest float' as deliberate policy. Not the known B1, which is as_real on large Integrals.",
+      "evidence": [
+        "src/manta_trading_engine/core_model/value_checks.py:63-70"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "te6078e2-N3",
+      "title": "Element-loop guard is copied into test_labels.py and test_confidence.py with a node set that differs from test_import_boundary.py (GeneratorExp excluded).",
+      "members": [
+        "haiku-xhigh/1/0",
+        "qwen38-27b/1/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True: test_import_boundary.py ELEMENT_LOOP_NODES includes ast.GeneratorExp, the two new local copies exclude it. Test-code duplication and inconsistent policy, no production behavior affected; the fix commit 6078e2b consolidated it.",
+      "evidence": [
+        "tests/core_model/test_confidence.py:23-32",
+        "tests/core_model/test_labels.py:283-286",
+        "tests/core_model/test_import_boundary.py:172-188"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "te6078e2-N4",
+      "title": "LabelVocabulary.category_ids is annotated frozenset[int] but the runtime accepts set, needing pyright ignores.",
+      "members": [
+        "haiku-xhigh/1/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True: the annotation is frozenset[int] while __post_init__ accepts set or frozenset with a reportUnnecessaryIsInstance suppression, and tests pass sets with ignores. Typing/API-shape inconsistency; behavior is correct.",
+      "evidence": [
+        "src/manta_trading_engine/core_model/labels.py:50-72"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "te6078e2-N5",
+      "title": "_coerce has no default branch, so a future ParameterType member would silently return None.",
+      "members": [
+        "haiku-xhigh/1/2"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True for a hypothetical new enum member; today the match covers both members of ParameterType. Future-proofing (assert_never), no current defect.",
+      "evidence": [
+        "src/manta_trading_engine/core_model/declarations.py:50-60"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "te6078e2-N6",
+      "title": "test_match_selects_the_branch_for_each_form runs a match in the test body and exercises no library code.",
+      "members": [
+        "haiku-xhigh/1/3",
+        "sonnet-high/1/1"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True: the test matches on its own parametrized inputs and asserts a string it built; it only proves dataclass __match_args__. Low-value test, no production defect.",
+      "evidence": [
+        "tests/core_model/test_declarations.py:154-164"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "te6078e2-N7",
+      "title": "No test pins SignalSequence ordering at the int64 extremes.",
+      "members": [
+        "haiku-xhigh/1/4"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "True: _require_time_order compares neighbours correctly; no test covers INT64_MAX followed by INT64_MIN. Missing test for an already-correct path (added later in 6078e2b).",
+      "evidence": [
+        "src/manta_trading_engine/core_model/signals.py:114-121"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "te6078e2-N8",
+      "title": "test_confidence.py helpers _array and _mask are annotated with bare np.ndarray.",
+      "members": [
+        "hy4/1/2",
+        "sonnet-high/1/0"
+      ],
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "The bare annotations are real and looser than the sibling NDArray[...] helpers. sonnet-high's claim that strict pyright fails is wrong: pyright at head (strict, tests included) reports 0 errors on test_confidence.py, as numpy 2 ndarray has defaulted type parameters. Style only.",
+      "evidence": [
+        "tests/core_model/test_confidence.py:69-74",
+        "pyproject.toml [tool.pyright]"
+      ],
+      "known": null,
+      "fail_justified": null
+    },
+    {
+      "id": "te6078e2-N9",
+      "title": "Test lines with trailing pyright-ignore comments exceed 88 chars and fail ruff E501 / format check in CI.",
+      "members": [
+        "qwen38-27b/1/0"
+      ],
+      "grade": "FALSE",
+      "confidence": "high",
+      "why": "Ran the repo's ruff on the head tree with its pyproject: 'ruff check' reports all checks passed and 'ruff format --check' reports all files formatted. E501 does not flag these lines, so CI does not fail.",
+      "evidence": [
+        "tests/core_model/test_signals.py:140",
+        "pyproject.toml [tool.ruff]"
+      ],
+      "known": null,
+      "fail_justified": false
+    }
+  ]
+}

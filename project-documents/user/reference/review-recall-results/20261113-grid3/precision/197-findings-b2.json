@@ -1,0 +1,79 @@
+[
+ {
+  "ref": "hy4/1/0",
+  "severity": "CONCERN",
+  "title": "`report.json` shape is not validated at the load boundary",
+  "location": "src/squadron/pipeline/batch_report.py:313-335",
+  "description": "`BatchReport.load()` casts `report[\"items\"]` to `list[dict[str, object]]` instead of validating it, then `BatchItemRecord.from_json()` calls `.get()` on each item at `src/squadron/pipeline/batch_report.py:164`. A malformed but syntactically valid JSON report such as `{\"schemaVersion\": 1, ..., \"items\": [\"bad\"]}` or `\"items\": [null]` raises an uncaught `AttributeError`; the `except (KeyError, TypeError, ValueError)` at `src/squadron/pipeline/batch_report.py:331-335` does not catch it. `item_resume._validate()` only converts `BatchReportLoadError` into a REJECTED exit, so this path escapes as a traceback instead of the documented exit 2. The written `docType` at `src/squadron/pipeline/batch_report.py:286` is also never checked on load. The current tests cover missing, unparseable, and wrong-version reports, but not malformed item shapes."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "Item-resume flags are not mutually exclusive with other run modes",
+  "location": "src/squadron/cli/commands/run.py:1150",
+  "description": "`check_item_flags()` at `src/squadron/cli/commands/run_item.py:32-48` only validates relationships among `--item`, `--resume`, `--decision`, and `--instructions`. It does not reject item-resume flags combined with `--validate`, `--step-done`, `--prompt-only --next`, or similar command modes. Because the pipeline-required guard in `run()` excludes cases where `resume is not None`, a command such as `sq run --validate --resume r1 --item 401 --decision retry` reaches `assert pipeline is not None` at `src/squadron/cli/commands/run.py:1150` and crashes. Other earlier dispatch arms, such as `--step-done` and `--prompt-only --next --resume`, exit before the `--resume --item` block, so the item-resume flags are silently ignored. `tests/cli/commands/test_run_item.py` covers only item-flag combinations and a plain resume, not these conflicting modes."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "Run-lock mutation detection misses executor shapes that commit",
+  "location": "src/squadron/pipeline/run_lock.py#_step_mutates",
+  "description": "`_step_mutates()` only recognizes a top-level `StepTypeName.LOOP` with `commit_each_iteration: true` and recursively walks `config[\"steps\"]`. However `_execute_step()` at `src/squadron/pipeline/executor.py:721-748` also supports a legacy inline `loop:` sub-config on other step types, and `_execute_fan_out_step()` expands `fan_out.inner` through `_execute_step_once()`. A custom pipeline with a non-mutating step type plus `loop: {commit_each_iteration: true, ...}`, or a `fan_out.inner` that expands to `devlog`/`commit`, can mutate git/cf while `pipeline_mutates()` returns `False`; `_take_run_lock()` will skip the lock. That contradicts the documented D11 rule that any pipeline which commits or moves cf state takes the lock. `tests/cli/commands/test_run_lock_cli.py` covers a top-level `loop` step and nested `steps`, but not inline `loop:` or `fan_out.inner`."
+ },
+ {
+  "ref": "hy4/1/3",
+  "severity": "CONCERN",
+  "title": "A timed-out merge-base read is reported as \"branch not merged\"",
+  "location": "src/squadron/pipeline/item_resume.py:297",
+  "description": "`_select_item()` calls `run_git([\"merge-base\", \"--is-ancestor\", ...])`; `run_git` returns `None` on timeout or invocation failure. At `src/squadron/pipeline/item_resume.py:297-303`, the code conflates that unknown result with a definite non-ancestor: it rewrites the status to `\"complete but {branch} is not merged into {target}\"`, then raises `_Stop(REJECTED, ...)`. The caller sees a normal validation refusal rather than an explicit \"could not verify git state\" failure, even though the new I/O path can hang, time out, or fail to answer. `tests/pipeline/test_item_resume_source.py` tests the real \"not merged\" case but has no test asserting the timeout/unknown-answer signal, which the failure-mode rules require for this new I/O path."
+ },
+ {
+  "ref": "hy4/1/4",
+  "severity": "CONCERN",
+  "title": "Markdown and JSON reports are not atomic as a pair",
+  "location": "src/squadron/pipeline/batch_report.py:302-310",
+  "description": "`BatchReport.write()` replaces the Markdown file first and the JSON file second. Each file is individually atomic, but the pair is not: if the second `_write_atomic()` at `src/squadron/pipeline/batch_report.py:308` fails, Markdown already contains the new record while JSON still contains the old one. `resume_item()` catches that `OSError` and returns `HALTED`, but the two report formats now disagree, contrary to the contract that a failed report rewrite leaves the old record in place. `tests/pipeline/test_batch_report.py::test_a_failed_write_keeps_the_previous_report_and_logs_error` patches `Path.replace` globally, so the first replace fails before the second call; it does not exercise the partial-success path."
+ },
+ {
+  "ref": "luna-r-high/1/0",
+  "severity": "CONCERN",
+  "title": "Reject malformed report items as load errors",
+  "location": "src/squadron/pipeline/batch_report.py:337",
+  "description": "`cast` does not validate JSON data at runtime. If `items` contains a non-object value (for example, `{\"items\":[null]}`), `BatchItemRecord.from_json` calls `.get` on that value and raises `AttributeError`. That exception is not converted to `BatchReportLoadError` here or handled by `resume_item`, so a malformed report can produce a traceback instead of the documented clean refusal. Validate the item collection and each item\u2019s shape before deserializing, and test malformed entries."
+ },
+ {
+  "ref": "luna-r-high/1/1",
+  "severity": "CONCERN",
+  "title": "Reject item-resume flags with dry-run mode",
+  "location": "src/squadron/cli/commands/run.py:1175-1201",
+  "description": "The `--dry-run` handler runs before the `--resume --item` handler, and the flag checks do not reject their combination. For example, `sq run P6 --resume <run_id> --item 401 --decision retry --dry-run` takes the dry-run path and never attempts the requested item resume. Reject this conflicting combination explicitly so the CLI cannot silently ignore the resume request."
+ },
+ {
+  "ref": "deepseek4-flash/1/0",
+  "severity": "CONCERN",
+  "title": "A dependency cycle (or a bad plan arg) escapes `resume_item` as a traceback",
+  "location": "src/squadron/pipeline/item_resume.py#resume_item",
+  "description": "The module docstring states the CLI-facing contract explicitly: \"Every refusal names the fact that refused it,\" and `resume_item`'s own docstring says \"never raises for an expected refusal.\" Its handler chain, however, catches only `_Stop`, `GitEnvironmentError` and `OSError`. `_resume_locked` calls `evaluate_each_source(source, params, cf_client)`, which invokes the source function; `_cf_slices_ready_to_implement` in `src/squadron/pipeline/sources.py` deliberately raises `ValueError` for a dependency cycle (and re-logs it at ERROR before re-raising), and `_plan_arg` raises `ValueError` for a plan that is not all digits. Neither is a `_Stop`, a `GitEnvironmentError`, or an `OSError`, so the exception propagates out of `resume_item`, out of `handle_item_resume` (which only catches `typer.Exit`), and out of the Typer command as an unhandled traceback rather than a `REJECTED` outcome with a named reason. The cycle path is reachable in production: a plan with a cyclic `dependencies:` frontmatter pair makes every `sq run implement-plan <plan>` fail, and `--item` then fails differently. Converting these to `_Stop(ResumeExit.REJECTED, ...)` (or adding a `ValueError` arm) would keep the documented contract true."
+ },
+ {
+  "ref": "deepseek4-flash/1/1",
+  "severity": "CONCERN",
+  "title": "`--item` is not wired into `run()`'s mutual-exclusivity guards; `--dry-run` then dies on a bare `assert`",
+  "location": "src/squadron/cli/commands/run_item.py#check_item_flags",
+  "description": "`check_item_flags` covers only the three flag relationships among `--item/--decision/--instructions/--resume`. Every other option in `run()` is guarded by the block at the top of the command, and `--item` was not added to any of those checks. In `src/squadron/cli/commands/run.py` the `--dry-run` block (`assert pipeline is not None  # guarded above`) executes before the new `if resume is not None and item is not None:` block, so `sq run --resume r1 --item 401 --decision retry --dry-run` passes validation, reaches that `assert`, and raises `AssertionError` \u2014 a traceback, not a usage error. The same shape applies to `--validate`, `--list` and `--status` combined with `--item`. (`--dry-run --resume` alone already had this hazard, so the fix could live either in `check_item_flags` or by adding `item` to the existing `any([...])` guards \u2014 but the newly added flag surface currently inherits a crash path that the rest of the command spends ~50 lines avoiding.)"
+ },
+ {
+  "ref": "deepseek4-flash/1/2",
+  "severity": "CONCERN",
+  "title": "A git timeout in `_select_item` is reported as \"not merged\"",
+  "location": "src/squadron/pipeline/item_resume.py#_select_item",
+  "description": "```python\nmerged = run_git([\"merge-base\", \"--is-ancestor\", branch, target], cwd=cwd)\nif merged is not None and merged.returncode == 0:\n```\n\n`run_git` returns `None` when git timed out or could not run \u2014 that is exactly the condition `squadron/pipeline/git_ops.py` treats as an unknown state everywhere else (`verify_git_state` counts \"git timed out or could not run\" as a failure; `_rev_count` raises `GitStateUnknownError`). Here `None` falls through and is reported to the operator as `status complete but {branch} is not merged into {target}`. The outcome is fail-safe (nothing runs), but the reason is a guess presented as a fact, which violates \"Never use silent fallback values\" and \"get the actual error message before diagnosing\": the operator will go looking for an unmerged branch when the real problem is a hung git. Distinguishing `result is None` (unanswerable \u2192 HALTED/GitStateUnknownError) from `returncode == 1` (genuinely not merged) matches the convention the rest of `git_ops` follows."
+ },
+ {
+  "ref": "deepseek4-flash/1/3",
+  "severity": "CONCERN",
+  "title": "`report.json` is parsed with casts, and a missing `index`/`name` silently becomes the string `\"None\"`",
+  "location": "src/squadron/pipeline/batch_report.py#from_json",
+  "description": "`BatchReport.load` documents \"any problem raises `BatchReportLoadError`\" and checks `schemaVersion` deliberately. But the per-record decode goes through raw dicts:\n\n```python\nvalues = {attr: data.get(key) for attr, key in _JSON_KEYS.items()}\n...\nindex=str(values[\"index\"]),\nname=str(values[\"name\"]),\noutcome=ItemOutcome(str(values[\"outcome\"])),\n```\n\n`data.get` returns `None` for an absent key, and `str(None)` is `\"None\"` \u2014 so a `report.json` whose items lack `index` or `name` loads successfully and produces records keyed `\"None\"`, while a missing `outcome` raises and is reported as malformed. That inconsistency is exactly what `resume_item` consumes: it matches records by `r.index == request.index`, so a silently-nulled index surfaces as \"no record for item 401 in \u2026\", which names the wrong cause. The module-level dict is also the only schema definition for a file boundary; the project rules ask for Pydantic (or equivalent strict validation) at file-parsing boundaries. Requiring `index`/`name` to be present and non-null (raising `BatchReportLoadError` otherwise) would make the loader's contract true."
+ }
+]

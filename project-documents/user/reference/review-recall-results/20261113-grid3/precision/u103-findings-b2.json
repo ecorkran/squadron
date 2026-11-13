@@ -1,0 +1,86 @@
+[
+ {
+  "ref": "hy4/1/0",
+  "severity": "CONCERN",
+  "title": "Teardown calls `destroy()` after a failed `create()`, which the real provider rejects",
+  "location": "src/chart/use-chart-provider.ts:192-225",
+  "description": "`teardown()` is shared by unmount and the mount-failure `catch` (line 308), and unconditionally calls `provider.destroy()` (line 217). The concrete `LightweightChartsProvider.destroy()` begins with `const chart = this.assertReady()` (src/chart/providers/lightweight-charts-provider.ts:67-68), which throws when `this.chart === null`. That is exactly the state after `createChart(...)` throws, since `create()` assigns `this.chart` only after `createChart` returns (lines 53-61). So every real create failure produces a second, misleading `console.error('[useChartProvider] provider teardown failed', ...)` for a teardown failure that never happened. The destroy throw is caught (line 218), so nothing escapes, but the \"one disposal path\" comment is wrong for an uninitialized provider. The tests cannot catch this: `chartProviderMockFactory` implements `destroy()` as a no-op spy (src/test/support/chart-provider-spy.ts:110-112), so `surfaces a create() failure` and `tears down after a failed create` (src/test/use-chart-provider.lifecycle.test.tsx:88-117) pass against a double that is more permissive than the contract. Guard `destroy()` on create having succeeded, or make the spy honor `assertReady()`."
+ },
+ {
+  "ref": "hy4/1/1",
+  "severity": "CONCERN",
+  "title": "Adding the first series never activates the visible-range effect, contrary to comments and the test name",
+  "location": "src/chart/use-chart-provider.ts:340-344",
+  "description": "The effect is keyed on `[mount.ready, chart, range]` and gated on `seriesCountRef.current === 0`. `seriesCountRef` is a **ref**, and `buildChartOperations`' `addSeries` only calls `series.onAdded()` \u2192 `seriesCountRef.current += 1` (src/chart/chart-facade.ts:49-55, src/chart/use-chart-provider.ts:145-152). Mutating a ref causes no render and no effect re-run, so adding a series alone never applies the current range. Yet the comment claims \"initiative 120 activates the moment it adds the first series\" (lines 337-338) and the slice design says \"activating on the first `addSeries`\". The test `applies the range once a series exists` (src/test/use-chart-provider.translation.test.tsx:135-144) passes only because it *also* calls `setRange(NEXT_RANGE)` on line 141, which changes a real dependency \u2014 it does not test that the first `addSeries` applies `DEFAULT_RANGE`. Initiative 120 adding series without changing range will silently skip the viewport. Either make series count state (or expose it through the effect deps) or correct the comments and add a test that only adds a series."
+ },
+ {
+  "ref": "hy4/1/2",
+  "severity": "CONCERN",
+  "title": "`error` is documented as the \"first error\" but the code keeps the latest",
+  "location": "src/chart/use-chart-provider.ts:97-99",
+  "description": "`UseChartProviderResult.error` says \"The first error from any provider operation, or null\" (src/chart/chart-operations.ts:77), and `keeps the first error rather than being reset by a later success` (src/test/use-chart-provider.errors.test.tsx:234) names the same contract. `setOperationError` unconditionally replaces it: `setMount((current) => ({ ...current, error: failure }))`, so a second failing operation overwrites the first. The test only fires a throwing resize followed by a *successful* resize (lines 238-245); a success never calls `setOperationError`, so it passes trivially and never exercises two failures. Similarly the `MountState` comment \"ready xor failed\" (chart-operations.ts:84-85) is false after a post-mount error, where `ready` stays true and `error` is set. Pick one semantic (first-wins or last-wins), make doc and code agree, and add a two-failure test."
+ },
+ {
+  "ref": "hy4/1/3",
+  "severity": "CONCERN",
+  "title": "E2E comments contradict the new `--mode e2e` wiring and point at the wrong spec",
+  "location": "playwright.config.ts:6-9",
+  "description": "The header still says \"Specs run against the PRODUCTION build ... so e2e exercises the same artifact `pnpm build` ships\", but `webServer.command` now runs `pnpm build --mode e2e` (line 44), which deliberately includes `/__chart-harness` \u2014 an artifact that differs from default `pnpm build`. The slice design explicitly relies on that difference. Also, the newly edited comment in e2e/smoke.spec.ts:9-10 says \"The chart itself is asserted in chart-render.spec.ts\", but that spec navigates to `/__chart-harness` (e2e/chart-render.spec.ts:14); the product chart at `/` is asserted in the new `e2e/chart-live.spec.ts`. Update both comments. Related: `reuseExistingServer: !process.env.CI` (line 46) can reuse a server built in a different mode, in which case the harness route is absent and `chart-render.spec.ts` fails for a reason unrelated to the code under test."
+ },
+ {
+  "ref": "hy4/1/4",
+  "severity": "CONCERN",
+  "title": "New test files violate the external \u2192 internal \u2192 sibling import ordering rule",
+  "location": "src/test/use-chart-provider.translation.test.tsx:15-23",
+  "description": "The React rule requires sorted imports (external \u2192 internal \u2192 sibling \u2192 styles). Here two sibling imports (`./support/chart-provider-spy.ts`, `./support/render-with-contexts.tsx`) appear at lines 22-23 **after** the `LINE_SERIES` const (lines 15-21), so imports aren't even contiguous. The same drift appears in `use-chart-provider.errors.test.tsx:1-8`, `use-chart-provider.facade.test.tsx:1-4`, `use-chart-provider.lifecycle.test.tsx:1-5`, and `use-chart-provider.resize.test.tsx:1-5`, where `react` (external) is imported after a `./support/` sibling import and sibling imports are split into two groups. Production files (e.g. src/chart/use-chart-provider.ts, src/routes/chart-route.tsx) are ordered correctly, so this is inconsistent within the same change."
+ },
+ {
+  "ref": "hy4/1/5",
+  "severity": "CONCERN",
+  "title": "`readChartStyle` doc claims undefined on an empty token, but a partial miss silently yields a white-background chart",
+  "location": "src/routes/chart-route.tsx:29-55",
+  "description": "The docstring says \"Returns undefined when a token resolves empty ... so the provider keeps its library defaults rather than being handed an empty color string\" (lines 31-33), but line 46 returns `undefined` only when **all three** tokens are empty. If `--color-surface` is missing while `--color-grid` resolves, the function returns `{ background: undefined, textColor: ..., grid: ... }`, so the provider applies dark grid/text over its library-default **white** background. That is a silent partial fallback \u2014 the opposite of the project's \"Never use silent fallback values. Fail explicitly\" principle \u2014 and would leave a visually broken dark theme with no error. Either fail loudly on any missing token, or document and test the partial-style behavior. The same file's `hexToRgba` consumer in e2e/chart-live.spec.ts:141 would then fail at `not.toBe('')` (line 140), which is a late, non-diagnostic signal."
+ },
+ {
+  "ref": "hy4/1/6",
+  "severity": "CONCERN",
+  "title": "Initial size uses border-box measurements while resize uses content-box",
+  "location": "src/chart/use-chart-provider.ts:246-266",
+  "description": "The mount path measures `container.getBoundingClientRect()` (line 249), which **includes** the 1px `border border-grid` on each side of the container (src/routes/chart-route.tsx:92, Tailwind preflight sets `box-sizing: border-box`). The observer path uses `entry.contentRect.width/height` (line 265), which excludes borders. So the chart is first painted 2px wider/taller than its content box, then corrected by the observer's initial callback \u2014 the comment \"matches its container on the very first paint\" (lines 243-247) is not true. Use one measurement source (e.g. `clientWidth`/`clientHeight` plus `getBoundingClientRect` only for fractional precision, or derive from `contentRect`) for both paths."
+ },
+ {
+  "ref": "luna-r-high/1/0",
+  "severity": "CONCERN",
+  "title": "Apply the current range when a series is added",
+  "location": "src/chart/use-chart-provider.ts:341-344",
+  "description": "The series count is stored in a ref, so `onAdded()` does not trigger a render. This effect only runs when `mount.ready` or `range` changes; adding the first series therefore does not apply the current range until some later range change. The translation test changes the range after adding the series, which triggers the effect and misses this case. Make the series-count change reactive or apply the current range when the first series is added."
+ },
+ {
+  "ref": "luna-r-high/1/1",
+  "severity": "CONCERN",
+  "title": "Preserve the documented first operation error",
+  "location": "src/chart/use-chart-provider.ts:97-100",
+  "description": "`setOperationError` replaces the stored error on every failure, but `UseChartProviderResult.error` is documented as the first provider-operation error. A later failure can therefore replace the error consumers were promised. Preserve the first error, or update the contract if the intended behavior is to expose the most recent error."
+ },
+ {
+  "ref": "deepseek4-flash/1/0",
+  "severity": "CONCERN",
+  "title": "Visible-range effect is gated on a ref that is not a dependency, so the advertised seam does not activate on the first series",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "The effect reads `seriesCountRef.current === 0` as its data guard but lists only `[mount.ready, chart, range]` as dependencies. `seriesCountRef` is a ref (src/chart/use-chart-provider.ts:72), written by `series.onAdded`/`onRemoved` (lines 147\u2013151); writing it does not re-render and cannot re-run an effect. So when the count goes 0 \u2192 1 while `range` is unchanged, the effect does not re-run and `chart.setVisibleRange(range)` is never issued.\n\nThe comment at lines 328\u2013338 asserts \"The effect and its dependency array stay wired as the seam initiative 120 activates the moment it adds the first series.\" That is not what the code does: it activates on the *next* range change after a series exists. The initiative-120 flow this seam is built for (range set \u2192 data fetched \u2192 `addSeries`) would therefore apply the range only if the range happens to change again afterwards. The test that appears to cover this, `src/test/use-chart-provider.translation.test.tsx:135-145` (\"applies the range once a series exists\"), passes only because it calls `setRange` *after* `addSeries` \u2014 it exercises the incidental ordering, not the claim in the comment. The current-slice behaviour is still correct (the chart is empty by design, so the call is always withheld), which is why this is a CONCERN rather than a FAIL."
+ },
+ {
+  "ref": "deepseek4-flash/1/1",
+  "severity": "CONCERN",
+  "title": "`ready`/`error` \"xor\" and \"first error\" comments contradict the code they document",
+  "location": "src/chart/chart-operations.ts:77",
+  "description": "Two doc claims are contradicted by the implementation:\n\n- `src/chart/chart-operations.ts:83-85` (repeated at `src/chart/use-chart-provider.ts:84-86`) states \"They are never independent \u2014 a chart is ready xor failed \u2014 so they are committed together in a single state update.\" But `setOperationError` (src/chart/use-chart-provider.ts:96-99) deliberately preserves `ready: true` while setting `error`, and the suite asserts exactly that state (`src/test/use-chart-provider.errors.test.tsx`: `{ ready: 'true', error: 'resize exploded' }`). A live chart with an operation error is a supported, tested state \u2014 it is not xor.\n- `src/chart/chart-operations.ts:77` documents `error` as \"The first error from any provider operation, or null.\" `setOperationError` overwrites unconditionally, so the field holds the *most recent* error, not the first. The test at `src/test/use-chart-provider.errors.test.tsx` (\"keeps the first error rather than being reset by a later success\") only proves a success does not clear it; a later failure does replace it.\n\nBoth comments are load-bearing for maintainers \u2014 the xor wording invites a future \"fix\" that would break the intentional operation-error state, and the \"first error\" wording misdescribes the retention rule."
+ },
+ {
+  "ref": "deepseek4-flash/1/2",
+  "severity": "CONCERN",
+  "title": "Playwright config header still claims the e2e run exercises the production artifact",
+  "location": "playwright.config.ts:6-7",
+  "description": "The header says \"Specs run against the PRODUCTION build served by `vite preview` (not the dev server) so e2e exercises the same artifact `pnpm build` ships,\" but the `webServer.command` in this diff (playwright.config.ts:44) is now `pnpm build --mode e2e && pnpm preview --mode e2e ...`. With `MODE=e2e` the artifact is *not* the one a default `pnpm build` produces, and it is not the one that ships. The new inline comment at lines 35\u201343 explains the gate correctly, so the file now contradicts itself.\n\nThe consequence beyond the comment: nothing in the automated suite builds or exercises the production-mode bundle any more, so a production-only regression (e.g. a mistake in the harness `MODE` gate at src/routes/router.ts:44, or any mode-conditional branch) is no longer caught by CI. The slice design verifies the production gate with a manual `grep` over `dist/assets/*.js`, which is not reproducible in CI. Either correct the header or add a CI check that builds the default mode and asserts the harness is absent."
+ }
+]
