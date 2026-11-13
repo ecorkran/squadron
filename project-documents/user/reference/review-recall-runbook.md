@@ -162,3 +162,29 @@ Append one dated line per batch: cases, configs, runs per config, recall, link t
   - The sol family drops known bugs on both Codex and OpenRouter, so it is the model, not the harness. Effort high did not help sol or luna as a comb.
   - Best pipeline so far: haiku-xhigh review, opus-high comb: 73 findings at 26% REAL become 21 at 86%, all 6 of its known bugs kept.
   - One run per reviewer; a difference of one or two findings is noise. sol-high is missing 4 calls (Codex credits ran out). `sub` costs are what the SDK reports on a subscription, not charges.
+- 20261113 grid 3 (outputs, job lists, runner `run.sh`, grades and `precision/score.py`: `review-recall-results/20261113-grid3/`). Cheap OpenRouter tier (luna-r, luna-r-high, luna-r-xhigh, hy4, minimax31-flash, qwen38-27b; glm53 15 runs then deferred) 3 runs on all 17 cases; Codex luna-xhigh, sol-high and a few others until credits ran out (about 37 reviews per Codex window); Claude haiku-xhigh, sonnet-high, sonnet on the 7 new cases. Graded run 1 only, incrementally (new findings matched to already-graded issues; only new issues read against code). **Agent grades.** Known bugs hit is graded by fix commits.
+
+  Original 10 cases, run 1 (14 known bugs):
+
+  | Config | Findings | Precision | Distinct REAL | Known bugs hit | API cost/review |
+  |---|---|---|---|---|---|
+  | haiku-xhigh | 73 | 26% | 19 | 6 | $0.53 (SDK-reported) |
+  | sol (Codex) | 31 | 81% | 25 | 5 | pending sol-r |
+  | hy4 | 66 | 20% | 13 | 4 | $0.32 (50% sale) |
+  | luna-r-high | 31 | 42% | 13 | 3 | $0.03 |
+  | luna-r-xhigh | 32 | 34% | 11 | 3 | $0.07 |
+  | sol-high (Codex) | 32 | 75% | 24 | 2 | pending |
+  | minimax31-flash | 56 | 14% | 7 | 2 | $0.06 |
+  | sonnet-high | 38 | 16% | 6 | 2 | $0.52 |
+  | luna-xhigh (Codex) | 15 | 33% | 5 | 2 | ~luna-r |
+  | deepseek4-flash | 24 | 38% | 9 | 1 | $0.12 |
+  | sonnet | 39 | 10% | 4 | 1 | $0.50 |
+
+  New 7 cases (context-forge, trading-engine), run 1 (7 known bugs; Codex configs missing most cases): minimax31-flash 2 known / 29% precision, haiku-xhigh 2 / 19%, hy4 1 / 24%, sonnet-high 1 / 12%, luna-r family 0 / 36-50%, qwen38-27b 0 / 14%, sonnet 0 / 0%. Only 3 of 7 known bugs found by anyone.
+
+  Notes:
+  - luna at xhigh is not haiku-xhigh (3 vs 6 known bugs); luna-r-high beats luna-r-xhigh. Effort high did not help sol (2 vs 5 known). minimax31-flash is the only model with a real false-claim rate (21% FALSE). qwen38-27b is weak as a reviewer (about 1 finding per review).
+  - Codex reports only about one turn of usage (hundreds of output tokens per review), so Codex API cost is estimated from the same model on OpenRouter.
+  - OpenRouter reviewers hit `agent.max_tool_iterations` (20); packaged glm53/kimi3/muse output caps near the 1M window broke large prompts (fixed in `7547dc9a`). Cheap glm-5.3 hosts are fp4.
+  - Costs: 7 haiku-xhigh reviews moved the Claude 5-hour meter about 1 point. Grading: batch 1 (one agent per case, 135 findings) about 840k agent tokens, about 6k/finding; batch 2 (5 agents, about 285 findings) about 660k, about 2.3k/finding. The long interactive session itself was the largest Claude cost (meter 24% to 74% for about 13 points of measured work).
+- 20261113 two-stage comb (luna-r, then opus-high on what luna kept): opus read 95 findings instead of 181; REAL kept 47/54, noise dropped 95%, precision 89%, known bugs 12/14 (opus-high alone 14/14; one run each). 7 calls first returned the Claude usage-limit text as output (#325) and were rerun.
