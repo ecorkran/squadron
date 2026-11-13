@@ -1,0 +1,125 @@
+[
+ {
+  "repo": "context-forge",
+  "fix": "58eb51e136",
+  "date": "2026-11-03",
+  "subject": "fix: skip the remote guide tag lookup outside cf guides info",
+  "introducers": [
+   "18507f73cb",
+   "a0ad21f573",
+   "a31e3b6568",
+   "a581addee4",
+   "d711586591"
+  ],
+  "review": "project-documents/user/reviews/935-review.code.agent-scoped-rule-marker.md",
+  "head": "efe12e3642",
+  "base": "18507f73cb^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "485cb3d9a3",
+  "date": "2026-10-24",
+  "subject": "fix: harden rule resolution validation, unique temp file, move readRulesExclude",
+  "introducers": [
+   "18507f73cb",
+   "3442ca7eb1",
+   "bed22298ec"
+  ],
+  "review": "project-documents/user/reviews/266-review.code.conventions-reconciliation.md",
+  "head": "80ef264992",
+  "base": "3442ca7eb1^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "351d108363",
+  "date": "2026-10-19",
+  "subject": "fix: use 'cf guides install' in error and tool messages",
+  "introducers": [
+   "6e9b3ca0fa",
+   "a687c80384"
+  ],
+  "review": "project-documents/user/reviews/246-review.code.permissiveness-setting.md",
+  "head": "6837256dde",
+  "base": "a687c80384^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "21105930fe",
+  "date": "2026-10-13",
+  "subject": "fix: name the unchanged case when a guide install makes no commit",
+  "introducers": [
+   "696d0df81d"
+  ],
+  "review": "project-documents/user/reviews/927-review.code.worktree-dedup-and-explicit-project-worktree-resolution.md",
+  "head": "dd58f337c6",
+  "base": "696d0df81d^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "e984cea3cf",
+  "date": "2026-10-12",
+  "subject": "fix(core): harden slice design fence tracking and template checks",
+  "introducers": [
+   "2e9355acd2",
+   "7403aa074e",
+   "8858036ffe",
+   "930a2949bc",
+   "ea4ac00170"
+  ],
+  "review": "project-documents/user/reviews/214-review.code.native-slice-design-validation.md",
+  "head": "3d1268e86a",
+  "base": "2e9355acd2^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "afd8f74a31",
+  "date": "2026-10-05",
+  "subject": "fix(core): defer a checkout whose readiness probe fails instead of aborting the fix run",
+  "introducers": [
+   "1d4ccbf97f",
+   "cf048f03fc"
+  ],
+  "review": "project-documents/user/reviews/archive/213-review.code.cf-check-fix-worktree-aware-writes.md",
+  "head": "ec7f752e96",
+  "base": "1d4ccbf97f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "f8466322e8",
+  "date": "2026-09-25",
+  "subject": "fix(mcp): merge per-view fix results in workflow_check",
+  "introducers": [
+   "1289ae8c8c",
+   "a2344f4500",
+   "f2cfc05ac0"
+  ],
+  "review": "project-documents/user/reviews/926-review.code.worktree-scoped-validate-check-attribution-and-scope-reporting.md",
+  "head": "b7f892e600",
+  "base": "f2cfc05ac0^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "580915e0b1",
+  "date": "2026-09-22",
+  "subject": "fix: report per-path outcomes from cf validate frontmatter (#92, #96)",
+  "introducers": [
+   "a662ad0989",
+   "a7286db992"
+  ],
+  "review": "project-documents/user/reviews/923-review.code.frontmatter-validate-command-dateupdated-stamp.md",
+  "head": "1976437730",
+  "base": "a662ad0989^"
+ },
+ {
+  "repo": "trading-engine",
+  "fix": "9e3a2bae1a",
+  "date": "2026-11-12",
+  "subject": "fix: refuse str and bytes in require_iterable_of",
+  "introducers": [
+   "185e400340"
+  ],
+  "review": "project-documents/user/reviews/105-review.code.labels-signals-and-declarations.md",
+  "head": "6211cf1c16",
+  "base": "185e400340^"
+ }
+]

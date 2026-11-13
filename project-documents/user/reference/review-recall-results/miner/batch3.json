@@ -1,0 +1,124 @@
+[
+ {
+  "repo": "context-forge",
+  "fix": "13ca7ea536",
+  "date": "2026-10-25",
+  "subject": "fix: drop stale adoption.state unset warning from cf next",
+  "introducers": [
+   "3f7a882cb0",
+   "8c69557585",
+   "aa8f069334",
+   "bac95b09d1"
+  ],
+  "review": "project-documents/user/reviews/266-review.code.conventions-reconciliation.md",
+  "head": "80ef264992",
+  "base": "8c69557585^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "5e840ccb8b",
+  "date": "2026-10-21",
+  "subject": "fix: gather adoption facts before persisting adoption.state",
+  "introducers": [
+   "4d64f150f7"
+  ],
+  "review": "project-documents/user/reviews/261-review.code.detection-and-adoption-state.md",
+  "head": "f8657488c9",
+  "base": "4d64f150f7^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "5ab3e70bff",
+  "date": "2026-10-13",
+  "subject": "fix: offer the guide's required-rules block for weak ESLint flat configs",
+  "introducers": [
+   "340bb38a03"
+  ],
+  "review": "project-documents/user/reviews/215-review.code.native-setup-ide-install.md",
+  "head": "57a6b15471",
+  "base": "340bb38a03^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "9006d54c5f",
+  "date": "2026-10-13",
+  "subject": "fix(cli): contain manifest prune to the project and keep dry-run errors",
+  "introducers": [
+   "527d3ba78c"
+  ],
+  "review": "project-documents/user/reviews/archive/215-review.code.native-setup-ide-install.md",
+  "head": "291dabe401",
+  "base": "527d3ba78c^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "995b04c542",
+  "date": "2026-10-07",
+  "subject": "fix(core): narrow guide.exclude protection and commit config with re-extract",
+  "introducers": [
+   "23c9d1b957",
+   "696d0df81d",
+   "7055211c9e",
+   "85d6574c88",
+   "90c4f8f651",
+   "fd4ea69376"
+  ],
+  "review": "project-documents/user/reviews/213-review.code.cf-check-fix-worktree-aware-writes.md",
+  "head": "c881f68b8b",
+  "base": "23c9d1b957^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "334d42b998",
+  "date": "2026-10-02",
+  "subject": "fix: install Codex skills to ~/.agents/skills",
+  "introducers": [
+   "aa44f80ae6"
+  ],
+  "review": "project-documents/user/reviews/925-review.code.guide-install-robustness.md",
+  "head": "a91eba9f27",
+  "base": "aa44f80ae6^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "d33147e90e",
+  "date": "2026-09-25",
+  "subject": "fix(core): normalize checkout root in check-result dedup key",
+  "introducers": [
+   "1289ae8c8c",
+   "709f467c15",
+   "e3c94e9a79"
+  ],
+  "review": "project-documents/user/reviews/926-review.code.worktree-scoped-validate-check-attribution-and-scope-reporting.md",
+  "head": "b7f892e600",
+  "base": "e3c94e9a79^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "6ba7048c9a",
+  "date": "2026-09-19",
+  "subject": "fix: honor proxy variables for tarball guide download and name failures",
+  "introducers": [
+   "07691b4221",
+   "1df7421e9c",
+   "71a3b7d93f",
+   "ff80db3461"
+  ],
+  "review": "project-documents/user/reviews/925-review.code.guide-install-robustness.md",
+  "head": "a91eba9f27",
+  "base": "07691b4221^"
+ },
+ {
+  "repo": "trading-engine",
+  "fix": "ccae5e3527",
+  "date": "2026-11-08",
+  "subject": "fix: harden market validation and share type guards",
+  "introducers": [
+   "45472f7e1d",
+   "8bc356a086"
+  ],
+  "review": "project-documents/user/reviews/102-review.code.market-and-instrument-model.md",
+  "head": "1b665d05e3",
+  "base": "45472f7e1d^"
+ }
+]

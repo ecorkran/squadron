@@ -1,0 +1,128 @@
+[
+ {
+  "repo": "context-forge",
+  "fix": "7ba8d680c2",
+  "date": "2026-10-29",
+  "subject": "fix: surface unexpected read errors in parseSlicePlan",
+  "introducers": [
+   "09384f2a36",
+   "3ef8fe8149",
+   "422e07c526",
+   "46b68cd8c7",
+   "4bdf47053a",
+   "6031e8ab48",
+   "83b34d43b9",
+   "ac52315590",
+   "ba5e58d9e4",
+   "cf19a5f6f7",
+   "f0a029813b"
+  ],
+  "review": "project-documents/user/reviews/264-review.code.brownfield-aware-cf-next.md",
+  "head": "00d9ba2224",
+  "base": "ac52315590^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "41d934c9cf",
+  "date": "2026-10-21",
+  "subject": "fix: list CI files relative to the project folder in Adoption Facts",
+  "introducers": [
+   "4d64f150f7"
+  ],
+  "review": "project-documents/user/reviews/261-review.code.detection-and-adoption-state.md",
+  "head": "f8657488c9",
+  "base": "4d64f150f7^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "242fc601db",
+  "date": "2026-10-14",
+  "subject": "fix: commit the removal on tarball guide uninstall",
+  "introducers": [
+   "a31e3b6568",
+   "e124e0a821"
+  ],
+  "review": "project-documents/user/reviews/925-review.code.guide-install-robustness.md",
+  "head": "a91eba9f27",
+  "base": "e124e0a821^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "d19b4d4c3f",
+  "date": "2026-10-13",
+  "subject": "fix: drop hardcoded rule list from setup-ide claude note",
+  "introducers": [
+   "d205392b4f"
+  ],
+  "review": "project-documents/user/reviews/215-review.code.native-setup-ide-install.md",
+  "head": "57a6b15471",
+  "base": "d205392b4f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "5993e73076",
+  "date": "2026-10-07",
+  "subject": "fix(core): identify the default worktree by isDefault, not name",
+  "introducers": [
+   "467363007f",
+   "79b0c1d6c8",
+   "79cb625953",
+   "87d8aaa6c9"
+  ],
+  "review": "project-documents/user/reviews/932-review.code.restore-default-worktree-range-on-sibling-removal.md",
+  "head": "459f41c3ed",
+  "base": "79b0c1d6c8^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "a304bb14d7",
+  "date": "2026-10-03",
+  "subject": "fix(core): stage tarball guide extract and swap into place",
+  "introducers": [
+   "6ba7048c9a",
+   "71a3b7d93f"
+  ],
+  "review": "project-documents/user/reviews/926-review.code.worktree-scoped-validate-check-attribution-and-scope-reporting.md",
+  "head": "b7f892e600",
+  "base": "6ba7048c9a^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "5b1168a3f1",
+  "date": "2026-09-25",
+  "subject": "fix(cli): apply check fixes per worktree before merging",
+  "introducers": [
+   "1289ae8c8c",
+   "8503d17777",
+   "added39938",
+   "f2cfc05ac0"
+  ],
+  "review": "project-documents/user/reviews/926-review.code.worktree-scoped-validate-check-attribution-and-scope-reporting.md",
+  "head": "b7f892e600",
+  "base": "f2cfc05ac0^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "e9597a5eb2",
+  "date": "2026-09-22",
+  "subject": "fix: scope cf validate frontmatter to the caller's worktree (#88)",
+  "introducers": [
+   "a7286db992"
+  ],
+  "review": "project-documents/user/reviews/923-review.code.frontmatter-validate-command-dateupdated-stamp.md",
+  "head": "1976437730",
+  "base": "a7286db992^"
+ },
+ {
+  "repo": "trading-engine",
+  "fix": "6078e2bc58",
+  "date": "2026-11-11",
+  "subject": "fix: keep distinct integers distinct in as_real and share the loop guard",
+  "introducers": [
+   "7dd4748d05"
+  ],
+  "review": "project-documents/user/reviews/105-review.code.labels-signals-and-declarations.md",
+  "head": "6211cf1c16",
+  "base": "7dd4748d05^"
+ }
+]
