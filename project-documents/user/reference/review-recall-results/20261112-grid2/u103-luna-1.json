@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Series count can drift when adding or removing series fails",
+      "description": "`addSeries` increments the count whenever the provider returns, even if it returns no valid series ID; `removeSeries` decrements after every successful call, even if the ID was unknown or already removed. The hook uses this count to decide whether to apply visible ranges (`src/chart/use-chart-provider.ts:340-345`), so it can attempt a range on an empty chart or suppress one while series remain. Keep membership by series ID, or have the provider operations report whether the collection actually changed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/chart-facade.ts:49-60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A resize error is cleared by a later context change",
+      "description": "The mount effect calls `setMountOutcome(null)` after mounting, and that replaces the entire state with `{ready: true, error: null}`. If a post-mount operation fails before the mount effect's state update is committed, that later update erases the error. Preserve an existing operation error when committing readiness, or otherwise ensure mount completion cannot overwrite a newer failure.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:91-99"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Series count can drift when adding or removing series fails",
+      "location": "src/chart/chart-facade.ts:49-60",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A resize error is cleared by a later context change",
+      "location": "src/chart/use-chart-provider.ts:91-99",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:18:25.353721",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 60924,
+  "cached_tokens": 59776,
+  "cache_write_tokens": null,
+  "completion_tokens": 260,
+  "reasoning_tokens": 0,
+  "duration_seconds": 28.75157112488523,
+  "cost_usd": 0.00084256,
+  "cost_basis": "alias_pricing"
+}

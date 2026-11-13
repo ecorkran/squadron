@@ -1,0 +1,186 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Atomic report write leaks its temp file when the write fails",
+      "description": "`NamedTemporaryFile(delete=False)` is created, then `handle.write(text)` runs inside the `with`. If `write` or `replace` raises `OSError`, for example with a full disk, the `.{name}.*` temp file stays in the runs dir. The handler logs and re-raises but never unlinks it. The report is rewritten after every item, so repeated failures leave a growing set of hidden files. There is also no flush or fsync before the rename, so the \"never sees a partial file\" claim only holds against concurrent readers, not against a crash. Unlink the temp file in the `except` branch, using `contextlib.suppress(FileNotFoundError)` with a justifying comment.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py#_write_atomic"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "CLI item-resume module imports private helpers from `run.py` through a circular import",
+      "description": "`run_item.py` imports `_apply_param_overrides` and `_run_pipeline_sdk` inside the function body. It needs `# pyright: ignore[reportPrivateUsage]` and a comment saying \"run.py imports this module\". That is a layering inversion: the extracted module depends on private internals of its caller. Move the shared helpers into a third module that both import, or have `run.py` pass the pipeline runner and the override parser in as parameters. Passing them in also removes the need for the pyright suppressions.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py#handle_item_resume"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Run-lock decision depends on a `definition` whose source in the resume paths I could not confirm",
+      "description": "The `--resume` and implicit-resume branches call `_locked(definition, ...)`, but the diff shows no change that loads the definition for the resumed pipeline. If `definition` comes from the CLI `pipeline` argument or from an earlier load, a resumed run whose `state.pipeline` is mutating could skip the lock. Alternatively, the call could pick up the wrong pipeline's answer. The test `test_a_plain_resume_of_a_paused_run_with_the_lock_held_exits_2` mocks `state.pipeline = \"P6\"`, so it does not distinguish the two cases. I did not confirm where `definition` is bound, so please verify it is `load_pipeline(state.pipeline)` and add a test where the CLI argument and the state pipeline differ.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py#_locked"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dead and duplicated control flow in the lock and resume paths",
+      "description": "`raise AssertionError(\"unreachable\")` follows a `with` block whose body always returns. It is dead code and needs `# pragma: no cover`. `_locked` and `_take_run_lock` in `run.py` also split one concern in two. `_locked` catches `typer.Exit` only to close the coroutine, which is a workaround for creating the coroutine before the lock is taken. Take the lock first and build the coroutine inside the `with`, or pass a factory (a zero-argument callable that returns the coroutine). That removes the close-and-reraise step.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py#resume_item"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`ItemRerun.replace` can fail with a bare `StopIteration`",
+      "description": "`next(i for i, r in enumerate(records) if r.index == record.index)` has no default. If the record index is not in the loaded report, `StopIteration` is raised. Inside a coroutine this becomes `RuntimeError(\"coroutine raised StopIteration\")`, and `resume_item` does not catch it, so the failure is neither handled nor clearly reported. `_reconcile` and `_outcome` use the same pattern. Raise an explicit error that names the index.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py#ItemRerun.replace"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Style and typing hygiene",
+      "description": "Several new lines are well over 88 characters, including the `_write_each_report` signature and `_add_record`, along with the `_step_mutates` line in `run_lock.py` and `_not_ready_reason` in `sources.py`. The project rules call for 88. The new tests also use many `# type: ignore[attr-defined]` comments and untyped helpers such as `body_runner`, `resume` and `_record`. This conflicts with the strict-pyright rule. Run `ruff format` and type the helpers, for example with a small `Protocol` or a typed `ResumeOutcome` return.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py#_write_each_report"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Reserved-param, schema-version and run-lock design is sound",
+      "description": "The reserved keys are defined once and enforced at three entry points: `-p`, the pipeline `params` block, and stored run state. `report.json` carries a schema version and fails explicitly on a mismatch. The run lock never waits, is released by the OS when its holder dies, and is covered by tests for the held, killed-holder, unopenable-file and separate-worktree cases. Halt, flag-kind and exhaustion paths each have a test that asserts the observable signal. Aside from the two items above that I could not fully verify, the new I/O paths log at ERROR or WARNING and do not swallow exceptions.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/control_params.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Atomic report write leaks its temp file when the write fails",
+      "location": "src/squadron/pipeline/batch_report.py#_write_atomic",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "CLI item-resume module imports private helpers from `run.py` through a circular import",
+      "location": "src/squadron/cli/commands/run_item.py#handle_item_resume",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Run-lock decision depends on a `definition` whose source in the resume paths I could not confirm",
+      "location": "src/squadron/cli/commands/run.py#_locked",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Dead and duplicated control flow in the lock and resume paths",
+      "location": "src/squadron/pipeline/item_resume.py#resume_item",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`ItemRerun.replace` can fail with a bare `StopIteration`",
+      "location": "src/squadron/pipeline/batch_report.py#ItemRerun.replace",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Style and typing hygiene",
+      "location": "src/squadron/pipeline/executor.py#_write_each_report",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Reserved-param, schema-version and run-lock design is sound",
+      "location": "src/squadron/pipeline/control_params.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:30:33.339595",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 257009,
+  "cached_tokens": 165522,
+  "cache_write_tokens": 91483,
+  "completion_tokens": 5579,
+  "reasoning_tokens": null,
+  "duration_seconds": 43.89601224986836,
+  "cost_usd": 0.4466324,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

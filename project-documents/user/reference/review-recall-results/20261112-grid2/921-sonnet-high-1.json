@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Sudoers rule grants root-equivalent access to the `manta` account",
+      "description": "The header says \"exactly the commands those scripts issue, nothing wider\". Three entries are wider than that:\n\n- **`MT_INSTALL` runs a user-owned script as root.** The rule allows `/home/manta/.../deploy/install-production.sh --ref *` as root. That file lives in the operator's own checkout, which `manta` can write. Anyone who can edit the script, or who gets `manta` access, gets unrestricted root. `--ref *` is also unconstrained. To close the hole, the script would have to be root-owned and non-writable by `manta` (for example, installed under `/usr/local/sbin`). The rule would then name that path.\n- **Sudoers `*` also matches spaces.** `systemctl stop mt-*` therefore matches `systemctl stop mt-x sshd.service`, and the same applies to `start` and `restart`. The wildcard is not limited to `mt-` units.\n- **`MT_RUN` is broad.** `/usr/local/bin/mt-run *` passes any arguments through. As root, `deploy/mt-run` executes the production `mt` CLI with the credentials from `/etc/manta-trading.env`. `MT_READ` also lets `manta` read that file outright. The repository's `cutover_common.py` does use that read (line 226), so it is intentional, but it should be documented as a deliberate exposure of secrets.\n\nThe file also names only the 921-related commands. The 265 and 268 cutover scripts issue `sudo tee`, `cp` and `grep` against the env file, and the header's claim does not cover those.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:8-13"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`[WAIT]` and `FAIL` verdict markers are scattered string literals",
+      "description": "`[WAIT]` is defined as a literal in `scripts/repair_921_minute_sessions.py:288`. The cutover script then matches it by substring at lines 204, 265 and 273, next to the existing `\"FAIL\"` substring checks. The tests repeat it again. Project rules say a comparison value must be defined once. If the producer's wording changes, the cutover silently stops waiting and the `[WAIT]` handling in `ok` stops working. Because `WAIT` is a three-way verdict, a shared constant or an exit code would be sturdier than parsing printed text. Today `run_verify` returns a plain `False` for both FAIL and WAIT, so the caller cannot tell them apart without parsing.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:204"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The narration log is opened before the working-directory preflight",
+      "description": "`start_log(NOTES_DIR / ...)` runs before `preflight(args.ref)`. `NOTES_DIR` is a relative path (`cutover_common.py:32`). `preflight` is what checks that the script is running from the dev checkout root (it checks `deploy/` and `.env`, `cutover_common.py:95`). Run from any other directory, the script first creates `project-documents/user/notes/` and a log file there, and only then raises `CutoverError`. Starting the log after `preflight` fixes this. The log also doesn't capture the streamed `run(..., stream=True)` output or the bare `print` lines, only `say`. The docstring calls it \"the cutover's report\", which overstates what it holds.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:226-231"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cagg freshness compares job finish time with row `created_at`",
+      "description": "`stale` is `last_successful_finish < max(created_at)`. A refresh materializes the data present when it started, not when it finished. A bar written between the start and finish of the refresh job passes as \"fresh\" while the cagg has not seen it. The probe also does not account for a refresh policy `end_offset`, which can leave the newest buckets unmaterialized after a successful refresh. The window may be small, but this check exists to prevent a wrong verdict, so the race should at least be documented. Using `last_successful_start`, if the view exposes it, would remove the first problem. I did not verify the `job.hypertable_name = <cagg>` join against a live TimescaleDB, so that join is untested.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py#cagg_freshness_for_session"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Import ordering violates the project's ruff `I` rule",
+      "description": "The project selects `I` in `pyproject.toml`, but several import blocks look unsorted:\n\n- `scripts/cutover_921_minute_sessions.py` lists `NOTES_DIR, fire_unit_until, start_log, CutoverError, fire_unit, \u2026`.\n- `scripts/repair_921_minute_sessions.py` puts `cagg_freshness_for_session` before `CheckReport`.\n- `minute.py` inserts the `daemon.minute_sessions` and `gaps.compute_missing_ranges` imports ahead of `gaps.minute_coverage`.\n- `test_repair_921.py` puts `cagg_freshness_for_session` before `SymbolFindings`.\n\nRun `ruff check --select I --fix` on these files.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:45-50"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test setup is copy-pasted and one test duplicates `_run`",
+      "description": "`test_last_bar_before_the_chunk_end_is_still_success` re-implements the roughly 50-line mock harness that `_run` already provides, with only different bounds and bars. `TestTruncatedDayAwareSeeding` repeats the connection, transaction and lock mocks a third time. `_run` should accept `bounds` and `gap_end` parameters and the shared mocks should become fixtures in `conftest.py`. The tests also patch about ten internals of `_do_minute_symbol`, so they assert wiring more than behavior. The pure `minute_sessions` tests are good and cover the key predicate.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/data/acquisition/daemon/test_minute.py:2339-2470"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Session judgement may skip a session that opens before the chunk",
+      "description": "`fetch_session_bounds(conn, symbol, chunk_start, chunk_end)` filters on `session_open_utc >= chunk_start`. A session that opened before `chunk_start` and closes inside the chunk is not judged, so `judge_chunk_by_sessions` finds no judgeable session and keeps the classifier verdict. Chunks are normally session-aligned, so this is probably benign. The new tests do not exercise it. The change also opens an extra pool connection per chunk for what is a small read.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:901-904"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Behavioral change in the trailing-weekend tolerance",
+      "description": "The old four-day tolerance is replaced by session judgement. A response with zero bars in a session now yields PARTIAL and keeps the row. That is the intent, and the PARTIAL path increments `attempt_count`. A session the provider never publishes, such as a calendar-listed day with no data, will eventually reach `RETRY_EXHAUSTED`. That outcome seems acceptable, but it is a new route to `RETRY_EXHAUSTED`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:891-916"
+    },
+    {
+      "severity": "PASS",
+      "title": "Timer, constants and tests stay consistent",
+      "description": "`MINUTE_PASS_FIRING_TIMES_UTC`, `mt-minute-pass.timer`, the constants docstrings and the test expectations all move to 04:05 and 07:05. A grep of `.py`, `.timer`, `.service` and `.sh` files found no leftover 01:05 references. `_latest_bar_dt` is removed with no remaining callers. The UTC formatting fix in `check_minute_session_mass` is correct.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/constants.py:150"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Sudoers rule grants root-equivalent access to the `manta` account",
+      "location": "deploy/sudoers.d/manta-ops:8-13",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`[WAIT]` and `FAIL` verdict markers are scattered string literals",
+      "location": "scripts/cutover_921_minute_sessions.py:204",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The narration log is opened before the working-directory preflight",
+      "location": "scripts/cutover_921_minute_sessions.py:226-231",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cagg freshness compares job finish time with row `created_at`",
+      "location": "src/manta_trading/data/gaps/repair_921.py#cagg_freshness_for_session",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Import ordering violates the project's ruff `I` rule",
+      "location": "scripts/cutover_921_minute_sessions.py:45-50",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test setup is copy-pasted and one test duplicates `_run`",
+      "location": "test/unit/data/acquisition/daemon/test_minute.py:2339-2470",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Session judgement may skip a session that opens before the chunk",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:901-904",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Behavioral change in the trailing-weekend tolerance",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:891-916",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Timer, constants and tests stay consistent",
+      "location": "src/manta_trading/constants.py:150",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:00:31.296556",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 313945,
+  "cached_tokens": 243679,
+  "cache_write_tokens": 70254,
+  "completion_tokens": 7547,
+  "reasoning_tokens": null,
+  "duration_seconds": 67.10810720780864,
+  "cost_usd": 0.3844938,
+  "cost_basis": "provider"
+}

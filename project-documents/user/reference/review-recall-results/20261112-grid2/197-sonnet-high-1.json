@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Item resume lets `load_pipeline` errors escape as a traceback",
+      "description": "`_validate` calls `load_pipeline(state.pipeline)` outside any `try`. `load_pipeline` raises `FileNotFoundError` when the pipeline is renamed or removed since the run, and the YAML loader can raise validation errors too (`loader.py:103`). `resume_item` documents \"never raises for an expected refusal\", and `_validate` already maps `FileNotFoundError` from `state_manager.load` and `SchemaVersionError` to `REJECTED`. `run.py` wraps the same call in three places and prints a clean error with exit 1. Here the exception passes through `handle_item_resume` and prints a traceback, so an automated caller gets no `ResumeExit` code. Catch it and raise `_Stop(ResumeExit.REJECTED, ...)` with the pipeline name, logged like the report-load failure.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:186"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`list_tasks` now crashes with a bare `KeyError` on a `cf` that lacks the new fields",
+      "description": "`int(e[\"completed\"])` and `int(e[\"total\"])` are now mandatory for every `TaskEntry`. Failing explicitly is the right policy. But an older `cf` that doesn't emit these keys produces `KeyError: 'completed'`, with no mention of `cf` or its version. This breaks every consumer of `list_tasks`, including the existing `slices_needing_tasks` source, not only the new `slices_ready_to_implement`. `_run_json` already wraps bad JSON in `ContextForgeError`; do the same here with a message naming the cf command and the missing key. The dataclass defaults `completed: int = 0` and `total: int = 0` on `TaskEntry` also invite the silent-placeholder behaviour the project rules forbid. A `total` of 0 quietly disables the \"all tasks checked\" flag.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/integrations/context_forge.py:183-184"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_write_atomic` leaks temp files on failure and changes file permissions",
+      "description": "If `handle.write` or `temp.replace(target)` raises `OSError`, the `.{name}.XXXX` temp file is never unlinked. The write is now repeated after every item, so a full disk or a permission problem can leave one orphan per attempt in the runs dir. The new test patches `Path.replace` to fail and so exercises this path, but never asserts the directory is clean. Also, `NamedTemporaryFile` creates the file with mode 0600. After the rename the reports are 0600, where the previous `write_text` honoured the umask. Unlink the temp in the `except` branch and `chmod` it to the intended mode, or document that 0600 is intended.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:343-355"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`run_item.py` and `run.py` import each other, and `run_item.py` imports private names",
+      "description": "`run.py` imports `run_item`, and `handle_item_resume` imports `_apply_param_overrides` and `_run_pipeline_sdk` back from `run.py` inside the function, with `pyright: ignore[reportPrivateUsage]` markers. The in-code comment (\"Imported here: run.py imports this module\") admits the cycle. This is a layering inversion: the new module reaches into the command module's private internals, and the suppressions hide it from pyright. Pass the pipeline runner and the param-override parser in as arguments, which would fit the `BodyRunner` design already in `item_resume.py`. Alternatively, move both helpers into a shared module without underscore names.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:61-65"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Blocking sync I/O inside `async def` in the item-resume path",
+      "description": "`_resume_locked`, `_git_precondition` and `_select_item` are coroutines that run many synchronous subprocess calls (`current_branch`, `dirty_paths`, `restore_target`, `run_git merge-base`, `cf_client.list_slices`) plus `report.write`. The Python rules require sync work inside awaitables to stay under 1ms or go to an executor. No other coroutine shares the loop in this CLI path, so there is no starvation today. The pattern is already used by branch actions, but it would bite if item resume were ever embedded in a longer-lived loop.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:139-160"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`BatchItemRecord.from_json` turns missing keys into the string \"None\"",
+      "description": "`str(values[\"index\"])` and `str(values[\"name\"])` on a missing key give `\"None\"` rather than a load error. A missing `outcome` is rejected only because `ItemOutcome(\"None\")` raises. A hand-edited or truncated `report.json` could therefore load with a record whose index is `\"None\"`. Require `index`, `name` and `outcome` explicitly (raise `KeyError`, which `BatchReport.load` already maps to `BatchReportLoadError`).",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py#BatchItemRecord.from_json"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`resume_item` maps every `OSError` to \"cannot write the batch report\"",
+      "description": "The handler wraps the whole `_resume_locked` body, but its message and comment assume the failure came from a report write. Any other `OSError` from the body, for example while reading the report or a state file, would be mislabelled and not logged at ERROR here. Narrow it to the write call sites, or word the message generically and log it.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:133-135"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Redundant report write after the last item",
+      "description": "After each completed item the loop calls `_write_each_report(..., final=False)`. On normal completion the `finally` block then writes the same Markdown and JSON again. This is harmless, but it doubles the I/O for the last item. A single flag or a skip-if-unchanged check would avoid it.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py#_execute_each_step"
+    },
+    {
+      "severity": "PASS",
+      "title": "Reserved control params, run lock and exit-code contract",
+      "description": "The control keys are defined once and enforced at all three entry points: `-p`, the pipeline `params:` block (`validate_pipeline`) and item-resume overrides. The lock covers every mutating `sq run` path. `_locked` closes the unawaited coroutine on refusal. Lock-failure paths log at ERROR and are tested. The `ResumeExit` table is a single enum shared by the CLI and tests. The `sources.py` ordering (stable topological sort with a named cycle path) and the batch report's schema-versioned load/validation are cleanly done and well covered.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/control_params.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Item resume lets `load_pipeline` errors escape as a traceback",
+      "location": "src/squadron/pipeline/item_resume.py:186",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`list_tasks` now crashes with a bare `KeyError` on a `cf` that lacks the new fields",
+      "location": "src/squadron/integrations/context_forge.py:183-184",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`_write_atomic` leaks temp files on failure and changes file permissions",
+      "location": "src/squadron/pipeline/batch_report.py:343-355",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`run_item.py` and `run.py` import each other, and `run_item.py` imports private names",
+      "location": "src/squadron/cli/commands/run_item.py:61-65",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Blocking sync I/O inside `async def` in the item-resume path",
+      "location": "src/squadron/pipeline/item_resume.py:139-160",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`BatchItemRecord.from_json` turns missing keys into the string \"None\"",
+      "location": "src/squadron/pipeline/batch_report.py#BatchItemRecord.from_json",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`resume_item` maps every `OSError` to \"cannot write the batch report\"",
+      "location": "src/squadron/pipeline/item_resume.py:133-135",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Redundant report write after the last item",
+      "location": "src/squadron/pipeline/executor.py#_execute_each_step",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Reserved control params, run lock and exit-code contract",
+      "location": "src/squadron/pipeline/control_params.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:28:36.303745",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 780942,
+  "cached_tokens": 619325,
+  "cache_write_tokens": 161605,
+  "completion_tokens": 12933,
+  "reasoning_tokens": null,
+  "duration_seconds": 104.94266458391212,
+  "cost_usd": 0.8460552,
+  "cost_basis": "provider"
+}

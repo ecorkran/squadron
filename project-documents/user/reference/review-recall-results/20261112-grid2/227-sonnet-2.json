@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Unexpected exceptions skip the cutover report",
+      "description": "The module docstring says the first failure stops the run and \"the report is still written\". `run_steps` only catches `StepFailed` and `CalledProcessError`. Several steps can raise other exceptions on ordinary host conditions:\n- `step_production` and `run_health` call `read_text().splitlines()[-1]`. This raises `IndexError` on an empty log file. `step_production` also raises `FileNotFoundError` if the log is absent, because it has no `exists()` guard.\n- `step_weekly` has the same `[-1]` risk on `base.log`.\n- `tick_commands()` and `step_check` read `CRON_FILE` unguarded.\n- `shell()` and `psql()` have no timeout, so a hung job blocks the run indefinitely.\n\nAn uncaught exception skips `report.write_text(...)`. That loses the expected-vs-seen record, which is the main audit trail for a production cutover. Wrap the step call so unexpected exceptions are recorded as FAIL and the report is still written, either with a documented top-level handler or a `try/finally` around the report write. Also guard the empty-file cases explicitly.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:243-256"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Production code uses `assert` for runtime narrowing",
+      "description": "`assert match is not None` and `assert flags is not None` serve as runtime checks. They disappear under `python -O`. In `run_health`, `require(...)` already raises when the condition fails, so the assert only placates the type checker. Return or raise explicitly instead (for example, build the tuple inside the guard).",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:block_commands; scripts/cutover_227_tick_backup.py:run_health"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Host facts and argument literals are duplicated instead of sourced from the cluster table",
+      "description": "`strip_new_args` hardcodes `--replication-host 127.0.0.1`, while the value belongs to the `deploy/backup-clusters.conf` row. `MAIN`/`TICK`, `HOST_BACKUP_ROOT = /data/backup`, `TICK_UNIT` and `RCLONE_REMOTE` are likewise re-declared in the cutover. `deploy/setup-backup.sh` also defines `RCLONE_REMOTE=b2` itself. This breaks the project's \"define a value once\" rule. If the table changes, the TD3 production-line guard silently diverges, or fails for the wrong reason. Derive the replication host from the production row, and reference the shared constants where possible.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:strip_new_args"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Lifecycle read failures are swallowed with `|| true`, but the output parsing covers them",
+      "description": "`b2_lifecycle.sh`'s exit status is discarded and the code relies on parsing its stdout. This is safe today because every failure path prints a line that maps to `MISSING <cluster> lifecycle-read`, and the unit tests cover it. If the script ever exits non-zero with empty output, the loop would see no lines and report nothing. A one-line guard for an empty `LIFECYCLE_OUT` would make this robust.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh (b2_lifecycle block, Step 3)"
+    },
+    {
+      "severity": "PASS",
+      "title": "Cron rendering, cluster table integration and test coverage",
+      "description": "I confirmed that `deploy/backup-clusters.conf`, `deploy/lib/backup_clusters.sh`, `scripts/backup_clusters.py` and the `cron_main_pre227.txt` fixture exist, and that the `BackupCluster` constructor matches the test fixture. The render logic quotes replacement strings, which protects `2>&1` from bash 5.2+ patsub, and there is a regression test for it. The test against the real pre-227 production file guards the TD3 \"only new args added\" invariant. The tests cover malformed-table and missing-cluster failures, rehearse root relocation, lifecycle read-only behavior, and a missing lifecycle rule not changing the exit code. The provisioning changes are covered by tests: REPLICATION is opt-in, pg_hba is rendered, and parent directories are 755 while the data directory stays 700. No production-URL reads were introduced in the tests.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_setup_backup.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unexpected exceptions skip the cutover report",
+      "location": "scripts/cutover_227_tick_backup.py:243-256",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Production code uses `assert` for runtime narrowing",
+      "location": "scripts/cutover_227_helpers.py:block_commands; scripts/cutover_227_tick_backup.py:run_health",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Host facts and argument literals are duplicated instead of sourced from the cluster table",
+      "location": "scripts/cutover_227_helpers.py:strip_new_args",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Lifecycle read failures are swallowed with `|| true`, but the output parsing covers them",
+      "location": "deploy/setup-backup.sh (b2_lifecycle block, Step 3)",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Cron rendering, cluster table integration and test coverage",
+      "location": "test/unit/test_setup_backup.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:24:44.684035",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 349797,
+  "cached_tokens": 226150,
+  "cache_write_tokens": 123641,
+  "completion_tokens": 3798,
+  "reasoning_tokens": null,
+  "duration_seconds": 35.73440270894207,
+  "cost_usd": 0.561272,
+  "cost_basis": "provider"
+}

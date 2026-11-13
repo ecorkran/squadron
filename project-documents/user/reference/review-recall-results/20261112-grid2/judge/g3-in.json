@@ -1,0 +1,709 @@
+[
+ {
+  "bug": "a122-B1",
+  "description": "build_argv emitted `sq run P4 --run-id X -p slice=N`; squadron rejects it ('requires a slice argument'); the slice must be the positional target, so every dispatched run failed.",
+  "candidates": []
+ },
+ {
+  "bug": "a122-B2",
+  "description": "RunnerTenant._tick_project's unexpected-fault path returns (COMPLETE, True), reporting work, so the host loop skips its idle wait and a persistent fault spins at full speed (one traceback per pass).",
+  "candidates": [
+   {
+    "run": "a122-haiku-xhigh-2",
+    "location": "src/amoeba/runner/tenant.py:145-149",
+    "title": "A persistent planner error spins the resident loop",
+    "text": "The broad catch escalates on the project path, where `raise_project_escalation` returns the open row unchanged and writes nothing (project_escalations.py:58-59). It then returns `(TickResult.COMPLETE, True)` unconditionally. `RunnerTenant.tick` returns that `True`, which contradicts its own docstring (tenant.py:96-99). The host runs `worked = tenant.tick(self) or worked` (host.py:275) and skips the idle wait when `worked` is true (host.py:253-254). So a planner that raises every tick causes back-to-back full tracebacks, one `BEGIN IMMEDIATE` per pass, and write-lock churn against the other tenants. Production planners are empty today, so this is dormant, but slice 125 adds them. `tests/runner/test_tenant.py#test_an_unexpected_exception_is_logged_and_the_other_project_still_ticks` asserts `wrote` is true and pins the wrong behavior. Fix: return whether the escalation actually wrote, and consider a backoff."
+   },
+   {
+    "run": "a122-haiku-xhigh-3",
+    "location": "src/amoeba/runner/tenant.py:149",
+    "title": "A caught tick exception reports work done, so the loop never idles under a recurring fault",
+    "text": "`_tick_project` returns `TickResult.COMPLETE, True` after the broad catch, whether or not `escalate()` wrote anything. `escalate()` writes nothing when the node is already blocked (`faults.py:172-182`), and `raise_project_escalation` returns the open row unchanged on a repeat (`store/project_escalations.py:58-59`). So a fault that recurs every tick reports work every tick. `RunnerTenant.tick` passes that `True` up (`tenant.py:111-116`), and `ResidentProcess._loop` skips its idle wait when a tenant reports work (`process/host.py:252-254, 275`).\n\nThe result is a loop with no pause that logs a full traceback on every pass (`tenant.py:146`) and takes SQLite's write lock on every pass (`BEGIN IMMEDIATE`, `project_escalations.py:54`). This breaks the `Tenant.tick` contract (\"Returns whether any work was done\", `host.py:79-80`) and the `RunnerTenant.tick` docstring (\"True only if something was written\", `tenant.py:96-97`). A planner that raises on each call reproduces it: `decide` runs with the node context cleared, so the escalation is project-scoped and deduplicated.\n\nThe tests miss it. `test_an_unexpected_exception_is_logged_and_the_other_project_still_ticks` asserts `wrote` only because the other project launched. Fix: have `escalate()` report whether it wrote and return that value from the catch. Add a test that ticks a single failing project twice and asserts `tick()` returns `F"
+   },
+   {
+    "run": "a122-haiku-xhigh-3",
+    "location": "src/amoeba/runner/tenant.py",
+    "title": "The Runner has no load test, though the rules and CI require one",
+    "text": "The Python rules require a `tests/load/` test for code on concurrency or environment-layer paths, asserting latency, throughput, or resource bounds. CI runs that tier as its own step (`.github/workflows/ci.yml:54`). This slice adds a tick budget, detached `sq` launches, and per-project polling, and none of it has a load test. `tests/load/` covers crash loops, recovery scale, and concurrent inbox writes, but not the Runner. The slice document does not mention load tests or record a waiver.\n\nAdd a load test with several projects and a realistic run count that asserts the tick deadline holds and `sq` calls per interval stay bounded. It would also have caught the shared-observer finding above. If the PM accepts a deferral, record it in the slice."
+   },
+   {
+    "run": "a122-luna-1",
+    "location": "src/amoeba/runner/tenant.py:145-149",
+    "title": "Repeated unexpected faults can busy-loop the resident process",
+    "text": "The exception handler always reports work after escalating. But escalation may write nothing when the node is already blocked or the project escalation is already open (`src/amoeba/runner/faults.py:171-190`). The host waits for its idle interval only when no tenant reports work (`src/amoeba/process/host.py:251-254`), so a recurring planner or stage exception can make the Runner retry continuously and consume CPU. Report work only when escalation actually changed state, or otherwise allow the host to idle."
+   },
+   {
+    "run": "a122-sol-1",
+    "location": "src/amoeba/runner/tenant.py:145-149",
+    "title": "Repeated unexpected faults bypass the idle interval",
+    "text": "The exception handler always reports a write, even when `escalate` deduplicates an existing escalation or finds an already-blocked node. `ResidentProcess._loop` waits only when tenants report no work, so a persistent exception produces a tight retry-and-error-log loop. Have escalation report whether it actually changed the store, and combine that with `tick.wrote` instead of returning unconditional `True`."
+   }
+  ]
+ },
+ {
+  "bug": "u103-B1",
+  "description": "The visible-range effect gates on seriesCountRef.current===0 but its deps are [mount.ready, chart, range]; a series added after the range settles never triggers setVisibleRange (visible range never applied on first data). Latent at this slice.",
+  "candidates": [
+   {
+    "run": "u103-deepseek4-flash-1",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Visible-range effect is gated on a ref that is not a dependency, so the advertised seam does not activate on the first series",
+    "text": "The effect reads `seriesCountRef.current === 0` as its data guard but lists only `[mount.ready, chart, range]` as dependencies. `seriesCountRef` is a ref (src/chart/use-chart-provider.ts:72), written by `series.onAdded`/`onRemoved` (lines 147\u2013151); writing it does not re-render and cannot re-run an effect. So when the count goes 0 \u2192 1 while `range` is unchanged, the effect does not re-run and `chart.setVisibleRange(range)` is never issued.\n\nThe comment at lines 328\u2013338 asserts \"The effect and its dependency array stay wired as the seam initiative 120 activates the moment it adds the first series.\" That is not what the code does: it activates on the *next* range change after a series exists. The initiative-120 flow this seam is built for (range set \u2192 data fetched \u2192 `addSeries`) would therefore apply the range only if the range happens to change again afterwards. The test that appears to cover this, `src/test/use-chart-provider.translation.test.tsx:135-145` (\"applies the range once a series exists\"), passes only because it calls `setRange` *after* `addSeries` \u2014 it exercises the incidental ordering, not the claim in the comment. The current-slice behaviour is still correct (the chart is empty by design, so the call is always withheld), which is why this is a CONCERN rather than a FAIL."
+   },
+   {
+    "run": "u103-deepseek4-flash-2",
+    "location": "src/chart/use-chart-provider.ts:338",
+    "title": "The visible-range seam does not activate when a series is added, contrary to its comment",
+    "text": "The comment states \"the effect and its dependency array stay wired as the seam initiative 120 activates the moment it adds the first series.\" That is not what the code does. The guard reads `seriesCountRef.current` (line 341) inside an effect whose dependencies are `[mount.ready, chart, range]` (line 345). `series.onAdded`/`onRemoved` in `src/chart/chart-facade.ts:47-56` mutate the ref only \u2014 no render, no effect re-run \u2014 so adding a series changes nothing; the range is applied only on the next `range` change (or a remount). The covering test \"applies the range once a series exists\" (`src/test/use-chart-provider.translation.test.tsx`) actually passes *because* it also calls `setRange` afterwards, and its `toHaveBeenCalledTimes(1)` assertion confirms the effect did not run at `addSeries` time. So a future consumer that adds a series and expects the Context's default range to be applied will silently get the library's auto-fit. The comment should say the effect fires on the next range change, or the count should become render-visible state if activation-on-add is intended."
+   },
+   {
+    "run": "u103-deepseek4-flash-3",
+    "location": "src/chart/use-chart-provider.ts:337",
+    "title": "Range-translation comment claims activation \"on the first series\", but the guard cannot observe it",
+    "text": "The comment at lines 337-338 says the visible-range effect's \"dependency array stay[s] wired as the seam initiative 120 activates the moment it adds the first series.\" That is not what the code does. The guard at line 341 reads `seriesCountRef.current`, and the effect's dependency array (line 345) is `[mount.ready, chart, range]`. `seriesCountRef` is mutated only inside the facade callbacks at src/chart/chart-facade.ts:54 (`series.onAdded()`) and :60 (`series.onRemoved()`), which mutate a ref and therefore cause no re-render and no dependency change. Concretely: mount \u2192 `ready` flips true \u2192 effect runs once with count 0 and returns; then `chart.addSeries(...)` bumps the ref but nothing re-runs the effect, so the Context range is *not* applied to a newly added series until `range` itself changes next.\n\nThe test that appears to cover this only passes because it calls `setRange` after `addSeries` \u2014 see src/test/use-chart-provider.translation.test.tsx:140 followed by `act(() => symbolTimeframe().setRange(NEXT_RANGE))`. So the assertion proves the range-change path, not the claim in the comment. Either the comment should describe reality (the seam activates on the next range change after data exists), or the seam should be made observable (e.g. drive the count through state/a ref plus a re-render trigger, or expose an explicit \"data attached\" signal). As written, initiative 120 inhe"
+   },
+   {
+    "run": "u103-haiku-xhigh-1",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Visible range is not applied after a series is added",
+    "text": "The range effect depends on `[mount.ready, chart, range]`. Adding a series through the facade changes none of these, so the effect does not re-run. The comment at lines 333-338 says the seam activates \"the moment it adds the first series,\" which the code does not do. The test at `src/test/use-chart-provider.translation.test.tsx:135` passes only because it calls `setRange` after `addSeries`. Reverse the order and the range is never applied. This is latent because the chart is empty in this slice, but initiative 120 adds data after mount, so the context range would be silently ignored until the user changes it. Fix: make the series count part of the effect's state so adding a series re-runs it, and add a test that adds a series first."
+   },
+   {
+    "run": "u103-haiku-xhigh-1",
+    "location": "src/chart/use-chart-provider.ts:358-363",
+    "title": "Indicator effect is a no-op",
+    "text": "The effect body is `if (!mount.ready) return;` followed by a comment, and nothing else. It reads `indicators` only to re-run an empty body. The comment calls it \"not a silent empty effect,\" but it is one. Under the rule to resist complexity, it adds a dependency and a context consumer with no behavior. The test at `src/test/use-chart-provider.translation.test.tsx:177` (\"fires the indicator observer without error\") can only pass, since it asserts the absence of errors and calls. Remove the effect and the `useIndicators()` call until initiative 120 needs them, or keep it and drop the test."
+   },
+   {
+    "run": "u103-haiku-xhigh-1",
+    "location": "src/test/use-chart-provider.errors.test.tsx:255-271",
+    "title": "Teardown-race test cannot fail",
+    "text": "The test claims a subscription callback fired after teardown is inert. The handlers the hook registers (`src/chart/use-chart-provider.ts:287-301`) do nothing except return early when disposed, and they never call the provider. The assertions that `getVisibleRange` was not called and that `resize` was called once would hold with or without the guard. The `not.toThrow()` checks cannot fail either. The disposed checks at lines 290-292 and 297-299 are therefore dead code. Either give the handlers observable work and assert it is suppressed after teardown, or remove the guards and the test."
+   },
+   {
+    "run": "u103-haiku-xhigh-2",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Range is not applied when the first series is added",
+    "text": "The translation effect depends on `[mount.ready, chart, range]`. `seriesCountRef` is a ref, so `addSeries` through the facade (chart-facade.ts:49-56) changes no dependency and the effect does not re-run. The comment at lines 333-338 says the effect \"activates the moment it adds the first series.\" That is false. A range set before the first series is never applied until the range changes again. The test \"applies the range once a series exists\" in `src/test/use-chart-provider.translation.test.tsx` adds the series before calling `setRange`, which hides the gap. Fix: make the count observable (state, or a dependency that changes on 0\u21921), and add a test that sets the range first and adds the series second."
+   },
+   {
+    "run": "u103-haiku-xhigh-2",
+    "location": "src/chart/use-chart-provider.ts:173",
+    "title": "The hook is hard-wired to the concrete provider",
+    "text": "`new LightweightChartsProvider()` runs inside the hook. CLAUDE.md says to program to interfaces, and the testing rules say to use dependency injection. Without a seam, all five hook test files repeat the same `vi.mock('../chart/index.ts', \u2026)` boilerplate, and the spy must replicate the class by hand. Fix: accept an optional factory, `createProvider: () => IChartProvider = () => new LightweightChartsProvider()`, so tests can pass a fake without module mocking."
+   },
+   {
+    "run": "u103-haiku-xhigh-2",
+    "location": "src/chart/use-chart-provider.ts:358-363",
+    "title": "Two effects do nothing in this slice",
+    "text": "The indicator effect has an early return and no body. It exists only to subscribe to `useIndicators()`, which makes the hook throw outside `IndicatorProvider`. The test \"fires the indicator observer without error\" asserts that nothing happens. The range effect (340-345) is also dead on the product path, since nothing adds a series in this slice. CLAUDE.md says \"Always resist adding complexity.\" If the slice spec requires these seams, keep them and document that in one place. If not, remove the no-op effect and the `useIndicators()` coupling until initiative 120."
+   },
+   {
+    "run": "u103-haiku-xhigh-2",
+    "location": "src/test/use-chart-provider.errors.test.tsx",
+    "title": "The race-guard tests never show the guards are load-bearing",
+    "text": "The \"teardown race\" tests call captured subscription handlers after unmount. In the hook, those handlers contain only `if (disposedRef.current) return`, so the tests pass with or without the guard. `getVisibleRange` is never called and `resize` is called once regardless. `triggerResize` in `src/test/support/chart-provider-spy.ts` refuses to deliver to disconnected observers, so the disposed check on the ResizeObserver path (`runGuarded`) is never reached. In `src/test/use-chart-provider.translation.test.tsx`, \"does not translate after unmount\" adds no series before unmounting, so the `seriesCount === 0` guard alone blocks the call. Fix: invoke the captured observer callback directly after disconnect and assert `resize` is not called; add a series before unmount in the translation test."
+   },
+   {
+    "run": "u103-haiku-xhigh-3",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Range translation is not applied when the first series is added after the range is set",
+    "text": "The visible-range effect depends on `[mount.ready, chart, range]`. The series count lives in `seriesCountRef` (line 72), which is a ref. `addSeries` through the facade increments it (`src/chart/chart-facade.ts:49-56`) but triggers no render, so the effect does not re-run. If the Context range is set while the chart is empty, the effect returns early at line 341. When the first series is added later, nothing re-runs the effect, so the current range is not applied until the range changes again.\n\nThe comment at lines 337-338 says the seam \"activates the moment it adds the first series.\" That is not what happens. The test `use-chart-provider.translation.test.tsx:135-145` passes only because it adds the series before calling `setRange`. Its comment at lines 166-167 shows the ordering was chosen on purpose. No test covers \"range set, then first series added,\" which is the case initiative 120 will hit first. Fix: make the \"has series\" fact part of state so the effect depends on it, and add the missing ordering to the tests."
+   },
+   {
+    "run": "u103-haiku-xhigh-3",
+    "location": "src/test/use-chart-provider.errors.test.tsx:255-271",
+    "title": "The \"inert after teardown\" tests cannot fail",
+    "text": "The hook's subscription handlers (`src/chart/use-chart-provider.ts:286-301`) have a body that is only `if (disposedRef.current) { return }`. They never call the provider, never resize, and never read a range. The test \"makes a subscription callback fired after teardown inert\" checks that the handlers don't throw, that `getVisibleRange` isn't called, and that `resize` ran once. Removing the guard changes none of those, so the test passes either way. It gives false coverage for the teardown race.\n\nThe subscriptions are also dead code in production. The comment at lines 276-278 says they exist to prove the disposer lifecycle under React, so production mounts subscriptions only to exercise them in tests. That runs against CLAUDE.md's \"resist adding complexity.\" Fix: give the handlers an observable effect a test can assert on, or remove them and test the disposer lifecycle directly against the spy."
+   },
+   {
+    "run": "u103-luna-2",
+    "location": "src/chart/use-chart-provider.ts:317-322",
+    "title": "Series-count changes do not activate range translation",
+    "text": "The visible-range effect depends on `mount.ready`, `chart`, and `range`, but not on `seriesCountRef`. Adding or removing a series updates only the ref, so it does not trigger a render or rerun the effect. As a result, setting a range after the chart is populated does not apply it until some unrelated dependency changes. The translation test can miss this because it calls `setRange` after adding the series. Consider tracking the count in state or explicitly triggering translation when series membership changes."
+   },
+   {
+    "run": "u103-luna-3",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Range translation does not react to series-count changes",
+    "text": "The effect checks `seriesCountRef.current` but depends only on readiness, the facade, and `range`. Adding the first series through `chart.addSeries()` updates the ref without triggering a render, so the current range is not applied until `range` changes for another reason. Likewise, re-adding a series after the chart becomes empty will not restore the range automatically. Track series-count changes in reactive state or otherwise trigger the translation when the count transitions from zero."
+   },
+   {
+    "run": "u103-sol-1",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Adding data does not apply the pending visible range",
+    "text": "Adding the first populated series only updates `seriesCountRef`; it neither triggers a render nor changes this effect\u2019s dependencies. Consequently, an existing Context range remains unapplied until `range` changes again. The translation test masks this by calling `setRange` after adding the series. Trigger synchronization when data becomes available and test adding data without changing the range."
+   },
+   {
+    "run": "u103-sol-2",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Adding data does not activate range synchronization",
+    "text": "Adding a series only mutates `seriesCountRef`; it neither triggers rendering nor changes an effect dependency. Consequently, adding the first populated series after readiness never applies the existing Context range. The translation test masks this by also calling `setRange`. Make data availability reactive or explicitly apply the pending range when data becomes available, and test adding data without changing Context."
+   },
+   {
+    "run": "u103-sol-3",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Adding the first series does not apply the current range",
+    "text": "Adding a series only mutates `seriesCountRef`; it neither triggers rendering nor changes this effect\u2019s dependencies. Once an empty chart is ready, adding populated data therefore leaves the current Context range unapplied until `range` changes again. The translation test masks this by calling `setRange` after `addSeries`. Trigger synchronization when data becomes available, and test adding data without changing the range."
+   },
+   {
+    "run": "u103-sol-3",
+    "location": "src/chart/use-chart-provider.ts:341",
+    "title": "Series count does not establish that the chart contains data",
+    "text": "The guard permits range translation after adding `{ type: 'line', data: [] }`, despite the time scale still having no points. Likewise, `updateSeries` can clear the last populated series without decrementing the count. Both paths bypass the empty-chart protection and expose the documented `setVisibleRange` failure. Track actual data availability across additions, updates, and removals; add regression tests for empty series and clearing existing data."
+   },
+   {
+    "run": "u103-sonnet-1",
+    "location": "src/chart/use-chart-provider.ts (range-translation `useEffect`)",
+    "title": "Range translation gated on a non-reactive ref",
+    "text": "The effect reads `seriesCountRef.current === 0`, but its dependencies are `[mount.ready, chart, range]`. A series added after the last range change never triggers the effect. The stored range is therefore not applied when data first arrives, and it only applies on the next range change. The comment calls this \"the seam initiative 120 activates\", but the seam won't work as described without a reactive signal such as state or a counter in state. Also, `seriesCountRef` is updated inside `chart-facade.ts` callbacks, and `buildChartOperations` is only exercised through the mocked provider, so the real throw-on-empty behavior isn't covered by any unit test."
+   },
+   {
+    "run": "u103-sonnet-2",
+    "location": "src/chart/use-chart-provider.ts:343-348",
+    "title": "Visible-range translation is not re-applied when the first series is added",
+    "text": "The range effect reads `seriesCountRef.current`, a ref, and depends only on `[mount.ready, chart, range]`. If a consumer adds a series after the range is set, the effect does not re-run. The chart then keeps its default viewport until `range` changes, and the test `applies the range once a series exists` only passes because it calls `setRange` after `addSeries`. The code comment says initiative 120 will \"activate\" this seam. The gap will surface there as a silent mismatch between the Context and the chart. Either track the series count as state (or expose a signal) so the effect re-runs, or document this limitation explicitly at the seam."
+   },
+   {
+    "run": "u103-sonnet-3",
+    "location": "src/chart/use-chart-provider.ts (visible-range effect, `seriesCountRef.current === 0` guard)",
+    "title": "The range effect does not re-run when the first series is added",
+    "text": "The effect that applies the visible range reads `seriesCountRef.current`. That is a ref, not state, so it is not in the dependency array. Adding the first series therefore does not apply the `range` the Context already holds. The range reaches the chart only on the next range change. The test `applies the range once a series exists` hides this by calling `setRange(NEXT_RANGE)` after `addSeries`. Initiative 120 will hit this as soon as it adds data. Either track the series count as state, or have the `addSeries` path re-apply the current range. Add a test that adds a series without changing the range afterwards."
+   },
+   {
+    "run": "u103-sonnet-3",
+    "location": "src/chart/use-chart-provider.ts (the `subscribeCrosshairMove` and `subscribeVisibleRangeChange` callbacks)",
+    "title": "Subscription handlers are effectively dead code",
+    "text": "Both handlers have the body `if (disposedRef.current) { return }` and do nothing else. The comments say this is deliberate, to exercise the disposer lifecycle. It still adds a subscription pair, a retained-disposer array, and the teardown loop for zero behavior. That conflicts with \"resist adding complexity\". Defer these subscriptions until initiative 120 has a consumer, or expose them only through the facade, which already forwards them."
+   },
+   {
+    "run": "u103-sonnet-high-1",
+    "location": "src/chart/use-chart-provider.ts:275-298",
+    "title": "Mount-time subscriptions use no-op handlers (dead code)",
+    "text": "Both `subscribeCrosshairMove` and `subscribeVisibleRangeChange` are registered with callbacks whose only body is `if (disposedRef.current) return`. The indicator effect (`:348-358`) likewise has an empty body. This adds subscriptions and effect runs that do nothing, plus about 40 lines of explanatory comment. It also adds failure paths: a subscribe throw now fails the whole mount. The justification is \"proves the disposer lifecycle\", which the tests could do through the facade. The CLAUDE.md \"resist complexity\" principle argues for removing these until initiative 120 needs them. If they stay, they should at least be called out as intentional scaffolding in the slice docs."
+   },
+   {
+    "run": "u103-sonnet-high-1",
+    "location": "src/chart/use-chart-provider.ts:334-340",
+    "title": "Range translation is skipped when the first series is added after the range was set",
+    "text": "The range effect checks `seriesCountRef.current === 0`, but the ref is not state, so adding the first series does not re-run the effect. If the range was set while the chart was empty, adding a series does not apply that range. The next `range` change does. The comments describe this as a seam for initiative 120, but the behavior is a latent bug: the viewport stays out of sync with Context until the user changes the range. The test only covers \"add series, then change range\". Track the series count as state, or have `addSeries` re-apply the current range. At minimum, document and test the \"range already set before first series\" case."
+   },
+   {
+    "run": "u103-sonnet-high-2",
+    "location": "src/chart/use-chart-provider.ts:237-242",
+    "title": "Visible-range translation never fires when the first series is added",
+    "text": "The range effect is keyed on `[mount.ready, chart, range]` and gated on `seriesCountRef.current === 0`. A ref is not reactive, so adding a series does not re-run the effect. If the range was set while the chart was empty, the call is withheld and then never applied once data arrives. It only runs on the next change to `range`.\n\nThe comment says the seam activates \"the moment [initiative 120] adds the first series\", which overstates what the code does. The translation test sets the range after `addSeries`, so it never covers this ordering. Either re-apply the current range from the facade's `addSeries` path (for example through the `onAdded` callback), or correct the comment and add a test that pins the ordering."
+   },
+   {
+    "run": "u103-sonnet-high-2",
+    "location": "src/chart/use-chart-provider.ts:293-304",
+    "title": "Subscription callbacks and the indicator effect are empty no-ops",
+    "text": "`subscribeCrosshairMove` and `subscribeVisibleRangeChange` are given handlers whose only body is `if (disposedRef.current) { return }`. The indicator-observer effect (around lines 252-260) also does nothing. These are labelled as deliberate placeholders, but they are dead code that runs in production, and they affect the tests. The \"makes a subscription callback fired after teardown inert\" test in `use-chart-provider.errors.test.tsx` passes vacuously, because the handlers can't call anything whether or not the disposed guard exists. Keep the subscription lifecycle if you want to prove disposer handling, but don't count the inertness test as coverage of the disposed flag until a handler does real work."
+   },
+   {
+    "run": "u103-sonnet-high-3",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Visible-range translation is gated on a ref, so it cannot react to the first series being added",
+    "text": "The effect reads `seriesCountRef.current` but lists only `[mount.ready, chart, range]` as dependencies. A ref change does not re-run the effect. When a series is added to an empty chart, the Context's current range is not applied. It only reaches the chart on the next `range` change. The test \"applies the range once a series exists\" avoids this by calling `setRange` after `addSeries`, so it never covers the case. The comment calls this a seam for initiative 120. Even so, the first add leaves the chart and the Context out of sync. Either apply the range inside the facade's `addSeries` path when the count goes 0\u21921, or track the count as state."
+   },
+   {
+    "run": "u103-sonnet-high-3",
+    "location": "src/chart/use-chart-provider.ts:262-275",
+    "title": "Subscriptions and the indicator effect are no-ops, and the teardown-race test is vacuous",
+    "text": "The crosshair and visible-range handlers contain only `if (disposedRef.current) { return }`, so both branches do nothing. The adapter still builds a crosshair payload on every mouse move for no consumer. The indicator effect at lines 358-363 is also an empty body. These are documented placeholders, but they add per-event work and dead code. The test \"makes a subscription callback fired after teardown inert\" in `src/test/use-chart-provider.errors.test.tsx` asserts that `getVisibleRange` was not called. That passes whether or not the guard exists, because the handler never calls anything. Either defer the subscriptions until a consumer exists, or test the disposer lifecycle through real handler behavior."
+   },
+   {
+    "run": "u103-sonnet_notools-1",
+    "location": "src/chart/use-chart-provider.ts#useChartProvider",
+    "title": "Subscription handlers and the indicator effect are no-ops",
+    "text": "The mount sequence subscribes to crosshair and visible-range events with handlers that only check `disposedRef` and then do nothing. The indicator-translation effect likewise has an empty body behind a `ready` guard. The comments explain these as placeholders for initiative 120 and as a way to exercise the disposer lifecycle. Even so, they add live subscriptions, effects and dependency arrays that do nothing. Each live subscription is also one more thing that can throw during mount. This conflicts with the project rule to resist unnecessary complexity. Consider adding them when initiative 120 needs them. If they stay, record that decision in the slice notes."
+   },
+   {
+    "run": "u103-sonnet_notools-1",
+    "location": "src/chart/use-chart-provider.ts (visible-range `useEffect`)",
+    "title": "The visible-range effect does not re-run when the first series is added",
+    "text": "The effect checks `seriesCountRef.current === 0` but depends only on `[mount.ready, chart, range]`. A ref change does not re-run an effect. If a series is added after `range` was last set, the current range is never applied until `range` changes. Tests only pass because they call `setRange` after `addSeries`. The code comment says the effect is the seam initiative 120 \"activates the moment it adds the first series\". That claim is wrong as written. The series count needs to be state, or `addSeries` needs to trigger the range apply."
+   },
+   {
+    "run": "u103-sonnet_notools-2",
+    "location": "src/chart/use-chart-provider.ts (visible-range effect)",
+    "title": "Visible-range translation does not fire when the first series is added",
+    "text": "The effect is gated on `seriesCountRef.current === 0`, but a ref change does not re-run an effect. Its dependencies are `[mount.ready, chart, range]`. If a series is added after the range was set, the stored range is never applied. It is applied only on the next range change. The comment calls this a \"seam initiative 120 activates the moment it adds the first series\", which is not true as written. The test \"applies the range once a series exists\" masks this by calling `setRange` after `addSeries`. Initiative 120 will hit this: either apply the range from `addSeries` in the facade, or track series presence as state."
+   },
+   {
+    "run": "u103-sonnet_notools-2",
+    "location": "src/chart/use-chart-provider.ts (subscribeCrosshairMove / subscribeVisibleRangeChange callbacks, indicator effect)",
+    "title": "No-op subscription handlers and placeholder effect are dead code",
+    "text": "Both subscription callbacks consist only of `if (disposedRef.current) { return }`, so they do nothing. The indicator effect has an empty body behind a guard. Both are documented as deliberate seams. They still add a live subscription and effect on every mount for no behavior, which goes against the \"resist complexity\" principle. The tests do assert the subscription lifecycle, so the cost is small. Consider adding both when initiative 120 needs them."
+   },
+   {
+    "run": "u103-sonnet_notools-3",
+    "location": "src/chart/use-chart-provider.ts (the two `subscribe*` calls)",
+    "title": "Subscription callbacks are empty, so the teardown-race tests pass vacuously",
+    "text": "Both handlers contain only `if (disposedRef.current) { return }` and do nothing else. The test `makes a subscription callback fired after teardown inert` asserts that `getVisibleRange` and `resize` aren't called, but the handler body can't call them in any case. The test would pass if the `disposedRef` guard were deleted. The empty subscriptions are also dead code, even though the comment says they are there to exercise the disposer lifecycle. Test the disposal ordering and the disposer calls, which the other tests already do, and drop the claim that the inert-callback behavior is verified. Alternatively, wait until a handler does real work."
+   },
+   {
+    "run": "u103-sonnet_notools-3",
+    "location": "src/chart/use-chart-provider.ts (range effect)",
+    "title": "Visible-range translation is not re-applied when the first series is added",
+    "text": "The effect depends on `[mount.ready, chart, range]` and reads `seriesCountRef.current`, which is a ref and so triggers no re-render. If a range is set while the chart is empty and a series is added afterwards, the range is never applied until `range` changes. The comment says initiative 120 \"activates\" the seam when it adds the first series, but nothing re-runs the effect at that point. The test `applies the range once a series exists` only passes because it calls `setRange` after `addSeries`. Replace the ref with state, or apply the current range from the `addSeries` path, and document whichever you choose."
+   }
+  ]
+ },
+ {
+  "bug": "a122-C1",
+  "description": "A malformed `issued_at` aborts the whole project tick instead of faulting one entry (control).",
+  "candidates": [
+   {
+    "run": "a122-sonnet-high-3",
+    "location": "src/amoeba/runner/observe.py:127-129",
+    "title": "Run-id extraction from a journal entry is duplicated three times, with different strictness",
+    "text": "The same rule, that an `sq_run` entry must carry a non-empty string `run_id`, is written separately in three places:\n- `observe.py:127-129` in `_observe_one` raises `ValueError` on a missing or empty id.\n- `finish.py:141-145` in `_run_id` raises `ValueError` only when the id is not a string. An empty string passes.\n- `launch.py:166` `_text_parameter(entry, PARAM_RUN_ID)` raises on a missing or empty id.\n\n`faults.py:194-198` in `_in_flight_run_ids` skips validation and calls `str(entry.parameters[PARAM_RUN_ID])`. That raises `KeyError` for a malformed entry. It does this inside `escalate`, which is the last-resort fault path, so the failure surfaces from the one place that must not raise. The project rules say not to duplicate logic and not to scatter comparison values.\n\nDefine one helper, for example `run_id_of(entry)`, in one module (probably `launch.py`) that raises `ValueError`. Use it in `observe`, `finish` and `faults`. For `escalate`, decide explicitly what a malformed entry means."
+   }
+  ]
+ },
+ {
+  "bug": "a122-C2",
+  "description": "An unexpected fault on a node blocked on a non-human kind is recorded nowhere / never escalated (control).",
+  "candidates": [
+   {
+    "run": "a122-deepseek4-flash-1",
+    "location": "src/amoeba/runner/faults.py#_in_flight_run_ids",
+    "title": "`_in_flight_run_ids` indexes a parameter that legacy entries may not carry, and the failure lands in the not-caught escalation path",
+    "text": "```python\nstr(entry.parameters[PARAM_RUN_ID])\n```\n\nEvery sibling that reads the same key defends itself and raises a descriptive error: `launch._text_parameter` and `finish._run_id` use `.get` plus an explicit `ValueError`, and `observe._observe_one` does the same for the same key. `REQUIRED_PARAMETER_KEYS` guarantees the key only for entries written through today's `journal_issue`; `ProcessSettings` documents entries \"journaled before slice 120, which carry no run id\", and `unresolved_journal_entries` returns whatever is unresolved. A bare `KeyError` here propagates out of `escalate`, which the comment in `_tick_project` explicitly says is \"not caught again\", turning a per-project fault into a process-wide crash with a traceback at the CLI boundary. Use `.get` and raise the descriptive error the other readers raise.\n\n---"
+   },
+   {
+    "run": "a122-deepseek4-flash-2",
+    "location": "src/amoeba/runner/faults.py#_in_flight_run_ids",
+    "title": "`_in_flight_run_ids` indexes `parameters[\"run_id\"]` directly, inside the handler that must not raise",
+    "text": "```python\nreturn [\n    str(entry.parameters[PARAM_RUN_ID])\n    for entry in store.unresolved_journal_entries(project_id)\n    if entry.node_id == node_id and entry.kind is CommandKind.SQ_RUN\n]\n```\n\n`escalate` is called from the one broad `except` in `RunnerTenant._tick_project`, after the original fault has already been logged. A `KeyError` raised here is not caught anywhere: it escapes `_tick_project`, ends the tenant's tick, and takes the process down instead of escalating, which is the opposite of the \"expected faults are answers, not exceptions\" doctrine stated in `faults.py`'s own module docstring. The sibling readers are careful about exactly this value \u2014 `observe._observe_one` and `finish._run_id` both treat an unusable run id as an explicit `ValueError` with a message naming the entry \u2014 so the bare subscript is inconsistent within the same stage. It is reachable when an unresolved `sq_run` entry carries no `run_id` key (pre-slice-120 rows are the documented case); recovery normally resolves or escalates those before tenants tick, so this is narrow, but the failure mode is a crash rather than an answer. Using `.get` plus the same \"unusable run id\" message would make the handler total."
+   },
+   {
+    "run": "a122-haiku-xhigh-1",
+    "location": "src/amoeba/runner/faults.py:120-143",
+    "title": "Expected faults lose detail: first payload wins, and each recurring fault costs a write",
+    "text": "`raise_expected_faults` calls `store.raise_project_escalation` once per fault. The store returns an already-open row unchanged (src/amoeba/store/project_escalations.py:58-59), so the escalation keeps the payload of the first fault of that kind ever raised. Two `run_observation_failed` faults for different runs in one tick: the second run's id and detail are dropped. A `launch_overdue` escalation keeps the stderr tail from when it first opened, so an operator sees stale evidence. Each recurring fault also opens a `BEGIN IMMEDIATE` write transaction every tick even when nothing is written. Fix: update the open row's payload, or raise once per kind with the current details, and skip the store call for kinds already open this tick."
+   },
+   {
+    "run": "a122-haiku-xhigh-1",
+    "location": "src/amoeba/runner/tenant.py:145",
+    "title": "The one broad catch is not at a process boundary",
+    "text": "The rules allow a broad catch only as a top-level handler at a process boundary (python.md, Functions & Error Handling). `ResidentProcess` calls `tenant.tick(self)` with no try (src/amoeba/process/host.py:275), so the process boundary is the CLI handler at cli/main.py:318. The catch at tenant.py:145 isolates one project: it logs with `logger.exception`, writes an escalation and returns. That is a deliberate design (D8; slice doc lines 277 and 436; the count test in tests/runner/test_tenant.py), and it does not swallow silently. But it fits neither clause (a) nor clause (c) as written, so the rules do not cover it. Either add a scoped, commented exception for per-unit isolation to the rules and keep the count test, or narrow the catch to the exceptions a tick can raise."
+   },
+   {
+    "run": "a122-haiku-xhigh-1",
+    "location": "src/amoeba/runner/faults.py:4",
+    "title": "faults.py's docstring says escalation writes come later; they are already here",
+    "text": "The module docstring says \"Escalation writes join this module in a later task.\" The module now contains `raise_expected_faults` (line 120) and `escalate` (line 152), both of which write to the store, plus the runtime objects `NodeContext` and `TickFaults`. It is no longer only a shared vocabulary. Fix: correct the docstring, or move the store-writing functions to their own module so the vocabulary module has no store writes."
+   },
+   {
+    "run": "a122-haiku-xhigh-2",
+    "location": "src/amoeba/runner/tenant.py:145-149",
+    "title": "A persistent planner error spins the resident loop",
+    "text": "The broad catch escalates on the project path, where `raise_project_escalation` returns the open row unchanged and writes nothing (project_escalations.py:58-59). It then returns `(TickResult.COMPLETE, True)` unconditionally. `RunnerTenant.tick` returns that `True`, which contradicts its own docstring (tenant.py:96-99). The host runs `worked = tenant.tick(self) or worked` (host.py:275) and skips the idle wait when `worked` is true (host.py:253-254). So a planner that raises every tick causes back-to-back full tracebacks, one `BEGIN IMMEDIATE` per pass, and write-lock churn against the other tenants. Production planners are empty today, so this is dormant, but slice 125 adds them. `tests/runner/test_tenant.py#test_an_unexpected_exception_is_logged_and_the_other_project_still_ticks` asserts `wrote` is true and pins the wrong behavior. Fix: return whether the escalation actually wrote, and consider a backoff."
+   },
+   {
+    "run": "a122-haiku-xhigh-2",
+    "location": "src/amoeba/runner/faults.py:120-143",
+    "title": "Same-kind faults collapse into one stale detail",
+    "text": "`raise_expected_faults` calls `raise_project_escalation` once per fault. The store returns the already-open row unchanged for the same `(project, kind)` (project_escalations.py:58-59). So if two CF links fail in one tick, only the first one's detail is stored. While the kind keeps recurring, the open row keeps naming whichever fault came first, even after that one has recovered. The docstring says only that a repeat writes nothing; it does not mention the loss. `test_a_failed_link_raises_one_escalation...` covers one link only. Fix: either merge the subjects into the payload on recurrence or key the row on the subject, and add a two-subject test."
+   },
+   {
+    "run": "a122-haiku-xhigh-3",
+    "location": "src/amoeba/runner/tenant.py:149",
+    "title": "A caught tick exception reports work done, so the loop never idles under a recurring fault",
+    "text": "`_tick_project` returns `TickResult.COMPLETE, True` after the broad catch, whether or not `escalate()` wrote anything. `escalate()` writes nothing when the node is already blocked (`faults.py:172-182`), and `raise_project_escalation` returns the open row unchanged on a repeat (`store/project_escalations.py:58-59`). So a fault that recurs every tick reports work every tick. `RunnerTenant.tick` passes that `True` up (`tenant.py:111-116`), and `ResidentProcess._loop` skips its idle wait when a tenant reports work (`process/host.py:252-254, 275`).\n\nThe result is a loop with no pause that logs a full traceback on every pass (`tenant.py:146`) and takes SQLite's write lock on every pass (`BEGIN IMMEDIATE`, `project_escalations.py:54`). This breaks the `Tenant.tick` contract (\"Returns whether any work was done\", `host.py:79-80`) and the `RunnerTenant.tick` docstring (\"True only if something was written\", `tenant.py:96-97`). A planner that raises on each call reproduces it: `decide` runs with the node context cleared, so the escalation is project-scoped and deduplicated.\n\nThe tests miss it. `test_an_unexpected_exception_is_logged_and_the_other_project_still_ticks` asserts `wrote` only because the other project launched. Fix: have `escalate()` report whether it wrote and return that value from the catch. Add a test that ticks a single failing project twice and asserts `tick()` returns `F"
+   },
+   {
+    "run": "a122-haiku-xhigh-3",
+    "location": "src/amoeba/runner/faults.py:3-4",
+    "title": "`faults.py` docstring says escalation writes come later, but they are already in the module",
+    "text": "\"Escalation writes join this module in a later task.\" `raise_expected_faults` (line 120) and `escalate` (line 152) are defined here now, so the docstring contradicts the code. The `tick.py` module docstring (lines 3-5) places the reconciliation-read slot \"in observe\", but the code marker sits after `observe()` in `ProjectTick.run` (`tick.py:94`). Update both."
+   },
+   {
+    "run": "a122-luna-1",
+    "location": "src/amoeba/runner/tenant.py:145-149",
+    "title": "Repeated unexpected faults can busy-loop the resident process",
+    "text": "The exception handler always reports work after escalating. But escalation may write nothing when the node is already blocked or the project escalation is already open (`src/amoeba/runner/faults.py:171-190`). The host waits for its idle interval only when no tenant reports work (`src/amoeba/process/host.py:251-254`), so a recurring planner or stage exception can make the Runner retry continuously and consume CPU. Report work only when escalation actually changed state, or otherwise allow the host to idle."
+   },
+   {
+    "run": "a122-sol-1",
+    "location": "src/amoeba/runner/tenant.py:145-149",
+    "title": "Repeated unexpected faults bypass the idle interval",
+    "text": "The exception handler always reports a write, even when `escalate` deduplicates an existing escalation or finds an already-blocked node. `ResidentProcess._loop` waits only when tenants report no work, so a persistent exception produces a tight retry-and-error-log loop. Have escalation report whether it actually changed the store, and combine that with `tick.wrote` instead of returning unconditional `True`."
+   },
+   {
+    "run": "a122-sonnet_notools-2",
+    "location": "src/amoeba/runner/faults.py#_in_flight_run_ids",
+    "title": "Escalation path can itself raise on a malformed run id",
+    "text": "`_in_flight_run_ids` reads `entry.parameters[PARAM_RUN_ID]` with a hard subscript and wraps it in `str()`. `RunObserver._observe_one` and `finish._run_id` both raise `ValueError` when the run id is missing, empty or not a string. The tenant's process-boundary catch then calls `escalate`, which reaches `_in_flight_run_ids` for that same entry. If the run id is absent, that raises `KeyError` inside the `except` handler, and the process dies instead of escalating. If the run id is not a string, `str()` hides the bad value. The comment in `tenant.py` (\"a failing escalation write means a broken store\") is then wrong. Use `.get` and skip or report entries whose run id is unusable."
+   },
+   {
+    "run": "a122-sonnet_notools-3",
+    "location": "src/amoeba/runner/faults.py#raise_expected_faults",
+    "title": "Project-scoped escalations keep only the first fault of each kind",
+    "text": "The store deduplicates on `(project, kind)`. If two runs go `launch_overdue` or `run_observation_failed` in the same project, only the first fault's `node_id`, `run_id` and `detail` reach the escalation. The second node's failure is invisible to the operator until the first clears. `TickFaults` holds every fault, so the loss happens when the rows are written. Aggregate the details into one payload, for example a list of nodes and run ids, or document that this is intended."
+   }
+  ]
+ },
+ {
+  "bug": "u103-C1",
+  "description": "The mount effect never re-runs when the container ref resolves late, so the hook stays ready:false (control).",
+  "candidates": [
+   {
+    "run": "u103-deepseek4-flash-1",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Visible-range effect is gated on a ref that is not a dependency, so the advertised seam does not activate on the first series",
+    "text": "The effect reads `seriesCountRef.current === 0` as its data guard but lists only `[mount.ready, chart, range]` as dependencies. `seriesCountRef` is a ref (src/chart/use-chart-provider.ts:72), written by `series.onAdded`/`onRemoved` (lines 147\u2013151); writing it does not re-render and cannot re-run an effect. So when the count goes 0 \u2192 1 while `range` is unchanged, the effect does not re-run and `chart.setVisibleRange(range)` is never issued.\n\nThe comment at lines 328\u2013338 asserts \"The effect and its dependency array stay wired as the seam initiative 120 activates the moment it adds the first series.\" That is not what the code does: it activates on the *next* range change after a series exists. The initiative-120 flow this seam is built for (range set \u2192 data fetched \u2192 `addSeries`) would therefore apply the range only if the range happens to change again afterwards. The test that appears to cover this, `src/test/use-chart-provider.translation.test.tsx:135-145` (\"applies the range once a series exists\"), passes only because it calls `setRange` *after* `addSeries` \u2014 it exercises the incidental ordering, not the claim in the comment. The current-slice behaviour is still correct (the chart is empty by design, so the call is always withheld), which is why this is a CONCERN rather than a FAIL."
+   },
+   {
+    "run": "u103-deepseek4-flash-2",
+    "location": "src/chart/use-chart-provider.ts:338",
+    "title": "The visible-range seam does not activate when a series is added, contrary to its comment",
+    "text": "The comment states \"the effect and its dependency array stay wired as the seam initiative 120 activates the moment it adds the first series.\" That is not what the code does. The guard reads `seriesCountRef.current` (line 341) inside an effect whose dependencies are `[mount.ready, chart, range]` (line 345). `series.onAdded`/`onRemoved` in `src/chart/chart-facade.ts:47-56` mutate the ref only \u2014 no render, no effect re-run \u2014 so adding a series changes nothing; the range is applied only on the next `range` change (or a remount). The covering test \"applies the range once a series exists\" (`src/test/use-chart-provider.translation.test.tsx`) actually passes *because* it also calls `setRange` afterwards, and its `toHaveBeenCalledTimes(1)` assertion confirms the effect did not run at `addSeries` time. So a future consumer that adds a series and expects the Context's default range to be applied will silently get the library's auto-fit. The comment should say the effect fires on the next range change, or the count should become render-visible state if activation-on-add is intended."
+   },
+   {
+    "run": "u103-deepseek4-flash-2",
+    "location": "src/test/use-chart-provider.resize.test.tsx:30",
+    "title": "`MEASURED`/`measuredRect` DOMRect stub is duplicated in four suites",
+    "text": "`src/test/support/` was created precisely so \"the suites share one convention rather than re-deriving a double each file\" (see the header of `src/test/support/chart-provider-spy.ts`), and `render-with-contexts.tsx` centralizes the Context wrapper for the same reason. The container-measurement stub did not get that treatment: the identical `const MEASURED = { width: 1024, height: 640 }` plus `measuredRect()` appears in `src/test/use-chart-provider.errors.test.tsx:30-42`, `src/test/use-chart-provider.facade.test.tsx:33-45`, `src/test/use-chart-provider.translation.test.tsx:38-50`, and re-derived inline in `src/test/use-chart-provider.resize.test.tsx:37-40`. This violates the project DRY guideline and means a jsdom-layout fix must be made in four places. There is a smaller related split: environment stubs live in two modules \u2014 canvas/`matchMedia` in `src/test/setup.ts`, the `ResizeObserver` stub in `chart-provider-spy.ts` \u2014 so it is not obvious where a new stub belongs."
+   },
+   {
+    "run": "u103-deepseek4-flash-3",
+    "location": "src/chart/use-chart-provider.ts:337",
+    "title": "Range-translation comment claims activation \"on the first series\", but the guard cannot observe it",
+    "text": "The comment at lines 337-338 says the visible-range effect's \"dependency array stay[s] wired as the seam initiative 120 activates the moment it adds the first series.\" That is not what the code does. The guard at line 341 reads `seriesCountRef.current`, and the effect's dependency array (line 345) is `[mount.ready, chart, range]`. `seriesCountRef` is mutated only inside the facade callbacks at src/chart/chart-facade.ts:54 (`series.onAdded()`) and :60 (`series.onRemoved()`), which mutate a ref and therefore cause no re-render and no dependency change. Concretely: mount \u2192 `ready` flips true \u2192 effect runs once with count 0 and returns; then `chart.addSeries(...)` bumps the ref but nothing re-runs the effect, so the Context range is *not* applied to a newly added series until `range` itself changes next.\n\nThe test that appears to cover this only passes because it calls `setRange` after `addSeries` \u2014 see src/test/use-chart-provider.translation.test.tsx:140 followed by `act(() => symbolTimeframe().setRange(NEXT_RANGE))`. So the assertion proves the range-change path, not the claim in the comment. Either the comment should describe reality (the seam activates on the next range change after data exists), or the seam should be made observable (e.g. drive the count through state/a ref plus a re-render trigger, or expose an explicit \"data attached\" signal). As written, initiative 120 inhe"
+   },
+   {
+    "run": "u103-deepseek4-flash-3",
+    "location": "src/test/use-chart-provider.resize.test.tsx:30",
+    "title": "The same DOMRect/MEASURED/Host fixture is copy-pasted across four suites",
+    "text": "`MEASURED = { width: 1024, height: 640 }` plus a `measuredRect()`/inline-rect stub and a near-identical `Host` component are duplicated in four files: src/test/use-chart-provider.errors.test.tsx:30-52, src/test/use-chart-provider.facade.test.tsx:33-60, src/test/use-chart-provider.resize.test.tsx:30-41, and src/test/use-chart-provider.translation.test.tsx:38-71. This contradicts the project's DRY guideline and the convention these very files establish \u2014 `src/test/support/` already exists for shared doubles (`chart-provider-spy.ts`, `render-with-contexts.tsx`), and that helper's own docstring justifies centralizing precisely so suites do not \"re-derive a double each file.\" Drift is already visible: the resize copy has diverged into an inline arrow literal cast while the other three use a named `measuredRect()` function. A shared `measuredContainer` fixture/`Host` in `src/test/support/` would remove the repetition and the drift risk."
+   },
+   {
+    "run": "u103-haiku-xhigh-1",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Visible range is not applied after a series is added",
+    "text": "The range effect depends on `[mount.ready, chart, range]`. Adding a series through the facade changes none of these, so the effect does not re-run. The comment at lines 333-338 says the seam activates \"the moment it adds the first series,\" which the code does not do. The test at `src/test/use-chart-provider.translation.test.tsx:135` passes only because it calls `setRange` after `addSeries`. Reverse the order and the range is never applied. This is latent because the chart is empty in this slice, but initiative 120 adds data after mount, so the context range would be silently ignored until the user changes it. Fix: make the series count part of the effect's state so adding a series re-runs it, and add a test that adds a series first."
+   },
+   {
+    "run": "u103-haiku-xhigh-1",
+    "location": "src/chart/use-chart-provider.ts:108-113",
+    "title": "Operations before ready are silently dropped",
+    "text": "`runGuarded` returns `undefined` with no log when `providerRef.current` is null. That covers the time before the mount effect runs. The comment at lines 101-107 justifies dropping calls after teardown, but pre-ready calls are dropped the same way. `addSeries` then returns `undefined`, which is also what a caller gets when the provider throws, so a caller cannot tell \"not ready\" from \"failed.\" CLAUDE.md prohibits silent fallbacks. Log the pre-ready drop, or return a distinguishable result, and document the two cases separately."
+   },
+   {
+    "run": "u103-haiku-xhigh-1",
+    "location": "src/test/use-chart-provider.errors.test.tsx:255-271",
+    "title": "Teardown-race test cannot fail",
+    "text": "The test claims a subscription callback fired after teardown is inert. The handlers the hook registers (`src/chart/use-chart-provider.ts:287-301`) do nothing except return early when disposed, and they never call the provider. The assertions that `getVisibleRange` was not called and that `resize` was called once would hold with or without the guard. The `not.toThrow()` checks cannot fail either. The disposed checks at lines 290-292 and 297-299 are therefore dead code. Either give the handlers observable work and assert it is suppressed after teardown, or remove the guards and the test."
+   },
+   {
+    "run": "u103-haiku-xhigh-1",
+    "location": "src/chart/use-chart-provider.ts:249-250",
+    "title": "Initial resize measures a different box than the observer",
+    "text": "The mount sizes the chart with `getBoundingClientRect()`, which returns the border box. The observer reports `contentRect`, which excludes the border. The container is the `section` with the `border` class (`src/routes/chart-route.tsx:92`), and `theme.css` imports Tailwind, which sets `box-sizing: border-box`. Reading the CSS, the first `resize` passes 640px for a box whose content is 638px, and the observer corrects it when it first fires. The impact is probably transient and never painted. Still, the comment at lines 243-248 says the chart matches its container on first paint, and the code does not guarantee that. Use one measurement source for both paths. I did not run the app to confirm the pixel values."
+   },
+   {
+    "run": "u103-haiku-xhigh-2",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Range is not applied when the first series is added",
+    "text": "The translation effect depends on `[mount.ready, chart, range]`. `seriesCountRef` is a ref, so `addSeries` through the facade (chart-facade.ts:49-56) changes no dependency and the effect does not re-run. The comment at lines 333-338 says the effect \"activates the moment it adds the first series.\" That is false. A range set before the first series is never applied until the range changes again. The test \"applies the range once a series exists\" in `src/test/use-chart-provider.translation.test.tsx` adds the series before calling `setRange`, which hides the gap. Fix: make the count observable (state, or a dependency that changes on 0\u21921), and add a test that sets the range first and adds the series second."
+   },
+   {
+    "run": "u103-haiku-xhigh-2",
+    "location": "src/chart/use-chart-provider.ts:97-99",
+    "title": "The \"first error\" contract is violated: the last error wins",
+    "text": "`setOperationError` overwrites `error` on every failure (`{ ...current, error: failure }`). The documented contract at `src/chart/chart-operations.ts:77` says \"The first error from any provider operation.\" The test named \"keeps the first error rather than being reset by a later success\" in `src/test/use-chart-provider.errors.test.tsx` has one failure and one success. It never tests two failures, so it cannot catch the mismatch. Pick one behavior: keep the first error, or change the doc and rename the test."
+   },
+   {
+    "run": "u103-haiku-xhigh-2",
+    "location": "src/chart/use-chart-provider.ts:108-126",
+    "title": "Pre-ready and missing-ref calls fail silently",
+    "text": "`runGuarded` returns `undefined` when the provider is null, with no log and no state change. A call made before mount therefore returns `undefined`, which is indistinguishable from a provider error (that case does set state). The mount effect also returns silently when `containerRef.current` is null (lines 168-171), and the lifecycle test \"does nothing when the container ref is null\" asserts that silence. CLAUDE.md says \"Never use silent fallback values. Fail explicitly.\" The teardown-race drop is justified in comments at lines 101-106, but that justification covers only post-teardown calls, not pre-mount ones. Fix: log, or surface as `error`, when a call arrives before mount or the ref is missing. Keep the silent drop only for the post-teardown window."
+   },
+   {
+    "run": "u103-haiku-xhigh-2",
+    "location": "src/chart/use-chart-provider.ts:173",
+    "title": "The hook is hard-wired to the concrete provider",
+    "text": "`new LightweightChartsProvider()` runs inside the hook. CLAUDE.md says to program to interfaces, and the testing rules say to use dependency injection. Without a seam, all five hook test files repeat the same `vi.mock('../chart/index.ts', \u2026)` boilerplate, and the spy must replicate the class by hand. Fix: accept an optional factory, `createProvider: () => IChartProvider = () => new LightweightChartsProvider()`, so tests can pass a fake without module mocking."
+   },
+   {
+    "run": "u103-haiku-xhigh-2",
+    "location": "src/test/use-chart-provider.errors.test.tsx",
+    "title": "The race-guard tests never show the guards are load-bearing",
+    "text": "The \"teardown race\" tests call captured subscription handlers after unmount. In the hook, those handlers contain only `if (disposedRef.current) return`, so the tests pass with or without the guard. `getVisibleRange` is never called and `resize` is called once regardless. `triggerResize` in `src/test/support/chart-provider-spy.ts` refuses to deliver to disconnected observers, so the disposed check on the ResizeObserver path (`runGuarded`) is never reached. In `src/test/use-chart-provider.translation.test.tsx`, \"does not translate after unmount\" adds no series before unmounting, so the `seriesCount === 0` guard alone blocks the call. Fix: invoke the captured observer callback directly after disconnect and assert `resize` is not called; add a series before unmount in the translation test."
+   },
+   {
+    "run": "u103-haiku-xhigh-3",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Range translation is not applied when the first series is added after the range is set",
+    "text": "The visible-range effect depends on `[mount.ready, chart, range]`. The series count lives in `seriesCountRef` (line 72), which is a ref. `addSeries` through the facade increments it (`src/chart/chart-facade.ts:49-56`) but triggers no render, so the effect does not re-run. If the Context range is set while the chart is empty, the effect returns early at line 341. When the first series is added later, nothing re-runs the effect, so the current range is not applied until the range changes again.\n\nThe comment at lines 337-338 says the seam \"activates the moment it adds the first series.\" That is not what happens. The test `use-chart-provider.translation.test.tsx:135-145` passes only because it adds the series before calling `setRange`. Its comment at lines 166-167 shows the ordering was chosen on purpose. No test covers \"range set, then first series added,\" which is the case initiative 120 will hit first. Fix: make the \"has series\" fact part of state so the effect depends on it, and add the missing ordering to the tests."
+   },
+   {
+    "run": "u103-haiku-xhigh-3",
+    "location": "src/chart/use-chart-provider.ts:108-113",
+    "title": "Calls made before the chart is live are dropped silently",
+    "text": "`runGuarded` returns `undefined` when `providerRef.current` is null or `disposedRef` is set. It does not log and does not change state. The comment at lines 101-107 justifies the drop only for the torn-down case. Before mount, the drop is silent too. React runs child effects before the parent's effect, so a child that calls `chart.addSeries(...)` from its own mount effect has the call dropped, and nothing in `error` or `ready` reports it. A null `containerRef` (lines 168-171) also leaves `ready` false with `error` null and no message. CLAUDE.md says \"never use silent fallback values.\" Fix: report a pre-ready call explicitly, and surface the null-container case through `error`. Only the post-teardown drop should stay silent."
+   },
+   {
+    "run": "u103-haiku-xhigh-3",
+    "location": "src/test/use-chart-provider.errors.test.tsx:255-271",
+    "title": "The \"inert after teardown\" tests cannot fail",
+    "text": "The hook's subscription handlers (`src/chart/use-chart-provider.ts:286-301`) have a body that is only `if (disposedRef.current) { return }`. They never call the provider, never resize, and never read a range. The test \"makes a subscription callback fired after teardown inert\" checks that the handlers don't throw, that `getVisibleRange` isn't called, and that `resize` ran once. Removing the guard changes none of those, so the test passes either way. It gives false coverage for the teardown race.\n\nThe subscriptions are also dead code in production. The comment at lines 276-278 says they exist to prove the disposer lifecycle under React, so production mounts subscriptions only to exercise them in tests. That runs against CLAUDE.md's \"resist adding complexity.\" Fix: give the handlers an observable effect a test can assert on, or remove them and test the disposer lifecycle directly against the spy."
+   },
+   {
+    "run": "u103-haiku-xhigh-3",
+    "location": "src/chart/use-chart-provider.ts:97-99",
+    "title": "`error` keeps the latest failure, but the contract says it keeps the first",
+    "text": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation, or null\" (`src/chart/chart-operations.ts:77`). `setOperationError` overwrites unconditionally: `setMount((current) => ({ ...current, error: failure }))`. A second failing operation replaces the first.\n\nThe test named \"keeps the first error rather than being reset by a later success\" (`use-chart-provider.errors.test.tsx:234-247`) only checks that a later success does not clear the error. Its second call succeeds, so it never checks a later failure. Decide which contract is intended. If it is \"first,\" keep the existing error when one is set and add a two-failure test. If it is \"latest,\" fix the doc and rename the test."
+   },
+   {
+    "run": "u103-luna-1",
+    "location": "src/chart/use-chart-provider.ts:91-99",
+    "title": "A resize error is cleared by a later context change",
+    "text": "The mount effect calls `setMountOutcome(null)` after mounting, and that replaces the entire state with `{ready: true, error: null}`. If a post-mount operation fails before the mount effect's state update is committed, that later update erases the error. Preserve an existing operation error when committing readiness, or otherwise ensure mount completion cannot overwrite a newer failure."
+   },
+   {
+    "run": "u103-luna-2",
+    "location": "src/chart/use-chart-provider.ts:317-322",
+    "title": "Series-count changes do not activate range translation",
+    "text": "The visible-range effect depends on `mount.ready`, `chart`, and `range`, but not on `seriesCountRef`. Adding or removing a series updates only the ref, so it does not trigger a render or rerun the effect. As a result, setting a range after the chart is populated does not apply it until some unrelated dependency changes. The translation test can miss this because it calls `setRange` after adding the series. Consider tracking the count in state or explicitly triggering translation when series membership changes."
+   },
+   {
+    "run": "u103-luna-3",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Range translation does not react to series-count changes",
+    "text": "The effect checks `seriesCountRef.current` but depends only on readiness, the facade, and `range`. Adding the first series through `chart.addSeries()` updates the ref without triggering a render, so the current range is not applied until `range` changes for another reason. Likewise, re-adding a series after the chart becomes empty will not restore the range automatically. Track series-count changes in reactive state or otherwise trigger the translation when the count transitions from zero."
+   },
+   {
+    "run": "u103-sol-1",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Adding data does not apply the pending visible range",
+    "text": "Adding the first populated series only updates `seriesCountRef`; it neither triggers a render nor changes this effect\u2019s dependencies. Consequently, an existing Context range remains unapplied until `range` changes again. The translation test masks this by calling `setRange` after adding the series. Trigger synchronization when data becomes available and test adding data without changing the range."
+   },
+   {
+    "run": "u103-sol-2",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Adding data does not activate range synchronization",
+    "text": "Adding a series only mutates `seriesCountRef`; it neither triggers rendering nor changes an effect dependency. Consequently, adding the first populated series after readiness never applies the existing Context range. The translation test masks this by also calling `setRange`. Make data availability reactive or explicitly apply the pending range when data becomes available, and test adding data without changing Context."
+   },
+   {
+    "run": "u103-sol-3",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Adding the first series does not apply the current range",
+    "text": "Adding a series only mutates `seriesCountRef`; it neither triggers rendering nor changes this effect\u2019s dependencies. Once an empty chart is ready, adding populated data therefore leaves the current Context range unapplied until `range` changes again. The translation test masks this by calling `setRange` after `addSeries`. Trigger synchronization when data becomes available, and test adding data without changing the range."
+   },
+   {
+    "run": "u103-sol-3",
+    "location": "src/chart/use-chart-provider.ts:341",
+    "title": "Series count does not establish that the chart contains data",
+    "text": "The guard permits range translation after adding `{ type: 'line', data: [] }`, despite the time scale still having no points. Likewise, `updateSeries` can clear the last populated series without decrementing the count. Both paths bypass the empty-chart protection and expose the documented `setVisibleRange` failure. Track actual data availability across additions, updates, and removals; add regression tests for empty series and clearing existing data."
+   },
+   {
+    "run": "u103-sonnet-1",
+    "location": "src/chart/use-chart-provider.ts#useChartProvider",
+    "title": "Dead no-op callbacks passed to subscribe* in mount sequence",
+    "text": "The two subscription handlers are empty. Each only does `if (disposedRef.current) { return }` and then falls off the end, so the guard protects nothing. Two live subscriptions are held with no consumer. The stated aim is to prove the disposer lifecycle, but this adds runtime listeners and a mount-failure surface (a subscribe throw now fails the whole chart) for no product behavior. Either wire a real consumer or drop the subscriptions until initiative 120 needs them. The teardown-race test (\"makes a subscription callback fired after teardown inert\") only asserts that a no-op does nothing, so it gives false confidence."
+   },
+   {
+    "run": "u103-sonnet-1",
+    "location": "src/chart/use-chart-provider.ts:1-366",
+    "title": "Hook file exceeds the ~300-line guideline and carries stale scaffolding comments",
+    "text": "The file is about 366 lines, over the project's ~300-line guidance. The `useEffect` mount body is also well over the ~50-line function guidance. The header says \"This file is built up across tasks 8/10/12/14\", and the comments say \"subscriptions join here in task 12\" and \"facade (task 14)\". Those are work-process notes that are now false or meaningless, since everything has landed. Several comment blocks are also stacked back to back above `series` and `chart` (the facade comment and the counter-callback comment). Remove the task references and merge the duplicated comments. The mount/teardown sequence could be extracted to cut the length, instead of disabling `react-hooks/refs` for the whole file in `eslint.config.js`."
+   },
+   {
+    "run": "u103-sonnet-1",
+    "location": "src/chart/use-chart-provider.ts (range-translation `useEffect`)",
+    "title": "Range translation gated on a non-reactive ref",
+    "text": "The effect reads `seriesCountRef.current === 0`, but its dependencies are `[mount.ready, chart, range]`. A series added after the last range change never triggers the effect. The stored range is therefore not applied when data first arrives, and it only applies on the next range change. The comment calls this \"the seam initiative 120 activates\", but the seam won't work as described without a reactive signal such as state or a counter in state. Also, `seriesCountRef` is updated inside `chart-facade.ts` callbacks, and `buildChartOperations` is only exercised through the mocked provider, so the real throw-on-empty behavior isn't covered by any unit test."
+   },
+   {
+    "run": "u103-sonnet-1",
+    "location": "src/chart/use-chart-provider.ts (`setOperationError`)",
+    "title": "\"First error\" contract contradicts the implementation and a test name",
+    "text": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation\". `setOperationError` unconditionally overwrites with the latest failure (`{ ...current, error: failure }`). The test \"keeps the first error rather than being reset by a later success\" only checks that a later success doesn't clear the error. It never checks that a second failure leaves the first in place. Align the doc comment with the behavior, or keep the first error and add a test for it."
+   },
+   {
+    "run": "u103-sonnet-2",
+    "location": "src/chart/use-chart-provider.ts:1-366",
+    "title": "Hook file exceeds the ~300-line guide and carries stale task-number comments",
+    "text": "The file is 366 lines, over the project's ~300-line target. Much of that is duplicated or stacked comment blocks. For example, two consecutive block comments sit above `series`: the \"forwarding facade\" one and the \"Counter callbacks\" one. The facade comment is orphaned and no longer describes the `useMemo` it precedes. Several comments also refer to build-process steps that mean nothing to a later reader. The header says \"forwarding facade (task 14)\" and \"built up across tasks 8/10/12/14\". The `teardown` comment says \"subscriptions join here in task 12\", but the subscription disposers are already implemented a few lines below it. Trim and reconcile these comments. The comment cleanup would likely bring the file closer to the limit."
+   },
+   {
+    "run": "u103-sonnet-2",
+    "location": "src/chart/use-chart-provider.ts:343-348",
+    "title": "Visible-range translation is not re-applied when the first series is added",
+    "text": "The range effect reads `seriesCountRef.current`, a ref, and depends only on `[mount.ready, chart, range]`. If a consumer adds a series after the range is set, the effect does not re-run. The chart then keeps its default viewport until `range` changes, and the test `applies the range once a series exists` only passes because it calls `setRange` after `addSeries`. The code comment says initiative 120 will \"activate\" this seam. The gap will surface there as a silent mismatch between the Context and the chart. Either track the series count as state (or expose a signal) so the effect re-runs, or document this limitation explicitly at the seam."
+   },
+   {
+    "run": "u103-sonnet-2",
+    "location": "src/test/use-chart-provider.facade.test.tsx:35",
+    "title": "`measuredRect` and the measure-ref scaffolding are copy-pasted across four test files",
+    "text": "The `measuredRect()` helper, the `MEASURED` constant and the `measure` ref callback are repeated in the facade, errors, translation and resize suites. The resize suite inlines the same rect as a one-liner. `render-with-contexts.tsx` was introduced to avoid exactly this kind of divergence. Move the rect stub into `src/test/support/`."
+   },
+   {
+    "run": "u103-sonnet-3",
+    "location": "src/chart/use-chart-provider.ts",
+    "title": "Hook file exceeds the project's ~300-line guide, and a lint rule is disabled to cope",
+    "text": "The hook is about 366 lines, over the ~300-line guide in CLAUDE.md. `eslint.config.js` also turns off `react-hooks/refs` for this file. The justification comment is thorough, but it still switches off a React-correctness rule on the file that holds the most ref-heavy logic. Two things would remove the need for the suppression:\n- Move the mount/teardown sequence into a plain helper module, for example `mountChart(container, style, onResize)`, returning a `{ provider, teardown }` object. That shrinks the file and keeps refs out of the facade's construction path.\n- Move the long narrative comment blocks into the helper module, since much of the file's length is comments."
+   },
+   {
+    "run": "u103-sonnet-3",
+    "location": "src/chart/use-chart-provider.ts (visible-range effect, `seriesCountRef.current === 0` guard)",
+    "title": "The range effect does not re-run when the first series is added",
+    "text": "The effect that applies the visible range reads `seriesCountRef.current`. That is a ref, not state, so it is not in the dependency array. Adding the first series therefore does not apply the `range` the Context already holds. The range reaches the chart only on the next range change. The test `applies the range once a series exists` hides this by calling `setRange(NEXT_RANGE)` after `addSeries`. Initiative 120 will hit this as soon as it adds data. Either track the series count as state, or have the `addSeries` path re-apply the current range. Add a test that adds a series without changing the range afterwards."
+   },
+   {
+    "run": "u103-sonnet-3",
+    "location": "src/chart/use-chart-provider.ts (the `subscribeCrosshairMove` and `subscribeVisibleRangeChange` callbacks)",
+    "title": "Subscription handlers are effectively dead code",
+    "text": "Both handlers have the body `if (disposedRef.current) { return }` and do nothing else. The comments say this is deliberate, to exercise the disposer lifecycle. It still adds a subscription pair, a retained-disposer array, and the teardown loop for zero behavior. That conflicts with \"resist adding complexity\". Defer these subscriptions until initiative 120 has a consumer, or expose them only through the facade, which already forwards them."
+   },
+   {
+    "run": "u103-sonnet-3",
+    "location": "src/test/use-chart-provider.errors.test.tsx",
+    "title": "Facade and error-funnel tests duplicate the same helpers across files",
+    "text": "`measuredRect`, `MEASURED`, and the `measure` ref callback are copied in the errors, facade, translation, and resize test files. The resize file inlines a slightly different version. `render-with-contexts.tsx` was extracted to avoid exactly this duplication, but these helpers were not. Move them into `src/test/support/` so changing the stub happens in one place."
+   },
+   {
+    "run": "u103-sonnet-high-1",
+    "location": "src/chart/use-chart-provider.ts:97-99",
+    "title": "`error` keeps the latest failure, but docs and a test name say \"first\"",
+    "text": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation\" (`src/chart/chart-operations.ts:77`). The test is named \"keeps the first error rather than being reset by a later success\". `setOperationError` does `setMount((current) => ({ ...current, error: failure }))`, so a second failure overwrites the first. The test only checks that a later success doesn't clear the error. It never checks that a second failure leaves the first one in place. Either preserve the first error (`current.error ?? failure`) or change the docs and test name to \"most recent\". Also add a test with two failures."
+   },
+   {
+    "run": "u103-sonnet-high-1",
+    "location": "src/chart/use-chart-provider.ts:275-298",
+    "title": "Mount-time subscriptions use no-op handlers (dead code)",
+    "text": "Both `subscribeCrosshairMove` and `subscribeVisibleRangeChange` are registered with callbacks whose only body is `if (disposedRef.current) return`. The indicator effect (`:348-358`) likewise has an empty body. This adds subscriptions and effect runs that do nothing, plus about 40 lines of explanatory comment. It also adds failure paths: a subscribe throw now fails the whole mount. The justification is \"proves the disposer lifecycle\", which the tests could do through the facade. The CLAUDE.md \"resist complexity\" principle argues for removing these until initiative 120 needs them. If they stay, they should at least be called out as intentional scaffolding in the slice docs."
+   },
+   {
+    "run": "u103-sonnet-high-1",
+    "location": "src/chart/use-chart-provider.ts",
+    "title": "Hook file exceeds the ~300-line guide, and its lint suppression is file-wide",
+    "text": "The file is 366 lines and the mount effect is about 150 lines, against the ~50-line function guideline. The `eslint.config.js` comment justifies disabling `react-hooks/refs` for the whole file partly by saying inlining the facade would keep the file about 60% over the guide. It is still over. The file-wide `off` also hides any real ref-during-render mistakes later added to this file. Consider extracting the mount sequence (create, resize, observer, subscriptions, teardown) into a plain helper that returns a disposer. That would shrink the effect and might let the rule stay enabled. If the suppression stays, use a targeted `eslint-disable-next-line` at the `useMemo` call instead."
+   },
+   {
+    "run": "u103-sonnet-high-1",
+    "location": "src/chart/use-chart-provider.ts:334-340",
+    "title": "Range translation is skipped when the first series is added after the range was set",
+    "text": "The range effect checks `seriesCountRef.current === 0`, but the ref is not state, so adding the first series does not re-run the effect. If the range was set while the chart was empty, adding a series does not apply that range. The next `range` change does. The comments describe this as a seam for initiative 120, but the behavior is a latent bug: the viewport stays out of sync with Context until the user changes the range. The test only covers \"add series, then change range\". Track the series count as state, or have `addSeries` re-apply the current range. At minimum, document and test the \"range already set before first series\" case."
+   },
+   {
+    "run": "u103-sonnet-high-2",
+    "location": "src/chart/use-chart-provider.ts:237-242",
+    "title": "Visible-range translation never fires when the first series is added",
+    "text": "The range effect is keyed on `[mount.ready, chart, range]` and gated on `seriesCountRef.current === 0`. A ref is not reactive, so adding a series does not re-run the effect. If the range was set while the chart was empty, the call is withheld and then never applied once data arrives. It only runs on the next change to `range`.\n\nThe comment says the seam activates \"the moment [initiative 120] adds the first series\", which overstates what the code does. The translation test sets the range after `addSeries`, so it never covers this ordering. Either re-apply the current range from the facade's `addSeries` path (for example through the `onAdded` callback), or correct the comment and add a test that pins the ordering."
+   },
+   {
+    "run": "u103-sonnet-high-2",
+    "location": "src/chart/use-chart-provider.ts:293-304",
+    "title": "Subscription callbacks and the indicator effect are empty no-ops",
+    "text": "`subscribeCrosshairMove` and `subscribeVisibleRangeChange` are given handlers whose only body is `if (disposedRef.current) { return }`. The indicator-observer effect (around lines 252-260) also does nothing. These are labelled as deliberate placeholders, but they are dead code that runs in production, and they affect the tests. The \"makes a subscription callback fired after teardown inert\" test in `use-chart-provider.errors.test.tsx` passes vacuously, because the handlers can't call anything whether or not the disposed guard exists. Keep the subscription lifecycle if you want to prove disposer handling, but don't count the inertness test as coverage of the disposed flag until a handler does real work."
+   },
+   {
+    "run": "u103-sonnet-high-2",
+    "location": "src/chart/use-chart-provider.ts:17-20",
+    "title": "Stale task references and misplaced comment blocks in the hook",
+    "text": "The header says the file is \"built up across tasks 8/10/12/14\", and the teardown comment says \"subscriptions join here in task 12\". Both are historical process notes that are now wrong, since subscriptions are already in the file. The \"forwarding facade\" comment block sits directly above the `series` counter `useMemo`, not above `chart`, which it describes, so two unrelated comment blocks are stacked back to back. Remove the task numbers and move the comment next to `chart`."
+   },
+   {
+    "run": "u103-sonnet-high-2",
+    "location": "src/test/use-chart-provider.errors.test.tsx:34-62",
+    "title": "Duplicated measurement and Host scaffolding across four test files",
+    "text": "`MEASURED` and `measuredRect()` are copy-pasted into the errors, facade and translation suites. The resize suite inlines the same stub. All four also hand-roll the same `measure` ref callback. `render-with-contexts.tsx` and `chart-provider-spy.ts` were centralized to avoid this kind of divergence. Move the stubbed-rect helper into `src/test/support/` so a change to the measurement stub is a one-place edit."
+   },
+   {
+    "run": "u103-sonnet-high-3",
+    "location": "src/chart/use-chart-provider.ts:167-324",
+    "title": "Mount effect and hook file well over the project size guides",
+    "text": "The mount effect runs 157 lines, against a guide of about 50 lines per function. The whole file is 366 lines, against about 300. The `eslint.config.js` suppression comment justifies itself by saying inlining the facade would leave the file \"~60% over\". The file is still about 22% over after the extraction. `teardown`, the mount sequence and the subscription setup could each be pulled into helpers. A `mountChart(container, style, \u2026)` function returning `{ observer, disposers }` would also make the `let observer` / `const disposers` hoisting, which `teardown` reads before it is declared, unnecessary."
+   },
+   {
+    "run": "u103-sonnet-high-3",
+    "location": "src/chart/use-chart-provider.ts:340-345",
+    "title": "Visible-range translation is gated on a ref, so it cannot react to the first series being added",
+    "text": "The effect reads `seriesCountRef.current` but lists only `[mount.ready, chart, range]` as dependencies. A ref change does not re-run the effect. When a series is added to an empty chart, the Context's current range is not applied. It only reaches the chart on the next `range` change. The test \"applies the range once a series exists\" avoids this by calling `setRange` after `addSeries`, so it never covers the case. The comment calls this a seam for initiative 120. Even so, the first add leaves the chart and the Context out of sync. Either apply the range inside the facade's `addSeries` path when the count goes 0\u21921, or track the count as state."
+   },
+   {
+    "run": "u103-sonnet-high-3",
+    "location": "src/chart/use-chart-provider.ts:262-275",
+    "title": "Subscriptions and the indicator effect are no-ops, and the teardown-race test is vacuous",
+    "text": "The crosshair and visible-range handlers contain only `if (disposedRef.current) { return }`, so both branches do nothing. The adapter still builds a crosshair payload on every mouse move for no consumer. The indicator effect at lines 358-363 is also an empty body. These are documented placeholders, but they add per-event work and dead code. The test \"makes a subscription callback fired after teardown inert\" in `src/test/use-chart-provider.errors.test.tsx` asserts that `getVisibleRange` was not called. That passes whether or not the guard exists, because the handler never calls anything. Either defer the subscriptions until a consumer exists, or test the disposer lifecycle through real handler behavior."
+   },
+   {
+    "run": "u103-sonnet-high-3",
+    "location": "src/chart/use-chart-provider.ts:10",
+    "title": "Stale and misplaced comments in the hook, and the smoke spec names the wrong file",
+    "text": "- The header refers to \"task 14\" and a build-up \"across tasks 8/10/12/14\", which is process history.\n- The `teardown` comment says subscriptions \"join here in task 12\", but they already do.\n- The \"The forwarding facade\u2026\" comment block sits above the `series` memo instead of the `chart` memo it describes.\n- In `e2e/smoke.spec.ts:10` the comment says \"The chart itself is asserted in chart-render.spec.ts\". That spec covers the harness route. The product chart is covered by `chart-live.spec.ts`."
+   },
+   {
+    "run": "u103-sonnet_notools-1",
+    "location": "src/chart/use-chart-provider.ts#useChartProvider",
+    "title": "Subscription handlers and the indicator effect are no-ops",
+    "text": "The mount sequence subscribes to crosshair and visible-range events with handlers that only check `disposedRef` and then do nothing. The indicator-translation effect likewise has an empty body behind a `ready` guard. The comments explain these as placeholders for initiative 120 and as a way to exercise the disposer lifecycle. Even so, they add live subscriptions, effects and dependency arrays that do nothing. Each live subscription is also one more thing that can throw during mount. This conflicts with the project rule to resist unnecessary complexity. Consider adding them when initiative 120 needs them. If they stay, record that decision in the slice notes."
+   },
+   {
+    "run": "u103-sonnet_notools-1",
+    "location": "src/chart/use-chart-provider.ts (visible-range `useEffect`)",
+    "title": "The visible-range effect does not re-run when the first series is added",
+    "text": "The effect checks `seriesCountRef.current === 0` but depends only on `[mount.ready, chart, range]`. A ref change does not re-run an effect. If a series is added after `range` was last set, the current range is never applied until `range` changes. Tests only pass because they call `setRange` after `addSeries`. The code comment says the effect is the seam initiative 120 \"activates the moment it adds the first series\". That claim is wrong as written. The series count needs to be state, or `addSeries` needs to trigger the range apply."
+   },
+   {
+    "run": "u103-sonnet_notools-2",
+    "location": "src/chart/use-chart-provider.ts#setOperationError",
+    "title": "\"First error\" contract is not what the code does",
+    "text": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation\". `setOperationError` does `{ ...current, error: failure }`, so the latest failure overwrites the earlier one. The test \"keeps the first error rather than being reset by a later success\" only exercises a fail-then-succeed sequence. It would still pass if two failures replaced each other. Either keep the first error (`current.error ?? failure`) or fix the docs. If you keep the first error, add a fail-fail test."
+   },
+   {
+    "run": "u103-sonnet_notools-2",
+    "location": "src/chart/use-chart-provider.ts (visible-range effect)",
+    "title": "Visible-range translation does not fire when the first series is added",
+    "text": "The effect is gated on `seriesCountRef.current === 0`, but a ref change does not re-run an effect. Its dependencies are `[mount.ready, chart, range]`. If a series is added after the range was set, the stored range is never applied. It is applied only on the next range change. The comment calls this a \"seam initiative 120 activates the moment it adds the first series\", which is not true as written. The test \"applies the range once a series exists\" masks this by calling `setRange` after `addSeries`. Initiative 120 will hit this: either apply the range from `addSeries` in the facade, or track series presence as state."
+   },
+   {
+    "run": "u103-sonnet_notools-2",
+    "location": "src/chart/use-chart-provider.ts",
+    "title": "Hook file is over the ~300-line guideline, and the lint rule is switched off to cope",
+    "text": "The file is about 366 lines, over the project's ~300-line guide, even after the facade and types were extracted. The `useEffect` mount body is far longer than the ~50-line function guide. `eslint.config.js` also disables `react-hooks/refs` for this file. The suppression is justified in a comment, and its scope is narrow. Even so, the rule is now off exactly where ref-heavy code lives. Consider moving the mount/teardown sequence into a plain `mountChart(container, style, \u2026)` helper. That would shorten the hook and may remove the need for the suppression."
+   },
+   {
+    "run": "u103-sonnet_notools-2",
+    "location": "src/chart/use-chart-provider.ts (subscribeCrosshairMove / subscribeVisibleRangeChange callbacks, indicator effect)",
+    "title": "No-op subscription handlers and placeholder effect are dead code",
+    "text": "Both subscription callbacks consist only of `if (disposedRef.current) { return }`, so they do nothing. The indicator effect has an empty body behind a guard. Both are documented as deliberate seams. They still add a live subscription and effect on every mount for no behavior, which goes against the \"resist complexity\" principle. The tests do assert the subscription lifecycle, so the cost is small. Consider adding both when initiative 120 needs them."
+   },
+   {
+    "run": "u103-sonnet_notools-2",
+    "location": "src/chart/use-chart-provider.ts",
+    "title": "Repeated and stacked comment blocks",
+    "text": "Several comments are stacked back to back. The facade comment sits directly above the separate \"Counter callbacks\" comment, and two consecutive block comments sit above the `disposers.push` calls. The header says the file \"is built up across tasks 8/10/12/14\" and refers to \"task 12\"/\"task 14\", which is process history that will confuse later readers. The `teardown` comment says \"subscriptions join here in task 12\" even though they already do. Tidy these into current-state comments."
+   },
+   {
+    "run": "u103-sonnet_notools-3",
+    "location": "src/chart/use-chart-provider.ts#runGuarded",
+    "title": "Docs say \"first error\" but the code keeps the latest",
+    "text": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation\". `setOperationError` replaces the current error unconditionally, so a second failure overwrites the first. The test `keeps the first error rather than being reset by a later success` only covers a later success, not a later failure. Either keep the first error (`current.error ?? failure`) or change the documentation, and add a test for two consecutive failures."
+   },
+   {
+    "run": "u103-sonnet_notools-3",
+    "location": "src/chart/use-chart-provider.ts (the two `subscribe*` calls)",
+    "title": "Subscription callbacks are empty, so the teardown-race tests pass vacuously",
+    "text": "Both handlers contain only `if (disposedRef.current) { return }` and do nothing else. The test `makes a subscription callback fired after teardown inert` asserts that `getVisibleRange` and `resize` aren't called, but the handler body can't call them in any case. The test would pass if the `disposedRef` guard were deleted. The empty subscriptions are also dead code, even though the comment says they are there to exercise the disposer lifecycle. Test the disposal ordering and the disposer calls, which the other tests already do, and drop the claim that the inert-callback behavior is verified. Alternatively, wait until a handler does real work."
+   },
+   {
+    "run": "u103-sonnet_notools-3",
+    "location": "src/chart/use-chart-provider.ts (range effect)",
+    "title": "Visible-range translation is not re-applied when the first series is added",
+    "text": "The effect depends on `[mount.ready, chart, range]` and reads `seriesCountRef.current`, which is a ref and so triggers no re-render. If a range is set while the chart is empty and a series is added afterwards, the range is never applied until `range` changes. The comment says initiative 120 \"activates\" the seam when it adds the first series, but nothing re-runs the effect at that point. The test `applies the range once a series exists` only passes because it calls `setRange` after `addSeries`. Replace the ref with state, or apply the current range from the `addSeries` path, and document whichever you choose."
+   },
+   {
+    "run": "u103-sonnet_notools-3",
+    "location": "src/test/use-chart-provider.facade.test.tsx",
+    "title": "Test harness code is duplicated across the five hook suites",
+    "text": "`MEASURED`, `measuredRect()`, the `measure` ref callback, and a near-identical `Host` component are copy-pasted across the lifecycle, resize, errors, facade and translation suites. `render-with-contexts.tsx` was extracted to avoid this duplication, but only the provider wrapper was shared. Move the measured-rect stub and a configurable `Host` into `src/test/support/`. A stale `captured.chart` also isn't reset in the translation `beforeEach`, and imports appear after a `const` in `translation.test.tsx`."
+   }
+  ]
+ }
+]

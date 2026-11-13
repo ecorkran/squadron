@@ -1,0 +1,222 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Review part failure now returns a result instead of raising, with a misleading log",
+      "description": "In the `except ProviderError` branch of the part-running method, the old `raise` is replaced by `_logger.exception(\"review: unexpected error ...\")` and `return self._exception_result(...)`. Two problems follow.\n- A named provider failure is logged as \"unexpected\" with a full traceback. The dispatch action deliberately avoids tracebacks for these (issue 200).\n- The method now returns an `ActionResult` where it used to propagate. I did not verify that the callers (`_gated_parts` and the split-review path) handle a failed result from one part the same way they handled the exception. This is the likeliest regression, because a split review could keep going or aggregate wrongly after a part fails. No test in the diff covers a failed part in a split review.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Effort lookup in the failure handler can mask the original error",
+      "description": "`effort_sent_by_profile(...)` calls `get_profile`, `ensure_provider_loaded` and `get_provider`. It runs inside the `except ProviderError` handler, so if any of those raises, the original provider error is lost. Compute the effort before the `try`, or reuse the value that the call path already determined.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews --json` prints plain text when the review directory is missing",
+      "description": "`stats_reviews` checks `report.missing_dir` before `as_json`. It echoes \"No review directory at ...\" and exits 0. A script piping `--json` into a parser gets invalid JSON. Emit the empty JSON report (the dataclass already carries `missing_dir`), or exit non-zero.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"warn once per alias\" pricing guarantee does not hold on the review path",
+      "description": "`run_review_with_profile` calls `resolve_cost(alias, ..., set())` with a fresh set on every call, and does so again on the failure path. The executor's `UsageCapture(set())` documents one warning per alias per run. Every review would warn again, so a run with several reviews logs the same pricing warning repeatedly. Passing a shared warning set in would fix this. The bare `set()` argument also exposes an awkward `UsageCapture(set())` constructor that all tests must repeat.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/review/review_client.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Rendering depends on the live alias table",
+      "description": "The \"api-rate equiv.\" label is decided at report time from the current alias config. Renaming an alias or changing its `cost_tier` relabels old runs. Persisting the tier in the `UsageRecord` would make historical reports stable.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats_views.py#_is_subscription"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Exception used as control flow in the usage row parser",
+      "description": "The code raises `ValueError` inside the `try` only so its own `except` catches it. A plain `isinstance` check that returns the unreadable row would be clearer.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/stats/usage_report.py#_row"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slice filter on a missing frontmatter key",
+      "description": "`str(front.get(\"slice\")) == slice_filter` turns a missing key into the string `\"None\"`. A user filtering by the literal `None` would match every artifact with no slice. Use an explicit `None` check.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py#_matches_slice"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Inconsistent handling of a missing usage capture",
+      "description": "`require_capture` raises `UsageCaptureMissingError` outside any `try` in the compact and summary actions. In dispatch it is caught by the catch-all and returned as a failed result. The behavior is tested, but the contract differs by action.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Usage reading and telemetry design",
+      "description": "The usage reader parses defensively: bools are rejected, malformed fields become `None` with a warning, and per-message usage is ignored. Telemetry is summed over every result and carried on errors. Token and cost totals keep `None` instead of 0. Tests cover the real captured fixture, partial results, stalls, and state round-tripping.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/usage.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Review part failure now returns a result instead of raising, with a misleading log",
+      "location": "src/squadron/pipeline/actions/review.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Effort lookup in the failure handler can mask the original error",
+      "location": "src/squadron/pipeline/actions/review.py",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats reviews --json` prints plain text when the review directory is missing",
+      "location": "src/squadron/cli/commands/stats.py:62",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The \"warn once per alias\" pricing guarantee does not hold on the review path",
+      "location": "src/squadron/review/review_client.py",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Rendering depends on the live alias table",
+      "location": "src/squadron/cli/stats_views.py#_is_subscription",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Exception used as control flow in the usage row parser",
+      "location": "src/squadron/stats/usage_report.py#_row",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Slice filter on a missing frontmatter key",
+      "location": "src/squadron/stats/reviews_report.py#_matches_slice",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Inconsistent handling of a missing usage capture",
+      "location": "src/squadron/pipeline/actions/compact.py",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Usage reading and telemetry design",
+      "location": "src/squadron/providers/sdk/usage.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:29:08.140276",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 290425,
+  "cached_tokens": 182566,
+  "cache_write_tokens": 107855,
+  "completion_tokens": 4606,
+  "reasoning_tokens": null,
+  "duration_seconds": 40.03073520818725,
+  "cost_usd": 0.5057520000000001,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

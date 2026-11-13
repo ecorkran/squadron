@@ -1,0 +1,333 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The full cutover requires verdict \"allowed\", which the planner never emits for an estimate",
+      "description": "`judge_estimate` raises unless `summary[\"verdict\"] == \"allowed\"` (lines 242-245). The cutover's step 3 gets its summary from `pass --estimate-only --json` (`ESTIMATE_ARGS`, first_purchase.py:80). That command never returns \"allowed\" for a non-empty plan:\n\n- `evaluate_spend` sets `VerdictStatus.ESTIMATE_ONLY` whenever `estimate_only` is passed, regardless of breach (src/manta_trading/data/tick/spend_guard.py:266-267).\n- `plan_summary` writes that status as `verdict` (purchase_plan.py:303).\n- The integration test asserts the same thing: test/integration/data/test_tick_purchase_phase.py:240 expects `\"estimate_only\"`.\n\nConsequences:\n\n- For any non-empty plan, the full run installs the release (step 2), then stops at step 3 with \"verdict estimate_only\". It does this even when both ceilings are correct.\n- The new `--estimate` path skips this check (`check_ceilings=False` returns BUY at lines 225-226). It prints \"the PM runs: sudo \u2026\", the PM sets the ceilings as instructed, and the full run still refuses.\n- The unit tests pass only because their fixtures use shapes the CLI does not print: `\"allowed\"` at test/unit/scripts/test_cutover_304_checks.py:80 and test/unit/scripts/test_cutover_304_first_purchase.py:402, and `\"refused\"` at test_cutover_304_first_purchase.py:544 for the `--estimate` test. CLAUDE.md requires parser fixtures to match production output.\n- The 232 slice note (`project-documents/user/slices/232-slice.universe-expansion-gc.md:561`) records `allowed` in estimate-only, so the planner contract changed at some point. I cannot tell from this worktree when.\n\nSuggested fix: decide the spend verdict from the figures and `reasons` instead of requiring `\"allowed\"`. Refusing on non-empty `reasons` would also cover a space shortfall, which the cutover does not check today. Replace the fixtures with real `estimate_only` output and add a test that feeds that output through `judge` and `_steps`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:242"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An unknown source edge passes the D6 item 3 exit rule silently",
+      "description": "`not_caught_up_report` lists nothing and reports no failure unless `caught_up is False`. `caught_up` is also `None` when the family has no source edge: `scope_caught_up` returns `None` when `source_edge is None` (src/manta_trading/data/tick/tick_status_scope.py:204-208), and the docstring at lines 192-193 says nothing is judged in that case. For a wanted family, an unknown edge therefore passes with only \"caught up None\" in the narration. The test `test_a_family_that_is_caught_up_lists_nothing` (parametrized with `None`) enshrines this. CLAUDE.md says no silent fallbacks, so an unjudgeable wanted family should be a failure.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:275"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Over-session names are attributed to the wrong volume family",
+      "description": "`named` is keyed by product only (scripts/cutover_304_evidence.py:216, 232-233), and `over_sessions` takes every `over` verdict regardless of family (purchase_accounting.py:105-116). The statistics coverage document carries volume checks for both volume families (`VOLUME_FAMILIES` in src/manta_trading/data/tick/schema_families.py:53-56, iterated in tick_coverage_statistics.py:61-71). Each verdict has a `family` field (tick_coverage.py:93). So `over_failures` attaches every ES over session to both the ES tick-tier row and the ES bar_1m row. The count is right, but the names can be wrong, and D6 item 4 requires naming. The test fixture for `over_sessions` omits `family`, so this is not exercised. Key the names by (product, family) and filter by family.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py:119"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`origins = {}` is untyped",
+      "description": "`origins` is assigned `{}` and later a `dict[RequestKey, datetime]`. Under the project's `typeCheckingMode = \"strict\"`, pyright will likely report a partially-unknown variable type. I could not run pyright to confirm. Annotate it as `dict[RequestKey, datetime]`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:171"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`EXIT_USAGE` is dead code",
+      "description": "The constant is defined and never used in this file (the grep matched only its definition). The argparse path returns argparse's own exit code. Remove it, or use it deliberately in `main` if it should override argparse's code.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Malformed numbers and naive timestamps can crash the run with a traceback",
+      "description": "`main` catches `KeyError` and `ValueError`, but `Decimal(\"\u2026\")` raises `decimal.InvalidOperation`, which is not a `ValueError` (`_estimate_only` line 270, `_decimal` and `_ceiling` in checks.py). Separately, `resubmit_origins` compares `requested_at` with an aware `since` without checking `tzinfo`, while `_edge_of` (purchase_verdicts.py:88-89) does check. A naive value would raise `TypeError`. These are crashes, not swallowed errors, but the handler set is inconsistent.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:249"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Docstring says every key is required, but `over_sessions` uses a default",
+      "description": "The module docstring (lines 5-6) says a missing key always raises, but `over_sessions` uses `coverage.get(\"volume_checks\") or ()`. The `.get` is correct: `to_dict` removes the key for non-statistics documents (tick_coverage.py:76-79). Fix the docstring.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py:112"
+    },
+    {
+      "severity": "NOTE",
+      "title": "One test asserts only that failures are non-empty",
+      "description": "The test ends with `assert report.failures`, which would pass for any failure message. Assert the expected text.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_purchase_verdicts.py#test_only_statistics_carry_the_publication_label"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The TICK_UNIVERSE history iteration and its None-end guard are repeated",
+      "description": "`latest_want_end`, `coverage_reads` (cutover_304_evidence.py:72-91) and `wanted_keys` (cutover_304_checks.py:74-80) each loop over the history wants. The `want.end is None` guard appears in the first two. One helper, such as `history_wants()`, would cover all three.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py#latest_want_end"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Three script modules exceed the ~300-line guide",
+      "description": "`cutover_304_evidence.py`, `cutover_304_checks.py` and `cutover_304_first_purchase.py` each run to about 310 lines. The `purchase_verdicts.py` docstring says the split exists \"so each of those scripts stays near 300 lines\", which is not yet true.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The slice ID and ref go into file paths unvalidated",
+      "description": "`--slice` only passes `_nonempty`, then flows into `NOTES_DIR / f\"{slice_id}-cutover-start.txt\"` and the baseline file. `ref` flows into the log name. A value containing `/` or `..` writes outside the notes directory. The operator runs this, so the risk is low. Validate the slice as digits and the ref against a tag pattern.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#start_file"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The ceiling hint points to a command that is not always printed",
+      "description": "`NO_CEILING_HINT` says the `--estimate` run prints the ceiling command. `_estimate_only` prints it only on BUY (first_purchase.py:273-275). For a nothing-to-buy plan the hint leads nowhere, although step 1 still requires both ceilings.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:42"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_unaccounted` ignores the acquisition-failed label for missing, pending and edge-unknown sessions",
+      "description": "`_label` prints \"acquisition failed\" for a missing, pending or edge-unknown session inside a retry-exhausted request. `_unaccounted` still fails that session as \"not accounted for\" (line 254 accepts only the publication label). The narration and the exit rule disagree. Confirm which one D6 intends.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:253"
+    },
+    {
+      "severity": "PASS",
+      "title": "`env_value` is only swallowed for a missing key",
+      "description": "I checked `env_value` (scripts/cutover_common.py:194-204): it raises `CutoverError` only when the key is absent. The `except CutoverError` in `check_plan_unset` and `_ceiling` therefore swallows only the absent-key case, and both carry a comment saying so.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:110"
+    },
+    {
+      "severity": "PASS",
+      "title": "Ceiling rounding is correct",
+      "description": "`_round_up` takes the ceiling to the next multiple of 5 with `ROUND_CEILING`, and an exact multiple is not raised. The `:f` format avoids exponent notation in the printed command. The parametrized test covers 89\u219290, 90\u219290 and 6.3+4\u219210/15. I checked the arithmetic by reading the code, not by running the test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:83"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The full cutover requires verdict \"allowed\", which the planner never emits for an estimate",
+      "location": "scripts/cutover_304_checks.py:242",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "An unknown source edge passes the D6 item 3 exit rule silently",
+      "location": "scripts/purchase_verdicts.py:275",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Over-session names are attributed to the wrong volume family",
+      "location": "scripts/purchase_accounting.py:119",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`origins = {}` is untyped",
+      "location": "scripts/cutover_304_first_purchase.py:171",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`EXIT_USAGE` is dead code",
+      "location": "scripts/cutover_304_first_purchase.py:79",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Malformed numbers and naive timestamps can crash the run with a traceback",
+      "location": "scripts/cutover_304_first_purchase.py:249",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Docstring says every key is required, but `over_sessions` uses a default",
+      "location": "scripts/purchase_accounting.py:112",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "One test asserts only that failures are non-empty",
+      "location": "test/unit/scripts/test_purchase_verdicts.py#test_only_statistics_carry_the_publication_label",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The TICK_UNIVERSE history iteration and its None-end guard are repeated",
+      "location": "scripts/purchase_verdicts.py#latest_want_end",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Three script modules exceed the ~300-line guide",
+      "location": "scripts/cutover_304_evidence.py",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The slice ID and ref go into file paths unvalidated",
+      "location": "scripts/cutover_304_first_purchase.py#start_file",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The ceiling hint points to a command that is not always printed",
+      "location": "scripts/cutover_304_checks.py:42",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`_unaccounted` ignores the acquisition-failed label for missing, pending and edge-unknown sessions",
+      "location": "scripts/purchase_verdicts.py:253",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`env_value` is only swallowed for a missing key",
+      "location": "scripts/cutover_304_checks.py:110",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Ceiling rounding is correct",
+      "location": "scripts/cutover_304_checks.py:83",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:20:13.578836",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 35,
+  "prompt_tokens": 2886425,
+  "cached_tokens": 2619636,
+  "cache_write_tokens": 266761,
+  "completion_tokens": 73103,
+  "reasoning_tokens": null,
+  "duration_seconds": 333.51076808408834,
+  "cost_usd": 0.58109556,
+  "cost_basis": "provider"
+}

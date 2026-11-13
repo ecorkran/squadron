@@ -1,0 +1,129 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Observing one project deletes other projects\u2019 polling state",
+      "description": "`RunnerTenant` shares one observer across all projects, but these lines retain only the current project\u2019s entries. Ticking another project\u2014even an empty one\u2014erases polling timestamps, overdue markers, and cached faults. Reproduced A \u2192 empty B \u2192 A polling A twice at the same clock time despite the configured interval. Scope observer state and cleanup per project, and add a multi-project regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:108-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Launch can start after the deadline or a stop request",
+      "description": "The budget check happens before journaling, but the database commit and log creation precede `Popen` without another check. If that work crosses the deadline or receives a stop request, the child still launches. Reproduced a journal operation advancing beyond the deadline and requesting stop: launch proceeded and `_act` returned `COMPLETE`. Recheck immediately before spawning and explicitly reconcile any journaled-but-unlaunched entry.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py:176-187"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unconfirmed launches lose standing poll faults between polls",
+      "description": "After an unconfirmed launch receives `PollFailure`, subsequent ticks inside the polling interval call `_still_overdue` without replaying `_faulted`. Reproduced the state changing from `FAULT` to `LAUNCHING` with no reported fault one second later, although no successful poll occurred. Consequently, `_close_recovered` can close the escalation prematurely. Replay standing faults until a usable observation supersedes them.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:186-187"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Repeated unexpected faults bypass the idle interval",
+      "description": "The exception handler always reports a write, even when `escalate` deduplicates an existing escalation or finds an already-blocked node. `ResidentProcess._loop` waits only when tenants report no work, so a persistent exception produces a tight retry-and-error-log loop. Have escalation report whether it actually changed the store, and combine that with `tick.wrote` instead of returning unconditional `True`.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py:145-149"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Observing one project deletes other projects\u2019 polling state",
+      "location": "src/amoeba/runner/observe.py:108-111",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Launch can start after the deadline or a stop request",
+      "location": "src/amoeba/runner/tick.py:176-187",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unconfirmed launches lose standing poll faults between polls",
+      "location": "src/amoeba/runner/observe.py:186-187",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Repeated unexpected faults bypass the idle interval",
+      "location": "src/amoeba/runner/tenant.py:145-149",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:23:15.212395",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 118588,
+  "cached_tokens": 118272,
+  "cache_write_tokens": null,
+  "completion_tokens": 699,
+  "reasoning_tokens": 179,
+  "duration_seconds": 126.14999920898117,
+  "cost_usd": 0.0194492,
+  "cost_basis": "alias_pricing"
+}

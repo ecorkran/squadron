@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Existing Context Forge task responses can now crash",
+      "description": "`list_tasks()` now requires every JSON entry to contain `completed` and `total`. The previous client contract only required `index` and optional `files`, so older or otherwise valid `cf list tasks --json` responses missing either field raise `KeyError`. This breaks callers such as the new readiness source before it can produce a report. Treat these fields as optional if the CLI contract permits omission, or validate the response and raise a clear integration error.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/integrations/context_forge.py:183-184"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "HALTED item resumes can leave the report showing the old outcome",
+      "description": "The executor replaces the report record only after the item body finishes. If the body raises a git/environment exception, `resume_item()` returns `HALTED` without rewriting the report, so the record remains flagged/not-run and does not show that this resume attempt halted. This conflicts with the report\u2019s role in recording item-resume decisions and failures; persist the halted attempt before returning, or explicitly model the in-progress/halted state.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:157-160"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Existing Context Forge task responses can now crash",
+      "location": "src/squadron/integrations/context_forge.py:183-184",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "HALTED item resumes can leave the report showing the old outcome",
+      "location": "src/squadron/pipeline/item_resume.py:157-160",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:19:19.806500",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 104042,
+  "cached_tokens": 102912,
+  "cache_write_tokens": null,
+  "completion_tokens": 268,
+  "reasoning_tokens": 0,
+  "duration_seconds": 47.112718584015965,
+  "cost_usd": 0.0012761200000000002,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Run-id extraction from a journal entry is duplicated three times, with different strictness",
+      "description": "The same rule, that an `sq_run` entry must carry a non-empty string `run_id`, is written separately in three places:\n- `observe.py:127-129` in `_observe_one` raises `ValueError` on a missing or empty id.\n- `finish.py:141-145` in `_run_id` raises `ValueError` only when the id is not a string. An empty string passes.\n- `launch.py:166` `_text_parameter(entry, PARAM_RUN_ID)` raises on a missing or empty id.\n\n`faults.py:194-198` in `_in_flight_run_ids` skips validation and calls `str(entry.parameters[PARAM_RUN_ID])`. That raises `KeyError` for a malformed entry. It does this inside `escalate`, which is the last-resort fault path, so the failure surfaces from the one place that must not raise. The project rules say not to duplicate logic and not to scatter comparison values.\n\nDefine one helper, for example `run_id_of(entry)`, in one module (probably `launch.py`) that raises `ValueError`. Use it in `observe`, `finish` and `faults`. For `escalate`, decide explicitly what a malformed entry means.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:127-129"
+    },
+    {
+      "severity": "NOTE",
+      "title": "observe.py exceeds the ~300-line file guideline",
+      "description": "The file is 326 lines. It holds the confirmed-run path, the unconfirmed-launch path and the shared helpers. The unconfirmed-launch logic (`_unconfirmed`, `_check_line`, `_after_launch_poll`, `_still_overdue`) could move to its own module with the confirmed path left behind. This is only a guideline (\"where practical\"), so no action is required.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "validate_settings does not check every new bound",
+      "description": "`validate_settings` checks that three fields are positive and that the call timeout is below the shutdown grace. It does not check `launch_grace_seconds` or `sq_timeout_seconds`, which the Runner also uses. `launch_grace_seconds` is used in `observe._within_grace`. A zero or negative value would make every launch look overdue immediately. `sq_timeout_seconds` is used by the start-up probe. If these two are validated elsewhere, ignore this. Otherwise extend the loop. The `getattr(settings, name)` loop over string names also loses type checking. A small tuple of `(name, value)` pairs would keep it.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/amoeba/runner/factory.py:34-55"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Some tests assert on implementation rather than behavior, or reach into private names",
+      "description": "`test_the_runner_package_has_exactly_one_broad_except` counts the literal string `\"except Exception\"` in the package source. It would also count a docstring or comment containing that text. The BLE ruff rule already enforces this mechanically.\n\nOther private-access spots:\n- `test_budget_coverage.py` imports `_link` from `test_probes`. That should be a shared helper in a support module.\n- `test_factory.py` reads `tenant._planners`.\n- `test_end_to_end.py` monkeypatches `cli_main._dispatch`.\n\nAll are tolerable and mostly pragma-suppressed. A shared `_link` helper in `tick_support` would be a cheap cleanup.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/runner/test_tenant.py:190-196"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tests import finish-result types through an incidental re-export",
+      "description": "`test_finish.py` and `test_observe_launch.py` import `LaunchFailed`, `RunEnded` and `RunVanished` from `amoeba.runner.observe`. Those types are defined in `amoeba.runner.observed`; `observe` only imports them for its own use. If `observe` stops using one of them, ruff's unused-import fix would drop it and the tests would break. Import from `amoeba.runner.observed`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/runner/test_finish.py:9-12"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exception handling, budget discipline and journal ordering",
+      "description": "- The single broad catch sits at the per-project process boundary. It logs with `logger.exception`, escalates, and lets the other projects tick in the same call. Store failures and `UpstreamShapeError` re-raise first.\n- Every narrow `except OSError` handler in `launch.py`, `observe.py` and `probes.py` carries a comment saying why the failure is an answer and not a bug.\n- `ProjectTick._launch` calls `build_argv` before `journal_issue`, so an invalid parameter cannot leave a journaled entry that was never launched. It then journals before `popen`.\n- `finish.record` blocks then resolves, and `_block_once` makes both steps safe to repeat after a crash. `test_crash_recovery.py` kills the process between the two writes and checks that the sequence completes.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py:131-146"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Run-id extraction from a journal entry is duplicated three times, with different strictness",
+      "location": "src/amoeba/runner/observe.py:127-129",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "observe.py exceeds the ~300-line file guideline",
+      "location": "src/amoeba/runner/observe.py",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "validate_settings does not check every new bound",
+      "location": "src/amoeba/runner/factory.py:34-55",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Some tests assert on implementation rather than behavior, or reach into private names",
+      "location": "tests/runner/test_tenant.py:190-196",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Tests import finish-result types through an incidental re-export",
+      "location": "tests/runner/test_finish.py:9-12",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Exception handling, budget discipline and journal ordering",
+      "location": "src/amoeba/runner/tenant.py:131-146",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:26:52.030482",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 765713,
+  "cached_tokens": 610333,
+  "cache_write_tokens": 155370,
+  "completion_tokens": 8039,
+  "reasoning_tokens": null,
+  "duration_seconds": 71.63938279193826,
+  "cost_usd": 0.7715099,
+  "cost_basis": "provider"
+}

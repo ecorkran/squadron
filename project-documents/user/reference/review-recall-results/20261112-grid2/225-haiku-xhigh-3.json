@@ -1,0 +1,333 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Status reports \"caught up: yes\" when the wanted range was never evaluated",
+      "description": "`_product_status` sets `wanted` to `None` when `wanted_end` is unknown (lines 189-193), so `_scope` covers only the held units. Line 217 still passes `wanted=wanted_start is not None`, which is true whenever a start is configured. `caught_up` returns `all(...)` over the verdicts, and `all([])` is `True`. A product with `tier` and `start` set, no `tick_dataset_edge` row, and no units therefore gets `caught_up=True`, and `print_status` renders \"caught up: yes\" (`tick_status_render.py:81-87`). For a verb whose purpose is to prove completeness, this is a silent fallback. The shipped universe has `tier=None` (`universe.py:46`), so it is latent today, but it becomes reachable once an operator sets a tier and start before the first pass. Fix: pass `wanted=wanted is not None` and render the unknown-end case explicitly.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:217"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Raw-count scan is not scoped to the shape's units or instruments",
+      "description": "`raw_counts` counts every `tick_trade` row in each session window for any instrument, with no `unit_id` or instrument filter. The ledger side is scoped to the shape (`_SHAPE_WHERE`, lines 55-59). `_session_row` (`tick_coverage.py:81`) builds the instrument set as the union of ledger and raw keys, so a foreign-instrument row in a session window becomes a `Mismatch` with ledger 0, and the CLI exits 3. Foreign rows are possible: ingest selects every verified tier unit when no `--unit-id` is given (`ingest_select.py:84-92`), and `_not_selectable` does not check shape for named units (`ingest_select.py:95-107`). An adopted job for another product can therefore land in `tick_trade`. The universe has one product today, so this is latent. Once a second product shares the database and the GLBX calendar, `coverage --product ES` will report false mismatches. Confidence is medium: I did not trace `adopt`'s shape acceptance end to end. Fix: restrict the raw scan to the shape's current `unit_id`s (`tick_trade` carries `unit_id`, `migrations/tick.py:244`), which mirrors the ledger definition. Add a test with a foreign-shape unit inside the window.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:166"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Negative edge age renders as \"-1d 23h\"",
+      "description": "`age` applies chained `divmod` to `int(seconds)`. For negative input, floor division yields negative components, and `if days:` then fires. By hand, `age(-5)` and `age(-3600)` both return `-1d 23h`. The input is `now - edge.observed_at` (`tick_status_build.py:212`). `observed_at` is written with the pass process's `run.clock()` (`availability.py:150`), and status reads its own `utc_now()` (`tick_store_cmds.py:187,197`). The ingest docstring says ingest runs on a host without the Databento key, so the two hosts' clocks can differ, and a status host behind the pass host yields a negative age. No test covers `age`. Fix: refuse or clamp negative ages explicitly, and add a parametrized test that includes negative values.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:43"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Raw scan is likely O(trades \u00d7 sessions) and unmeasured",
+      "description": "`raw_counts` joins `tick_trade` to an `unnest` of sessions on `ts_event BETWEEN open AND close`. A range predicate cannot be hashed or merged, so the likely plan is a nested loop that compares each trade row against each session, which is O(rows \u00d7 sessions). For a long range over a dense product, that is expensive. The diff has no EXPLAIN ANALYZE, and `sql.md` asks for one when tuning. I could not measure this, so the finding is unverified. Fix: measure on a realistic range first. If it is confirmed, use a per-session bounded aggregate (chunk exclusion on `ts_event`) or a LATERAL join so each trade row is touched once.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:166"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Calendar-session helper duplicates `product_session_days`",
+      "description": "`calendar_sessions` builds `TradingCalendar(calendar_id, url)`, maps `psycopg.OperationalError`, `CalendarNotFoundError` and `OutOfPopulatedRangeError` to `TickCalendarError`, and closes the calendar in `finally`. `tick_calendar.product_session_days` (lines 67-81) does the same with the same three branches. The helper also lives in the status module, although `TickCalendarError` and the calendar code are in `tick_calendar.py`. Fix: move one shared function into `tick_calendar.py` and call it from both places.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:63"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test gaps on the wanted-range path and the new helpers",
+      "description": "Every new integration test uses `TICK_UNIVERSE[0]`, which has `tier=None` (`universe.py:46`). Line 87 pins `caught_up is None`. As a result, none of these run: `_wanted_end`, the wanted branch of `_scope`, `caught_up` returning True or False, `holed_sessions`, or tier rendering. A single test with a tier and start would have caught the first finding. Also untested: `age()` (no test imports it), the cross-shape exclusion in `raw_counts` (`test_tick_status_reads.py:117-132` uses one unit), and the no-contracts branch of `_product_lines`. Fix: add a parametrized case with a configured tier and start, covering no edge and no units.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/integration/data/test_tick_status_build.py:87"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unannotated SQL fragments may fail strict pyright",
+      "description": "`_UNITS`, `_LEDGER_UNITS` and `_SHAPE_WHERE` are plain module-level strings, so pyright infers `str`. They are interpolated into `conn.execute(f\"...\")` at lines 84-85, 101-103 and 133-138. Every sibling module annotates this kind of fragment as `LiteralString` (`manifest_reads.py:84-91`, `ingest_select.py:63`, `manifest_repo.py:163`), which is what lets pyright check psycopg's `LiteralString` query argument. Strict pyright is a merge blocker in this project. I could not run pyright, and I did not confirm the installed psycopg signature, so treat this as likely rather than confirmed. Fix: annotate the three constants `LiteralString`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:50"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Connection typed as `Any` at the CLI boundary",
+      "description": "`_read` takes `Callable[[Any, str], ...]`, and the nested `read` in `tick_coverage` takes `conn: Any` (line 228). The `Conn` alias already exists (`manifest_reads.py:29`), and `connect_migrated` returns that type. Using the alias would keep the connection typed end to end.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:157"
+    },
+    {
+      "severity": "NOTE",
+      "title": "F-string SQL composition",
+      "description": "`sql.md` says never to use f-string SQL. Here the f-strings compose only module constants and `COVERAGE_PREDICATE`, and every value goes through `%(...)s` parameters, so there is no injection path. Sibling modules do the same (`manifest_reads.py:124`). I am noting it so the exception is deliberate. The typing fix in the previous finding keeps it aligned with the project's convention.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:58"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Repeated logging-patch block across three test files",
+      "description": "The `setup_logging` patch and its explanatory comment appear in `test_tick_ingest_cli.py` (the `no_key` fixture), `test_data_tick_ingest.py` (the `settings` fixture), and here as `_app_patches`. The pattern is used across roughly 40 test files, so it follows convention. A shared fixture would remove the copies.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "test/integration/data/test_tick_status_cli.py:44"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Contract filter re-derives the spread set by membership",
+      "description": "`spreads` is computed with the predicate `c.instrument_class == SPREAD_CLASS` (line 198). The contracts filter then re-derives the same set with `c not in spreads` (line 224). That is two paths to one predicate, and membership compares dataclasses by equality. Fix: filter on the predicate directly.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:223"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_product_lines` mutates the last bucket row and is about 53 lines",
+      "description": "`lines[-1] += ...` appends the degraded count to whichever row came last. That works only because the second `_BUCKET_ROWS` row is last. The function is about 53 lines, slightly over the ~50-line guideline. Both are small, but a split would make the coupling explicit.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:80"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exit-code mapping for status and coverage is correct",
+      "description": "`run_mapped` checks the `storage` tuple before `exit_code_for`, so `TickDatabaseUnreachable` maps to 4 for status and coverage. `TickPreflightError` raised from `_entries` maps to 1, because `run_context` re-exports the `store_context` class and `tick_exit.exit_code_for` imports that same class. `TickCalendarError` maps to 4 (`tick_exit.py:54-57`). Writers still see `TickDatabaseUnreachable` as a `TickPreflightError` subclass, so their exit 1 is unchanged. `test_tick_status_cli.py:142-153` covers these branches. I did not run them.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:78"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test DELETEs target only the fixture-created database",
+      "description": "`migrated_tick_db` is built on `ephemeral_tick_db` (`test/conftest.py:313`), which the conftest documents as a throwaway database owned by the test admin, the same as `ephemeral_db`. That fixture creates and drops its database (`test/conftest.py:201-226`). The DELETEs in `test_a_coverage_mismatch_exits_3` (line 122) and in `test_tick_status_build.py:112` therefore touch only that database. The new tests do not read the production URL variable.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "test/integration/data/test_tick_status_cli.py:121"
+    },
+    {
+      "severity": "PASS",
+      "title": "Refactor of the session-day helpers preserves behaviour",
+      "description": "`session_days` now filters `days_touched` to `[start, end)`, which matches the old loop's per-day check. No `_utc_midnight` references remain. `ingest_plan.py` no longer uses the removed `UTC`, `datetime`, or `time` imports, and its remaining `date` and `timedelta` imports are still used (lines 84 and 95).",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/session_days.py:48"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Status reports \"caught up: yes\" when the wanted range was never evaluated",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:217",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Raw-count scan is not scoped to the shape's units or instruments",
+      "location": "src/manta_trading/data/tick/status_reads.py:166",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Negative edge age renders as \"-1d 23h\"",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:43",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Raw scan is likely O(trades \u00d7 sessions) and unmeasured",
+      "location": "src/manta_trading/data/tick/status_reads.py:166",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Calendar-session helper duplicates `product_session_days`",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:63",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test gaps on the wanted-range path and the new helpers",
+      "location": "test/integration/data/test_tick_status_build.py:87",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Unannotated SQL fragments may fail strict pyright",
+      "location": "src/manta_trading/data/tick/status_reads.py:50",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Connection typed as `Any` at the CLI boundary",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:157",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "F-string SQL composition",
+      "location": "src/manta_trading/data/tick/status_reads.py:58",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Repeated logging-patch block across three test files",
+      "location": "test/integration/data/test_tick_status_cli.py:44",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Contract filter re-derives the spread set by membership",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:223",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`_product_lines` mutates the last bucket row and is about 53 lines",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:80",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Exit-code mapping for status and coverage is correct",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:78",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Test DELETEs target only the fixture-created database",
+      "location": "test/integration/data/test_tick_status_cli.py:121",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Refactor of the session-day helpers preserves behaviour",
+      "location": "src/manta_trading/data/tick/session_days.py:48",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:03:16.007011",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 40,
+  "prompt_tokens": 2853730,
+  "cached_tokens": 2625110,
+  "cache_write_tokens": 228588,
+  "completion_tokens": 65176,
+  "reasoning_tokens": null,
+  "duration_seconds": 294.9215784999542,
+  "cost_usd": 0.5232634,
+  "cost_basis": "provider"
+}

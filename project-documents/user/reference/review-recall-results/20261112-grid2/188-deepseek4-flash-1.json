@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`tape_complete_through` is documented as \"the newest stored trade\" \u2014 the exact phrasing the schema comment was rewritten to remove",
+      "description": "`TradesResponse.tape_complete_through` carries `Field(description=\"Created time of the newest stored trade. Null means the trades phase has never run \u2014 not that the tape is empty today.\")`. That is the inverse of what the field holds. It is populated from `TradesResponse.build(... facts.tape_complete_through ...)`, which `serve_timeseries.tape_facts` fills with `sync_state['trades'].watermark_ts` \u2014 the end of the last fully walked window, which is typically *later* than the newest stored trade because quiet periods produce no rows.\n\nThe project has an explicit, mechanically enforced stance that this phrasing is wrong: `src/manta_trading/market/schema/migrations/kalshi.py` (kalshi_006) rewrites the column comment to \"the tape is complete through this instant (end of the last fully walked window) - NOT the newest stored trade (slice 265, Decision 1)\", and `test/integration/test_kalshi_migrations.py:533` asserts the string `\"created_time of the newest stored trade\"` is **absent** from that comment. Slice design D5 restates the same thing.\n\nThe consequence is not cosmetic: D5 exists so a `count: 0` is unambiguous. A client reading \"newest stored trade\" interprets the field as a *floor on stored rows* rather than a *ceiling on completeness*, and will read a legitimately quiet window as a collection gap \u2014 the precise misreading D5 was written to prevent. Since the value is correct and only the description is wrong, this is a doc defect, but it is on the published contract of the field the slice singles out.\n\nTwo related sites repeat the same claim and should be corrected together:\n- `src/manta_trading/data/kalshi/serve_timeseries.py#tape_facts` \u2014 module-level docstring opens \"The trades tape's floor and its newest stored trade.\"\n- `README.md:621` (outside this diff, but it is the same sentence and ships to consumers).\n\nFor contrast, `coverage_from`'s description (\"Oldest instant the trades tape reaches, across the live and historical surfaces\") is accurate.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradesResponse"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The trades re-nesting is positional and untyped, so a new stored column would be fetched and silently dropped",
+      "description": "`TradeRecord.from_row` reads `values[0]` \u2026 `values[7]` positionally, and `TradeRow.values` is declared `tuple[Any, ...]` (`src/manta_trading/data/kalshi/serve_timeseries.py#TradeRow`). `fetch_trades` selects `TRADE_VALUE_COLUMNS`, derived from `TRADE_COLUMNS`, so adding a column to `TRADE_COLUMNS` widens the fetched tuple without changing the mapping code \u2014 the extra value is read, ignored, and never served, with no error anywhere.\n\nThe candle path deliberately does not have this property (its docstring: \"a column added there is served here without an edit\"), and the unit tests defend it structurally \u2014 `test/unit/api_server/test_kalshi_models.py::TestCandleRecord::test_nested_field_set_is_exactly_what_candle_columns_describes` asserts the served field set equals the set `CANDLE_COLUMNS` describes.\n\nThere is no analogous assertion for trades, and the integration test that looks like one cannot catch it: `test/integration/test_kalshi_serving.py::TestTradeWindow::test_value_count_matches_the_repository_mapping` asserts `len(r.values) == len(TRADE_COLUMNS) - 1`, which auto-adjusts to whatever `TRADE_COLUMNS` becomes, so it passes for 8 values or 9. The `Any` element type is what removes the last line of defence (a typed tuple or a `TRADE_COLUMNS`-driven mapping would make the omission a type error or a test failure).",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_admit_rows` is duplicated verbatim between the two Kalshi route modules",
+      "description": "`_admit_rows` exists in `src/manta_trading/api_server/routes/kalshi_catalog.py#_admit_rows` and is copied into the new `kalshi_timeseries.py` with the same body, the same docstring, the same `count > max_rows` comparison, and the same `HTTP_422_UNPROCESSABLE_CONTENT` code. Only the trailing advice differs (`\"narrow the filter\"` vs `\"narrow start/end\"`), which is a parameter, not a reason to fork the function.\n\nThis is the rule the project states most plainly (\"Do not duplicate logic. Respect DRY\"; \"Never scatter comparison values across code \u2026 define it once\"), and it is the same shape the slice already got right elsewhere \u2014 `serialization.timeseries_response` and `routes/windows.resolve_window` were both extracted precisely because a second consumer appeared. The ceiling comparison now has two definition sites free to drift: a change to the comparison (e.g. `>=`) or to the status code must be made twice, and nothing fails if only one is made.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#_admit_rows"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`windows.py`'s own justification applies to `gaps.py`, which was left with its own copy",
+      "description": "`windows.py`'s module docstring argues that the day-boundary convention \"lives here rather than in `bars.py` because two route families now depend on it, and two derivations of 'the last instant of a day' is exactly how one of them ends up exclusive by accident.\" After this change, \"midnight UTC on a date\" is still spelled three times: `windows.window_start_utc`, `src/manta_trading/api_server/routes/gaps.py:54` (`_window_start_utc`, byte-identical body), and `src/manta_trading/data/gaps/repair_921.py#window_start_utc`.\n\nThe `gaps.py` **end** bound is genuinely different and correctly left alone \u2014 it returns next-midnight because its predicate is half-open (`gap_start < %s`), and its docstring explains that with a production measurement. The **start** bound is not different. This is a note rather than a concern because `gaps.py`'s pair is documented and self-consistent, and folding it in would widen the diff; but the new module's stated rationale is only half-applied, so the next route author has two precedents to choose from.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/windows.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_window`'s `extra` parameter is period-specific despite its generic name and untyped contract",
+      "description": "`_window(..., extra: dict[str, Any] | None = None)` merges `extra` into the bound parameters *and* uses `if extra:` to decide whether to append the literal clause `period = %(period)s`. Any future caller that passes an `extra` for a different purpose gets a `period` predicate with no bound parameter, which psycopg rejects at execute time \u2014 a confusing failure for a call that looks reasonable at the call site. Both current callers pass exactly `{\"period\": period}`, so nothing is broken today; naming the parameter `period` (and typing it `int | None`) would make the contract match the behaviour, or a `sql.SQL` fragment parameter would remove the implicit coupling entirely.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#_window"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Duplicated invariant check and message for the malformed trades state row",
+      "description": "`tape_facts` re-implements the guard and repeats the message string verbatim from `src/manta_trading/data/kalshi/trade_status.py#read_trade_status`: `\"kalshi.sync_state['trades'] exists without a watermark or coverage floor; the row is written only by the trades phase's init_state\"`. Both modules already import `STATE_QUERY` and `effective_tape_floor` from `trade_status`, so a shared `_require_trades_state(row)` helper (or a small accessor) would sit naturally beside the function the slice deliberately promoted for exactly this reason. The duplicated string means a future rewording of the diagnostic has two sites, and only one is likely to be found.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#tape_facts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Load-test constants restated as literals beside their definitions",
+      "description": "The test asserts `body[\"count\"] == 450` while `KALSHI_MARKET_COUNT = 450` is defined in `test/load/conftest.py` and the module already imports four sibling constants (`KALSHI_DENSE_EVENT`, `KALSHI_DENSE_MARKET`, `KALSHI_SERIES`, `KALSHI_START`) from it \u2014 so the derived-from-one-place pattern is established one line away. The same theme appears in `test/load/conftest.py#_seed_kalshi_dense`: the candlestick `COPY` column list is derived from `CANDLE_COLUMNS`, while the trades `COPY` column list is hardcoded, so a change to `TRADE_COLUMNS` would leave the fixture seeding a stale shape (and the assertion above unable to notice). The `24_382` literal in `test_events_list_at_production_width` is fine \u2014 it is a production measurement with its provenance in the docstring, not a restatement of a fixture constant.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py#test_markets_list_scoped_to_the_dense_event"
+    },
+    {
+      "severity": "PASS",
+      "title": "The refusal ordering and the tape-filter derivation are implemented as designed and defended against real code paths",
+      "description": "Two properties the design leans on are actually true in the code, not just asserted in prose.\n\nThe over-ceiling refusal is raised by `_admit_rows` *after* `await loop.run_in_executor(...)` returns, so the `with pool.connection()` block has already closed on every path \u2014 including the 404, which is raised inside the block and unwound through it. `test/unit/api_server/test_kalshi_timeseries.py::TestCeiling::test_the_connection_is_released_before_the_refusal` asserts this against a pool that counts open checkouts, and the load test's `_RecordingCursor` proves the stronger claim (no row-projecting `SELECT` against `kalshi.trades`) against a real database rather than a mock.\n\n`tape_filtered` does not re-spell the comparison: it renders `trades_filter_sql(excluded)` and evaluates the same parameter set, and `test/integration/test_kalshi_serving.py::TestTapeFiltered` executes the rendered SQL *and* the Python helper across five configurations, asserting they agree \u2014 so the two cannot drift silently. `effective_tape_floor`'s promotion is likewise complete (no `_effective_floor` remains anywhere in `src/` or `test/`) and its three branches are covered directly in `test/integration/test_kalshi_status.py::TestEffectiveTapeFloor`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#get_trades"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`tape_complete_through` is documented as \"the newest stored trade\" \u2014 the exact phrasing the schema comment was rewritten to remove",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradesResponse",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "The trades re-nesting is positional and untyped, so a new stored column would be fetched and silently dropped",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_admit_rows` is duplicated verbatim between the two Kalshi route modules",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#_admit_rows",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`windows.py`'s own justification applies to `gaps.py`, which was left with its own copy",
+      "location": "src/manta_trading/api_server/routes/windows.py",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`_window`'s `extra` parameter is period-specific despite its generic name and untyped contract",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#_window",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Duplicated invariant check and message for the malformed trades state row",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#tape_facts",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Load-test constants restated as literals beside their definitions",
+      "location": "test/load/test_188_kalshi_api_nfr.py#test_markets_list_scoped_to_the_dense_event",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The refusal ordering and the tape-filter derivation are implemented as designed and defended against real code paths",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#get_trades",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:37:38.476625",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 50,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 446446,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2310441,
+  "cached_tokens": 2007168,
+  "cache_write_tokens": null,
+  "completion_tokens": 124052,
+  "reasoning_tokens": 117805,
+  "duration_seconds": 625.5928638330661,
+  "cost_usd": 0.1160094,
+  "cost_basis": "alias_pricing"
+}

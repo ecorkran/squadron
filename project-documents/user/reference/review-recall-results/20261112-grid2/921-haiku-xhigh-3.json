@@ -1,0 +1,333 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The minute firing is never stopped early because `mt-run` blocks until the unit exits",
+      "description": "`fire_unit_until` calls `run([\"mt-run\", ...], sudo=True, check=False, stream=True)` and only then calls `wait_for_unit_or_line` (line 357). `deploy/mt-run` starts the unit with `systemctl start --no-block` (line 127) and then loops `while is_running \"${unit}\"; do sleep 2; done` (line 129). So `mt-run minute` returns only after the minute unit has stopped. The minute firing is unbounded (backfill runs until quota is gone), so the call at line 356 blocks for the whole firing. By the time line 357 runs, the unit is inactive, and the stop branch at lines 358\u2013360 never acts on a live unit. The result is the ~10-hour firing that #22 was meant to end.\n\nThe test `test/unit/test_cutover_921.py#TestBoundedFiringAndRecord._fire` mocks `run` to return at once and feeds `unit_active` a scripted sequence. It encodes the assumption that `mt-run` returns while the unit is still active, so it cannot catch this.\n\nFix: start the unit without blocking (`sudo systemctl start --no-block mt-minute-pass.service` is already covered by `MT_UNITS`), or run `mt-run minute` as a `Popen` child, poll the journal for the line, stop the unit, then wait for the child. Add a test that fails if the stop happens only after the `mt-run` process has exited.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:356"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The sudoers rule grants root on a script in the operator's writable checkout",
+      "description": "`MT_INSTALL` lets `manta` run `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh --ref *` as root with NOPASSWD. That file sits in the operator's own checkout, which the operator must be able to write (they `git pull` there). Whoever can edit it can run arbitrary code as root with a single `sudo` call, so the \"limited root\" grant becomes unrestricted root for `manta`. The installer's own header (`deploy/install-production.sh:27-28`) avoids trusting the operator's checkout for units, but the root execution still comes from that checkout, which may hold uncommitted changes.\n\nAlso, `install()` (`scripts/cutover_common.py:134`) resolves the path with `Path(__file__).resolve()`. The rule therefore matches only when the checkout sits at that exact path and is not behind a symlink.\n\nFix: install the installer as a root-owned copy outside the home directory (for example `/usr/local/sbin/mt-install`, `0755 root:root`), point `MT_INSTALL` at that path, and have the cutover call it by that path.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:9"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The narration log omits the repair and verify output that the report depends on",
+      "description": "`_repair` captures the repair script's stdout and stderr and emits them with `print(output)` (line 102), not `say`. `start_log` tees only `say` lines (`scripts/cutover_common.py:57-62`). The `[PASS]`, `[FAIL]` and `[WAIT]` lines, which are the acceptance numbers, therefore never reach the log file. The final message (`CUTOVER INCOMPLETE \u2014 read the FAIL lines`, line 277) points to lines the log does not contain. The `mt-run` output and the wait-loop `print` lines are missing from the log for the same reason.\n\nThe commit's stated purpose is that \"the narration is the cutover's report; it gets a file.\" That is not met. The test `test_say_tees_to_the_log_file` only exercises `say`, so it cannot catch this.\n\nFix: route `_repair` output and the other `print` calls through one tee helper that writes to stdout and the log, and add a test that a `[FAIL]` line returned by `_repair` appears in the file.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:95"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The sudoers rule does not cover the repair step, and its header claim is inaccurate",
+      "description": "The header says the rule covers \"Exactly the commands those scripts issue.\" It does not. `_repair` (`scripts/cutover_921_minute_sessions.py:96-100`) runs `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode>` on every `--check`, `--apply` and `--verify`. None of the aliases match that command, so the cutover prompts for a password at its first repair step, or fails without a TTY. In the other direction, `MT_UNITS` lists `systemctl is-active`, which `unit_active` never runs under sudo.\n\nFix: run the repair as the service user (`sudo -u manta-trading ...`), which is the same pattern as `MT_GIT`, and add that alias. Do not grant root to a repository script.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:1"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The 04:05 UTC firing has about five minutes of margin in standard time",
+      "description": "The docstring says \"04:05 leaves an hour over the provider's upper bound,\" and it justifies that with \"20:00 ET = 00:00 UTC.\" Both hold only during EDT. From November 1 to March 8, 20:00 ET is 01:00 UTC, and the provider's stated 2\u20133 h upper bound is 04:00 UTC. Today (2026-11-12) is in standard time, so the 04:05 firing is about five minutes past the bound. The measurements in the docstring (01:21 and 11:27 UTC on 2026-09-10) bracket the window but include nothing near 04:00 UTC.\n\nThe new judgement should keep the row and retry on the 13:05 firing, so the likely cost is a delay rather than data loss. The comment is still wrong for half the year. Fix the comment, and consider a later UTC time or a measurement. The constant is single-sourced, so the change touches `constants.py`, `mt-minute-pass.timer`, and the tests that assert the times.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/constants.py:164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The cagg freshness probe duplicates an existing catalog query and drops its `-infinity` guard",
+      "description": "`cagg_freshness_for_session` re-implements the `timescaledb_information.jobs` + `job_stats` lookup that `market/maintenance/cagg_freshness.py` already has (`_JOB_SQL`, lines 73\u201383, and `_read_refresh_job`, line 270). The existing SQL normalizes the value with `nullif(s.last_successful_finish, '-infinity'::timestamptz)`, and its comment (lines 67\u201372) says psycopg raises `DataError` on `-infinity` for a policy that has never succeeded. The new query selects `stats.last_successful_finish` directly, so a never-succeeded policy makes `--verify` raise an uncaught `DataError` rather than reporting WAIT or FAIL. The new query also skips the probe statement-timeout guard that `_read_refresh_job` applies.\n\nFix: reuse `_read_refresh_job` (promote it to a public name) and take `last_refresh` from `.last_successful_finish`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py:182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The cutover loop fires more minute passes while verify reports WAIT",
+      "description": "The loop breaks only when verify reports neither FAIL nor WAIT (line 265). A WAIT means the cagg has not caught up, not that trailing work remains, so a stale cagg causes another full minute firing. Each firing runs to quota (see the first finding), so a persistent WAIT (for example a paused cagg policy, which verify cannot distinguish) spends the quota of up to five more firings. The run then reports \"reached the 6-firing ceiling\" (line 269), which misstates the cause. The trailing-completion result `_completed` is also ignored (line 260).\n\nFix: report WAIT as its own outcome and do not refire on it. Use the trailing-completion signal to decide whether another firing is needed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:259"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The minute timer's stagger comment is out of date",
+      "description": "The unit description and the comment at lines 6\u20137 say the minute pass is \"staggered 30 minutes behind mt-daily-pass.timer.\" The daily timer fires at 00:35 and 12:35 UTC, so the 04:05 firing is 3 h 30 min after it. Only the 13:05 firing is still 30 minutes behind. The rationale (\"never start simultaneously\") still holds, but the stated offset is wrong.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "deploy/systemd/mt-minute-pass.timer:2"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`except Exception: bars = []` sits on the path the new judgement uses",
+      "description": "This blanket catch with a fallback value is pre-existing, and it has no inline justification and no log. In practice `classify_outcome` already returns TRANSIENT_FAILURE for an unparseable body (`outcomes.py:115-118`), so a SUCCESS or PARTIAL verdict should not reach this branch with bad JSON. Narrow it to the specific exception and add the required comment, or log it.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:888"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`fire_unit` and `fire_unit_until` duplicate the same firing sequence",
+      "description": "Both functions take the cursor and start time, print the same banner, run `mt-run`, and run `sudo -v`. Factor the shared part into a helper.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:341"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The new trailing-phase tests repeat the same large patch block",
+      "description": "`TestChunkJudgedBySessions._run` (line 2327) and `test_last_bar_before_the_chunk_end_is_still_success` (line 2414) each repeat the same roughly 40-line `patch` context. Move it into one helper or fixture.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/data/acquisition/daemon/test_minute.py:2327"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The new imports are not in isort order",
+      "description": "The new imports in `minute.py` (lines 56\u201363), `scripts/cutover_921_minute_sessions.py` (lines 45\u201358), and `scripts/repair_921_minute_sessions.py` (line 60) do not follow the isort order that the required ruff `I` rule enforces. I could not run ruff to confirm.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:56"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Any single in-session bar satisfies a session",
+      "description": "`sessions_without_bars` counts a session as collected when any bar falls in `(open, close]`. This matches the repair's truncated-day predicate, which is documented, so the two agree. A response carrying only a few bars from a session still deletes the gap row, and nothing re-fetches it. The health check would catch it, but the repair path would not. State this limit in the docstring or add a minimum-bar threshold.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:43"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The sudoers rule exposes every secret in the env file",
+      "description": "`MT_READ` lets `manta` read all of `/etc/manta-trading.env`, but `verify_migrate_target` needs only two URL keys. This is a design tradeoff for an operator account that is already privileged. Consider a root-owned helper that prints only the URL keys. Also note that `MT_UNITS` includes `is-active`, which the code never runs under sudo.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:10"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The session-label fix has no test",
+      "description": "The UTC-label change is correct. I did not find a test that passes a non-UTC-zoned session into `check_minute_session_mass`. `test_a_healthy_session_passes` (`test/unit/cli/commands/test_data_health.py:275-280`) asserts only the `5,100/min` substring of the detail.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/minute_session_mass.py:260"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The minute firing is never stopped early because `mt-run` blocks until the unit exits",
+      "location": "scripts/cutover_common.py:356",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The sudoers rule grants root on a script in the operator's writable checkout",
+      "location": "deploy/sudoers.d/manta-ops:9",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The narration log omits the repair and verify output that the report depends on",
+      "location": "scripts/cutover_921_minute_sessions.py:95",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The sudoers rule does not cover the repair step, and its header claim is inaccurate",
+      "location": "deploy/sudoers.d/manta-ops:1",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The 04:05 UTC firing has about five minutes of margin in standard time",
+      "location": "src/manta_trading/constants.py:164",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The cagg freshness probe duplicates an existing catalog query and drops its `-infinity` guard",
+      "location": "src/manta_trading/data/gaps/repair_921.py:182",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The cutover loop fires more minute passes while verify reports WAIT",
+      "location": "scripts/cutover_921_minute_sessions.py:259",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The minute timer's stagger comment is out of date",
+      "location": "deploy/systemd/mt-minute-pass.timer:2",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`except Exception: bars = []` sits on the path the new judgement uses",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:888",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`fire_unit` and `fire_unit_until` duplicate the same firing sequence",
+      "location": "scripts/cutover_common.py:341",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The new trailing-phase tests repeat the same large patch block",
+      "location": "test/unit/data/acquisition/daemon/test_minute.py:2327",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The new imports are not in isort order",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:56",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Any single in-session bar satisfies a session",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:43",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The sudoers rule exposes every secret in the env file",
+      "location": "deploy/sudoers.d/manta-ops:10",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The session-label fix has no test",
+      "location": "src/manta_trading/cli/commands/minute_session_mass.py:260",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:58:19.812583",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 34,
+  "prompt_tokens": 2356733,
+  "cached_tokens": 2133710,
+  "cache_write_tokens": 222997,
+  "completion_tokens": 72055,
+  "reasoning_tokens": null,
+  "duration_seconds": 329.5284780000802,
+  "cost_usd": 0.50972136,
+  "cost_basis": "provider"
+}

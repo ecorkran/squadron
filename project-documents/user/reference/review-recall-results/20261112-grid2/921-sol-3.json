@@ -1,0 +1,129 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The bounded firing still waits for the entire pass",
+      "description": "`run()` uses blocking `subprocess.run()`. The invoked `deploy/mt-run` waits for the service to finish in `start_and_stream()` (lines 127\u2013129). Consequently, journal polling cannot begin while the pass is running, and the new stop-on-trailing-completion behavior does not work. Start the unit non-blockingly before polling. Add a test exercising the wrapper\u2019s blocking behavior rather than mocking it away.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:356-357"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The limited sudo policy permits root execution of an operator-controlled script",
+      "description": "`MT_INSTALL`, granted passwordless root execution on line 13, points into the operator\u2019s checkout. Modifying that script\u2014or replacing it through a writable parent directory\u2014allows arbitrary root execution, regardless of the `--ref` restriction. Install a root-owned entry point beneath root-owned directories and constrain the privileged operations it exposes.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Truncated days behind the seed frontier remain unrepaired",
+      "description": "Passing `uncovered_days` does not expand the seed window. When existing gaps are all terminal, surrounding code seeds only from `_gap_frontier`, or skips seeding if that frontier reaches `target_end`. A truncated day before that frontier is therefore excluded even when the new index identifies it. Seed the identified truncated sessions explicitly without resetting unrelated terminal gaps, and test this terminal-only state.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:765-771"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The narration log omits the acceptance evidence",
+      "description": "Only `say()` messages reach the new log. Repair output\u2014including acceptance measurements and failure details\u2014is emitted through plain `print()` in `_repair()`, while subprocess output is streamed directly to the terminal. The advertised \u201cfull narration\u201d therefore still loses the evidence needed to audit the cutover. Persist those outputs and errors alongside the narration.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:60-66"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The bounded firing still waits for the entire pass",
+      "location": "scripts/cutover_common.py:356-357",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The limited sudo policy permits root execution of an operator-controlled script",
+      "location": "deploy/sudoers.d/manta-ops:9",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Truncated days behind the seed frontier remain unrepaired",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:765-771",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The narration log omits the acceptance evidence",
+      "location": "scripts/cutover_common.py:60-66",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:20:20.835594",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 85150,
+  "cached_tokens": 82816,
+  "cache_write_tokens": null,
+  "completion_tokens": 682,
+  "reasoning_tokens": 222,
+  "duration_seconds": 61.073279791045934,
+  "cost_usd": 0.0197696,
+  "cost_basis": "alias_pricing"
+}

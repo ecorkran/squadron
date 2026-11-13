@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Test helpers return `object`, forcing pervasive `# type: ignore` in strict-checked tests",
+      "description": "`scripted_session`, `sdk_text`, `sdk_result`, `typed_config` and the other new helpers are annotated as returning `object`. Every caller then needs `# type: ignore[attr-defined]` (`tests/pipeline/test_sdk_session.py` has dozens). The Python rules require strict pyright on test code and say bugs in tests can mask bugs in code. `scripted_session` should return `SDKExecutionSession`. The message builders should return the SDK message types or `Any`. `typed_config` should return a `Callable`. The `_ledger_after` helper in `test_sdk_session.py` has the same problem. Proper return types would remove most of the ignores.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/conftest.py:86-226"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Timing-based tests rely on wall-clock sleeps",
+      "description": "The idle-timeout tests patch the timeout to 0.05s and script a 0.15s sleep. `test_slow_foreground_turn_has_no_timer` sleeps 0.1s. The 3x margin can fail on a loaded CI box. Making the timeout much smaller than the sleep (for example 0.01s against 0.5s), or driving the clock deterministically, would remove the flake risk.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/test_sdk_session.py (TestBackgroundIdleTimeout)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Pyright suppression at the options boundary in `open_pipeline_session`",
+      "description": "`SdkSettings.setting_sources` is typed `list[str]`, while the SDK expects a list of literals. The mismatch is hidden with `# pyright: ignore[reportArgumentType]`. `provider.py` handles the same boundary with `# type: ignore[arg-type]`. Typing `SdkSettings` with the SDK's `SettingSource` literal, or casting once inside `settings.py`, would fix this in one place instead of at every caller.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py (`open_pipeline_session`, `setting_sources=settings[\"setting_sources\"]`)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config is read from different directories on the one-shot and session paths",
+      "description": "`one_shot_dispatch_with_telemetry` resolves `pipeline.user_settings` and `pipeline.auto_memory` from the caller's `cwd`. The SDK agent itself is spawned with `cwd=None`, so the CLI runs in the process cwd. `open_pipeline_session` reads the same keys from `Path.cwd()`. If a caller passes a `cwd`, one-shot dispatch can pick up a different project's config than the process the CLI runs in, and than the session path would. Using one rule for both paths (and documenting it) would avoid surprising per-project overrides.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py (`config_cwd = cwd or \".\"`)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Comment points to a table that is no longer adjacent",
+      "description": "The `SystemPromptMode` docstring says \"the four rows of the table above\". The table is a comment on `AgentConfig.use_default_system_prompt`, about 40 lines earlier and in a different class. The `SystemPromptMode` docstring should name that field instead. Separately, `describe_*` helpers that render SDK-specific settings now sit in `core/models.py`. That is a mild layering smell, and they would sit better next to `providers/sdk/settings.py`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/squadron/core/models.py:93"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Error-path handling in the new session loop is sound",
+      "description": "Both broad `except Exception` blocks follow the project rules. `_reconnect` logs with `logger.exception`, records `unusable_reason` and re-raises. `_stop_background` has a justified inline comment and logs per task id. A stream that ends with agents still tracked raises instead of returning partial text. Tests cover each of these paths.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:_reconnect, _stop_background"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Test helpers return `object`, forcing pervasive `# type: ignore` in strict-checked tests",
+      "location": "tests/pipeline/conftest.py:86-226",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Timing-based tests rely on wall-clock sleeps",
+      "location": "tests/pipeline/test_sdk_session.py (TestBackgroundIdleTimeout)",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Pyright suppression at the options boundary in `open_pipeline_session`",
+      "location": "src/squadron/pipeline/sdk_session.py (`open_pipeline_session`, `setting_sources=settings[\"setting_sources\"]`)",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Config is read from different directories on the one-shot and session paths",
+      "location": "src/squadron/pipeline/actions/dispatch.py (`config_cwd = cwd or \".\"`)",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Comment points to a table that is no longer adjacent",
+      "location": "src/squadron/core/models.py:93",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Error-path handling in the new session loop is sound",
+      "location": "src/squadron/pipeline/sdk_session.py:_reconnect, _stop_background",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:25:22.178114",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 225289,
+  "cached_tokens": 17643,
+  "cache_write_tokens": 207642,
+  "completion_tokens": 3783,
+  "reasoning_tokens": null,
+  "duration_seconds": 33.74977466580458,
+  "cost_usd": 0.8766369,
+  "cost_basis": "provider"
+}

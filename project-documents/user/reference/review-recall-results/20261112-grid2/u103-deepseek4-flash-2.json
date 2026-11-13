@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`error` is documented as \"the first error\" but the implementation stores the latest",
+      "description": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation, or null\" (also carried into the slice design). The implementation does the opposite: `setOperationError` in `src/chart/use-chart-provider.ts:96-99` does `setMount((current) => ({ ...current, error: failure }))`, unconditionally replacing the previous error, so a second failing operation overwrites the first. The only covering test, \"keeps the first error rather than being reset by a later success\" (`src/test/use-chart-provider.errors.test.tsx`), throws exactly once and then succeeds \u2014 it proves a *success* does not clear the error, not that the *first* error is retained, so its name enshrines the same misconception. Either narrow the comment to \"the most recent error\" or make the state actually keep the first failure; today a reader (or initiative 120) cannot tell which contract holds. Related, worth deciding explicitly: nothing ever clears `error` while mounted, so `src/routes/chart-route.tsx:96-104` shows the alert for the rest of the mount after a single transient failure.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/chart-operations.ts:77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The visible-range seam does not activate when a series is added, contrary to its comment",
+      "description": "The comment states \"the effect and its dependency array stay wired as the seam initiative 120 activates the moment it adds the first series.\" That is not what the code does. The guard reads `seriesCountRef.current` (line 341) inside an effect whose dependencies are `[mount.ready, chart, range]` (line 345). `series.onAdded`/`onRemoved` in `src/chart/chart-facade.ts:47-56` mutate the ref only \u2014 no render, no effect re-run \u2014 so adding a series changes nothing; the range is applied only on the next `range` change (or a remount). The covering test \"applies the range once a series exists\" (`src/test/use-chart-provider.translation.test.tsx`) actually passes *because* it also calls `setRange` afterwards, and its `toHaveBeenCalledTimes(1)` assertion confirms the effect did not run at `addSeries` time. So a future consumer that adds a series and expects the Context's default range to be applied will silently get the library's auto-fit. The comment should say the effect fires on the next range change, or the count should become render-visible state if activation-on-add is intended.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:338"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`MEASURED`/`measuredRect` DOMRect stub is duplicated in four suites",
+      "description": "`src/test/support/` was created precisely so \"the suites share one convention rather than re-deriving a double each file\" (see the header of `src/test/support/chart-provider-spy.ts`), and `render-with-contexts.tsx` centralizes the Context wrapper for the same reason. The container-measurement stub did not get that treatment: the identical `const MEASURED = { width: 1024, height: 640 }` plus `measuredRect()` appears in `src/test/use-chart-provider.errors.test.tsx:30-42`, `src/test/use-chart-provider.facade.test.tsx:33-45`, `src/test/use-chart-provider.translation.test.tsx:38-50`, and re-derived inline in `src/test/use-chart-provider.resize.test.tsx:37-40`. This violates the project DRY guideline and means a jsdom-layout fix must be made in four places. There is a smaller related split: environment stubs live in two modules \u2014 canvas/`matchMedia` in `src/test/setup.ts`, the `ResizeObserver` stub in `chart-provider-spy.ts` \u2014 so it is not obvious where a new stub belongs.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.resize.test.tsx:30"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`playwright.config.ts` header comment now contradicts the e2e-mode build",
+      "description": "The file header still says specs \"run against the PRODUCTION build served by `vite preview` ... so e2e exercises the same artifact `pnpm build` ships.\" With the new `webServer.command` (`pnpm build --mode e2e && pnpm preview --mode e2e ...`), the artifact is deliberately *not* the one `pnpm build` ships \u2014 that is the whole point of the mode gate. The new comment block inside `webServer` explains the change; the header sentence above it should be corrected to match, otherwise the two statements in one file disagree.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "playwright.config.ts:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "smoke spec points at the wrong spec for the product chart",
+      "description": "The comment says \"The chart itself is asserted in chart-render.spec.ts; this spec covers the shell around it.\" `e2e/chart-render.spec.ts` navigates to `/__chart-harness` and asserts the slice-102 harness, not the chart at `/`. The product chart at `/` is asserted in `e2e/chart-live.spec.ts` (the file this slice adds). A reader chasing that pointer ends up in the wrong spec.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "e2e/smoke.spec.ts:10"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`RootLayout` comment claims shell chrome it does not render",
+      "description": "\"RootLayout is the root route's component: it renders the shell chrome and an `<Outlet/>`\" \u2014 the body is `return <Outlet />` with no chrome whatsoever. This line was edited in this diff (the old wording was \"the App shell chrome\"), so it is a live claim in touched code rather than inherited text.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/routes/routes.tsx:4"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Exported component `ChartRoute` has no return-type annotation",
+      "description": "`export function ChartRoute() {` omits a return type, while the TypeScript rule requires annotating return types on exported functions and the two sibling components added in this same slice (`IndicatorProvider`, `SymbolTimeframeProvider` in `src/state/*.tsx`) both annotate `: ReactNode`. Pick one convention and apply it to the new route component. (`App`/`RootLayout` are pre-existing exceptions, so this is drift within the slice rather than across the whole repo.)",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/routes/chart-route.tsx:57"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Imports sit below a top-level const in the translation suite",
+      "description": "`import { chartSpy, resetChartSpy } ...` and `import { renderWithContexts } ...` appear at lines 22-23, after the `LINE_SERIES` const at lines 15-21. The project convention is sorted imports (external \u2192 internal \u2192 sibling \u2192 styles), and every other suite in this slice groups all imports at the top. ESM hoisting makes it work, but it reads as an accident.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.translation.test.tsx:22"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Whole-file `react-hooks/refs` suppression is broader than the reported false positive",
+      "description": "The suppression is documented and scoped to `src/chart/use-chart-provider.ts`, which is better than a global disable. Two caveats I could not resolve: (1) the false-positive claim itself is unverifiable in this working copy (`node_modules` is absent, so I could not run the probe or the rule) \u2014 I am not disputing it, only marking it unverified; (2) the rule is now off for the *entire* file, including the genuine ref-read sites the rule exists to catch (`seriesCountRef.current` read in the range effect at `src/chart/use-chart-provider.ts:341`, `styleRef.current` at line 233), so future edits to this file get no ref discipline from lint. A narrower `eslint-disable-next-line` on the `buildChartOperations` call, if the rule permits it, would keep the rest of the file covered.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "eslint.config.js:55"
+    },
+    {
+      "severity": "PASS",
+      "title": "Single guarded error funnel and teardown ordering are correctly implemented",
+      "description": "`runGuarded` (lines 108-126) is the only place post-mount provider calls are gated and caught, logs at error level, and funnels to state; the facade in `src/chart/chart-facade.ts` never touches the raw provider, and `create`/`destroy` are not reachable through it. Teardown (lines 192-224) sets the `disposed` flag first, then unsubscribes \u2192 disconnects \u2192 destroys \u2192 nulls the ref, with each disposer and the destroy wrapped so one failure cannot leak the rest. The mount failure path reuses the same `teardown`, so there is one disposal path. This matches the design's F001 requirement, and the suites in `use-chart-provider.errors.test.tsx` / `.resize.test.tsx` force each path to throw.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:108-224"
+    },
+    {
+      "severity": "PASS",
+      "title": "Harness gating is written so Vite can constant-fold it",
+      "description": "The gate is two direct `===` comparisons against `import.meta.env.MODE` with the empty-array alternative, exactly as the design's \"Harness route gating\" section requires, and the comment records why a runtime `.includes()` form was rejected. I did not re-run `pnpm build` / grep the bundle, so the tree-shaking outcome is taken from the slice's recorded verification rather than re-confirmed here; the code shape itself is statically foldable.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "src/routes/router.ts:44-53"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with coverage is real, per-aspect, and spies at the provider boundary",
+      "description": "Each hook aspect has its own suite written alongside it (lifecycle, resize, errors/teardown-race, facade, translation), the provider is spied rather than mocked at internal seams, StrictMode double-invoke is exercised explicitly (`matches every create with a destroy under StrictMode double-invoke`), and the tests assert observable contract behavior (call counts, ordering via `invocationCallOrder`, disposer invocation) rather than implementation internals. `resetChartSpy` clearing `mockImplementationOnce` residue between tests is a genuine flakiness guard. No test asserts framework behavior or trivial pass-throughs.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.lifecycle.test.tsx"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`error` is documented as \"the first error\" but the implementation stores the latest",
+      "location": "src/chart/chart-operations.ts:77",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The visible-range seam does not activate when a series is added, contrary to its comment",
+      "location": "src/chart/use-chart-provider.ts:338",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`MEASURED`/`measuredRect` DOMRect stub is duplicated in four suites",
+      "location": "src/test/use-chart-provider.resize.test.tsx:30",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`playwright.config.ts` header comment now contradicts the e2e-mode build",
+      "location": "playwright.config.ts:6",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "smoke spec points at the wrong spec for the product chart",
+      "location": "e2e/smoke.spec.ts:10",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`RootLayout` comment claims shell chrome it does not render",
+      "location": "src/routes/routes.tsx:4",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Exported component `ChartRoute` has no return-type annotation",
+      "location": "src/routes/chart-route.tsx:57",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Imports sit below a top-level const in the translation suite",
+      "location": "src/test/use-chart-provider.translation.test.tsx:22",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Whole-file `react-hooks/refs` suppression is broader than the reported false positive",
+      "location": "eslint.config.js:55",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Single guarded error funnel and teardown ordering are correctly implemented",
+      "location": "src/chart/use-chart-provider.ts:108-224",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Harness gating is written so Vite can constant-fold it",
+      "location": "src/routes/router.ts:44-53",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test-with coverage is real, per-aspect, and spies at the provider boundary",
+      "location": "src/test/use-chart-provider.lifecycle.test.tsx",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:01:24.251204",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 42,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 658830,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 1372867,
+  "cached_tokens": 1277824,
+  "cache_write_tokens": null,
+  "completion_tokens": 167782,
+  "reasoning_tokens": 162394,
+  "duration_seconds": 1499.333654541988,
+  "cost_usd": 0.10471876,
+  "cost_basis": "alias_pricing"
+}

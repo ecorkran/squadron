@@ -1,0 +1,111 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Run totals omit earlier loop iterations",
+      "description": "The report reads only persisted `action_results`. However, loop execution keeps earlier iterations in `StepResult.prior_rounds`, which `StateManager._append_step()` does not serialize. A reproduced three-round loop costing $0.30 reports $0.10. Persist and include every iteration\u2019s usage, with a regression test covering multi-round execution.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/usage_report.py:112-116"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Split reviews retain only the first part\u2019s usage",
+      "description": "Usage is stamped separately on each part, but `fold_review_parts()` copies the first part\u2019s metadata without aggregating usage. Reproducing two $0.10 parts produces a $0.10 combined record instead of $0.20. Aggregate all parts\u2019 tokens, turns, duration, and cost before persisting the combined action.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:505-506"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Failed split-review parts violate the folding contract",
+      "description": "Returning `_exception_result()` now lets split-review execution continue with a failed part whose outputs contain no input file. `fold_review_parts()` requires exactly one input per part and raises `TypeError`; the outer handler then discards the captured usage and original failure result. Stop on failure while preserving accumulated spend, or explicitly support failed parts in the folding contract. Add a split-review provider-failure regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:487-493"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Run totals omit earlier loop iterations",
+      "location": "src/squadron/stats/usage_report.py:112-116",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Split reviews retain only the first part\u2019s usage",
+      "location": "src/squadron/pipeline/actions/review.py:505-506",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Failed split-review parts violate the folding contract",
+      "location": "src/squadron/pipeline/actions/review.py:487-493",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:21:31.055385",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 133042,
+  "cached_tokens": 132736,
+  "cache_write_tokens": null,
+  "completion_tokens": 332,
+  "reasoning_tokens": 0,
+  "duration_seconds": 108.53345274995081,
+  "cost_usd": 0.0172056,
+  "cost_basis": "alias_pricing"
+}

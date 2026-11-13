@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`AgentConfig.auto_memory` default of `False` silently disables auto-memory on SDK paths the slice did not enumerate, with no opt-in",
+      "description": "Previously the disable-var was applied only on the one path that asked for it: `provider.py` set `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` **only** when `config.setting_sources == []`. It now calls `sdk_settings_options(config.setting_sources or [], auto_memory=config.auto_memory, ...)`, and `AgentConfig.auto_memory` defaults to `False` (`src/squadron/core/models.py:72`), so the variable is applied unconditionally to every SDK agent that does not explicitly pass `auto_memory=True`.\n\nFor the paths the slice names (reviews, judges, PR, summary, audit) that is intended and tested. But `sq serve` does not appear in that list: `src/squadron/server/routes/agents.py:49` and `:179` build `AgentConfig` with `setting_sources=None`/`auto_memory` unset, so every server-spawned SDK agent now loses auto-memory where it previously had it. The slice was aware of `sq serve` for the *other* half of the same function \u2014 `SETTING_SOURCES_CLI_DEFAULT` in `core/models.py:112` carries the comment \"Only `sq serve` agents can still reach the SDK with None (slice 932 D10)\" \u2014 but `auto_memory` was not handled the same way. The config key cannot restore it either: `pipeline.auto_memory` is only read by `open_pipeline_session` and `one_shot_dispatch_with_telemetry`, and `keys.py` describes it as scoped to \"pipeline sessions and pipeline dispatch only.\"\n\nThe concrete gap is that a defaulted `False` on a shared model means \"off everywhere\", which is wider than the documented scope of the key that controls it, and there is no switch for the paths now affected. Making the default path explicit (or having the server path state its intent) would keep the model from answering a question nobody asked it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/provider.py:80-90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`except TimeoutError` around `_read_turn_with_retry` conflates the dispatch idle timer with any lower-layer timeout",
+      "description": "`TimeoutError` in 3.11+ is both `asyncio.TimeoutError` and (since 3.10) the alias of `socket.timeout`, and it is an `OSError` subclass. The handler is deliberately meant to catch the idle timer raised by `async with asyncio.timeout(idle_s)` inside `_read_turn`, but it wraps the entire `_read_turn_with_retry(...)` call, so a `TimeoutError` originating anywhere beneath it \u2014 SDK transport/socket, or an `asyncio.wait_for` inside the SDK \u2014 is caught by the same handler. When that happens on a waiting turn, the code calls `_stop_background`, kills the background agents, and returns partial text as if the run had merely gone idle, turning a transport failure into a successful-looking partial dispatch. That is the \"silent failure path\" shape the failure-mode rules call out.\n\nThe mirror case makes the contract visible: on a *foreground* turn `idle_s` is `None` so `asyncio.timeout` can never fire, and a `TimeoutError` from below is not covered by any of `dispatch()`'s `except` clauses (`CLINotFoundError`, `ProcessError`, `CLIConnectionError`/`CLIJSONDecodeError`/`ClaudeSDKError`), so it escapes as a bare `TimeoutError` rather than the `ProviderError` the docstring promises. Narrowing the catch to the timer's own signal \u2014 or converting it at the `asyncio.timeout` site so the two are distinguishable \u2014 would keep both cases honest. I have not inspected the SDK's internals from this checkout (the package is not vendored), so I cannot say which specific lower layer would raise it; the collision is in the catch, not in a proven call path.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._collect_turns"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `receive_response()` iterator is abandoned without `aclose()` on the timeout and retry paths",
+      "description": "`_read_turn` builds a fresh `stream = aiter(self.client.receive_response())` on every attempt and drives it with `anext`. There is no `finally`/`aclose()`. Two paths drop a half-consumed generator:\n\n- the idle timeout, where `asyncio.timeout` raises out of the `anext` and the exception propagates through `_collect_turns`;\n- the retry loop in `_read_turn_with_retry`, which starts a *new* `receive_response()` after a throttle while the previous generator is still open.\n\nThis got materially wider with the slice: the abandoned-on-throttle case was already rare, but the timeout path is now a designed, reachable outcome. On that path `_stop_background` immediately issues `stop_task(task_id)` against the same client while a dangling `receive_response()` generator still holds a read on the transport, and `dispatch()` then returns normally, leaving the generator to garbage collection. Closing the iterator (`contextlib.aclosing`, or consuming it inside a `try/finally`) on both exits would bound the resource the timeout path leaves behind.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._read_turn"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The same config keys are resolved against two different project roots within one run",
+      "description": "`open_pipeline_session` reads `pipeline.user_settings` and `pipeline.auto_memory` with `cwd = str(Path.cwd())`, and `_background_idle_timeout_s` later resolves `pipeline.background_idle_timeout_s` from `self.base_options.cwd or Path.cwd()` \u2014 which is the process cwd, because that is what `open_pipeline_session` stored. The one-shot path resolves the same two keys from the step's cwd: `one_shot_dispatch_with_telemetry` uses `config_cwd = cwd or \".\"` (`src/squadron/pipeline/actions/dispatch.py:143`), where `cwd` is `context.cwd`, i.e. `execute_pipeline`'s `effective_cwd`.\n\nWhen a run is started with a `cwd` other than the process cwd (a worktree, or `--cwd` pointing elsewhere), a `.squadron.toml` at that root is consulted by dispatch but not by the persistent session, so a single run can answer \"should this load user settings?\" and \"should auto-memory be on?\" differently per step. `load_config` merges user config with `project_config_path(cwd)`, so the divergence is real file resolution, not a formatting difference. Passing the run's effective cwd into `open_pipeline_session` (or reading the keys once at run scope) would restore one value from one source.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:452-461"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"stream ended before the dispatch's result\" is emitted even when our own result already arrived",
+      "description": "The `result is None` branch raises `ProviderError(\"stream ended before the dispatch's result; ...\")` whenever `turns.ledger.active`, but by that point `turns.own_result_seen` may already be true \u2014 that is precisely the `waiting` state entered on the previous iteration. In the waiting case the dispatch's own result *did* arrive and the follow-up turn is what never came, so the message asserts the opposite of what happened. Since the message is the operator's only signal on a run that is about to fail with agents still tracked, naming which of the two situations occurred (own result absent vs. follow-up never delivered) would make it actionable.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._collect_turns"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_stop_background` formats a float idle timeout with `%d`",
+      "description": "`_logger.warning(\"dispatch: no activity for %ds with background agent(s) still running; stopped: %s\", idle_s, ...)` passes the `float` `idle_s` into a `%d` conversion, which truncates. The default 1800 is unaffected, but a sub-second or fractional configured timeout logs as `0` \u2014 the new test patches `get_typed_config` to `0.05` and asserts only on the surrounding text, so this is invisible to the suite. The warning is the operator-facing record of why agents were killed, so the value it prints should be the value that was used.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._stop_background"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_load_resume_seed` logs a seeding decision before knowing whether a session will exist",
+      "description": "The seed is now loaded unconditionally whenever `start_from is not None`, whereas the previous code nested that work under `and sdk_session is not None`. So it performs a state-file read and emits `\"executor: resuming at step %d; seeding session from compact summary %s\"` even on a resume where `pool_policy` is not `LAZY` and no persistent session will ever be constructed \u2014 the run then proceeds unseeded while the log says it seeded. Deferring the log to the point where the seed is actually consumed (or making the message say the summary was *found*) would keep the log from claiming a rotation that did not happen.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py#_load_resume_seed"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Snapshot-test docstring still dates the fixture to slice 918",
+      "description": "That test's docstring states the fixture was \"Last regenerated for slice 918, which added the four stop-reason evidence lines to the Run Digest.\" `tests/review/fixtures/clean_pass_artifact.md` now carries `- System prompt: not computed` and `- Settings sources: not computed` directly after `- Output budget: backend default`, i.e. the artifact the 932 change adds to every review. The fixture therefore had to be regenerated for this slice (otherwise the byte-identical assertion fails) while the note that tells a future reader *why* it may be regenerated still names the previous slice. The `.md` file itself is outside the diff scope given to me, so I am inferring the regeneration from the fixture's current content rather than from seeing its change.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "tests/review/test_persistence.py#test_clean_pass_artifact_is_byte_identical_to_the_pre_change_snapshot"
+    },
+    {
+      "severity": "PASS",
+      "title": "Pure, dependency-free bookkeeping extracted from the session with tests that drive real SDK message types",
+      "description": "`BackgroundLedger`, `DispatchTurns`, and `is_own_result` are pure over messages with no client or I/O, which is what makes the wait/ledger behaviour testable at all. The tests construct real `AssistantMessage`/`ResultMessage`/`TaskStartedMessage`/`TaskNotificationMessage`/`TaskUpdatedMessage` instances (including `origin={\"kind\": \"task-notification\"}` and `parent_tool_use_id` for the subagent case) rather than loose mocks, and `frozenset({\"local_agent\", \"local_workflow\"})` cites the SDK constant it mirrors. The parametrized `TestBackgroundLedger` cases cover the terminal-signal-either-way rule, the idempotent duplicate terminal, and the \"shell never holds a dispatch\" case \u2014 behaviour, not implementation.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_turns.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Settings policy single-sourced, with per-path verification rather than sampled coverage",
+      "description": "`PIPELINE_SETTING_SOURCES` and `REVIEW_SETTING_SOURCES` being equal today but kept separate, with the comment explaining that they answer different questions, is the right call \u2014 and `tests/providers/sdk/test_settings_policy.py` drives each real builder (builtin review, PR review, pipeline session, one-shot dispatch, summary, audit, PR composer) and asserts none resolves to `None`, with a second parametrization asserting `pipeline.user_settings` widens pipeline paths only. That is the \"verify each I/O path, don't only verify the helper\" shape these policies need, and it is what caught `_resolve_setting_sources` having to distinguish absent from an explicit `[]`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/settings.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`AgentConfig.auto_memory` default of `False` silently disables auto-memory on SDK paths the slice did not enumerate, with no opt-in",
+      "location": "src/squadron/providers/sdk/provider.py:80-90",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`except TimeoutError` around `_read_turn_with_retry` conflates the dispatch idle timer with any lower-layer timeout",
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._collect_turns",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "The `receive_response()` iterator is abandoned without `aclose()` on the timeout and retry paths",
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._read_turn",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The same config keys are resolved against two different project roots within one run",
+      "location": "src/squadron/pipeline/sdk_session.py:452-461",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "\"stream ended before the dispatch's result\" is emitted even when our own result already arrived",
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._collect_turns",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`_stop_background` formats a float idle timeout with `%d`",
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._stop_background",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`_load_resume_seed` logs a seeding decision before knowing whether a session will exist",
+      "location": "src/squadron/pipeline/executor.py#_load_resume_seed",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Snapshot-test docstring still dates the fixture to slice 918",
+      "location": "tests/review/test_persistence.py#test_clean_pass_artifact_is_byte_identical_to_the_pre_change_snapshot",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Pure, dependency-free bookkeeping extracted from the session with tests that drive real SDK message types",
+      "location": "src/squadron/pipeline/sdk_turns.py",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Settings policy single-sourced, with per-path verification rather than sampled coverage",
+      "location": "src/squadron/providers/sdk/settings.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:47:02.244245",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 299443,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2354455,
+  "cached_tokens": 2011392,
+  "cache_write_tokens": null,
+  "completion_tokens": 81052,
+  "reasoning_tokens": 74866,
+  "duration_seconds": 502.65268824994564,
+  "cost_usd": 0.10018643999999999,
+  "cost_basis": "alias_pricing"
+}

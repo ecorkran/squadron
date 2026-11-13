@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Trade row mapping is positional, contradicting the \"driven by the mapping\" design",
+      "description": "`TradeRecord.from_row` reads `values[0]` through `values[7]` by position. `TRADE_VALUE_COLUMNS` in `serve_timeseries.py` is derived from `TRADE_COLUMNS` (`trade_repository.py:45`) minus `market_ticker`. Reordering or adding a column in `TRADE_COLUMNS` would silently mis-assign fields. For example, `yes_price_dollars` and `no_price_dollars` could swap and still validate as `Decimal`. The candle path walks `CANDLE_COLUMNS` and avoids this, and the module docstring claims the same property. Zip `row.values` with `TRADE_VALUE_COLUMNS` and construct from the resulting dict. `TradeRow.values: tuple[Any, ...]` also gives up type safety at this boundary. The unit test builds rows in the same positional order, so it cannot catch a drift.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:121-133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_window` couples the `period` predicate to the truthiness of `extra`",
+      "description": "`_window` appends `period = %(period)s` whenever `extra` is truthy, and it never checks that `\"period\"` is a key in `extra`. A future caller passing any other extra parameter would emit a `period` clause with no bound parameter, which fails at runtime. A caller passing `{}` would drop the predicate. Make `period: int | None` an explicit argument instead of an implicit dict contract.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:~185-200"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Load test reaches into private pool internals and uses mutable class-level state",
+      "description": "`_client` iterates `pool._pool` (a private attribute, suppressed with `noqa: SLF001`) and sets `cursor_factory` on the live connections. This is brittle against psycopg_pool upgrades. It also only reaches connections that are idle at that moment, so any connection the pool opens later has no recording cursor and its statements go unrecorded. The over-ceiling test could then pass vacuously on its \"no fetch\" half. The count-statement assertion (`assert counts`) partly mitigates this. Passing `kwargs={\"cursor_factory\": ...}` at pool construction would be sturdier, for example through a `create_app` hook. `_RecordingCursor.statements` is shared class-level state that leaks between tests.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py (`_RecordingCursor`, `_client`)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Blocking DB work and unbounded row materialisation under a count-then-fetch race",
+      "description": "The design deliberately omits `LIMIT`, so rows inserted between the count and the fetch can exceed the ceiling, as the module docstring acknowledges. The ceiling is the only memory bound, and a ceiling-sized candle response is about 35 MB in memory as pydantic models plus the serialized body. The two steps also run on separate statements inside a `with pool.connection()` block with no explicit transaction or snapshot. That is acceptable at the current tape-write rate, but a `REPEATABLE READ` transaction would remove the race cheaply. `run_in_executor(None, ...)` uses the default executor, whose size is not tied to the pool size. This is minor.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:94-117"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_count` builds SQL from a table string via `sql.SQL(table)`",
+      "description": "The `noqa` comment justifies this because both callers pass literals. A `sql.Identifier` pair or a `LiteralString` annotation would enforce it in the type system instead of by convention.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:~210"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Refactors are sound",
+      "description": "Extracting `window_start_utc` and `window_end_utc` into `windows.py` removes duplication between the bars and Kalshi routes. Renaming `_effective_floor` to `effective_tape_floor` is covered by new direct tests for all three branches. The fetch and count pairing is tested for agreement at the boundaries. The unit tests assert ordering, release of the connection before the 422, and the empty-window facts.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/windows.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Trade row mapping is positional, contradicting the \"driven by the mapping\" design",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:121-133",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`_window` couples the `period` predicate to the truthiness of `extra`",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:~185-200",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Load test reaches into private pool internals and uses mutable class-level state",
+      "location": "test/load/test_188_kalshi_api_nfr.py (`_RecordingCursor`, `_client`)",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Blocking DB work and unbounded row materialisation under a count-then-fetch race",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:94-117",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`_count` builds SQL from a table string via `sql.SQL(table)`",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:~210",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Refactors are sound",
+      "location": "src/manta_trading/api_server/routes/windows.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:24:07.380265",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 1,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 185527,
+  "cached_tokens": 77992,
+  "cache_write_tokens": 107531,
+  "completion_tokens": 2264,
+  "reasoning_tokens": null,
+  "duration_seconds": 19.945056999800727,
+  "cost_usd": 0.4653575,
+  "cost_basis": "provider"
+}

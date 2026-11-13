@@ -1,0 +1,93 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Include tick-tier families in completeness evidence",
+      "description": "`coverage_reads()` visits only `entry.history`, omitting both products\u2019 configured `tbbo` tiers. Consequently, `_family_evidence()` never checks or names their incomplete sessions, despite D6 requiring every family. An already-failing health baseline can remain unchanged while these omissions produce no exit-rule failure. Include each configured tier\u2019s range and add a regression test for an unaccounted-for tick-tier session.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py:75-76"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Only exempt provider holes on provider-missing days",
+      "description": "Every `provider_hole` session is skipped regardless of its condition. The existing `tick_status.caught_up()` contract exempts holes only when a constituent day is provider-`missing`; D6 requires the same distinction. A hole on an `available` day therefore remains not caught up but disappears from this report without failing.\n\nExecuting the extracted report function with `caught_up=False` and an available-day provider hole returned `SessionReport(lines=[], failures=[])`. Check the qualifying provider condition before exempting the session, and test both qualifying and nonqualifying holes.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:283-286"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Include tick-tier families in completeness evidence",
+      "location": "scripts/cutover_304_evidence.py:75-76",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Only exempt provider holes on provider-missing days",
+      "location": "scripts/purchase_verdicts.py:283-286",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:25:34.687963",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 132034,
+  "cached_tokens": 131712,
+  "cache_write_tokens": null,
+  "completion_tokens": 399,
+  "reasoning_tokens": 100,
+  "duration_seconds": 143.9203939170111,
+  "cost_usd": 0.0178052,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Trailing seeding can miss truncated sessions older than the priority window",
+      "description": "The truncated-day index is built only from `trailing_floor`, but that floor is the short trailing-priority window. A truncated session older than this window is therefore not passed as `uncovered_days`; if the coarse coverage index marks it covered, the normal seed still will not recreate its gap. This leaves older truncated sessions dependent on a separate repair run, despite the new cycle seeding logic. Consider scanning the full seedable history or explicitly bounding and documenting which truncations this cycle can recover.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:300-302"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Sudoers grants root access to an operator-writable installer",
+      "description": "`MT_INSTALL` allows `manta` to run the installer from `/home/manta/source/repos/manta/trading-data`. Since that checkout is operator-writable, the operator can modify the script and execute arbitrary commands as root through the NOPASSWD rule. Install or invoke a root-owned, non-writable copy of the installer instead; also note that the alias is defined but not included in the root command grant on line 13.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:9"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Trailing seeding can miss truncated sessions older than the priority window",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:300-302",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Sudoers grants root access to an operator-writable installer",
+      "location": "deploy/sudoers.d/manta-ops:9",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:16:11.979547",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 63178,
+  "cached_tokens": 58752,
+  "cache_write_tokens": null,
+  "completion_tokens": 288,
+  "reasoning_tokens": 0,
+  "duration_seconds": 30.25148058286868,
+  "cost_usd": 0.00117412,
+  "cost_basis": "alias_pricing"
+}

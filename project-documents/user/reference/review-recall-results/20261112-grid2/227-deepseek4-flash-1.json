@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Cutover script's \"report is always written\" guarantee does not hold for unchecked exceptions",
+      "description": "`run_steps` catches only `StepFailed` and `subprocess.CalledProcessError`, and `main()` writes the report only after `run_steps` returns \u2014 there is no `try/finally`. Several step bodies can raise exceptions outside that pair, each of which would abort the run with a traceback and no report:\n- an **empty** (but existing) log file makes `.splitlines()[-1]` raise `IndexError` in `run_health`, `step_weekly` (`scripts/cutover_227_tick_backup.py#step_weekly`) and `step_production`. Note the existing `if log.exists() else \"\"` guards only non-existence, not emptiness, so a health job that died between creating and writing the log hits this;\n- `conf_sums` in `scripts/cutover_227_host.py#conf_sums` uses `next(...)` with no default, so a `pg_lsclusters` shape change raises `StopIteration`;\n- `CRON_FILE.read_text()` / `.env` reads raise `FileNotFoundError`/`PermissionError` before any step runs.\n\nThis contradicts the module docstring (\"the first failure stops the run and the report is still written to `project-documents/user/notes/<date>-227-cutover.md`\") and slice 227 TD8 step 13 (\"stops at the first failed step \u2026 and still writes the report\"). The failure that loses the report is precisely the unforeseen one the report exists to explain. Wrapping the step dispatch in a broader handler (or writing the report in a `finally`) restores the documented contract.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": "error-handling",
+      "location": "scripts/cutover_227_tick_backup.py#run_steps"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`strip_new_args` hardcodes the replication host, duplicating the cluster table",
+      "description": "`strip_new_args` removes the literal `\" --replication-host 127.0.0.1\"`. The same value is the `replication_host` column of `deploy/backup-clusters.conf:21` and is already parsed into `ctx.main.replication_host` (`scripts/backup_clusters.py`, `BackupCluster.replication_host`), yet `step_apply` passes only `ctx.main.url_key` and `ctx.bucket_remote` into `production_changes`. AGENTS.md is explicit here: \"Never scatter comparison values across code. If a value is used in conditionals, switch cases, or lookups, define it once \u2026 and reference that definition everywhere.\" Because this is the comparison that protects production's schedule (TD3), a table edit to `replication_host` would silently stop the check from recognising the argument 227 adds, and the test that asserts the pre-227 equivalence would keep passing against its own hardcoded copy. Pass the row's host through from `ctx.main` instead.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py#strip_new_args"
+    },
+    {
+      "severity": "NOTE",
+      "title": "New provision tests assert on script source text rather than behaviour",
+      "description": "`_script_assignments` greps the provisioning script for literal assignment lines and the tests compare exact strings, e.g. `test_only_trading_tick_is_created` asserts `_script_assignments(\"CREATED_DATABASES\") == \"CREATED_DATABASES=(trading_tick)\"` and `test_roles_are_applied_with_replication` asserts `'-v with_replication=1 -f - < \"$ROLES_SQL\"' in body`. These break on harmless reformatting and cannot catch the regressions they name (a `with_replication` flag passed but the `\\if` block deleted from the SQL would still satisfy the grep). The testing rules ask for behaviour over implementation (`_rendered_hba()`, which extracts and *runs* `hba_content` with a stubbed `client_source`, is the right shape and shows the pattern is available here). There is a project precedent for constant-definition greps (`test_interval_constant_defined_once`), so this is informational rather than blocking.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_provision_tick_lib.py#_script_assignments"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Generated cutover report's `slice:` frontmatter does not follow the notes convention",
+      "description": "`render_report` emits `slice: backup-coverage-for-tick-archive-and-database`, whereas the sibling note it will sit beside, `project-documents/user/notes/2026-10-04-226-proof-drop-proof.md`, carries `slice: 226-slice.proof-on-existing-data` and also a `status:` field. AGENTS.md requires markdown frontmatter per `file-naming-conventions`, and the slice index/`-slice.` form is the one the existing note uses. The filename itself (`<date>-227-cutover.md`) is correct; only the metadata value and the missing `status` drift.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py#render_report"
+    },
+    {
+      "severity": "PASS",
+      "title": "Production's cron lines are reproduced exactly, with only the new argument pairs added",
+      "description": "Verified by reading the three inputs and tracing the logic rather than trusting the tests. `deploy/cron.d/manta-trading-backup` renders production's four jobs from `manta-trading-backup.cluster` with `@REPLICATION_HOST_ARG@` expanding to ` --replication-host 127.0.0.1` for `17/main` and to empty for `17/tick` (the table's `-`), and `_JOB_LINE`'s five-token prefix plus user field correctly separates `manta` jobs from the two `root` restic lines while ignoring `SHELL=`/`PATH=`/`MAILTO=` header lines. `production_lines` returns the `17/main` block followed by the host block, which matches the pre-227 file's order in `test/unit/fixtures/cron_main_pre227.txt`, so `production_changes`' `zip(..., strict=True)` comparison is a like-for-like line comparison. The `-` (bucket root) handling in `render_cron.sh` reproduces production's `--remote b2:<bucket>` unchanged, and the quoted `rep` in every `${x//pat/rep}` is what keeps `2>&1` from being rewritten under bash 5.2's `patsub_replacement`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py#production_lines"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": "error-handling",
+      "summary": "Cutover script's \"report is always written\" guarantee does not hold for unchecked exceptions",
+      "location": "scripts/cutover_227_tick_backup.py#run_steps",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`strip_new_args` hardcodes the replication host, duplicating the cluster table",
+      "location": "scripts/cutover_227_helpers.py#strip_new_args",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New provision tests assert on script source text rather than behaviour",
+      "location": "test/unit/test_provision_tick_lib.py#_script_assignments",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Generated cutover report's `slice:` frontmatter does not follow the notes convention",
+      "location": "scripts/cutover_227_helpers.py#render_report",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Production's cron lines are reproduced exactly, with only the new argument pairs added",
+      "location": "scripts/cutover_227_helpers.py#production_lines",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:51:53.874782",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 764339,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2430050,
+  "cached_tokens": 2081024,
+  "cache_write_tokens": null,
+  "completion_tokens": 223117,
+  "reasoning_tokens": 191091,
+  "duration_seconds": 1481.0011486250442,
+  "cost_usd": 0.16978952,
+  "cost_basis": "alias_pricing"
+}

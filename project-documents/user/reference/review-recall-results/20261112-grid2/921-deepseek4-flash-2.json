@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The timezone fix corrects the label, not the judgement the label describes",
+      "description": "`check_minute_session_mass` now converts with `.astimezone(UTC)` for the display, and the comment states the reason plainly: psycopg hands back `timestamptz` in the connection's zone (*America/Denver in production*). The same non-UTC value reaches `collecting_firing_finished_at`, which builds candidate instants with `close.replace(hour=firing.hour, minute=firing.minute, ...)` \u2014 a *wall-clock* replace in whatever zone `session_close_utc` carries, then compares `candidate >= close`.\n\nConcretely, for a 2026-09-09 session with a 14:00-06:00 (Denver) close: `close.replace(hour=4, minute=5)` is 04:05-06:00 = 10:05Z, and the 13:05 firing becomes 19:05Z \u2014 both before the 20:00Z close \u2014 so the function falls into its \"every firing today is before the close\" branch and returns `next_day.replace(hour=4, minute=5) + lag` = **13:05Z**, not the 07:05Z the runbook and `test/unit/cli/commands/test_data_health.py` assert. The session is then judged six hours later than documented, which is exactly the failure the runbook's step 2 warns about (\"A cutover run before 07:05 UTC judges D-2 \u2026 `--verify` reports a sub-1,000,000 mass and Task 7.8 stops on a false failure\").\n\nThis is reachable on the path being cut over: `scripts/repair_921_minute_sessions.py` connects with a bare `psycopg.connect(url)` (no `make_configure_connection(DB_BULK_SESSION)`), so its `--verify` reads the server default zone \u2014 the same connection whose output produced the comment being fixed. The unit tests pass because every fixture is constructed tz-aware UTC. Fixing this by normalising inside `collecting_firing_finished_at` (or where `fetch_candidate_sessions` builds `TradingSessionBounds`) would cover both the daemon and the repair, rather than only the label.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/minute_session_mass.py#collecting_firing_finished_at"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cagg_freshness_for_session` is a second, divergent implementation of an existing guard",
+      "description": "Slice 168 already owns this question: `manta_trading.market.maintenance.cagg_freshness.assert_cagg_fresh` reads the same `timescaledb_information.jobs`/`job_stats` pair for the same view, is cached for `CAGG_FRESHNESS_CACHE_TTL`, and bounds every probe with `CAGG_FRESHNESS_PROBE_STATEMENT_TIMEOUT`. The new probe re-spells a subset of it, and two of the omissions are load-bearing:\n\n- **No `-infinity` normalisation.** `_JOB_SQL` in that module wraps the column as `nullif(s.last_successful_finish, '-infinity'::timestamptz)` with the comment \"psycopg cannot load that into a datetime \u2014 it raises `DataError` mid-fetch, which would surface as PROBE_FAILED\". The new query selects `stats.last_successful_finish` raw. For a policy that has been created but never completed a run, `--verify` raises instead of reporting `[WAIT]` \u2014 and `--verify` is run by `_verify_when_fresh` inside the cutover, where an unhandled `psycopg.DataError` aborts the run with the acquisition timers held stopped.\n- **No statement timeout.** Both queries run on the caller's connection with whatever budget it has; the module that exists for this purpose sets one, and the codebase's own rule (\"ad-hoc prod aggregates require a statement_timeout\", journal 20260720) applies to the `max(created_at)` scan over a session's chunk.\n\nThe `INNER JOIN job_stats` also differs from the sibling's `LEFT JOIN`: a job with no stats row yields `last_refresh = None`, which `CaggFreshness.stale` then treats as stale whenever any bar exists. That is fail-safe, but it is a different verdict from `NO_JOB_ROW` for the same state, produced by code that looks equivalent.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py#cagg_freshness_for_session"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The sudoers rule is wider than its own comment claims, and names a script the operator can edit",
+      "description": "The header says \"Exactly the commands those scripts issue, nothing wider\". Two entries are wider:\n\n- `Cmnd_Alias MT_INSTALL = /home/manta/source/repos/manta/trading-data/deploy/install-production.sh --ref *` grants NOPASSWD root to a script inside the operator account's own home directory. Anything that can write that file owns root; a rule should not point at a path the rule's subject can modify. (The `--ref *` wildcard is also unconstrained \u2014 the ref becomes a `git checkout` argument under `set -euo pipefail`.) Preferring an installed copy under `/usr/local/libexec` or `/opt` with a root-owned mode would remove the escalation channel.\n- `Cmnd_Alias MT_RUN = /usr/local/bin/mt-run *` grants NOPASSWD root for the wrapper's whole surface. `deploy/mt-run` sources `/etc/manta-trading.env` and `exec`s the production `mt` binary when invoked with any non-verb argument, so \"the commands these scripts issue\" (`mt-run minute`, `mt-run daily`, `mt-run data kalshi status --json`) is not what this rule allows.\n\nSame file, second issue: the hardcoded checkout path is a second source of truth for a value `cutover_common.install()` derives at runtime (`Path(__file__).resolve().parents[1] / \"deploy/install-production.sh\"`). If the operator's checkout is not at `/home/manta/source/repos/manta/trading-data`, the rule silently fails to match and the install step prompts for a password mid-cutover \u2014 a failure that only appears on the host.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "One extra database round trip per chunk on the minute hot path",
+      "description": "`fetch_session_bounds` is now called inside the `while True:` chunk loop, opening a fresh `pool.connection()` per chunk, in addition to the two connections the loop already takes (`pick_most_recent_actionable_gap` and the write transaction). The session bounds it fetches are a property of the symbol's trading calendar for the chunk's date range \u2014 they do not change between chunks of the same symbol, and `fetch_session_bounds` is a `trading_sessions \u22c8 instruments` lookup with no per-chunk input beyond `chunk_start`/`chunk_end`.\n\nThe backfill phase walks up to `_PROVIDER_MAX_CHUNK_DAYS`-bounded chunks per symbol (the module's own comment cites ~69 chunks per symbol for a deep backfill), so on a universe-wide pass this is on the order of one extra query per chunk per symbol, against a `minute_ohlcv` of ~4.4 B rows. Fetching the bounds once per symbol (or joining them into a query the loop already makes) would remove the added round trips without changing the judgement.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py#_do_minute_symbol"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The cutover's sleep budget is unbounded while production timers are held stopped",
+      "description": "`_verify_when_fresh` may sleep `VERIFY_WAIT_POLLS \u00d7 VERIFY_WAIT_SECONDS` = 5 \u00d7 15 min = 75 minutes per call, and `main` calls it once per minute firing (up to `MAX_MINUTE_FIRINGS` = 6) *and* once more for the final acceptance report \u2014 up to ~8.75 hours of sleeping. `_hold_timers` runs before the first firing and `_release_timers` only in the `finally`, so for that whole period `mt-minute-pass.timer` and `mt-daily-pass.timer` are stopped.\n\n`MAX_MINUTE_FIRINGS` bounds the *firings*, not the wall clock, and the loop treats `[WAIT]` as \"keep going\" (`if \"FAIL\" not in verify_text and \"[WAIT]\" not in verify_text`), so a cagg that stays stale for hours re-fires the minute pass \u2014 spending EODHD calls \u2014 while the only real remedy is waiting for the hourly refresh. Worth pinning: a total time budget for the loop, or exiting the loop on `[WAIT]` the way `TestRepeatedMinuteFirings` already distinguishes a quota abort from a failure.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py#_verify_when_fresh"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_build_truncated_index` handles its own timeout but not the other faults its sibling survives",
+      "description": "`_build_truncated_index` catches `RepairScanTimeout` and fails safe (logged at ERROR, `None` returned, documented). Anything else `build_truncated_day_index` raises \u2014 a lost connection, `psycopg.OperationalError`, a timeout that surfaces as something other than `QueryCanceled` \u2014 propagates out of `run_minute_cycle` (the call site is outside the per-symbol `try`) and ends the pass at `runner._logger.exception(\"runner: run_minute_cycle raised\")`.\n\nThe function sitting three lines above it in the same `with pool.connection()` block makes the opposite choice for the same class of failure: `build_minute_coverage_index` \u2192 `_run_coverage_query` catches `psycopg.OperationalError` and returns `None`, precisely so a degraded read does not take down the cycle. Two adjacent best-effort index builds with different fault tolerance is the kind of asymmetry that reads as intent when it is not. (Whether failing *open* on `RepairScanTimeout` is right at all is a separate question the docstring argues for the scan and the module's `RepairScanTimeout` docstring argues against \u2014 \"an unmeasured universe must never be reported as a clean one\". Both positions are defensible; the mismatch between the two builders is not.)",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py#_build_truncated_index"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"The same predicate the repair's truncated-day index applies\" is not exactly true",
+      "description": "The module docstring and `judge_chunk_by_sessions` assert that the predicate here is the one the repair applies to stored bars. The repair's lateral in `find_truncated_days` bounds bars to `m.time >= ts.session_open_utc AND m.time < ts.session_close_utc` and calls a day truncated when `max(time) <= session_open_utc`; this module calls a session satisfied by any bar in `(open, close]`. The two agree everywhere except the single instant `time == session_close_utc`, where this module says \"collected\" and the repair's lateral does not see the bar at all. Since the whole stated value of the new predicate is that \"the daemon and the repair agree on what a truncated session is\", either the docstring or the `<= close` bound should move so they actually do.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py#sessions_without_bars"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The minute timer's stagger comment no longer describes the schedule",
+      "description": "The diff moves the first firing from 01:05 to 04:05, but the unit's `Description=` (\"staggered 30 min behind the daily pass\") and the `[Timer]` comment (\"Staggered 30 minutes behind mt-daily-pass.timer so the two passes never start simultaneously\") are unchanged. Against `mt-daily-pass.timer`'s 00:35/12:35 the stagger is now 30 minutes for one firing and 3\u00bd hours for the other. The property the comment states still holds for the wrong reason (the 00:35 daily pass is long finished by 04:05), which is what makes stale rationale worse than none.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "deploy/systemd/mt-minute-pass.timer"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`fire_unit_until` duplicates most of `fire_unit`",
+      "description": "The two functions share the cursor read, the start instant, the streamed `mt-run` invocation with its \"Ctrl-C only detaches\" banner, the `sudo -v` re-validation and the same comment on it; they differ only in waiting on a line vs the unit, and in the optional `stop_unit`. The project's own convention is \"Do not duplicate logic. Respect DRY.\" A shared private helper taking the wait/stop behaviour as a parameter would keep both call sites without restating the privileged invocation twice.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py#fire_unit_until"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`bar_timestamp` is a second parse of the provider's timestamp shape",
+      "description": "The docstring says it \"Mirrors `_bar_to_row`\", and it is a re-implementation rather than a call: `_bar_to_row` catches `(KeyError, ValueError, TypeError, InvalidOperation)` and returns `None` for the whole row, while `bar_timestamp` catches `(ValueError, TypeError, OverflowError)` and returns `None` for the instant. Both are reasonable on their own, but two parsers for one wire shape with two exception tuples is how a provider shape change lands in one and not the other. `_bar_to_row` is the insert path and the authority; extracting the timestamp parse from it would make the \"mirrors\" claim structural.\n\n---",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py#bar_timestamp"
+    },
+    {
+      "severity": "PASS",
+      "title": "The session judgement and the truncated-day seeding are tested at their boundaries, not just their happy path",
+      "description": "`bar_timestamp`, `sessions_without_bars` and `judge_chunk_by_sessions` each have direct tests for the exact cases the fix exists for: a bar at the open does not satisfy a session, a bar at the close does, a bar dated day D from session D-1 does not, the empty-bounds and no-judged-session pass-throughs keep the classifier's verdict, and outcomes that carry no bars never promote. `TestChunkJudgedBySessions` drives the real `_do_minute_symbol` with a spillover-only response and asserts the row survives (`PARTIAL`, `FetchStatus.UNKNOWN`), while `TestTruncatedDayAwareSeeding` asserts the backfill phase receives nothing. `TestScanScopeAndTimeout` in `test_repair_921.py` pins the load-bearing `AND m.time >= %s` chunk-exclusion bound with a comment explaining that deleting it makes the scan unrunnable \"silently and only against production-sized history\". That is the right shape for this class of change.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/data/acquisition/daemon/test_minute_sessions.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "The cutover's tests now refuse a real subprocess, which is what the previous run needed",
+      "description": "The new autouse `_no_side_effects` fixture patches `cutover_common.subprocess.run` to raise `AssertionError` for *any* invocation, nulls `_LOG_FILE`, redirects `start_log` into `tmp_path`, and neutralises both `time.sleep` seams. It closes the class of defect its own docstring names \u2014 an un-patched seam running `sudo mt-run minute` from pytest \u2014 and does so by default rather than per test, so a future test that forgets to patch a seam fails loudly instead of touching the host.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_cutover_921.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The timezone fix corrects the label, not the judgement the label describes",
+      "location": "src/manta_trading/cli/commands/minute_session_mass.py#collecting_firing_finished_at",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`cagg_freshness_for_session` is a second, divergent implementation of an existing guard",
+      "location": "src/manta_trading/data/gaps/repair_921.py#cagg_freshness_for_session",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The sudoers rule is wider than its own comment claims, and names a script the operator can edit",
+      "location": "deploy/sudoers.d/manta-ops",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "One extra database round trip per chunk on the minute hot path",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py#_do_minute_symbol",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "The cutover's sleep budget is unbounded while production timers are held stopped",
+      "location": "scripts/cutover_921_minute_sessions.py#_verify_when_fresh",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`_build_truncated_index` handles its own timeout but not the other faults its sibling survives",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py#_build_truncated_index",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "\"The same predicate the repair's truncated-day index applies\" is not exactly true",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py#sessions_without_bars",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The minute timer's stagger comment no longer describes the schedule",
+      "location": "deploy/systemd/mt-minute-pass.timer",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`fire_unit_until` duplicates most of `fire_unit`",
+      "location": "scripts/cutover_common.py#fire_unit_until",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`bar_timestamp` is a second parse of the provider's timestamp shape",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py#bar_timestamp",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The session judgement and the truncated-day seeding are tested at their boundaries, not just their happy path",
+      "location": "test/unit/data/acquisition/daemon/test_minute_sessions.py",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The cutover's tests now refuse a real subprocess, which is what the previous run needed",
+      "location": "test/unit/test_cutover_921.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:13:33.721510",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 799416,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2491701,
+  "cached_tokens": 1950208,
+  "cache_write_tokens": null,
+  "completion_tokens": 211912,
+  "reasoning_tokens": 205213,
+  "duration_seconds": 849.3001972499769,
+  "cost_usd": 0.186199,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,111 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Estimate mode prices the installed release, not the requested release",
+      "description": "`fetch_estimate()` invokes `sudo mt-run`, which executes `/opt/manta-trading/.venv/bin/mt`. This path never installs or runs the requested ref. When production still has the previous universe, `--estimate` prices those old wants\u2014potentially reporting nothing to buy and printing no ceiling command. Run the estimate using the requested release\u2019s universe and production configuration, and test with differing installed and requested releases.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:261-268"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Pre-install baseline omits the new GC bar family",
+      "description": "The baseline reads production accounting before `install_release()`. The previous universe has no GC bar want, and `family_wants()` only reports configured families, so this baseline lacks `GC/bar_1m`. After installation and purchase, accounting includes that family; `purchase_accounting.totals_delta()` then raises because its baseline is missing. Reruns retain the same incomplete baseline. Capture totals for every target family before spending, independently of the installed universe.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:112-115"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Session evidence excludes the tick-tier families",
+      "description": "`coverage_reads()` includes only history wants, so `_family_evidence()` never judges ES or GC `tbbo` sessions. Accounting narrates those families but does not enforce their caught-up state. Consequently, an unchanged unhealthy baseline can pass without naming outstanding tick-tier sessions, contrary to D6\u2019s every-family exit criterion. Include tier coverage over each entry\u2019s tier range.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py:72-91"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Estimate mode prices the installed release, not the requested release",
+      "location": "scripts/cutover_304_first_purchase.py:261-268",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Pre-install baseline omits the new GC bar family",
+      "location": "scripts/cutover_304_first_purchase.py:112-115",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Session evidence excludes the tick-tier families",
+      "location": "scripts/cutover_304_evidence.py:72-91",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:25:15.203861",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 128256,
+  "cached_tokens": 125952,
+  "cache_write_tokens": null,
+  "completion_tokens": 372,
+  "reasoning_tokens": 0,
+  "duration_seconds": 122.43028541584499,
+  "cost_usd": 0.020923200000000003,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A coverage range at the populated span's edge exits 4 as \"database unreachable\"",
+      "description": "`build_coverage` asks the calendar for `[utc_midnight(start - timedelta(days=1)), utc_midnight(end))` (lines 103-104) so a session that opens the previous evening is included. `TradingCalendar.sessions_between` calls `_require_populated` on **both** bounds (`data/base/trading_calendar.py:310-317`), and `calendar_sessions` (`tick_status_build.py:63-75`) converts `OutOfPopulatedRangeError` into `TickCalendarError`. `exit_code_for` maps `TickCalendarError` to `EXIT_STORAGE` (`cli/commands/tick_exit.py`), so `mt data tick coverage --start <first populated session date>` \u2014 a legitimate request \u2014 prints the calendar's \"outside calendar \u2026 Run 'mt data extend'\" refusal and exits **4**, which `READ_EPILOG` (`tick_store_cmds.py:37-42`) documents as \"the tick or production (calendar) database is unreachable.\" The operator gets a storage-outage diagnosis and a storage exit code for what is an out-of-range input. Either clamp the lookback to the populated span's first open, or map this refusal to exit 1 and say so in the epilog. (The share of this that is genuinely a storage outage \u2014 a dead connection \u2014 already reaches exit 4 through `psycopg.OperationalError`.)",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py:99-105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`caught_up` is computed on a different condition than the `wanted` range it reports on",
+      "description": "The in-scope `wanted` tuple is built at lines 187-192 and is `None` whenever `_wanted_end` cannot produce an end (`entry.end is None` **and** no `tick_dataset_edge` row \u2014 `_wanted_end`, lines 140-144). But the `caught_up` flag at line 217 tests only `wanted_start is not None`. So a product with `tier` set but an unknown/absent dataset edge falls into `_scope`'s held-units-only branch (no wanted bounds added, line 158), yet reports `caught up: yes/no` instead of the `n/a` that `caught_up`'s own docstring reserves for \"the product has no wanted range\" (`tick_status.py`, `caught_up`). Concretely, it can print `caught up: yes` over a scope that contains only days already held, which is precisely the reading TD9's \"n/a (no wanted range)\" branch exists to prevent. Today `TICK_UNIVERSE` has `tier=None`, so this is latent until 226 sets a tier \u2014 but it is the state 226 immediately lands in. Keying the flag off `wanted is not None` (the same value used for scope) makes the two agree.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:217"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Spreads are hidden by dataclass equality rather than by class",
+      "description": "`[c for c in lines if c not in spreads]` relies on `ContractLine` being a frozen dataclass whose `__eq__` compares every field, including the mutable-by-content `sessions`/`records`/`volume` counters. It is correct only because `instrument_id` is unique per line. `c.instrument_class != SPREAD_CLASS` \u2014 the same constant used four lines earlier to build `spreads` (line 198) \u2014 states the rule directly and needs no reasoning about equality semantics.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:224"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_DATE_FORMAT` is redefined instead of shared",
+      "description": "`_DATE_FORMAT = \"%Y-%m-%d\"` duplicates the identical constant in `cli/commands/tick.py:51`, and the two define the accepted CLI date format for the same command group. The project rule is explicit that a comparison value should be defined once and referenced everywhere; `tick_store_cmds.py` already imports from `tick_exit.py`, so a shared constant there (or a single module-level one) costs nothing. The same applies to the repeated `typer.Option(False, \"--json\", \u2026)` definition, though that predates this slice.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:57"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_read_storage()` is an indirection that returns a constant",
+      "description": "The function exists only to defer one import and is called at both call sites (lines 201 and 236) to produce the same one-element tuple. Inlining `(TickDatabaseUnreachable,)` at the `run_mapped(..., storage=...)` call removes a level of indirection with no behaviour change.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:170-173"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Float division converts nanosecond expiries to dates",
+      "description": "`datetime.fromtimestamp(c.expiration_ns / 1e9, UTC)` goes through a double for an integer-nanosecond value, in a renderer whose whole job is displaying them. It matches the precedent at `ingest_checks.py:31`, so it is not novel, but the exact idiom used elsewhere in the tick package (`// timedelta(microseconds=1)`, `ingest_records.utc_ns`) is available and cannot round.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:102"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Status re-runs the same unit query twice per product",
+      "description": "`_product_status` calls `_scope`, which calls `shape_units` (line 155), and then `session_verdicts`, which calls `shape_units` again (line 87) \u2014 the identical query with the identical parameters. Both feed the same product's report. The table is small today, so this is not a hot-path problem, but it is a duplicated read that a single call threaded through would remove.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:87"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The new renderer's pure helpers carry no direct test",
+      "description": "`age()` \u2014 including the \"largest two units\" truncation and the `0m` / `hours == 0` branches \u2014 and `_label()` have no direct test; the renderer is exercised only end-to-end through `test/integration/data/test_tick_status_cli.py`, which asserts the complete-note and spreads strings but never an age or label. These are pure functions with three branches each and would be cheap to parametrize, in the style `test/unit/data/tick/test_tick_status.py` already uses for the classification table.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:43-50"
+    },
+    {
+      "severity": "PASS",
+      "title": "Day-tiling logic is now stated once",
+      "description": "The slice replaces `ingest_plan._midnight` with the shared `utc_midnight` and lifts `session_days`' inline day walk into `days_touched`, which `tick_status_build` then reuses for scope, verdicts and coverage. I traced the reformulation of `session_days` (`touched.update(...)` with the `start <= day < end` filter moving out of the loop) against the previous behaviour in the diff and the existing unit tests in `test/unit/data/tick/test_session_days.py` \u2014 the clipping order changes but the result does not.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/session_days.py:37-44"
+    },
+    {
+      "severity": "PASS",
+      "title": "New destructive statements are confined to fixture-created databases",
+      "description": "The two `DELETE FROM tick_trade \u2026` statements in the new tests (also `test_tick_status_cli.py:125-128`) take their connection from `migrated_tick_db`, which `test/conftest.py` builds via the `mt_test_t` throwaway-database context manager and drops on teardown. Neither file reads `MT_TICK_DB_URL` or `MT_TIMESCALE_DB_URL`; the closed-port URL in `test_tick_status_cli.py:39-42` is constructed in-test. This satisfies the production-protection rules, and the delete-by-primary-key comment (rather than `ctid`) matches the guidance recorded in the slice's walkthrough.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "test/integration/data/test_tick_status_build.py:113-117"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A coverage range at the populated span's edge exits 4 as \"database unreachable\"",
+      "location": "src/manta_trading/data/tick/tick_coverage.py:99-105",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`caught_up` is computed on a different condition than the `wanted` range it reports on",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:217",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Spreads are hidden by dataclass equality rather than by class",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:224",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`_DATE_FORMAT` is redefined instead of shared",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:57",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_read_storage()` is an indirection that returns a constant",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:170-173",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Float division converts nanosecond expiries to dates",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:102",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Status re-runs the same unit query twice per product",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:87",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The new renderer's pure helpers carry no direct test",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:43-50",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Day-tiling logic is now stated once",
+      "location": "src/manta_trading/data/tick/session_days.py:37-44",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "New destructive statements are confined to fixture-created databases",
+      "location": "test/integration/data/test_tick_status_build.py:113-117",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:12:50.237351",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 44,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 706677,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2177791,
+  "cached_tokens": 1840896,
+  "cache_write_tokens": null,
+  "completion_tokens": 193162,
+  "reasoning_tokens": 187385,
+  "duration_seconds": 737.6110404999927,
+  "cost_usd": 0.15155412,
+  "cost_basis": "alias_pricing"
+}

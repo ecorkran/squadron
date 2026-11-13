@@ -1,0 +1,168 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Prompt and settings metadata keys and mode derivation are duplicated",
+      "description": "`describe_run_settings` in `core/models.py` builds the `system_prompt_mode`, `setting_sources` and `auto_memory` metadata keys for one-shot runs. The SDK-session branch in `dispatch.py` writes the same three keys again as string literals. It also re-derives the prompt mode with its own `PRESET_APPEND if session.seeded else PRESET` rule instead of going through `describe_system_prompt`. `ReviewResult.to_dict` adds a third copy of the two key names. The project rule is to define a comparison value once. Renaming a key now means editing several places, and the session path can drift from the one-shot path. Define the keys once, as constants or as a helper that accepts the session's values.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py#DispatchAction"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lines likely exceed the 88-character limit",
+      "description": "Several new lines look longer than 88 characters:\n- the `_read_turn` signature\n- the `RateLimitRejected(...)` raise\n- `_connect_lazy_session(run_id=effective_run_id, seed=resume_seed)` in `executor.py`\n- the `PRESET_APPEND if config.instructions else PRESET` return in `models.py`\n- the `system_prompt_mode` line in `review/models.py`\n\nI could not confirm the configured `line-length`, so this may be a project-wide override. If the limit is 88, `ruff format` or `ruff check` will fail on these lines. Run the formatter and apply the result.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._read_turn"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Session code reads config files directly",
+      "description": "`SDKExecutionSession` and `open_pipeline_session` call `get_typed_config` themselves, so session logic now does config file I/O. The tests have to patch `get_typed_config` in the module to cope. Passing the timeout and settings policy in at construction would be more testable. This is minor, because the lookup runs only when a dispatch is already waiting.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._background_idle_timeout_s"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test helpers are loosely typed",
+      "description": "`sdk_text`, `scripted_session` and `typed_config` return `object` or take bare `type`. As a result the tests need many `# type: ignore[attr-defined]` comments. This is not wrong, but strict pyright is meant to cover tests, and precise return types would remove most of the ignores. Also, `test_executor_each.py` imports `phase_artifact_cf_client` from the conftest. That helper is not in the diff, and I did not confirm it exists.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/conftest.py:scripted_session"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exception handling and failure observability",
+      "description": "The new broad catches comply with the project rules. `_stop_background` catches `Exception` with `# noqa: BLE001`, a justifying comment, and `logger.exception`. `_reconnect` logs with `logger.exception`, records `unusable_reason` and re-raises. Later calls then fail fast through `_require_usable`. The idle timeout, the stream ending with an agent still running, and the discarded follow-up turn each log at WARNING or raise. Tests cover each of these paths.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._stop_background"
+    },
+    {
+      "severity": "PASS",
+      "title": "Config and settings policy",
+      "description": "Bool coercion is lenient on case and whitespace and fails explicitly on bad input. `get_typed_config` handles `bool` before `int`. The settings policy sits in one module. `sdk_settings_options` copies `base_env` rather than mutating it. A parametrized per-path test asserts the policy for every automated SDK path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/config/manager.py#_coerce_bool"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Prompt and settings metadata keys and mode derivation are duplicated",
+      "location": "src/squadron/pipeline/actions/dispatch.py#DispatchAction",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Lines likely exceed the 88-character limit",
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._read_turn",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Session code reads config files directly",
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._background_idle_timeout_s",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test helpers are loosely typed",
+      "location": "tests/pipeline/conftest.py:scripted_session",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Exception handling and failure observability",
+      "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._stop_background",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Config and settings policy",
+      "location": "src/squadron/config/manager.py#_coerce_bool",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:30:06.442258",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 217777,
+  "cached_tokens": 54205,
+  "cache_write_tokens": 163568,
+  "completion_tokens": 5077,
+  "reasoning_tokens": null,
+  "duration_seconds": 40.27755045797676,
+  "cost_usd": 0.7169371,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

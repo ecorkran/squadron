@@ -1,0 +1,410 @@
+[
+ {
+  "bug": "932-B1",
+  "run": "932-deepseek4-flash-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-deepseek4-flash-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-deepseek4-flash-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-haiku-xhigh-1",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-haiku-xhigh-1",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-haiku-xhigh-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-haiku-xhigh-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-haiku-xhigh-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-haiku-xhigh-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-haiku-xhigh-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-haiku-xhigh-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-haiku-xhigh-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-haiku-xhigh-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-haiku-xhigh-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-luna-1",
+  "verdict": "HIT",
+  "why": "Returns when notification clears ledger before follow-up result"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-luna-1",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-luna-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-luna-3",
+  "verdict": "ADJACENT",
+  "why": "Early return, but about earlier dispatch background turn"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-sol-1",
+  "verdict": "HIT",
+  "why": "Notification before result empties ledger; continuation dropped"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-sol-1",
+  "verdict": "ADJACENT",
+  "why": "Timeout interrupts continuation; different defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-sol-2",
+  "verdict": "HIT",
+  "why": "Empty ledger returns before pending continuation read"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-sol-2",
+  "verdict": "ADJACENT",
+  "why": "Timer persists into foreground continuation; different defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-sol-3",
+  "verdict": "ADJACENT",
+  "why": "Timer persists into continuation; different defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-sol-3",
+  "verdict": "HIT",
+  "why": "Empty ledger returns without consuming pending continuation"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-sonnet-1",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-sonnet-high-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-sonnet-high-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-sonnet-high-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-sonnet_notools-1",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-sonnet_notools-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "932-B1",
+  "run": "932-sonnet_notools-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-deepseek4-flash-1",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-deepseek4-flash-1",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-deepseek4-flash-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-haiku-xhigh-1",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-haiku-xhigh-1",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-haiku-xhigh-2",
+  "verdict": "ADJACENT",
+  "why": "Item-resume dependency check, but about deferred status"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-haiku-xhigh-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-haiku-xhigh-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-haiku-xhigh-3",
+  "verdict": "ADJACENT",
+  "why": "Item-resume dependency check, but about deferred status"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-luna-1",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-luna-3",
+  "verdict": "ADJACENT",
+  "why": "Dependency openness inconsistency for deferred, not merged-slice status"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-sol-1",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-sol-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-sol-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-sonnet-1",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-sonnet-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-sonnet-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-sonnet-high-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-sonnet-high-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-sonnet-high-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-sonnet-high-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-sonnet_notools-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "197-B1",
+  "run": "197-sonnet_notools-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "307-B1",
+  "run": "307-deepseek4-flash-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "307-B1",
+  "run": "307-haiku-xhigh-1",
+  "verdict": "HIT",
+  "why": "Summary read top-level; actually nested under phases.summary"
+ },
+ {
+  "bug": "307-B1",
+  "run": "307-sonnet-high-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "307-B1",
+  "run": "307-sonnet_notools-2",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "307-B1",
+  "run": "307-sonnet_notools-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "307-B2",
+  "run": "307-haiku-xhigh-1",
+  "verdict": "HIT",
+  "why": "Verdict estimate_only never equals allowed; BUY unreachable"
+ },
+ {
+  "bug": "307-B2",
+  "run": "307-haiku-xhigh-1",
+  "verdict": "ADJACENT",
+  "why": "--estimate BUY on refusals; different defect"
+ },
+ {
+  "bug": "307-B2",
+  "run": "307-haiku-xhigh-2",
+  "verdict": "HIT",
+  "why": "Judge requires allowed but estimate emits estimate_only"
+ },
+ {
+  "bug": "307-B2",
+  "run": "307-haiku-xhigh-2",
+  "verdict": "ADJACENT",
+  "why": "--estimate BUY on refusals; different defect"
+ },
+ {
+  "bug": "307-B2",
+  "run": "307-haiku-xhigh-2",
+  "verdict": "ADJACENT",
+  "why": "Fixtures use wrong verdict vocabulary; test-side symptom"
+ },
+ {
+  "bug": "307-B2",
+  "run": "307-haiku-xhigh-3",
+  "verdict": "HIT",
+  "why": "Requires allowed, planner emits estimate_only"
+ },
+ {
+  "bug": "307-B2",
+  "run": "307-sonnet-2",
+  "verdict": "ADJACENT",
+  "why": "--estimate BUY on refusals; different defect"
+ },
+ {
+  "bug": "307-B2",
+  "run": "307-sonnet-3",
+  "verdict": "NO",
+  "why": "Unrelated to described defect"
+ },
+ {
+  "bug": "307-B2",
+  "run": "307-sonnet-high-3",
+  "verdict": "ADJACENT",
+  "why": "--estimate BUY on refusals; different defect"
+ }
+]

@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Mount effect and hook file well over the project size guides",
+      "description": "The mount effect runs 157 lines, against a guide of about 50 lines per function. The whole file is 366 lines, against about 300. The `eslint.config.js` suppression comment justifies itself by saying inlining the facade would leave the file \"~60% over\". The file is still about 22% over after the extraction. `teardown`, the mount sequence and the subscription setup could each be pulled into helpers. A `mountChart(container, style, \u2026)` function returning `{ observer, disposers }` would also make the `let observer` / `const disposers` hoisting, which `teardown` reads before it is declared, unnecessary.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:167-324"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Visible-range translation is gated on a ref, so it cannot react to the first series being added",
+      "description": "The effect reads `seriesCountRef.current` but lists only `[mount.ready, chart, range]` as dependencies. A ref change does not re-run the effect. When a series is added to an empty chart, the Context's current range is not applied. It only reaches the chart on the next `range` change. The test \"applies the range once a series exists\" avoids this by calling `setRange` after `addSeries`, so it never covers the case. The comment calls this a seam for initiative 120. Even so, the first add leaves the chart and the Context out of sync. Either apply the range inside the facade's `addSeries` path when the count goes 0\u21921, or track the count as state.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:340-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Subscriptions and the indicator effect are no-ops, and the teardown-race test is vacuous",
+      "description": "The crosshair and visible-range handlers contain only `if (disposedRef.current) { return }`, so both branches do nothing. The adapter still builds a crosshair payload on every mouse move for no consumer. The indicator effect at lines 358-363 is also an empty body. These are documented placeholders, but they add per-event work and dead code. The test \"makes a subscription callback fired after teardown inert\" in `src/test/use-chart-provider.errors.test.tsx` asserts that `getVisibleRange` was not called. That passes whether or not the guard exists, because the handler never calls anything. Either defer the subscriptions until a consumer exists, or test the disposer lifecycle through real handler behavior.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:262-275"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failed create is followed by a spurious second error from teardown",
+      "description": "If `provider.create()` throws, for example because `createChart` throws, `LightweightChartsProvider.chart` is still null. `src/chart/providers/lightweight-charts-provider.ts:67-70` shows `destroy()` calls `assertReady()`, which throws. The shared `teardown` then logs a misleading \"provider teardown failed\" error right after the real \"create failed\" one. The spy never throws from `destroy`, so the unit tests miss this. Consider tracking whether `create` succeeded and skipping `destroy` when it did not.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:218-226"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`readChartStyle` silently falls back to library defaults",
+      "description": "`CLAUDE.md` says \"Never use silent fallback values\". When a theme token resolves empty, it is dropped without any signal. If all three are empty the function returns `undefined`, and a partial miss leaves that color at the library default. A renamed token would therefore turn the chart white with no error. The e2e test catches the case where `--color-surface` is missing. A grid or text token that goes missing is not caught. Log or throw on a missing token. At minimum, test `readChartStyle` directly, since there is no unit test for it.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/routes/chart-route.tsx:34-55"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stale and misplaced comments in the hook, and the smoke spec names the wrong file",
+      "description": "- The header refers to \"task 14\" and a build-up \"across tasks 8/10/12/14\", which is process history.\n- The `teardown` comment says subscriptions \"join here in task 12\", but they already do.\n- The \"The forwarding facade\u2026\" comment block sits above the `series` memo instead of the `chart` memo it describes.\n- In `e2e/smoke.spec.ts:10` the comment says \"The chart itself is asserted in chart-render.spec.ts\". That spec covers the harness route. The product chart is covered by `chart-live.spec.ts`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:10"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Initial size uses the border box, later resizes use the content box",
+      "description": "The initial size comes from `getBoundingClientRect()`, which includes the container's 1px border. Observer updates use `contentRect`, which excludes it. The chart is therefore 2px oversized until the observer's first callback corrects it, and the e2e check only requires more than 50% of the container width, so it would not catch this. Using one measurement source would remove the inconsistency.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:187-188"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Harness gate relies on a manual bundle check",
+      "description": "The mode strings `'e2e'` and `'development'` are written inline, and `playwright.config.ts` repeats `e2e`. That is a deliberate trade-off to keep the tree-shaking working, and the comment explains it. The guarantee that production excludes the harness was verified by hand. A small build-output check, such as grepping the production bundle for `__chart-harness` in CI, would protect it from regressions. The `react-hooks/refs` suppression in `eslint.config.js` is scoped to one file and documented, which is acceptable.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/routes/router.ts:38-39"
+    },
+    {
+      "severity": "PASS",
+      "title": "Lifecycle, error funnel and test support design",
+      "description": "- The single `runGuarded` funnel, the disposed flag, and the unsubscribe \u2192 disconnect \u2192 destroy teardown order are coherent.\n- The `ready`/`error` state is held as one unit, and each disposer is pushed on its own so a mid-setup throw does not leak the first.\n- The lifecycle facade subset deliberately omits `create` and `destroy`.\n- The spy and `renderWithContexts` helpers keep the four hook suites consistent.\n- `getCapability` keeps its generic through the facade.\n- The removal of `WorkspaceRoute` leaves no dangling references.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/chart/chart-facade.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Mount effect and hook file well over the project size guides",
+      "location": "src/chart/use-chart-provider.ts:167-324",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Visible-range translation is gated on a ref, so it cannot react to the first series being added",
+      "location": "src/chart/use-chart-provider.ts:340-345",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Subscriptions and the indicator effect are no-ops, and the teardown-race test is vacuous",
+      "location": "src/chart/use-chart-provider.ts:262-275",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Failed create is followed by a spurious second error from teardown",
+      "location": "src/chart/use-chart-provider.ts:218-226",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`readChartStyle` silently falls back to library defaults",
+      "location": "src/routes/chart-route.tsx:34-55",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Stale and misplaced comments in the hook, and the smoke spec names the wrong file",
+      "location": "src/chart/use-chart-provider.ts:10",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Initial size uses the border box, later resizes use the content box",
+      "location": "src/chart/use-chart-provider.ts:187-188",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Harness gate relies on a manual bundle check",
+      "location": "src/routes/router.ts:38-39",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Lifecycle, error funnel and test support design",
+      "location": "src/chart/chart-facade.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:27:53.784871",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 528742,
+  "cached_tokens": 418244,
+  "cache_write_tokens": 110488,
+  "completion_tokens": 9574,
+  "reasoning_tokens": null,
+  "duration_seconds": 80.50725020794198,
+  "cost_usd": 0.583809,
+  "cost_basis": "provider"
+}

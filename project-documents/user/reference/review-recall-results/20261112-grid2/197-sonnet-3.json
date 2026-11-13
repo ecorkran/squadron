@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Item resume imports private functions from the CLI module through a cycle",
+      "description": "`handle_item_resume` imports `_apply_param_overrides` and `_run_pipeline_sdk` from `run.py` inside the function, and needs two `reportPrivateUsage` suppressions to do it. `run.py` also imports `run_item`, so the two modules depend on each other. The code comment admits this. Move those helpers to a shared module, or pass them in as arguments (the `run_body` argument already works this way). That removes the cycle and the suppressions.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:61-66"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_execute_each_step` and `execute_pipeline` keep growing",
+      "description": "`_execute_each_step` is well over 50 lines after this change. It now handles source evaluation, item reruns, pre-flagging, flag-kind classification, halt capture, per-item report writes and final report writes. `_finish_each_report` takes six parameters. The `item_rerun` flag is also threaded through `execute_pipeline`, `_execute_step` and `_execute_each_step`, so rerun mode is an extra branch in the main path rather than a separate strategy. Extract the per-item body, and consider a small \"item source and report sink\" abstraction. That would let the normal run and the rerun differ in one place instead of in several conditionals.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py#_execute_each_step"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mutating-step detection relies on a hard-coded step list and loose dict shapes",
+      "description": "`pipeline_mutates` uses a fixed set (`DESIGN`, `TASKS`, `IMPLEMENT`, `DEVLOG`, `BRANCH`) plus the string key `commit_each_iteration`. A new mutating step type that is not added here silently runs without the lock, and nothing fails to flag it. The nested-step walk casts `config[\"steps\"]` items as `{type: config}` dicts and treats any unexpected shape as non-mutating. That is a silent fallback, and the project rules say not to use those. Prefer a mutating property declared on each step type, or make an unknown shape raise. The `commit_each_iteration` literal should also be a shared constant, since the loop config defines it too.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py:40-70"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_write_each_report` breaks the 104-column line limit",
+      "description": "`async def _write_each_report(report: BatchReport, runs_dir: Path | None, *, final: bool = True) -> None:` is over the configured `line-length = 104` (pyproject.toml:71), so `ruff check` (E501) or `ruff format --check` will fail. Other new lines are also long, for example in `test_run_lock_cli.py` and `test_item_resume_source.py`. Run `ruff format` on the changed files.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:1454"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Each-step report is rewritten after every item with a blocking pattern per item",
+      "description": "Writing the report after each item is intended, since a killed batch should leave a report. Each write does two atomic writes (Markdown and JSON, each with a temp file and rename) and runs in `asyncio.to_thread`, so the event loop is not blocked. There is no `fsync`, though. The \"never see a partial file\" claim holds, but after a crash a renamed file can be empty on some filesystems. The `final=False` path also swallows nothing: an `OSError` from the per-item write propagates out of the loop. That choice is reasonable, but the documentation says \"failure leaves the previous report intact\", so the batch ending because of a report write failure should be stated in the docs and covered by a test. I could not find such a test in the diff.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py#_execute_each_step"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`BatchReport.load` and `from_json` accept loosely typed JSON",
+      "description": "`report.json` is an external file boundary, and the project rules call for Pydantic there. The code uses manual `cast` calls and `str(values[...])`. A missing `\"index\"` becomes the string `\"None\"` instead of an error, because `str(None)` does not raise and `data.get` is used. Missing `outcome` is caught (`ItemOutcome(\"None\")` raises `ValueError`), but `index` and `name` are not. Use a Pydantic model, or fail explicitly when required keys are absent.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:BatchItemRecord.from_json"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Resume paths in `run.py` all share the pipeline definition lock check",
+      "description": "Every `_locked(definition, ...)` call uses a `definition` that is assigned in that same branch (lines 1153, 1179, 1217, 1271). The lock is therefore taken against the right pipeline. This is fine as it stands. Because `_locked` closes the coroutine on a failed lock, nothing is left unawaited.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py:1217-1271"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test coverage is strong for the new paths",
+      "description": "The diff adds tests for the lock (held, killed holder, worktrees, open failure), report round-trip and version mismatch, flag-kind classification, halt reporting, the dependency ordering and cycles, reserved params, and the item-resume flows against a real temp git repo. Each failure-mode test asserts an observable signal such as an ERROR log or an exit code. This meets the failure-mode enumeration rule.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/test_item_resume_validation.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Item resume imports private functions from the CLI module through a cycle",
+      "location": "src/squadron/cli/commands/run_item.py:61-66",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_execute_each_step` and `execute_pipeline` keep growing",
+      "location": "src/squadron/pipeline/executor.py#_execute_each_step",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mutating-step detection relies on a hard-coded step list and loose dict shapes",
+      "location": "src/squadron/pipeline/run_lock.py:40-70",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`_write_each_report` breaks the 104-column line limit",
+      "location": "src/squadron/pipeline/executor.py:1454",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Each-step report is rewritten after every item with a blocking pattern per item",
+      "location": "src/squadron/pipeline/executor.py#_execute_each_step",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`BatchReport.load` and `from_json` accept loosely typed JSON",
+      "location": "src/squadron/pipeline/batch_report.py:BatchItemRecord.from_json",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Resume paths in `run.py` all share the pipeline definition lock check",
+      "location": "src/squadron/cli/commands/run.py:1217-1271",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test coverage is strong for the new paths",
+      "location": "tests/pipeline/test_item_resume_validation.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:25:39.257736",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 263149,
+  "cached_tokens": 117851,
+  "cache_write_tokens": 145294,
+  "completion_tokens": 2979,
+  "reasoning_tokens": null,
+  "duration_seconds": 27.341873666038737,
+  "cost_usd": 0.6311093,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Root-NOPASSWD sudoers rule runs a script from a user-writable path",
+      "description": "`MT_INSTALL` lets `manta` run `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh --ref *` as root with no password. That file is in the operator's own home directory, so the operator, or anything running as them, can edit it and then run it as root. This makes the \"limited root\" header untrue, because the rule is effectively full root. The script should be installed to a root-owned path such as `/usr/local/libexec`. Failing that, the rule needs a constraint that cannot be bypassed by editing the checkout. `scripts/cutover_common.py:133-135` builds the same checkout-relative path, so it would need to change with the rule.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Sudoers wildcards also match extra arguments",
+      "description": "In sudoers, `*` also matches spaces. `systemctl stop mt-*` therefore matches `systemctl stop mt-x sshd`, and `mt-run *` and `--ref *` match any arguments at all. The rule is wider than the comment says (\"exactly the commands those scripts issue\"). I did not check what `mt-run` itself accepts. The `systemctl` rules should name the units explicitly. The `mt-run` rule should list the specific subcommands the scripts use, which are `minute`, `kalshi` and `data kalshi status --json`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:7-8"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Import ordering breaks ruff `I` in several files",
+      "description": "In the `cutover_common` import, `NOTES_DIR`, `fire_unit_until` and `start_log` are placed before `CutoverError`. In `scripts/repair_921_minute_sessions.py`, `cagg_freshness_for_session` comes before `CheckReport`. In `minute.py`, the new `minute_sessions` and `repair_921` imports sit before `gaps.minute_coverage`, and `gaps.compute_missing_ranges` is in the middle. In `test_repair_921.py`, `cagg_freshness_for_session` comes before `SymbolFindings`. The project's required ruff `I` rule would flag all of these.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:45-52"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Timer comments no longer match the schedule",
+      "description": "The comment says the pass is \"Staggered 30 minutes behind mt-daily-pass.timer\". With the move from 01:05 to 04:05, that offset is probably no longer true. I did not inspect `mt-daily-pass.timer`. The comment should be updated or the stagger re-verified.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "deploy/systemd/mt-minute-pass.timer:6"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Log file is overwritten and its failures are unhandled",
+      "description": "`start_log` uses `write_text`, which truncates any existing file. `say` also reopens the file on every line, and an `OSError` mid-cutover would crash the run partway through a destructive operation. The timestamped name in the cutover script avoids collisions today. Using `open(\"x\")` or `\"a\"` in `start_log` would remove that risk, and failures in `say` should be handled deliberately. `_LOG_FILE` is also module-global mutable state.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:45-62"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Extra DB connection per chunk and a long function",
+      "description": "Each chunk now checks out a second pool connection just to call `fetch_session_bounds`, while the symbol connection is already held. This is fine at the current pool size. It does make `_do_minute_symbol` longer, and it is already well past the 50-line guideline.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:902"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_verify_when_fresh` can block for 75 minutes per call",
+      "description": "Within the firing loop, each iteration can wait up to five polls of 15 minutes. The acceptance step then repeats the same wait. The bound is explicit and tested, so this is only informational.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:200"
+    },
+    {
+      "severity": "PASS",
+      "title": "Session-based chunk judgement and tests",
+      "description": "The `(open, close]` predicate is a pure function with focused tests covering the spillover, at-open, at-close, weekend-tail and no-bounds cases. The `except` in `bar_timestamp` is narrow and has a justifying comment. The 04:05 firing change is applied consistently across the constants, the timer and the tests.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Root-NOPASSWD sudoers rule runs a script from a user-writable path",
+      "location": "deploy/sudoers.d/manta-ops:9",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Sudoers wildcards also match extra arguments",
+      "location": "deploy/sudoers.d/manta-ops:7-8",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Import ordering breaks ruff `I` in several files",
+      "location": "scripts/cutover_921_minute_sessions.py:45-52",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Timer comments no longer match the schedule",
+      "location": "deploy/systemd/mt-minute-pass.timer:6",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Log file is overwritten and its failures are unhandled",
+      "location": "scripts/cutover_common.py:45-62",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Extra DB connection per chunk and a long function",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:902",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`_verify_when_fresh` can block for 75 minutes per call",
+      "location": "scripts/cutover_921_minute_sessions.py:200",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Session-based chunk judgement and tests",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T15:59:54.713956",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 166174,
+  "cached_tokens": 111392,
+  "cache_write_tokens": 54776,
+  "completion_tokens": 3215,
+  "reasoning_tokens": null,
+  "duration_seconds": 30.56758033297956,
+  "cost_usd": 0.26602060000000005,
+  "cost_basis": "provider"
+}

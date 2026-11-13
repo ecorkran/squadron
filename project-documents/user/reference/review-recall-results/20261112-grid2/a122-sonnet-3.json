@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "observe.py exceeds the file-size guideline and mixes two state machines",
+      "description": "`observe.py` is about 326 lines, over the ~300-line guideline. It carries the confirmed-run poll classifier, the unconfirmed-launch grace and overdue logic, and four per-entry dicts and sets (`_last_poll`, `_overdue`, `_faulted` and the tracker). `_unconfirmed`, `_check_line` and `_after_launch_poll` pass 6\u20137 arguments between them. Splitting the unconfirmed-launch path into its own module or class would shrink the file and make the state easier to reason about.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Settings validation uses string-keyed `getattr`",
+      "description": "`validate_settings` iterates over field names as string literals and reads them with `getattr(settings, name)`. A rename of a `ProcessSettings` field would fail at runtime rather than in pyright strict mode. It also scatters the field names, which the project's \"define it once\" rule discourages. Reading the fields directly, for example from a tuple of `(name, value)` pairs, would keep the checking static.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/amoeba/runner/factory.py:34-50"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests import private helpers from other test modules",
+      "description": "`test_budget_coverage.py` imports `_link` from `runner.test_probes` and needs a `pyright: ignore[reportPrivateUsage]` to do so. `_link` should move to `tick_support.py` or a conftest, so that one test module does not depend on another test module's private helper. `test_tenant.py` and `test_factory.py` also reach into private attributes (`_tracker`, `_planners`) with ignores. That couples those tests to the implementation rather than to behavior.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/runner/test_budget_coverage.py:20"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Crash harness relies on type-ignores and runtime monkeypatching",
+      "description": "`_hooked` returns `tuple[object, object]`, and `main` then passes the pieces to `RunnerTenant` with `# type: ignore[arg-type]`. `_arm_resolve_kill` replaces `Store.journal_resolve` on the class for the whole process. This is acceptable in a throwaway subprocess, but the loose typing is why the ignores are needed. Typing the returns as `PopenFactory` and `Callable[[str], RunPoll]` would remove most of them. The tests are meant to be under strict pyright, and this pattern cuts against that.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/runner/crash_entry.py:105-120"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The one broad catch is justified but guarded only by a source-text count",
+      "description": "The `except Exception` at the process boundary logs with `logger.exception`, escalates, and re-raises store and shape failures first. This satisfies rule (c). `test_the_runner_package_has_exactly_one_broad_except` guards it by counting the string `except Exception`, which is brittle: it would pass if the string appeared in a comment, and it would miss `except BaseException`. The `noqa: BLE001` plus the ruff `BLE` rule already enforce this mechanically, so the text-count test adds little.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py:140"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Magic numbers in the crash-proof entry point",
+      "description": "The timing constants (`IDLE_INTERVAL_SECONDS`, `CALL_TIMEOUT_SECONDS` and the others) are defined as module constants, which is fine for test code. `RunnerTenant` still ends up built against a manually assembled `ProcessSettings` rather than through `runner_tenant`. The crash proof therefore does not exercise `validate_settings`, the `launch-logs` directory creation or `PRODUCTION_PLANNERS`. `test_factory.py` and `test_end_to_end.py` cover those separately.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/runner/crash_entry.py:46-52"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "observe.py exceeds the file-size guideline and mixes two state machines",
+      "location": "src/amoeba/runner/observe.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Settings validation uses string-keyed `getattr`",
+      "location": "src/amoeba/runner/factory.py:34-50",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests import private helpers from other test modules",
+      "location": "tests/runner/test_budget_coverage.py:20",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Crash harness relies on type-ignores and runtime monkeypatching",
+      "location": "tests/runner/crash_entry.py:105-120",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The one broad catch is justified but guarded only by a source-text count",
+      "location": "src/amoeba/runner/tenant.py:140",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Magic numbers in the crash-proof entry point",
+      "location": "tests/runner/crash_entry.py:46-52",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:25:03.527964",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 265410,
+  "cached_tokens": 117860,
+  "cache_write_tokens": 147546,
+  "completion_tokens": 2903,
+  "reasoning_tokens": null,
+  "duration_seconds": 24.271664124913514,
+  "cost_usd": 0.6395946,
+  "cost_basis": "provider"
+}

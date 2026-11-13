@@ -1,0 +1,171 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Observer state is pruned against one project's entries, so the poll interval and fault dedup break for multi-project supervisors",
+      "description": "`RunnerTenant` builds **one** `RunObserver` in `__init__` (`src/amoeba/runner/tenant.py#RunnerTenant.__init__`) and passes that same instance into every `ProjectTick` (`_tick_project`). `ProjectTick.run` then calls it once per project with only that project's entries: `self._observer.observe(self._run_entries(), ...)`, where `_run_entries` filters `unresolved_journal_entries(project_id)` (`src/amoeba/runner/tick.py#ProjectTick.run`).\n\n`RunObserver.observe` prunes all three pieces of cross-tick state against *the entries it was handed*:\n\n```python\nlive = {entry.id for entry in entries}\nself._last_poll = {k: v for k, v in self._last_poll.items() if k in live}\nself._overdue &= live\nself._faulted = {k: v for k, v in self._faulted.items() if k in live}\n```\n\nSo project B's tick discards project A's remembered state. Consequences, each contradicting a documented decision:\n\n- `_last_poll` is lost, so `_poll_due` returns `True` for A's runs on every A tick. D10's \"at most once per tick and no more often than the run poll interval\" (architecture, and the task's own acceptance wording) holds only for a single-project supervisor. `test_a_confirmed_run_is_not_polled_before_the_interval` passes only because its rig ticks one project. Each `sq runs wait` is a bounded subprocess call, so this burns the tick budget repeatedly.\n- `_faulted` is lost, so the replay mechanism in `_confirmed` never fires across projects: A's standing `RUN_OBSERVATION_FAILED` stops being replayed, `_close_recovered` closes A's escalation on that tick, and the next poll reopens a fresh row \u2014 exactly the close/reopen churn the `_faulted` field's own comment says it exists to prevent.\n- `_overdue` is lost the same way, so an overdue launch's `LAUNCH_OVERDUE` escalation also alternately closes and reopens.\n\n`amoeba start` hosts however many projects exist (`host.project_ids` \"grows at runtime\", per `host.py`), and slice 125 is told to add its planner without changing `tenant.py` or `launch.py` \u2014 so deferring this carries it forward. The fix is to keep the state keyed per entry id and prune against the entries currently in flight across the supervisor (or to give each project its own observer, keyed by project).\n\n---",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py#RunObserver.observe"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_in_flight_run_ids` indexes a parameter that legacy entries may not carry, and the failure lands in the not-caught escalation path",
+      "description": "```python\nstr(entry.parameters[PARAM_RUN_ID])\n```\n\nEvery sibling that reads the same key defends itself and raises a descriptive error: `launch._text_parameter` and `finish._run_id` use `.get` plus an explicit `ValueError`, and `observe._observe_one` does the same for the same key. `REQUIRED_PARAMETER_KEYS` guarantees the key only for entries written through today's `journal_issue`; `ProcessSettings` documents entries \"journaled before slice 120, which carry no run id\", and `unresolved_journal_entries` returns whatever is unresolved. A bare `KeyError` here propagates out of `escalate`, which the comment in `_tick_project` explicitly says is \"not caught again\", turning a per-project fault into a process-wide crash with a traceback at the CLI boundary. Use `.get` and raise the descriptive error the other readers raise.\n\n---",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py#_in_flight_run_ids"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No load-tier coverage for the Runner's launch/poll path",
+      "description": "`tests/load/` contains no test that composes the Runner: `test_crash_loop.py` and `test_recovery_scale.py` drive a stand-in journaling tenant (`JOURNALING_TENANT` in `load_harness.py`), not `RunnerTenant`. The Runner is now a real environment-boundary path \u2014 it spawns detached children, holds process handles for reaping, and makes bounded subprocess calls on a deadline \u2014 which is the class of path the Python rules require the load tier to exercise, asserting on latency, throughput or resource bounds rather than functional correctness. The crash proof in `tests/runner/` does drive real processes and SIGKILL, but it asserts end state, not bounds, and it never runs more than one project. A multi-project configuration would also have caught the state-pruning defect above.\n\n---",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/load/test_crash_loop.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`cli_environment`'s docstring still says only one variable is set",
+      "description": "The pre-existing sentence \"``AMOEBA_STORE_DIR`` is the only variable set\" is now false: the function also prepends a stub `sq` directory to `PATH` in the paragraph added by this change. Worth reconciling, since the surrounding text explains the exact invariant (no new environment reads, D3) that the sentence is meant to convey.\n\n---",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "tests/cli_harness.py#cli_environment"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two factory tests assert on private tenant state rather than behavior",
+      "description": "`test_passed_planners_are_used_as_given` asserts `tenant._planners == (planner,)` and `tests/runner/test_tenant.py` reaches into `rig.tenant._tracker`, both behind `pyright: ignore[reportPrivateUsage]`. `test_a_build_creates_the_launch_logs_directory` shows the stronger form available here: drive the tenant and observe the effect. These pin an internal tuple layout rather than \"the passed planner is the one that plans\".\n\n---",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/runner/test_factory.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Bound validation reads fields by string name, which static checking cannot follow",
+      "description": "The loop over `(\"tick_deadline_seconds\", \"tick_call_timeout_seconds\", \"run_poll_interval_seconds\")` with `value: float = getattr(settings, name)` defeats pyright strict for both the attribute existence and the type: a renamed `ProcessSettings` field, or one whose type changes, is caught only when the code runs. Reading the three attributes explicitly would keep the same error messages and the same single-source defaults in `settings.py` while restoring static checking.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/amoeba/runner/factory.py#validate_settings"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Observer state is pruned against one project's entries, so the poll interval and fault dedup break for multi-project supervisors",
+      "location": "src/amoeba/runner/observe.py#RunObserver.observe",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`_in_flight_run_ids` indexes a parameter that legacy entries may not carry, and the failure lands in the not-caught escalation path",
+      "location": "src/amoeba/runner/faults.py#_in_flight_run_ids",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No load-tier coverage for the Runner's launch/poll path",
+      "location": "tests/load/test_crash_loop.py",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`cli_environment`'s docstring still says only one variable is set",
+      "location": "tests/cli_harness.py#cli_environment",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Two factory tests assert on private tenant state rather than behavior",
+      "location": "tests/runner/test_factory.py",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Bound validation reads fields by string name, which static checking cannot follow",
+      "location": "src/amoeba/runner/factory.py#validate_settings",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:38:38.110154",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 40,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 340004,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2259335,
+  "cached_tokens": 1943168,
+  "cache_write_tokens": null,
+  "completion_tokens": 92096,
+  "reasoning_tokens": 84874,
+  "duration_seconds": 685.2149574998766,
+  "cost_usd": 0.1015778,
+  "cost_basis": "alias_pricing"
+}

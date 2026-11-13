@@ -1,0 +1,204 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Run-id validation is duplicated in three places",
+      "description": "`finish._run_id` and `observe.RunObserver._observe_one` each check for a non-empty string `run_id`. `launch._text_parameter` repeats the check for `PARAM_RUN_ID`. Each raises its own `ValueError` with its own wording. The project's DRY rule says one place should own this, for example a single `run_id_of(entry)` helper. As written, a change to what counts as a valid id has to be made in three places.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/finish.py#_run_id"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests lean on `type: ignore`, `Any` and `object` signatures, which conflicts with strict pyright",
+      "description": "The Python rules require strict pyright over `src` and `tests`, with zero errors. In the diff, `_hooked` returns `tuple[object, object]` and the caller then needs `# type: ignore[arg-type]`. `_arm_resolve_kill` monkeypatches `Store.journal_resolve` behind `# type: ignore[method-assign]`. Several test fixtures are typed `make_rig: Any`, and the fakes take `**kwargs: Any`. Typed callables, using the existing `PopenFactory` and `Callable[[str], RunPoll]`, would remove most of these suppressions.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "tests/runner/crash_entry.py:_hooked"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test modules import private helpers from each other",
+      "description": "`test_budget_coverage` imports `_link` from `runner.test_probes` and suppresses the private-usage warning. `test_tenant.py` has its own `Rig` that duplicates `tick_support.Rig`. The shared setup should move into a support module such as `tick_support`. Otherwise one test file's refactor breaks another.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/runner/test_budget_coverage.py:20"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`test_the_runner_package_has_exactly_one_broad_except` is a text-count guard",
+      "description": "The test counts the substring `except Exception` across the package, so it also matches comments and docstrings, and misses `except BaseException` and aliases. It enforces the rule loosely. The `BLE` ruff rule already enforces it mechanically, so an AST-based check or a reliance on `ruff` would be sturdier. Because the intent is a process-boundary catch, the `# noqa: BLE001` there is acceptable: it is justified by a comment and logs with `logger.exception`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/runner/test_tenant.py:test_the_runner_package_has_exactly_one_broad_except"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`faults.py` module docstring is stale",
+      "description": "The docstring still says \"Escalation writes join this module in a later task\", but this diff adds `escalate` and `raise_expected_faults` to the same file. The sentence should be removed.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py:1-10"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`observe.py` exceeds the ~300-line guideline",
+      "description": "At 326 lines, the file is slightly over the guideline. The confirmed and unconfirmed observation paths could split into separate modules if it grows further in slices 123 to 126.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`validate_settings` reads fields by string name",
+      "description": "`getattr(settings, name)` with a tuple of names defeats type checking, because a renamed field fails at runtime instead of in pyright. Direct attribute access in a short loop over `(label, value)` pairs would keep it checked.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/amoeba/runner/factory.py:validate_settings"
+    },
+    {
+      "severity": "PASS",
+      "title": "Process-boundary handling, budget discipline and crash ordering look sound",
+      "description": "- **Exception handling:** Store failures and `UpstreamShapeError` re-raise. Anything else is logged with `logger.exception` and escalated. Expected faults are returned as values, not swallowed.\n- **Subprocess budget:** Every subprocess call site (`poll`, the `cf` probes, `Popen`) checks `TickBudget.allows_call` first, and `test_budget_coverage` guards this.\n- **Crash ordering:** The journal entry is written before launch. Finish records \"block, then resolve\" idempotently. The SIGKILL tests cover each crash point.\n- **Import boundaries:** Rules 10 and 11 in `test_import_boundaries.py` keep the runner package's public surface narrow.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py#RunnerTenant._tick_project"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Run-id validation is duplicated in three places",
+      "location": "src/amoeba/runner/finish.py#_run_id",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Tests lean on `type: ignore`, `Any` and `object` signatures, which conflicts with strict pyright",
+      "location": "tests/runner/crash_entry.py:_hooked",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test modules import private helpers from each other",
+      "location": "tests/runner/test_budget_coverage.py:20",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`test_the_runner_package_has_exactly_one_broad_except` is a text-count guard",
+      "location": "tests/runner/test_tenant.py:test_the_runner_package_has_exactly_one_broad_except",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`faults.py` module docstring is stale",
+      "location": "src/amoeba/runner/faults.py:1-10",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`observe.py` exceeds the ~300-line guideline",
+      "location": "src/amoeba/runner/observe.py",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`validate_settings` reads fields by string name",
+      "location": "src/amoeba/runner/factory.py:validate_settings",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Process-boundary handling, budget discipline and crash ordering look sound",
+      "location": "src/amoeba/runner/tenant.py#RunnerTenant._tick_project",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:29:47.748650",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 258318,
+  "cached_tokens": 64439,
+  "cache_write_tokens": 193875,
+  "completion_tokens": 6003,
+  "reasoning_tokens": null,
+  "duration_seconds": 46.957931959070265,
+  "cost_usd": 0.8505685000000001,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

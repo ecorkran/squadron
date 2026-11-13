@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`LaunchTracker.confirm` is dead in production code and duplicated by direct mutation",
+      "description": "`LaunchTracker.confirm()` has no caller under `src/`. Only tests call it. `RunObserver._confirm` (`src/amoeba/runner/observe.py:276`) instead sets `tracked.confirmed = True` on the `TrackedLaunch` directly. That gives two ways to confirm a launch, and the tested one is not the one production uses. Tests that call `tracker.confirm` therefore don't exercise the real confirmation path. Route `_confirm` through `LaunchTracker.confirm` and keep the `_overdue` bookkeeping there, or drop the method and make the tests mutate state the way production does.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/launch.py:257-259"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_close_recovered` can close an `unexpected_fault` escalation after one clean tick",
+      "description": "`_close_recovered` closes every open project escalation whose `fault_kind` is not in this tick's `TickFaults.kinds()`. `unexpected_fault` is written by `escalate()` in `faults.py`. It goes straight to `store.raise_project_escalation`, never through `TickFaults`, so it is never in the recurring set. The next tick that completes without cut-off therefore closes it. That includes the case where the node had a run in flight and `escalate` deliberately took the project-scoped path instead of blocking the node. A real, intermittent planner or decide bug would open and close an escalation within seconds, and no human gets a durable signal. If that is intended, say so in the `_close_recovered` docstring. If not, close only kinds the tick can re-observe (`run_observation_failed`, `launch_overdue`, `cf_probe_failed`) and leave `unexpected_fault` for a human to close. The store docstring says the `fault_kind` vocabulary is the Runner's. That makes an explicit allowlist cheap and safe against other writers later.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py#ProjectTick._close_recovered"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Run-id and parameter validation is duplicated in three places",
+      "description": "The \"entry has an unusable run id\" check exists in `finish._run_id`, in `RunObserver._observe_one` (`observe.py:127-129`) and, as `_text_parameter`, in `launch.py`. They have the same failure shape but slightly different rules (the observer also rejects an empty string). The project guidelines require DRY. Extract one `run_id_of(entry)` helper next to `PARAM_RUN_ID` use, probably in `launch.py`, and have `finish` and `observe` call it. Then the rule can't drift between modules.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/finish.py:139-143"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Weakly typed test entry point relies on `type: ignore`",
+      "description": "`_hooked` returns `tuple[object, object]`. `main` then passes both items with `# type: ignore[arg-type]`, and the `Popen` call carries another `# type: ignore[call-overload]`. The Python rules include `tests/` in strict pyright, so these suppressions hide real signature mismatches. Typing the return as `tuple[PopenFactory, Callable[[str], RunPoll]]` removes two of the ignores. `test_tenant.py` has a similar gap: `make_rig: Any` loses the `Rig` type, and each test re-annotates it.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "tests/runner/crash_entry.py#_hooked"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Line over 88 characters and a text-count guard test",
+      "description": "The `except Exception as error:  # noqa: BLE001 - ...` line is about 90 characters, over the 88 limit. E501 is in the required rule set, so shorten the trailing comment. The catch is correctly a documented process-boundary handler: it logs with `logger.exception` and escalates. `test_the_runner_package_has_exactly_one_broad_except` guards it by counting the literal text `except Exception` across `*.py`. That is brittle: a docstring or comment containing the phrase breaks it, and `except BaseException` would not be counted. An `ast`-based check, as `test_import_boundaries.py` already does, would be sturdier.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py:145"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`observe.py` is over the file-size guideline",
+      "description": "The file is about 326 lines against the ~300-line guideline. The confirmed and unconfirmed observation paths are cohesive enough to split cleanly: the launch-confirmation logic (`_unconfirmed`, `_check_line`, `_after_launch_poll`, `_still_overdue`) could move to its own module. Not blocking.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Process-boundary error handling and fault isolation",
+      "description": "Store failures and `UpstreamShapeError` re-raise so the process exits and recovery takes over. Everything else is logged with `logger.exception`, escalated through `escalate()`, and the other projects still tick. The narrower `except OSError` handlers in `launch.py`, `observe.py` and `probes.py` each carry an inline justification and return an answer for the caller to record. Both crash-recovery and per-project isolation have tests.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py#RunnerTenant._tick_project"
+    },
+    {
+      "severity": "PASS",
+      "title": "Launch and journal ordering, budget enforcement, and test coverage",
+      "description": "The command is journaled before `Popen`, and unusable parameters are rejected before journaling. `finish.record` writes block then resolve idempotently, which is shown by the kill-between-block-and-resolve test. `TickBudget` is checked before every poll, `cf` call and launch, and `test_budget_coverage.py` fails any call site that starts after the deadline. The import-boundary rules (10 and 11) are enforced mechanically. The SIGKILL scenarios use real processes and condition-based waits, and nothing in the tests touches a production database variable.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py#ProjectTick._launch"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`LaunchTracker.confirm` is dead in production code and duplicated by direct mutation",
+      "location": "src/amoeba/runner/launch.py:257-259",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`_close_recovered` can close an `unexpected_fault` escalation after one clean tick",
+      "location": "src/amoeba/runner/tick.py#ProjectTick._close_recovered",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Run-id and parameter validation is duplicated in three places",
+      "location": "src/amoeba/runner/finish.py:139-143",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Weakly typed test entry point relies on `type: ignore`",
+      "location": "tests/runner/crash_entry.py#_hooked",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Line over 88 characters and a text-count guard test",
+      "location": "src/amoeba/runner/tenant.py:145",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`observe.py` is over the file-size guideline",
+      "location": "src/amoeba/runner/observe.py",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Process-boundary error handling and fault isolation",
+      "location": "src/amoeba/runner/tenant.py#RunnerTenant._tick_project",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Launch and journal ordering, budget enforcement, and test coverage",
+      "location": "src/amoeba/runner/tick.py#ProjectTick._launch",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:26:43.682612",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 444611,
+  "cached_tokens": 286374,
+  "cache_write_tokens": 158231,
+  "completion_tokens": 7937,
+  "reasoning_tokens": null,
+  "duration_seconds": 65.89970374992117,
+  "cost_usd": 0.749532,
+  "cost_basis": "provider"
+}

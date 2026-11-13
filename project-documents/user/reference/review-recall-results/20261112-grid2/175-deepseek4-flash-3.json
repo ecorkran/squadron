@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A provider failure on a split review no longer stops the remaining parts",
+      "description": "`ReviewAction._run_part` used to `raise` the `ProviderError`, which propagated out of `_review` entirely. The new code (the hunk replacing `raise` with `return self._exception_result(...)`) converts it into an ordinary `ActionResult`. `_review` collects parts in a loop:\n\n```python\nfor number, (part, suffix) in enumerate(zip(part_inputs, suffixes, strict=True), 1):\n    ...\n    results.append(await self._run_part(settings, context, part, suffix, (number, count)))\nreturn fold_review_parts(results)\n```\n\nBecause the failure is now a returned value rather than an exception, the loop **continues to the next part**. For a multi-part review (e.g. the split `tasks` template) a provider outage \u2014 auth failure, 429, 500 \u2014 now causes one additional model call, one additional failure-artifact save, and one additional paid attempt per remaining part, instead of stopping at the first. The step still ends `success=False`, so the outcome is masked; only the cost and time grow. The updated comment (\"The step still fails, with what the call spent before it failed\") describes the result but not this side effect. Previously the first failure aborted before parts 2..N were reached.\n\nIf the intent is to preserve the abort, `_run_part` should re-raise after building the usage record (letting `execute`'s handler produce the result as before), or `_review` should break out of the loop on a failed part. I did not read `fold_review_parts`, so how the failure result folds is unverified \u2014 the extra calls happen regardless.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py#ReviewAction._review"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_logger.exception` is used for a named, expected provider failure",
+      "description": "The new line `_logger.exception(\"review: unexpected error in step %s\", context.step_name)` sits inside `except ProviderError as exc:`. This codebase deliberately distinguishes the two cases \u2014 `dispatch.py`'s `_provider_failure` comments \"A named provider failure (issue 200): the message says what happened, so one ERROR line and no traceback\", and `summary.py` logs the same class at `ERROR` without a traceback. Emitting a full traceback labelled \"unexpected error\" for an expected `ProviderError` contradicts that convention and buries the real signal in a stack that says nothing the message does not. The preceding `_logger.warning` already names the step and artifact.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py#ReviewAction._run_part"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`effort_for_session` returns `None` but is read as a value",
+      "description": "`effort_for_session(self, resolved) -> None` only logs the D7/#216 gap; its return annotation says `None`. Yet two call sites read it as the effort that was sent:\n\n```python\neffort_sent = capture.effort_for_session(resolved)\n...\ncapture.record_from_telemetry(resolved, reply.telemetry, ..., effort_sent=effort_sent)\n```\n\nand in `summary.py` the same shape. The result is correct (`None` is the intended value) but the name and signature promise a derivation that does not happen, and the log side effect at a value-read site is easy to miss. A `logger`-only helper plus an explicit `effort_sent=None` at the call sites would say the same thing without the misdirection.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py#UsageCapture.effort_for_session"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`compact` records an alias in the `model` field and can never be alias-priced",
+      "description": "`capture.record_from_telemetry(None, reply.telemetry, started=started, model=summary_model, effort_sent=None)` passes `resolved=None` (so `alias`/`profile` are `None`, which is deliberate per the comment) and sets `model` to `summary_model` \u2014 the step's *alias* (e.g. `haiku`), not a resolved model id. Every other action persists the resolved model id in `UsageRecord.model`. Downstream, `stats_views._model_cell` renders `record.alias or record.model`, so a compact row displays an alias where other rows display a model id, and `sq stats run --json` carries the two kinds of value under the same key. Because `alias` is `None`, `price_usage` returns `None`, so a compact call whose SDK result reports no cost is silently unpriced rather than alias-priced \u2014 consistent with the stated D3 rationale, but worth being an explicit decision rather than a consequence of the `None`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py#CompactAction._execute_sdk_rotate"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Model resolution re-reads the alias TOML files once more per call",
+      "description": "`_resolved` now ends with `alias if alias in get_all_aliases() else None`. `get_all_aliases()` loads and parses the built-in `models.toml` and the user's `~/.config/squadron/models.toml` on every invocation, and `_resolved` already calls it three times via `model_allows_tools`, `model_max_output_tokens`, and `model_effort`. This change makes it four disk-backed calls per resolved model, on the path every dispatch, review, and summary step takes. The alias dict is already available in the function's own scope conceptually \u2014 reading it once and indexing it would remove three of the four reads without changing behavior.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/resolver.py#_resolved"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A session-scoped autouse fixture registers providers process-wide",
+      "description": "`_load_providers` is `autouse=True, scope=\"session\"` and calls `ensure_provider_loaded` for `sdk`, `openai`, and `openai-oauth`. The docstring justifies it (action tests patch `ensure_provider_loaded` out, so a provider they name must already be in the registry), but the effect is that every test in the session runs against a mutated global registry, including tests that assert on an unregistered-provider error path. A fixture that registers providers and restores the prior registry state per module would keep the same convenience without making provider registration a session-wide invariant. The tests that depend on it (`test_usage_capture.py::test_executor_gives_every_step_one_capture`) also call `register_step_type` globally with no cleanup, which has the same shape.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/conftest.py:27"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A provider failure on a split review no longer stops the remaining parts",
+      "location": "src/squadron/pipeline/actions/review.py#ReviewAction._review",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`_logger.exception` is used for a named, expected provider failure",
+      "location": "src/squadron/pipeline/actions/review.py#ReviewAction._run_part",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`effort_for_session` returns `None` but is read as a value",
+      "location": "src/squadron/pipeline/usage_capture.py#UsageCapture.effort_for_session",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`compact` records an alias in the `model` field and can never be alias-priced",
+      "location": "src/squadron/pipeline/actions/compact.py#CompactAction._execute_sdk_rotate",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Model resolution re-reads the alias TOML files once more per call",
+      "location": "src/squadron/pipeline/resolver.py#_resolved",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "A session-scoped autouse fixture registers providers process-wide",
+      "location": "tests/pipeline/conftest.py:27",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:08:11.936246",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 214157,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2698471,
+  "cached_tokens": 2337920,
+  "cache_write_tokens": null,
+  "completion_tokens": 62216,
+  "reasoning_tokens": 56429,
+  "duration_seconds": 309.52290133317,
+  "cost_usd": 0.096509,
+  "cost_basis": "alias_pricing"
+}

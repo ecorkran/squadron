@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`TradeRecord.from_row` restates the column mapping positionally, and no test would catch a reorder",
+      "description": "`CandleRecord.from_row` walks `CANDLE_COLUMNS` with `zip(..., strict=True)` and is explicitly designed so that the wire shape is derived from the storage mapping. `TradeRecord.from_row` in the same module does the opposite: it hardcodes `values[0]` \u2026 `values[7]` against field names, while the *selection order* comes from `TRADE_VALUE_COLUMNS` in `src/manta_trading/data/kalshi/serve_timeseries.py` (derived from `TRADE_COLUMNS`). The two spellings can drift silently: `count_fp`, `yes_price_dollars`, and `no_price_dollars` are all `Decimal`, so swapping two entries in `TRADE_COLUMNS` would still type-check and would serve prices under the wrong field names.\n\nI checked whether a test would catch that. `test/integration/test_kalshi_trades.py::test_trade_columns_parity` asserts the *set* of column names and attribute names against the live table, not their order. `test/integration/test_kalshi_serving.py::test_value_count_matches_the_repository_mapping` asserts only `len(r.values) == len(TRADE_COLUMNS) - 1`. `test/unit/api_server/test_kalshi_models.py::test_trade_record_serializes_its_decimals_as_strings` builds its `TradeRow` in the current order, so it agrees with whatever order `from_row` assumes. The module docstring's claim that \"neither direction restates the other\" holds for candles but not for trades \u2014 driving `TradeRecord.from_row` from `TRADE_VALUE_COLUMNS` (or asserting the field order in a test) would close it.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_not_found` and `_admit_rows` are duplicated between the two Kalshi route modules",
+      "description": "Both helpers exist in `routes/kalshi_catalog.py` and again in `routes/kalshi_timeseries.py`, in the same slice. `_admit_rows` is identical except for the trailing advice string (\"narrow the filter\" vs \"narrow start/end\"); `_not_found` is identical except that the timeseries copy hardcodes `\"Market\"` while the catalog copy takes a `resource` parameter. The 422 body and the 404 body are user-facing contracts, and the two copies can now drift independently. `_admit_rows` in particular is the D8 admission guard the slice is about \u2014 one definition in a shared module (or `windows.py`'s neighbour) would keep the ceiling message from ever disagreeing between route families. The same duplication appears in prose: `windows.resolve_window`'s reversed-range message restates `bars._admit_range`'s string rather than sharing it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#_admit_rows"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`CandleRow`'s docstring says fourteen value columns; the tuple holds sixteen",
+      "description": "The docstring reads \"One stored candle: its period end plus the fourteen value columns,\" but `CandleRow.values` is populated from `CANDLE_VALUE_COLUMNS`, which is built from all of `CANDLE_COLUMNS`: 4 (`yes_bid`) + 4 (`yes_ask`) + 6 (`price`) + `volume_fp` + `open_interest_fp` = **16**. The same codebase says sixteen elsewhere \u2014 `src/manta_trading/constants.py:1306` (\"a candle carries sixteen decimal strings where a bar carries five floats\") and `test/load/test_188_kalshi_api_nfr.py:125`/`:247`. Fourteen is the count of *nested* columns only, which is why `models/kalshi_timeseries.py`'s module docstring is defensible and this one is not. `test/unit/api_server/test_kalshi_models.py:186` carries the same fourteen/`CANDLE_COLUMNS` mismatch. A reader using this docstring to reason about `len(row.values)` gets the wrong number.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:72"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The candle `period` predicate is gated on the truthiness of an `extra` dict",
+      "description": "In `_window`, the `period = %(period)s` clause is appended only when `if extra:` is truthy, and `extra` doubles as the parameter carrier. `_candle_window` passes `{\"period\": period}` so it works today, and a market's candles are only correct when that clause is present (the table's key includes `period`). But the clause's presence is implied by a non-empty dict rather than stated by a parameter, so a future caller passing `extra={}` \u2014 or a refactor that filters falsy values \u2014 would silently count and fetch across every period for that market. An explicit flag or a dedicated `_candle_window`-owned clause would make the invariant visible.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#_window"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`CANDLES_CEILING_RESPONSE_MB` is defined and never read",
+      "description": "The constant's own docstring says it is \"Recorded here rather than asserted: it is an input to whether a byte ceiling is ever wanted, not a threshold this slice defends,\" and `test_candles_at_the_admission_ceiling_records_its_response_size` prints the measured size without comparing it to the constant. A `grep` across the repository finds only the definition. The measurement is valuable; keeping it as an unreferenced module constant means it can go stale against the printed value without anything noticing. Either assert the printed size is within some band of it, or move the number into the slice document where it is not code.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:120"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Three different `window_start_utc` spellings now coexist",
+      "description": "`windows.window_start_utc(date) -> datetime` (midnight UTC), `gaps._window_start_utc(date)` (same body, private), and `data/gaps/repair_921.window_start_utc()` (a zero-argument function returning a fixed epoch \u2014 a completely different meaning). The new module's docstring justifies centralising the day-boundary convention, which is right, but the gaps pair remains a second copy of the same body and the repair-921 name collides with it. `gaps.py` genuinely needs different `end` semantics (next-midnight, half-open predicate) and documents why \u2014 the `start` half does not differ and could use the shared function. At minimum the name collision is worth resolving so a reader grepping for the symbol does not land on three meanings.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/windows.py:20"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Load tests for this slice are not gated by CI",
+      "description": "The module docstring states plainly that CI wiring is slice 907's deliverable and that \"nothing here is enforced by CI today.\" I confirmed `.github/workflows/ci.yml` is publish-on-tag with no test job, so the four load assertions and the `kalshi_dense_db` fixture run only under the documented manual invocation. The project's Python rules call for CI to gate load tests on network/concurrency paths; this is a documented, tracked deferral rather than an oversight, and it matches what slice 187 already did \u2014 noting it only so the deferral is not mistaken for coverage.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:1"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`TradeRecord.from_row` restates the column mapping positionally, and no test would catch a reorder",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_not_found` and `_admit_rows` are duplicated between the two Kalshi route modules",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#_admit_rows",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`CandleRow`'s docstring says fourteen value columns; the tuple holds sixteen",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:72",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The candle `period` predicate is gated on the truthiness of an `extra` dict",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#_window",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`CANDLES_CEILING_RESPONSE_MB` is defined and never read",
+      "location": "test/load/test_188_kalshi_api_nfr.py:120",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Three different `window_start_utc` spellings now coexist",
+      "location": "src/manta_trading/api_server/routes/windows.py:20",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Load tests for this slice are not gated by CI",
+      "location": "test/load/test_188_kalshi_api_nfr.py:1",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:36:23.462761",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 49,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 398573,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2043882,
+  "cached_tokens": 1744384,
+  "cache_write_tokens": null,
+  "completion_tokens": 112318,
+  "reasoning_tokens": 106864,
+  "duration_seconds": 550.5794808750506,
+  "cost_usd": 0.10729623999999999,
+  "cost_basis": "alias_pricing"
+}

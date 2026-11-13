@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Adding data does not activate range synchronization",
+      "description": "Adding a series only mutates `seriesCountRef`; it neither triggers rendering nor changes an effect dependency. Consequently, adding the first populated series after readiness never applies the existing Context range. The translation test masks this by also calling `setRange`. Make data availability reactive or explicitly apply the pending range when data becomes available, and test adding data without changing Context.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:340-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Series count does not establish data availability",
+      "description": "`addSeries({ type: 'line', data: [] })` increments the counter, and `updateSeries` can clear all data without adjusting it. The range effect therefore forwards calls against an empty time scale\u2014the condition its guard explicitly intends to prevent. Track whether usable time points exist, accounting for updates and removals, and cover empty-series creation and clearing the last populated series.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/chart-facade.ts:49-64"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Adding data does not activate range synchronization",
+      "location": "src/chart/use-chart-provider.ts:340-345",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Series count does not establish data availability",
+      "location": "src/chart/chart-facade.ts:49-64",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:22:47.772500",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 75487,
+  "cached_tokens": 70272,
+  "cache_write_tokens": null,
+  "completion_tokens": 344,
+  "reasoning_tokens": 97,
+  "duration_seconds": 45.10151266702451,
+  "cost_usd": 0.020897199999999998,
+  "cost_basis": "alias_pricing"
+}

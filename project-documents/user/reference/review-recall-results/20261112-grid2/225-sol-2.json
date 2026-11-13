@@ -1,0 +1,93 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Coverage compares counts from different database snapshots",
+      "description": "Ledger totals and raw counts are separate queries on the autocommit connection supplied by `_read`. If ingestion commits between them, coverage compares the old ledger against newly committed trades and falsely reports corruption, exiting 3. Ingestion\u2019s transaction does not prevent this reader-side race. Run the report within a read-only, repeatable-read transaction and add a concurrent-ingestion regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py:109-113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Coverage repeatedly scans every aggregate on the event loop",
+      "description": "Each `_session_row` expands and scans both complete dictionaries to find one session\u2019s instruments. Across all sessions, this produces quadratic growth and runs synchronously inside `build_coverage`. A local benchmark with 2,520 sessions and 40 instruments took approximately 0.64 seconds for just 100 session rows, exceeding the async synchronous-work limit. Group counts by session once, and offload substantial processing from the event loop.\n\nTests could not run: the available project Python environment lacks `pytest`.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py:81"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Coverage compares counts from different database snapshots",
+      "location": "src/manta_trading/data/tick/tick_coverage.py:109-113",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Coverage repeatedly scans every aggregate on the event loop",
+      "location": "src/manta_trading/data/tick/tick_coverage.py:81",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:20:49.170797",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 99754,
+  "cached_tokens": 99456,
+  "cache_write_tokens": null,
+  "completion_tokens": 514,
+  "reasoning_tokens": 249,
+  "duration_seconds": 81.46149845793843,
+  "cost_usd": 0.0156816,
+  "cost_basis": "alias_pricing"
+}

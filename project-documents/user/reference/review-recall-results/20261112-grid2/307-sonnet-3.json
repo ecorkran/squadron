@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Source files exceed the ~300-line guideline",
+      "description": "The line counts of the three modified cutover scripts are 311 (`cutover_304_checks.py`), 308 (`cutover_304_first_purchase.py`) and 312 (`cutover_304_evidence.py`). These counts come from a grep that includes blank lines. `purchase_verdicts.py` was split out explicitly to stay near 300 lines, but the other three files grew past that mark anyway. Each is only slightly over. The overshoot is minor, and `_check_scope`, `_check_resubmit` and `resubmit_origins` could move into a separate module.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mixed `fetch_status` vocabulary and bucket names are matched by string literals",
+      "description": "The `_NEEDS_REASON`, `_NEVER_ACCOUNTED`, `_NEEDS_PUBLICATION` and `_LISTED_NEVER` sets are built from `TickSessionStatus` values, so that part is fine. `_unaccounted` falls through to a `CutoverError` for any bucket not in those four sets, so a new status will stop the cutover. That is the intended fail-closed behaviour and is tested. However, the other `purchase_verdicts` literals, such as `ISSUE_CLOSED = \"CLOSED\"`, depend on `gh` output text. A short comment next to `ISSUE_CLOSED` shows the author considered this. Even so, `_label` compares session dates and request ranges as ISO strings (`request.start <= day < request.end`). That is correct only while the formats match exactly, and `str(date)` does match. Parsing them as `date` objects would make this robust. It is minor.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:196-216"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`main` swallows `SystemExit` from argparse",
+      "description": "`main` catches `SystemExit` around `parse_args` and returns `int(exc.code or 0)`. The inline comment justifies this: argparse has already printed usage, and `main` returns its exit code so the code is testable. It is a narrow, justified swallow. One edge case: `SystemExit.code` can be a string, which would make `int()` raise `ValueError`. argparse only emits ints, so this is theoretical. A simpler design would pass `argv` to a parser configured with `exit_on_error=False`, or let `SystemExit` propagate.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:main"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unrecoverable `--estimate` mode relies on a hand-copied state-write guard in tests",
+      "description": "The test asserts that no install, pass or baseline call happens by monkeypatching `install_release`, `run_passes` and `record_start_and_baselines`. `_estimate_only` also calls `evidence.mt_json` inside `judge` only when `since is not None`, which `--estimate` never triggers. That test therefore confirms the happy path but not that `judge` skips the `debug requests` read for `start=None`. Add a case in which a resubmit exists and `start=None`. It should expect the \"is a resubmit\" refusal and make no extra `mt_json` call.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_cutover_304_first_purchase.py:test_estimate_prints_the_command_and_buys_nothing"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Ceiling command is now derived instead of hardcoded",
+      "description": "The old fixed ceilings (7 and 16) are replaced by values rounded up to a $5 step, computed from the estimate. This removes a magic default, and the tests cover the boundary cases (multiples of 5 are not raised). Using `Decimal` with `ROUND_CEILING` and formatting with `:f` avoids exponent notation. The design is sound.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:ceiling_command"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tests build real CLI payloads rather than hand-made shapes",
+      "description": "The tests construct documents through `accounting_futures._product_payload`, `coverage_to_dict` and `tick_debug_cmds._cell`. This follows the parser-fixture rule in the project guidelines. The `test_bar_job_dirs_read_the_rows_the_real_cli_renders` test directly guards the symbols-shape drift that the latest commit fixed.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_purchase_accounting.py:_document"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Source files exceed the ~300-line guideline",
+      "location": "scripts/cutover_304_checks.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Mixed `fetch_status` vocabulary and bucket names are matched by string literals",
+      "location": "scripts/purchase_verdicts.py:196-216",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`main` swallows `SystemExit` from argparse",
+      "location": "scripts/cutover_304_first_purchase.py:main",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Unrecoverable `--estimate` mode relies on a hand-copied state-write guard in tests",
+      "location": "test/unit/scripts/test_cutover_304_first_purchase.py:test_estimate_prints_the_command_and_buys_nothing",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Ceiling command is now derived instead of hardcoded",
+      "location": "scripts/cutover_304_checks.py:ceiling_command",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests build real CLI payloads rather than hand-made shapes",
+      "location": "test/unit/scripts/test_purchase_accounting.py:_document",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:25:36.263050",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 202432,
+  "cached_tokens": 85878,
+  "cache_write_tokens": 116550,
+  "completion_tokens": 2029,
+  "reasoning_tokens": null,
+  "duration_seconds": 19.328270290978253,
+  "cost_usd": 0.5003488,
+  "cost_basis": "provider"
+}

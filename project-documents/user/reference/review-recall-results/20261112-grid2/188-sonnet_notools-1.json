@@ -1,0 +1,204 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Trade rows are mapped by hard-coded positional indices",
+      "description": "`TradeRecord.from_row` reads `values[0]` through `values[7]` by position. The column order is defined elsewhere, by `TRADE_COLUMNS` minus `market_ticker` in `serve_timeseries.TRADE_VALUE_COLUMNS`. The module docstring says the candle path avoids this by following `CANDLE_COLUMNS`. The trade path restates the order by hand. Reordering `TRADE_COLUMNS`, or inserting a column, would silently assign wrong values to wrong fields. Types that happen to match, such as the two price decimals, would make the swap invisible. The tests assert only the count, not the field mapping against `TRADE_VALUE_COLUMNS`. Zip the values with `TRADE_VALUE_COLUMNS` into a dict, or add a test that checks the order against that tuple.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": "fragile-contract",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_window` toggles the period predicate on the truthiness of `extra`",
+      "description": "`_window` appends `period = %(period)s` only `if extra:`. That makes the shared helper's behavior depend on whether an unrelated parameters dict is non-empty. Any future caller that passes `extra` for another purpose would get a `period` predicate it never asked for. That would raise a missing-parameter error or add a wrong filter. Pass the period explicitly, or have the caller add its own clause. The `column` argument and the `period` clause should be decided in the same place.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#_window"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_CANDLE_OBJECTS` models are never used to build the nested objects",
+      "description": "The dict maps each nested name to a model class, but `from_row` uses only its keys. It then hard-codes `CandleBidAsk(**nested[\"yes_bid\"])`, `CandleBidAsk(**nested[\"yes_ask\"])`, `CandlePrice(**nested[\"price\"])`, `flat[\"volume_fp\"]` and `flat[\"open_interest_fp\"]`. The comment says the field names come from `CANDLE_COLUMNS`. The model-class values are dead, and the object names are restated in two places. Either construct `_CANDLE_OBJECTS[name](**fields)` in a loop, or reduce the dict to a set of names. A new nested object in `CANDLE_COLUMNS` would currently raise `KeyError` rather than be served, which contradicts the \"served without an edit\" claim in the module docstring.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:56-62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The load test's statement recorder is fragile and incomplete",
+      "description": "Assertion 2 depends on three things that make it weaker than it looks.\n- It uses class-level mutable state (`statements`).\n- It reaches into the private `pool._pool` to set `cursor_factory` on connections that already exist. Any connection the pool opens later is not recorded. A fetch on such a connection would go unseen, and the \"no fetch ran\" assertion would pass vacuously.\n- It identifies fetches by the absence of `count(*)` in a statement that mentions `kalshi.trades`.\n\nPass `cursor_factory` through the pool's `kwargs` at construction, or pin the pool size so no new connections open during the measurement. The test also never asserts that the recorder saw any statements on the connections it measured.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py#_RecordingCursor"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Magic numbers duplicate the load fixture constants",
+      "description": "`assert body[\"count\"] == 450` repeats `KALSHI_MARKET_COUNT`, and `24_382` appears as a literal in the events test and in the conftest docstring. Import the constants so the fixture and the assertions cannot drift apart.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py#test_markets_list_scoped_to_the_dense_event"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tape_filtered` depends on a parameter key inside `trades_filter_sql`",
+      "description": "The function reads `selection.params[\"trades_excluded_categories\"]` and guards its shape with a `# pragma: no cover` branch. Reusing the SQL builder's parameter set avoids a second spelling of the rule, and the integration test checks the helper against the real SQL predicate, which is good. The coupling is to a private key name. Exposing a small evaluator next to `trades_filter_sql` would make the contract explicit.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#tape_filtered"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Count and fetch run as separate statements",
+      "description": "The count and the fetch are separate statements on one connection, not one snapshot. The docstring says a concurrent insert can make the response slightly over the ceiling, never truncated. That trade-off is reasoned and documented, so no change is needed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py (module docstring)"
+    },
+    {
+      "severity": "PASS",
+      "title": "Window resolution, executor discipline and connection scoping",
+      "description": "- **Blocking work:** it runs in `run_in_executor`.\n- **Pool checkout:** the checkout is scoped to the reads and released before serialization and before the 422 is raised.\n- **Day-boundary logic:** it is consolidated in `windows.py` and shared with `bars.py` instead of being duplicated.\n- **Tests:** unit tests cover ordering, the 404 path, the ceiling refusal, empty-window disambiguation and window resolution. Integration tests cover the readers, and the load tier covers the ceiling.\n- **SQL:** all queries are parameterized, and the identifiers come from module constants rather than caller input.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": "fragile-contract",
+      "summary": "Trade rows are mapped by hard-coded positional indices",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`_window` toggles the period predicate on the truthiness of `extra`",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#_window",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_CANDLE_OBJECTS` models are never used to build the nested objects",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:56-62",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The load test's statement recorder is fragile and incomplete",
+      "location": "test/load/test_188_kalshi_api_nfr.py#_RecordingCursor",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Magic numbers duplicate the load fixture constants",
+      "location": "test/load/test_188_kalshi_api_nfr.py#test_markets_list_scoped_to_the_dense_event",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`tape_filtered` depends on a parameter key inside `trades_filter_sql`",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#tape_filtered",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Count and fetch run as separate statements",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py (module docstring)",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Window resolution, executor discipline and connection scoping",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:29:14.596512",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 178664,
+  "cached_tokens": 74584,
+  "cache_write_tokens": 104076,
+  "completion_tokens": 4505,
+  "reasoning_tokens": null,
+  "duration_seconds": 36.387618916807696,
+  "cost_usd": 0.47360670000000005,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

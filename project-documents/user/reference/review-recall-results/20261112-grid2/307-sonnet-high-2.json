@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Duplicated \"want has no end date\" validation and exit-code constants",
+      "description": "`coverage_reads()` in `cutover_304_evidence.py` and `latest_want_end()` in `purchase_verdicts.py` each loop over `TICK_UNIVERSE` histories. Each raises the same `\"{product} {schema} want has no end date\"` error for an open-ended want. This breaks the DRY rule: the open-end rule belongs in one helper. The same applies to the exit codes. `cutover_304_evidence.py` still defines `EXIT_OK, EXIT_PARTIAL = 0, 3`. `purchase_verdicts.py` imports the same names from `manta_trading.cli.commands.tick_exit`. Two sources for one value will drift. Import the production constants in `cutover_304_evidence.py` and extract one \"history wants with fixed ends\" iterator.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py#coverage_reads"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`__doc__` used as `str` under strict pyright",
+      "description": "`description=__doc__.split(\"\\n\")[0]` calls `.split` on `__doc__`, which is typed `str | None`. Strict pyright (a merge blocker in the Python rules) reports `reportOptionalMemberAccess`. It also breaks silently under `python -OO`, which strips docstrings. Use an explicit module constant for the description, or raise if `__doc__` is empty.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#_parser"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Request ranges are matched as strings, not dates",
+      "description": "`_label` decides whether a session falls inside an exhausted request with `request.start <= day < request.end`. Both sides are `str(row[\"range_start\"])` and `str(session[\"session_date\"])`. This is correct only while `debug requests` renders both as `YYYY-MM-DD`. `_cell` renders `date` and `datetime` through `isoformat()`. If a range column ever arrives as a datetime, the lexicographic comparison silently mislabels sessions. The same string-keyed matching applies to `RequestKey` in `resubmit_origins` and `_check_scope`. Parse to `date` once in `retry_exhausted_requests` and compare `date` objects. At minimum, add a test that feeds rows rendered through the real `_cell`. The tests already do this for `symbols`, but not for ranges.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py#_label"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Untyped generics in new tests",
+      "description": "The test helpers `_request`, `_unit` and `_coverage` return bare `dict`, and `exhausted: list | None` is unparameterised. Strict pyright covers `tests/`, so these need `dict[str, Any]` and `list[Any]`. The `_status` helper in the same file returns `object` where it builds a `CompletedProcess`. The new tests otherwise cover behavior well: boundary equality on the dataset edge, each unaccounted bucket, and the real-shape fixtures.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_purchase_verdicts.py#_request"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`main` swallows argparse's `SystemExit`",
+      "description": "`except SystemExit` converts argparse's exit into a return code. It carries the required justification comment and sits at a process boundary, so it complies with the rules. `exc.code` is typed `str | int | None`, so `int(exc.code or 0)` could raise on a string code. argparse only uses ints, so this is theoretical.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:229-234"
+    },
+    {
+      "severity": "PASS",
+      "title": "Gates, ceilings and estimate-only flow",
+      "description": "The gate issue is required, with no skip flag. The dataset edge and the issue state are checked before install and before any state is written, and the tests assert nothing is written on refusal. `--estimate` buys nothing and writes no state. The ceiling values are derived from the estimate through one `ceiling_command`, so the hardcoded `7`/`16` ceilings are gone. Doubtful input (a missing key, an unparseable timestamp, an unknown bucket) raises `CutoverError` rather than defaulting, in line with the project's no-silent-fallback rule.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#_estimate_only"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Duplicated \"want has no end date\" validation and exit-code constants",
+      "location": "scripts/cutover_304_evidence.py#coverage_reads",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`__doc__` used as `str` under strict pyright",
+      "location": "scripts/cutover_304_first_purchase.py#_parser",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Request ranges are matched as strings, not dates",
+      "location": "scripts/purchase_verdicts.py#_label",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Untyped generics in new tests",
+      "location": "test/unit/scripts/test_purchase_verdicts.py#_request",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`main` swallows argparse's `SystemExit`",
+      "location": "scripts/cutover_304_first_purchase.py:229-234",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Gates, ceilings and estimate-only flow",
+      "location": "scripts/cutover_304_first_purchase.py#_estimate_only",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:28:15.125023",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 205619,
+  "cached_tokens": 85878,
+  "cache_write_tokens": 119737,
+  "completion_tokens": 4425,
+  "reasoning_tokens": null,
+  "duration_seconds": 38.96145487506874,
+  "cost_usd": 0.5370573,
+  "cost_basis": "provider"
+}

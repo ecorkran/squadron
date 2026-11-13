@@ -1,0 +1,111 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Background timeout also interrupts foreground continuation work",
+      "description": "Once `_read_turn` receives an idle timeout, it applies that timeout to every subsequent message wait\u2014even after a task notification clears the ledger and the parent starts its continuation. Reproduced: notification \u2192 parent text \u2192 slow foreground work returns partial text as success, with no tasks stopped. Disable the background timer when foreground work resumes and test this transition.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:299-308"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Completed tasks can still owe a continuation turn",
+      "description": "An empty active-task ledger does not establish that the response is complete. If a task notification arrives before the dispatch\u2019s own result, this branch returns without consuming the parent\u2019s pending continuation. Reproduced with the scripted client: only \u201cWaiting\u201d was returned; the subsequent \u201cWrote design\u201d turn remained unread. Track pending continuations or authoritative session-idle state, and cover this ordering.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:251-252"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Model switching bypasses the unusable-session guard",
+      "description": "After reconnect failure, `DispatchAction` calls `session.set_model()` before guarded `dispatch()`. Because `set_model()` lacks `_require_usable()`, the real disconnected client raises \u201cNot connected\u201d instead of preserving the recorded reconnect failure. Reproduced using a real `ClaudeSDKClient` with a failing connect. Guard model switching too; the current mock-based batch test conceals this behavior.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:418-421"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Background timeout also interrupts foreground continuation work",
+      "location": "src/squadron/pipeline/sdk_session.py:299-308",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Completed tasks can still owe a continuation turn",
+      "location": "src/squadron/pipeline/sdk_session.py:251-252",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Model switching bypasses the unusable-session guard",
+      "location": "src/squadron/pipeline/sdk_session.py:418-421",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:24:13.385870",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 111628,
+  "cached_tokens": 110976,
+  "cache_write_tokens": null,
+  "completion_tokens": 642,
+  "reasoning_tokens": 292,
+  "duration_seconds": 90.37397112487815,
+  "cost_usd": 0.0188216,
+  "cost_basis": "alias_pricing"
+}

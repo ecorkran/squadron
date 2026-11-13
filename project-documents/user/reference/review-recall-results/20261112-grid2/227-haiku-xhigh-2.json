@@ -1,0 +1,351 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Step 2 aborts on any host where 17/tick is not yet in pg_lsclusters",
+      "description": "`step_check` runs `setup-backup.sh --check` before `step_provision`, and its expected text (lines 236-237) says \"17/tick not yet set up\". But `deploy/setup-backup.sh:125-127` dies, in check mode too, when any table cluster is missing from `pg_lsclusters` (\"nothing changed\"). `test_cluster_absent_from_pg_lsclusters_is_fatal` in `test/unit/test_setup_backup.py` pins that behavior. On a host without `17/tick`, setup-backup prints no SUMMARY, so `step_check` fails at lines 90-92 and provisioning (step 3) is never reached. On manta9000 the cluster already exists (the fixture in `test/unit/test_setup_backup.py` records `17/tick` online there on 2026-10-04), so the production run is not blocked. The script's own contract still cannot be met on a fresh host, such as the second-host acceptance run in runbook 210. Either run provisioning before the check, or have setup-backup report an absent cluster as MISSING items instead of dying.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:87"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unexpected exceptions skip the report the docstring promises",
+      "description": "`run_steps` catches only `StepFailed` and `CalledProcessError` (line 274). Any other exception escapes `main()` before `report.write_text` (line 312), so no report is written and the step stays \"not run\". The docstring (lines 4-6) says the report is still written on failure. Realistic triggers:\n- `conf_sums()` raises `StopIteration` when `17/main` is absent from `pg_lsclusters` (`scripts/cutover_227_host.py:82`).\n- `step_production` reads `backup-health.log` with no `exists()` guard (line 224), while `run_health` guards the same read (lines 159-160). A missing log raises `FileNotFoundError`, and an empty one raises `IndexError`.\n- `main()` indexes `production_lines(...)[0]` (line 293).\n\nFix: wrap the run in `main()` with a top-level handler that logs with `logger.exception`, writes the report with outcome FAIL, and re-raises. That satisfies the CLAUDE.md rule for a process boundary.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:269"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Vacuous assertion in the tick-command test",
+      "description": "`assert all(\"manta \" not in c.split(\"/\")[0] for c in commands.values())` can never fail. `block_commands()` returns the text after the user field, which starts with the checkout path (`/home/manta/...`). So `split(\"/\")[0]` is `\"\"`, and `\"manta \" not in \"\"` is always true. Replace it with an assertion that can fail, such as every command starting with `f\"{CHECKOUT}/scripts/\"`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_cutover_227.py:101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The REPLICATION grant is tested only by source-text order",
+      "description": "The branch that grants REPLICATION (`scripts/provision_tick_roles.sql:116-125`) is checked only by asserting that `ALTER ROLE %I REPLICATION` appears before `\\else` in the file. No test runs the artifact with `-v with_replication=1`. The integration fixture `apply_artifact` (`test/tick_support/database.py:36-54`) applies the file without that variable, so the grant never executes in any tier. A regression that drops the grant, or grants it when not requested, would pass. Add an integration test that runs the artifact with and without the variable and asserts `rolreplication` for `tick_migrate`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_provision_tick_lib.py:255"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "SQL built with an f-string, and shell code built by interpolation",
+      "description": "`tick_locks_held` builds its query with an f-string (line 94). The project rule says never f-string SQL. No injection path exists today, because the keys are two integer constants. The same pattern appears at line 75, where `env_value` interpolates the library path into a `bash -c` string. The env-file path and key are passed as positional arguments, but the library path is not, so a checkout path containing a double quote would break the command. Fix: bind the lock keys as psql `-v` variables, as `provision_tick_roles.sql` does with `tick_db`, and pass the library path as `$3`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "scripts/cutover_227_host.py:92"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"no value\" sentinel and other host constants are defined in several places",
+      "description": "`-` is the \"no value\" sentinel of the cluster table. It is defined three times: `TABLE_NONE=-` in `deploy/lib/render_cron.sh:39`, `TABLE_NONE=-` in `deploy/lib/b2_lifecycle.sh:34`, and `_NONE = \"-\"` in `scripts/backup_clusters.py:19`. Other host facts are also spelled in more than one place, against CLAUDE.md's rule to define each value once:\n- `ARM_FILE=RECONCILE-ARMED` (`deploy/setup-backup.sh:80`) and `ARM_FILE = \"RECONCILE-ARMED\"` (`scripts/cutover_227_tick_backup.py:69`).\n- The bucket variable name `MT_BACKUP_S3_BUCKET`, as a literal at `deploy/setup-backup.sh:129`, as `BUCKET_KEY` at `scripts/cutover_227_host.py:27`, and as `BUCKET_KEY` at `deploy/lib/b2_lifecycle.sh:33`.\n- The cluster identity, spelled `17/tick` (`TICK` in `scripts/cutover_227_helpers.py`), `postgresql@17-tick` (`scripts/cutover_227_host.py:23`), and regex literals `17/tick` (`scripts/cutover_227_tick_backup.py:72-73`).\n\nFix: define the sentinel once in `deploy/lib/backup_clusters.sh`, which already documents the convention, and reference it from both shell scripts. Derive `TICK_UNIT` and the regexes from `TICK`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "deploy/lib/render_cron.sh:39"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The production URL rewrite is duplicated and hard-coded",
+      "description": "`strip_new_args` hard-codes the `--url-key` pattern and the `127.0.0.1` replication host (lines 86-87). Both values are columns of `deploy/backup-clusters.conf:20`. `test/unit/test_setup_backup.py` has its own copy (`_NEW_MAIN_ARGS` and `_strip_new_args`). If the `17/main` row changes, the stripping no longer matches the rendered file, and step 4 refuses a correct render. Derive the stripped arguments from the `17/main` row, and share one helper with the test oracle.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:84"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The tick data-directory parents are made world-searchable",
+      "description": "`PG_PARENT_DIR_MODE=755` applies to `/data/postgresql` and `/data/postgresql/17` (lines 65-67), so every local user can traverse the tree. The data directory itself stays 0700, so table contents are protected, and the reason (`df` on the volume by the cron user) is documented. A narrower option is a named ACL, `setfacl -m u:manta:x` on the two parents, which is the same pattern `setup-backup.sh` already uses for the WAL directory. Consider switching before the cutover runs.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "scripts/provision_tick_cluster.sh:61"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stale comments and docstrings",
+      "description": "- `setup-backup.sh:231` says the arm file is \"armed by hand after a watched reconcile\". The cutover's `step_weekly` creates it with `arm.touch()` (`scripts/cutover_227_tick_backup.py:188`). That auto-arm is the design: the 227 slice doc (TD7) says it is created only if the final check passed. The comment is the stale part.\n- The docstring says \"Thirteen steps\" (`scripts/cutover_227_tick_backup.py:4`), but `STEPS` has twelve entries. The report is printed as \"Step 13\" (line 313).",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh:231"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The absent `--url-key` fallback is a hard-coded default that the new template never uses",
+      "description": "`backup_health_cron.sh`, `cron_nightly_metadata.sh`, and `cron_weekly_backup.sh` treat an absent `--url-key` as `MT_TIMESCALE_MAINTENANCE_URL` (comments at `backup_health_cron.sh:22` and `:36`, and `cron_weekly_backup.sh:60`). The rendered cron now passes `--url-key` on every job, so the fallback serves only pre-227 lines. That conflicts with CLAUDE.md's no-hard-coded-defaults rule. The comments say the fallback is removed after the cutover, but nothing in this diff tracks that. These scripts are outside the diff; I raise it because the diff makes the fallback dead code.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/backup_health_cron.sh:22"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The 227 slice doc says nothing reads the removed MT_PROOF_226 keys, which is wrong",
+      "description": "The 227 slice doc (`project-documents/user/slices/227-slice.backup-coverage-for-tick-archive-and-database.md:74`) says the stale `MT_PROOF_226_*` lines \"name a dropped database, and nothing reads them.\" `scripts/proof_226/common.py:21-22` still defines them as the env names the harness reads, and `test/unit/test_proof_226_harness.py:100-111` tests that. Removing them from `provision_tick_cluster.sh` is correct and tested, but the harness is now dead code against a dropped database. Correct the doc, or remove the harness in a follow-up.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "scripts/proof_226/common.py:21"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Type checking does not reach the new Python",
+      "description": "`[tool.mypy]` sets `files = [\"src/manta_trading\"]`. So `scripts/cutover_227_*.py`, `scripts/backup_clusters.py`, and `test/unit/test_cutover_227.py` are never type-checked. That conflicts with the comment at lines 70-71, which says zero errors on files touched by a slice is the merge bar. The config is also not strict, which the python rules name as the standard. This predates the slice, but the slice's files fall outside the stated bar.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "pyproject.toml:72"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test fixtures are typed as Any or ModuleType",
+      "description": "The `ctx` fixture returns `Any`, and the cutover module is passed around as `ModuleType`. So `cutover.Step`, `cutover.StepFailed`, and every patched attribute go unchecked, and a misspelled name only fails at run time. Typing the fixture as `Context` and importing the module types would let a checker catch these.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "test/unit/test_cutover_227.py#ctx"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Cutover paths with no tests",
+      "description": "The tests cover the weekly arm logic, the restart guards, the WAL wait, and the production checks. Not covered: `step_offsite`, `step_metadata`, `step_health_clean`, and `main()` (the user and bucket guards and the report write). The `--min-age` arithmetic in `step_offsite` (lines 213-214) decides whether a clean verify can be claimed, and a mistake there fails silently.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:207"
+    },
+    {
+      "severity": "PASS",
+      "title": "The lifecycle reader never sets a rule",
+      "description": "I read the full script. The only rclone call is `rclone backend lifecycle` (lines 65-66), the rules are only compared with jq (lines 70-84), and nothing writes. `TestSetupLifecycle.test_never_sets_a_rule` in `test/unit/test_setup_backup.py` pins this by logging every rclone argument. That matches the header's warning that rclone replaces all bucket rules.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "deploy/lib/b2_lifecycle.sh:65"
+    },
+    {
+      "severity": "PASS",
+      "title": "Cron rendering fails explicitly when a row has no data directory",
+      "description": "`[ -n \"${PGDATA_OF[$name]:-}\" ] || die` refuses the render when a table row has no `--pgdata`, so there is no silent default. `test_missing_pgdata_for_a_row_refused` in `test/unit/test_setup_backup.py` covers it.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/lib/render_cron.sh:102"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Step 2 aborts on any host where 17/tick is not yet in pg_lsclusters",
+      "location": "scripts/cutover_227_tick_backup.py:87",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unexpected exceptions skip the report the docstring promises",
+      "location": "scripts/cutover_227_tick_backup.py:269",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Vacuous assertion in the tick-command test",
+      "location": "test/unit/test_cutover_227.py:101",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The REPLICATION grant is tested only by source-text order",
+      "location": "test/unit/test_provision_tick_lib.py:255",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "SQL built with an f-string, and shell code built by interpolation",
+      "location": "scripts/cutover_227_host.py:92",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The \"no value\" sentinel and other host constants are defined in several places",
+      "location": "deploy/lib/render_cron.sh:39",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The production URL rewrite is duplicated and hard-coded",
+      "location": "scripts/cutover_227_helpers.py:84",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The tick data-directory parents are made world-searchable",
+      "location": "scripts/provision_tick_cluster.sh:61",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Stale comments and docstrings",
+      "location": "deploy/setup-backup.sh:231",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The absent `--url-key` fallback is a hard-coded default that the new template never uses",
+      "location": "scripts/backup_health_cron.sh:22",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The 227 slice doc says nothing reads the removed MT_PROOF_226 keys, which is wrong",
+      "location": "scripts/proof_226/common.py:21",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Type checking does not reach the new Python",
+      "location": "pyproject.toml:72",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Test fixtures are typed as Any or ModuleType",
+      "location": "test/unit/test_cutover_227.py#ctx",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Cutover paths with no tests",
+      "location": "scripts/cutover_227_tick_backup.py:207",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The lifecycle reader never sets a rule",
+      "location": "deploy/lib/b2_lifecycle.sh:65",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Cron rendering fails explicitly when a row has no data directory",
+      "location": "deploy/lib/render_cron.sh:102",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:09:33.432657",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 33,
+  "prompt_tokens": 2187120,
+  "cached_tokens": 1940141,
+  "cache_write_tokens": 246957,
+  "completion_tokens": 85790,
+  "reasoning_tokens": null,
+  "duration_seconds": 376.0271965418942,
+  "cost_usd": 0.5607012899999999,
+  "cost_basis": "provider"
+}

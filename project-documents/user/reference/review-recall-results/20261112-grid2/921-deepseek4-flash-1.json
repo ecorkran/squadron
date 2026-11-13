@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The sudoers rule does not authorize the repair/verify command the cutover runs",
+      "description": "The file's own header claims it contains \"Exactly the commands those scripts issue, nothing wider\". `_repair()` (`scripts/cutover_921_minute_sessions.py:93-100`) runs `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode>` \u2014 with `sudo=True` \u2014 and that command appears in none of `MT_UNITS`, `MT_RUN`, `MT_INSTALL`, `MT_READ`, or `MT_GIT`. On a host where this file is the operator account's only grant, the cutover's very first repair step (`_repair(\"--check\")`) is refused, because sudoers is allow-list: an unlisted command is denied rather than password-prompted. `sudo -v`, `sudo -u manta-trading git -C /opt/manta-trading rev-parse HEAD` (line 14, matching `cutover_common.install`), `sudo cat /etc/manta-trading.env` (`cutover_common.migrate`), and `sudo systemctl stop/start mt-*` are all covered, so the omission of the repair invocation looks unintentional rather than a deliberate narrowing.\n\nTwo related couplings worth pinning while you are here: `MT_INSTALL` hard-codes `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh`, and `cutover_common.install()` now resolves that path as `Path(__file__).resolve().parents[1] / \"deploy/install-production.sh\"` (`scripts/cutover_common.py:132-135`) \u2014 nothing checks that the two agree, so a checkout at any other path breaks the install step silently; and this artifact has no drift guard, although the repo already guards its sibling deploy artifacts (`test/unit/deploy/test_units.py` parses the units, the installer's `UNITS` array and `mt-run`). A guard in that module asserting every `sudo`-prefixed command the cutover scripts issue is named by a `Cmnd_Alias` in this file would have caught this omission mechanically.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:7-14"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new cagg-freshness probe drops the `-infinity` normalization slice 168 documents as required",
+      "description": "`cagg_freshness_for_session` selects `stats.last_successful_finish` raw. `src/manta_trading/market/maintenance/cagg_freshness.py:68-79` states in the same repository: \"`last_successful_finish` is `-infinity` for a policy that has been created but has never completed a run. psycopg cannot load that into a datetime \u2014 it raises `DataError` mid-fetch\", and normalizes it with `nullif(s.last_successful_finish, '-infinity'::timestamptz)`. The new query has no such guard, so for any cagg whose refresh policy has not yet completed a run (a fresh or rebuilt database \u2014 051 recreates both coverage caggs' policies, and the test tier runs against freshly migrated databases) the fetch raises. `run_verify` (`scripts/repair_921_minute_sessions.py:255-295`) and `main` catch only `RepairScanTimeout`, so the operator gets a psycopg traceback instead of the `[WAIT]`/`[FAIL]` verdict, and `cutover_921`'s `_verify_when_fresh` never sees the text it branches on.\n\nThe same probe also re-spells `'policy_refresh_continuous_aggregate'` as a bare literal in the SQL, while `cagg_freshness.py:58` defines that value as a named constant precisely because it is \"the same value `cagg_repair.py` filters on\" \u2014 the project rule is one definition per value.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py:201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A chunk with bars but no judgeable session keeps `PARTIAL`, contradicting the stated removal of the weekend tolerance",
+      "description": "`judge_chunk_by_sessions` returns the classifier's verdict unchanged when `judged` is empty. `src/manta_trading/data/acquisition/daemon/minute.py:889-901` justifies deleting the old four-day tolerance with \"a weekend or holiday tail has no session to be missing, so a chunk whose sessions are all covered is SUCCESS however far its last bar sits before chunk_end\" \u2014 but a chunk containing *no* session at all is the case where \"all its sessions are covered\" is vacuously true, and there the code does not return `SUCCESS`.\n\nConcretely: for a range lying wholly between two sessions (the shape a legacy midnight-anchored row takes, e.g. `[Sat 00:00, Sun 00:00]`), `fetch_session_bounds` returns `{}`, so `judged` is empty and a response carrying only the spillover bar keeps the classifier's `PARTIAL`. The removed tolerance (`(chunk_end.date() - latest.date()).days <= 4`) turned exactly that response into `SUCCESS`, which deleted the row. Now the row survives, is re-picked each cycle (it is the most recent actionable gap), and `_advance_minute_gap` increments `attempt_count` each time until it promotes to `RETRY_EXHAUSTED` at `MAX_RETRY_COUNT` \u2014 a terminal row that makes `data_status.health` read `FAILED` for that symbol forever, which is the \"a unit that is always failed is not an alarm\" pathology slice 921 exists to remove.\n\nThe behaviour is deliberate and pinned by `test_no_judgeable_session_keeps_the_classifier_verdict` and `test_empty_bounds_judge_nothing`, and the reachable population may now be small because the repair resets in-window rows to session-close ends. I could not verify how many legacy midnight-anchored actionable rows remain in production (`find_truncated_days` and `build_truncated_day_index` ignore them; `count_row_shapes`' `midnight_ended_rows` counter is the only measurement, and terminal legacy rows are excluded from `pick_most_recent_actionable_gap`). Please either confirm the class is empty in production, or state the residual \u2014 currently the code comment asserts a property the code does not have for this input.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:85"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The narration log does not contain the acceptance output it exists to preserve",
+      "description": "`start_log`/`say` (`scripts/cutover_common.py:41-62`) tee only `say()` lines. The cutover's `_repair()` prints the `--check`/`--apply`/`--verify` bodies with a plain `print(output)`, never `say`, so the numbers the whole slice is judged on are absent from `project-documents/user/notes/921-cutover-<ts>.log`. The same is true of `install()`, `hold_timer()`, `release_timer()` and the \"`unit` is running \u2014 waiting\" polls in `cutover_common`, which all use `print`. The script's closing line tells the operator `full narration: {log_path}`, and the incomplete-run line tells them to \"read the FAIL lines\" \u2014 those FAIL lines are in the terminal and not in the file. The added test (`test_say_tees_to_the_log_file`) asserts only the `say` path, so this gap is invisible to the suite. Given the docstring's premise (\"The first 921 cutover's only record was terminal scrollback across two ten-hour firings\"), routing the repair/verify output through the log is the point.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:93-102"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The minute-pass timer still describes a 30-minute stagger that no longer exists",
+      "description": "The `Description` (line 2) and the `[Timer]` comment (lines 6-7) say the pass is \"staggered 30 minutes behind the daily pass\" so the two \"never start simultaneously\". With the first firing moved to `04:05` and `mt-daily-pass.timer` at `00:35/12:35`, the first firing is 3 h 30 min behind, not 30 minutes; only the `13:05` firing is 30 minutes behind `12:35`. The diff updated the equivalent comment in `deploy/systemd/mt-kalshi-pass.timer` (\"00:35/12:35, 04:05/13:05\") but left this one stating a schedule the file no longer has \u2014 in the file whose firing time the health check's judged-session boundary is derived from.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "deploy/systemd/mt-minute-pass.timer:2"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`bar_timestamp` misses `OSError`, which `datetime.fromtimestamp` is documented to raise",
+      "description": "The docstring promises \"A bar without a readable timestamp cannot satisfy any session\", and the `except` tuple is `(ValueError, TypeError, OverflowError)`. `datetime.fromtimestamp` also raises `OSError` when the C `gmtime`/`localtime` call fails for an out-of-range value, so an absurd epoch from the provider escapes as an exception from `judge_chunk_by_sessions`, is caught by `_process_minute_symbol`'s last-resort handler and mis-tagged `MinuteFailureKind.DATABASE` \u2014 the same misattribution the class docstring says must not happen. The pre-existing `_bar_to_row` (`minute.py`) has the same exposure, so this mirrors an existing pattern rather than introducing a new one; adding `OSError` (or a range bound) closes it in both places.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:35"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`MT_READ` grants the operator account root-level read of the production credentials",
+      "description": "`Cmnd_Alias MT_READ = /usr/bin/cat /etc/manta-trading.env` exists so `cutover_common.migrate()` can compare the checkout's maintenance URL with the production one (`verify_migrate_target`). The rule is correctly scoped to a single file, but the file it exposes is the whole credential set \u2014 DB URL, API keys \u2014 to an unprivileged account, passwordlessly. A helper that prints only `(host, port, dbname)` would satisfy the same guard with a fraction of the blast radius. Flagging for visibility, not as a blocker.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:10"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Import ordering in the new `minute.py` block is not isort-conformant",
+      "description": "`ruff` is configured with the `I` rule set (`pyproject.toml`), and the new imports introduce a fresh inversion inside one contiguous block: `...gaps.repair_921` (line 60) precedes `...gaps.minute_coverage` (line 64), and `...daemon.minute_sessions` (line 56) sits between `manta_trading.data.gaps` and `manta_trading.data.gaps.compute_missing_ranges`. Sorted order would be `gaps` \u2192 `gaps.compute_missing_ranges` \u2192 `gaps.minute_coverage` \u2192 `gaps.repair_921`, with the `acquisition.*` imports ahead of all of them. The file was already out of order around this block before the change, so this is not making a green tree red \u2014 but since the new lines are contiguous and mechanical to fix, `ruff check --select I --fix` on this file is worth a follow-up.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:56-66"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "The sudoers rule does not authorize the repair/verify command the cutover runs",
+      "location": "deploy/sudoers.d/manta-ops:7-14",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The new cagg-freshness probe drops the `-infinity` normalization slice 168 documents as required",
+      "location": "src/manta_trading/data/gaps/repair_921.py:201",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A chunk with bars but no judgeable session keeps `PARTIAL`, contradicting the stated removal of the weekend tolerance",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:85",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The narration log does not contain the acceptance output it exists to preserve",
+      "location": "scripts/cutover_921_minute_sessions.py:93-102",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The minute-pass timer still describes a 30-minute stagger that no longer exists",
+      "location": "deploy/systemd/mt-minute-pass.timer:2",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`bar_timestamp` misses `OSError`, which `datetime.fromtimestamp` is documented to raise",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:35",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`MT_READ` grants the operator account root-level read of the production credentials",
+      "location": "deploy/sudoers.d/manta-ops:10",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Import ordering in the new `minute.py` block is not isort-conformant",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:56-66",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:14:28.310087",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 42,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 861684,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 2372448,
+  "cached_tokens": 1971584,
+  "cache_write_tokens": null,
+  "completion_tokens": 228142,
+  "reasoning_tokens": 222161,
+  "duration_seconds": 903.8886941249948,
+  "cost_usd": 0.17732768,
+  "cost_basis": "alias_pricing"
+}

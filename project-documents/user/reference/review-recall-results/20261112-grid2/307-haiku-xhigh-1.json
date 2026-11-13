@@ -1,0 +1,279 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The estimate parser reads top-level keys from a payload that nests the summary under `phases`",
+      "description": "`fetch_estimate` returns the parsed stdout of `mt data tick pass --estimate-only --json` unchanged. `judge_estimate` then reads `summary[\"wanted_days\"]`, `summary[\"verdict\"]`, and `summary[\"requests\"]` at the top level (`scripts/cutover_304_checks.py:196`). The real payload has none of those keys. `print_pass` calls `pass_to_dict`, which is `PassResult.to_dict()` plus `exit_code` (`src/manta_trading/cli/commands/tick_pass_render.py:146-148`, `:285-287`). That method places each phase's summary under `phases[i].summary` (`src/manta_trading/data/tick/pass_contract.py:119-135`). The purchase summary is at `phases[name == \"purchase\"].summary`, which `scripts/cutover_234_checks.py:145` already reads that way. Here `_check_scope` raises `KeyError: 'wanted_days'`. `main` catches it as \"unexpected payload\" and exits 1 (`cutover_304_first_purchase.py:249-252`). The full run and the new `--estimate` mode both stop there, before any spend, so the PM never gets the ceiling command.\n\nThe tests miss this because the fixtures are flat. `NOTHING` (`test/unit/scripts/test_cutover_304_first_purchase.py:47-56`) and `_summary()` (`test/unit/scripts/test_cutover_304_checks.py:59-80`) are hand-written. `_summary`'s docstring says it mirrors `plan_summary`, which is the inner summary and not what the CLI prints. The CLAUDE.md parser rule requires fixtures in the production format. Only the coverage, accounting, and debug fixtures use the real builders. This path predates the diff, but the diff adds `--estimate` on top of it, and its tests pin the wrong shape. I could not check history without git to see whether the nesting came after 304.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:152-163"
+    },
+    {
+      "severity": "FAIL",
+      "title": "A real estimate can never reach BUY: its verdict is `estimate_only`, and the judge accepts only `allowed`",
+      "description": "`pass --estimate-only` calls `evaluate_spend(..., estimate_only=True)`, which sets `VerdictStatus.ESTIMATE_ONLY` whenever the plan is non-empty (`src/manta_trading/data/tick/spend_guard.py:266-269`; `purchase_plan.py:252-260`; `purchase_phase.py:158-163`). An integration test pins that value: `test/integration/data/test_tick_purchase_phase.py:240` asserts `summary[\"verdict\"] == \"estimate_only\"`. `judge_estimate` returns BUY only when the verdict equals `VERDICT_ALLOWED` (`\"allowed\"`). So on the full path, every non-empty plan is refused: by the ceiling checks, or by this verdict check once they pass. The `--estimate` mode avoids the check only because `check_ceilings=False` returns early (next finding). The `_summary` fixture uses `\"verdict\": \"allowed\"`, which the real estimate never produces, so the tests cannot see this. A fix has to decide BUY from the ceilings and from `reasons`. The archive-space shortfall reaches the estimate only through `reasons` (`purchase_plan.py:304`), and the verdict will never say \"refused\" for it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:242-245"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--estimate` returns BUY for any refusal and prints the ceiling command as the fix",
+      "description": "With `check_ceilings=False`, `judge_estimate` returns `Estimate.BUY` before it reads the verdict. So any refusal is reported as a buy. `_estimate_only` then prints `verdict refused: buy` and \"the PM runs: sudo \u2026set-tick-spend-ceilings.sh \u2026\" (`scripts/cutover_304_first_purchase.py:271-275`). One refusal that raising a ceiling cannot fix is the archive-space shortfall, which `plan_summary` appends to `reasons` (`purchase_plan.py:304`; `spend_guard.py:117-124`). The PM would set ceilings, and the real run would then stop on space. `test_estimate_prints_the_command_and_buys_nothing` uses only `reasons: [\"ceiling\"]`, so this path is untested. When the two FAILs are fixed, the `--estimate` branch also has to refuse on non-ceiling reasons.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:225-226"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Over-session names are keyed by product, not family, and a missing key is silently defaulted",
+      "description": "`_family_evidence` collects `over` names into `named[product]` across every coverage read for that product, both ES `ohlcv-1m` and ES `statistics`. `over_failures` then attaches the whole list to each family row for that product. So a bar-family failure can name statistics sessions, and the reverse. Each `volume_verdict_dict` carries a `family` field (`src/manta_trading/data/tick/tick_coverage.py:93`) that could key the list. Separately, `over_sessions` uses `coverage.get(\"volume_checks\") or ()` (`scripts/purchase_accounting.py:112`). That default swallows an absent key, although the module docstring says every key is required and a missing one raises. The failure still fires, because the count comes from `cross_tier`, so the impact is on the names.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py:232-234"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--slice` accepts any text, and that text becomes part of file paths",
+      "description": "The help text and docstring say `--slice <n>`, but `_nonempty` accepts any non-empty string. The value builds the start file, the baseline file, and the log name (`:99-104`, `:237`). A value like `../x` writes outside `NOTES_DIR`. `ref` goes into the log name the same way, though that predates this diff. Validating the slice as digits (`type=int`, or a `^\\d+$` check) would enforce the documented contract.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:201-204"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new scripts and the new tests are not covered by the configured type checker",
+      "description": "`[tool.mypy]` sets `files = [\"src/manta_trading\"]`. So `scripts/purchase_*.py`, `scripts/cutover_304_*.py`, and `test/unit/scripts/test_*.py` are never checked. The python rules require strict pyright over `src` and `tests`, or zero mypy errors on touched files, and this config does not reach these files. The tests also load the scripts as `ModuleType` (`pv`, `fp`, `ev`, `checks`), so every call into the code under test is `Any`. Test helpers use bare `-> dict` and `list` annotations (`test/unit/scripts/test_purchase_verdicts.py:187`, `:200`, `:250`, `:273-274`), which pyright strict reports as `reportMissingTypeArgument`.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "pyproject.toml:72-75"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dead constant, and a duplicate definition of the exit codes",
+      "description": "`EXIT_USAGE = 2` is never used in the file. `scripts/cutover_304_evidence.py:42` redefines `EXIT_OK, EXIT_PARTIAL = 0, 3`, while `purchase_verdicts.py:25` already imports the same values from `manta_trading.cli.commands.tick_exit`. Use one source.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`resubmit_origins` accepts naive timestamps, and the comparison would then raise an uncaught `TypeError`",
+      "description": "`_edge_of` rejects instants without a timezone, but `resubmit_origins` does not. A naive `requested_at` reaches `made < since` in `_check_resubmit` (`:182`) and raises `TypeError`. `main` catches only `KeyError` and `ValueError`, so that becomes a traceback. `requested_at` is `TIMESTAMPTZ` (`src/manta_trading/market/schema/migrations/tick.py:146`), so this is latent.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:157-164"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unknown session buckets raise instead of counting as failures, and the docstring does not say so",
+      "description": "`not_caught_up_report`'s docstring says a session the exit rule cannot account for \"is a failure.\" `_unaccounted` actually raises `CutoverError` for an unknown bucket, which stops the run before the report is written. That is the outcome `evidence.py`'s module docstring says it avoids. Every `TickSessionStatus` member is covered today, so this is reachable only if the enum grows. The test asserts the stop, so the behavior looks intended and only the docstring needs fixing.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:255"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The purchase gate cannot pass until the provider edge reaches 2026-12-01",
+      "description": "`latest_want_end()` returns 2026-12-01 00:00 UTC, from `_HISTORY_END` in `src/manta_trading/data/tick/universe.py:87`. `check_dataset_edge` refuses while any product's edge is earlier. Today is 2026-11-13, so the cutover will refuse until the edge catches up. This matches the universe comment and looks intended, but the PM should plan around it.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:64-76"
+    },
+    {
+      "severity": "PASS",
+      "title": "Bucket sets cover every `TickSessionStatus` member",
+      "description": "The nine members (`retry_exhausted`, `failed`, `provider_hole`, `in_flight`, `awaiting_ingest`, `missing`, `pending`, `edge_unknown`, `complete`) each sit in exactly one of the four sets. The sets are built from enum values, not literals (`src/manta_trading/data/tick/tick_status.py:29-40`). A real session status cannot reach the unknown-bucket stop.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:194-210"
+    },
+    {
+      "severity": "PASS",
+      "title": "Coverage, accounting, status, and debug-row fixtures use the real builders",
+      "description": "`_coverage` calls `coverage_to_dict`. The accounting fixtures call `_product_payload`. `test_bar_job_dirs_read_the_rows_the_real_cli_renders` runs the real `_cell`. Field names that `purchase_accounting.py` reads match `TickAccountingLine` and `CrossTierResult`. The top-level keys read from `coverage`, `accounting`, `status`, and `debug requests` match the CLI output. Only the `pass --estimate-only` path is nested, which is the first FAIL.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_purchase_verdicts.py:250-262"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The estimate parser reads top-level keys from a payload that nests the summary under `phases`",
+      "location": "scripts/cutover_304_first_purchase.py:152-163",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A real estimate can never reach BUY: its verdict is `estimate_only`, and the judge accepts only `allowed`",
+      "location": "scripts/cutover_304_checks.py:242-245",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`--estimate` returns BUY for any refusal and prints the ceiling command as the fix",
+      "location": "scripts/cutover_304_checks.py:225-226",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Over-session names are keyed by product, not family, and a missing key is silently defaulted",
+      "location": "scripts/cutover_304_evidence.py:232-234",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`--slice` accepts any text, and that text becomes part of file paths",
+      "location": "scripts/cutover_304_first_purchase.py:201-204",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "The new scripts and the new tests are not covered by the configured type checker",
+      "location": "pyproject.toml:72-75",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Dead constant, and a duplicate definition of the exit codes",
+      "location": "scripts/cutover_304_first_purchase.py:79",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`resubmit_origins` accepts naive timestamps, and the comparison would then raise an uncaught `TypeError`",
+      "location": "scripts/cutover_304_checks.py:157-164",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Unknown session buckets raise instead of counting as failures, and the docstring does not say so",
+      "location": "scripts/purchase_verdicts.py:255",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The purchase gate cannot pass until the provider edge reaches 2026-12-01",
+      "location": "scripts/purchase_verdicts.py:64-76",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Bucket sets cover every `TickSessionStatus` member",
+      "location": "scripts/purchase_verdicts.py:194-210",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Coverage, accounting, status, and debug-row fixtures use the real builders",
+      "location": "test/unit/scripts/test_purchase_verdicts.py:250-262",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:19:57.662083",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 58,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 59,
+  "prompt_tokens": 6753168,
+  "cached_tokens": 6408517,
+  "cache_write_tokens": 344591,
+  "completion_tokens": 99817,
+  "reasoning_tokens": null,
+  "duration_seconds": 451.26811879104935,
+  "cost_usd": 0.8714696900000001,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews --json` emits plain text when the review directory is missing",
+      "description": "`stats_reviews` checks `report.missing_dir` before `as_json` and prints `No review directory at ...` to stdout. A caller piping `--json` into a parser gets non-JSON output with exit code 0. This is a silent contract break. Handle the missing-directory case after the JSON branch, or emit an empty report with `missing_dir` in the JSON. `stats_run` already honours `--json` consistently. The test `test_reviews_missing_dir_exits_0_with_message` only covers the table mode.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:60-63"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Review failure path logs a misleading \"unexpected error\" ERROR, duplicating the WARNING above it",
+      "description": "The old `raise` let `execute`'s catch-all log the failure. The new `except ProviderError` branch now returns directly. It calls `_logger.exception(\"review: unexpected error in step %s\", ...)` right after the provider-failed WARNING at lines 474-485. A named `ProviderError` is an expected failure, and elsewhere in this diff (`dispatch.py`, `summary.py`) it gets one ERROR line with no traceback. Each failed review therefore emits two log lines, and the second calls it \"unexpected\". Use `_logger.error` with the message, or drop one of the two lines.\n\n`effort_sent_by_profile` (called at line 491) looks up the profile and provider via `get_profile` and `get_provider`. If that lookup raises inside this handler, the exception reaches `execute`'s generic catch-all. The usage record and the artifact-path context are then lost. Compute the effort value before the `try`, or guard the lookup.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:486"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failed-review cost is resolved twice, and the second pass ignores the resolved value",
+      "description": "`review_client.run_review_with_profile` already resolves the failed run's cost and stores it on `exc.cost_usd` and `exc.cost_basis`. `RunCost.from_error` reads those fields. `UsageCapture.record_from_error` ignores them and passes `telemetry.cost_usd` to `_build`, which calls `resolve_cost` again. The two renderings of one failure (the artifact and the step's usage record) can therefore disagree. This is more likely if `alias` differs between the two paths, for example a bare model id. It also duplicates pricing logic that should live in one place. Reuse `exc.cost_usd` and `exc.cost_basis` in `record_from_error`, as `record_from_review` reuses `result.cost_usd`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py:record_from_error"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Pricing-warning dedupe is bypassed in `review_client`",
+      "description": "`UsageCapture` exists so that the executor's per-run warned set makes each pricing WARNING fire once per alias. `run_review_with_profile` calls `resolve_cost(..., set())` with a fresh set on every call. A pipeline review therefore re-warns on every review step, and the warning count differs from the dispatch and summary paths. Either thread the run's warned set through, or document that review pricing warnings are deliberately per-call.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/review/review_client.py:313-321"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dispatch `except ProviderError` now runs before more specific handlers, and the telemetry-less path is untested",
+      "description": "Moving the `ProviderError` clause above `ModelResolutionError`, `ModelPoolNotImplemented`, `KeyError`, and the other handlers changes the matching order. I did not confirm that none of those types subclasses `ProviderError`. If any does, it would now get provider-failure treatment. The tests cover the one-shot and session failure paths that carry telemetry. They do not cover a `ProviderError` that reaches `execute` directly with `usage=None`. Add one test for that path, and verify the class hierarchy.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py:404-406"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`effort_for_session` is a query-named method with a side effect",
+      "description": "It always returns `None`, and its only real behaviour is a once-per-run DEBUG log. The name suggests a lookup. A name such as `note_session_effort_gap`, or a plain `None` at the call sites plus a separate logging call, would show the intent. This is low priority.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py:effort_for_session"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Several long lines and a large `dispatch.py`",
+      "description": "The diff adds lines over 88 columns, for example the `_one_shot(...)` call arguments and `stats_views.py` row construction. Confirm `ruff format` and `ruff check` pass under the project's configured line length. `dispatch.py` keeps growing well past the ~300-line guideline. The extraction of `_one_shot` and `_provider_failure` helps, but the module is a candidate for splitting.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Usage reader, telemetry folding, and report cores",
+      "description": "`read_result_usage` reads defensively and treats a bool as not an int. It warns on malformed fields while keeping their siblings, and it never sums per-message usage. Failures carry partial telemetry via `ProviderError.telemetry`. `UsageCaptureMissingError` fails explicitly instead of skipping capture. The `stats` report cores are Typer- and Rich-free, and both `--json` and table output come from the same serializers. Tests exercise real-fixture parsing, malformed input, cancellation, and the state round-trip with pre-slice schema versions.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/usage.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats reviews --json` emits plain text when the review directory is missing",
+      "location": "src/squadron/cli/commands/stats.py:60-63",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Review failure path logs a misleading \"unexpected error\" ERROR, duplicating the WARNING above it",
+      "location": "src/squadron/pipeline/actions/review.py:486",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Failed-review cost is resolved twice, and the second pass ignores the resolved value",
+      "location": "src/squadron/pipeline/usage_capture.py:record_from_error",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Pricing-warning dedupe is bypassed in `review_client`",
+      "location": "src/squadron/review/review_client.py:313-321",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Dispatch `except ProviderError` now runs before more specific handlers, and the telemetry-less path is untested",
+      "location": "src/squadron/pipeline/actions/dispatch.py:404-406",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`effort_for_session` is a query-named method with a side effect",
+      "location": "src/squadron/pipeline/usage_capture.py:effort_for_session",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Several long lines and a large `dispatch.py`",
+      "location": "src/squadron/pipeline/actions/dispatch.py",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Usage reader, telemetry folding, and report cores",
+      "location": "src/squadron/providers/sdk/usage.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:01:51.390497",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 248397,
+  "cached_tokens": 240882,
+  "cache_write_tokens": 7509,
+  "completion_tokens": 3865,
+  "reasoning_tokens": null,
+  "duration_seconds": 30.128422333160415,
+  "cost_usd": 0.10279300000000001,
+  "cost_basis": "provider"
+}

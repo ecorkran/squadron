@@ -1,0 +1,240 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Cutover can crash without writing its report, contrary to its docstring",
+      "description": "The module docstring promises the report is still written after the first failure. `run_steps` catches only `StepFailed` and `CalledProcessError`. Several steps can raise other exceptions:\n- `step_production` runs `(ctx.main.backup_root / \"backup-health.log\").read_text().splitlines()[-1]`. A missing or empty log raises `FileNotFoundError` or `IndexError`.\n- `step_weekly` and `run_health` handle a missing log correctly, but `step_production` does not.\n- `shell` and `run` can raise `OSError`.\n\nAny of these skips `report.write_text` in `main`, which loses the step-by-step record this tool exists to produce. Catch `OSError` and `IndexError` at the step boundary, or guard the log read the way `run_health` does.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#run_steps"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Host jobs are identified by the literal user \"root\"",
+      "description": "`production_lines` finds the host block with `j.split()[5] == \"root\"`. The test helper `_host_block` repeats this with `\" root \" in j`. The project rule says to define a comparison value once and never use incidental labels as logical structure. The host block is already delimited by position, after the cluster blocks and under the `# host:` comment. Parse by structure, or define the user once as a shared constant that the cron template also draws from.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py#production_lines"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`assert` used as a runtime check in production code",
+      "description": "`assert match is not None` and `assert flags is not None` (in `run_health`) are stripped under `python -O`. They are also not explicit failures. `block_lines` already filtered the lines through `_JOB_LINE`, so the first is a type-narrowing aid. Narrow the type properly, or raise `StepFailed`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py#block_commands"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cutover arms reconciliation after an unarmed run, not a watched one",
+      "description": "`setup-backup.sh` says the arm file is \"armed by hand after a watched reconcile (TD7)\". `step_weekly` instead touches `RECONCILE-ARMED` as soon as the weekly job exits 0 with the `=== weekly backup done` line. The test fixture shows that line reading `(unarmed)` with \"reconcile skipped: not armed\". So the first reconcile, which can delete offsite data, never runs under observation before the arm file exists. This may be a deliberate TD8 decision, but the two comments contradict each other and nothing documents the change. Reconcile the wording, or require a human confirmation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#step_weekly"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick guard checks are time-of-check/time-of-use",
+      "description": "`tick_locks_held()` is re-checked immediately before `systemctl restart`, which is a good mitigation. A tick run can still acquire its advisory lock between the check and the restart, and the restart would then interrupt it. The window is small and the design is aware of it. Note this in the step comment, or hold a lock across the restart.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#step_restart"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lifecycle step swallows the helper's exit status",
+      "description": "The `|| true` has no comment justifying the swallow. The loop does fail closed, because an unexpected or empty line falls into the `*)` branch and reports `MISSING <cluster> lifecycle-read`. But an empty output yields a report with a blank detail. Add the justification comment and a clearer message for empty output.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh (per-cluster loop, `LIFECYCLE_OUT=$(...) || true`)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Odd test assertion hides unexplained text",
+      "description": "`assert \"@\" not in text.replace(\"@192\", \"\")` strips an unexplained `@192` before checking for unfilled placeholders. Nothing in the diff produces that token, so it looks like a leftover workaround that weakens the placeholder check. Remove it, or explain it.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_setup_backup.py (TestRenderCron.test_hourly_interval)"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test helpers re-implement production helpers",
+      "description": "`_block`, `_host_block` and `_strip_new_args` duplicate `block_lines`, `production_lines` and `strip_new_args` from `cutover_227_helpers.py`. An independent oracle is defensible here, because the test compares the render against the pre-227 fixture. Say so in a comment so the duplication is not \"fixed\" later.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "test/unit/test_setup_backup.py#_block"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Proof database and `.env` keys are orphaned on existing hosts",
+      "description": "The `trading_tick_proof` database and the `MT_PROOF_226_*` env keys are dropped from provisioning, and `pg_hba` no longer admits them. On a host already provisioned under slice 226, the old database and `.env` entries remain. The tests assert the script no longer mentions the proof database, but nothing handles cleanup of existing hosts. Mention it in the runbook.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "scripts/provision_tick_cluster.sh (`CREATED_DATABASES`, `URL_KEYS`)"
+    },
+    {
+      "severity": "PASS",
+      "title": "Testing and safety posture",
+      "description": "The new tests cover the failure paths that matter: the weekly job not arming on failure, a pending production restart refusing to proceed, a held lock stopping before restart, the WAL wait bound, and lifecycle `MISSING` not failing the run. The render tests compare the 17/main output against the pre-227 fixture. The lifecycle helper is read-only by design, and the test `test_never_sets_a_rule` checks that. The bash `&` substitution pitfall is handled and tested. I saw no secrets in source and no tests reading the production DB URL variable.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_cutover_227.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Cutover can crash without writing its report, contrary to its docstring",
+      "location": "scripts/cutover_227_tick_backup.py#run_steps",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Host jobs are identified by the literal user \"root\"",
+      "location": "scripts/cutover_227_helpers.py#production_lines",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`assert` used as a runtime check in production code",
+      "location": "scripts/cutover_227_helpers.py#block_commands",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cutover arms reconciliation after an unarmed run, not a watched one",
+      "location": "scripts/cutover_227_tick_backup.py#step_weekly",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Tick guard checks are time-of-check/time-of-use",
+      "location": "scripts/cutover_227_tick_backup.py#step_restart",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Lifecycle step swallows the helper's exit status",
+      "location": "deploy/setup-backup.sh (per-cluster loop, `LIFECYCLE_OUT=$(...) || true`)",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Odd test assertion hides unexplained text",
+      "location": "test/unit/test_setup_backup.py (TestRenderCron.test_hourly_interval)",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Test helpers re-implement production helpers",
+      "location": "test/unit/test_setup_backup.py#_block",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Proof database and `.env` keys are orphaned on existing hosts",
+      "location": "scripts/provision_tick_cluster.sh (`CREATED_DATABASES`, `URL_KEYS`)",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Testing and safety posture",
+      "location": "test/unit/test_cutover_227.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:29:38.117156",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 206465,
+  "cached_tokens": 139493,
+  "cache_write_tokens": 66968,
+  "completion_tokens": 5235,
+  "reasoning_tokens": null,
+  "duration_seconds": 42.29757874994539,
+  "cost_usd": 0.34027929999999995,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

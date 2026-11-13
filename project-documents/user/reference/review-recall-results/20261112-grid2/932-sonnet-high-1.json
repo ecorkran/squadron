@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Pipeline settings policy and its config keys are wired in two places",
+      "description": "`one_shot_dispatch_with_telemetry` and `open_pipeline_session` (`src/squadron/pipeline/sdk_session.py:455-461`) each repeat the same sequence. Each reads `pipeline.user_settings`, feeds it to `pipeline_setting_sources`, and reads `pipeline.auto_memory`. The key strings `\"pipeline.user_settings\"` and `\"pipeline.auto_memory\"` are literals at both sites and again in `keys.py`. That conflicts with the project rule \"define once, reference everywhere\". A rename or a new policy input would have to be changed in both places, and the two could drift. The two sites also resolve the config cwd differently: `cwd or \".\"` in one and `Path.cwd()` in the other.\n\nAdd one helper next to `sdk_settings_options` in `providers/sdk/settings.py`, for example `pipeline_settings(cwd)`. It would own the key names and the policy resolution, and both callers would use it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py:140-153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test fakes return `object`, forcing 35 type suppressions in one test file",
+      "description": "`scripted_session`, `sdk_text`, `sdk_result` and `typed_config` are all annotated `-> object`. As a result, `tests/pipeline/test_sdk_session.py` carries 35 `# type: ignore` or `pyright: ignore` comments (`session.dispatch`, `ledger.active`, and others). The Python rules require strict pyright on tests, because test bugs can mask code bugs. Suppressing at every call site defeats that. Annotate `scripted_session` as `SDKExecutionSession`, `_ledger_after` as `BackgroundLedger`, and the message builders with the SDK message types. Related: `test_failed_reconnect_marks_session_unusable` uses `pytest.raises(Exception, match=\"E2BIG\")`, which is broader than needed. `ProviderError` or `CLIConnectionError` would be tighter.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/conftest.py:180-210"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Auto-memory is now always disabled for non-pipeline SDK agents, including `sq serve`",
+      "description": "Previously `CLAUDE_CODE_DISABLE_AUTO_MEMORY` was set only when `setting_sources == []`. Now `kwargs[\"env\"]` is always set, and `AgentConfig.auto_memory` defaults to `False`. Any caller that doesn't opt in, `sq serve` agents included, now runs with auto-memory off. This matches the stated D11 policy of an explicit per-path choice, so it is not a defect. It is a user-visible behavior change for `sq serve`, and it should be called out in the release notes. The `setting_sources=None` path still reaches the CLI with its default of loading user settings. That is documented as `SETTING_SOURCES_CLI_DEFAULT` and is not a new risk.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/provider.py:81-90"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Type suppressions at the settings boundary",
+      "description": "`SdkSettings.setting_sources` is `list[str]`, but `ClaudeAgentOptions` expects its `SettingSource` literal list. This forces `# pyright: ignore[reportArgumentType]` here and `# type: ignore[arg-type]` on `base_env=` in `provider.py:86`. Typing the `SdkSettings` field with the SDK's literal type, or building the options in one place (see the first finding), would remove both. `SDKExecutionSession.auto_memory` also infers its value from env-variable presence rather than storing it. That is correct today, but it couples the property to the env encoding.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:459"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Preset-ness is derived in two places",
+      "description": "`_PRESET_MODES` re-encodes which `SystemPromptMode` values mean \"preset\" in the persistence layer. The knowledge belongs on the enum, for example an `uses_preset` property, next to `describe_system_prompt`. Separately, the constant sits between `_NOT_COMPUTED` and `_NOT_OFFERED`, which splits that pair. The `describe_system_prompt` docstring refers to \"the table above\", which is a comment inside `AgentConfig`. That reference is fragile if the class is edited.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py:200"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exception handling and failure observability in the new SDK session code",
+      "description": "`_stop_background` catches a broad `Exception`, with `noqa: BLE001` and a comment explaining that the SDK raises a bare `Exception`. It logs with `logger.exception` and continues to the next task id. `_reconnect` records `unusable_reason`, logs at ERROR and re-raises. `_require_usable` then fails every later call. The idle-timeout stop, the discarded follow-up turn and the stream-ended-with-agents-running cases all emit WARNING or raise `ProviderError`, and tests assert the logged signal for each. This satisfies the failure-mode enumeration rule.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:318-335"
+    },
+    {
+      "severity": "PASS",
+      "title": "Bool config coercion and the settings-policy test matrix",
+      "description": "Bool parsing is lenient (case and whitespace), and an invalid value raises a `ValueError` that names the key. The CLI maps that error to exit code 1. `test_path_settings_policy` drives each automated SDK path's real builder, for reviews, PR review, pipeline session, one-shot dispatch, summary, audit and PR composer. It asserts that no path resolves to `None` setting sources. That covers the main regression risk of this change.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/providers/sdk/test_settings_policy.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Pipeline settings policy and its config keys are wired in two places",
+      "location": "src/squadron/pipeline/actions/dispatch.py:140-153",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test fakes return `object`, forcing 35 type suppressions in one test file",
+      "location": "tests/pipeline/conftest.py:180-210",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Auto-memory is now always disabled for non-pipeline SDK agents, including `sq serve`",
+      "location": "src/squadron/providers/sdk/provider.py:81-90",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Type suppressions at the settings boundary",
+      "location": "src/squadron/pipeline/sdk_session.py:459",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Preset-ness is derived in two places",
+      "location": "src/squadron/review/persistence.py:200",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Exception handling and failure observability in the new SDK session code",
+      "location": "src/squadron/pipeline/sdk_session.py:318-335",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Bool config coercion and the settings-policy test matrix",
+      "location": "tests/providers/sdk/test_settings_policy.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:27:43.744592",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 381766,
+  "cached_tokens": 244316,
+  "cache_write_tokens": 137444,
+  "completion_tokens": 8253,
+  "reasoning_tokens": null,
+  "duration_seconds": 68.35132329212502,
+  "cost_usd": 0.6632162000000001,
+  "cost_basis": "provider"
+}

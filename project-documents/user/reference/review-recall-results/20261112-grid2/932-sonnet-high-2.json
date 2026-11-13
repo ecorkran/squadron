@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Comment says unreported values render as \"not reported\", but the code renders \"not computed\"",
+      "description": "The comment above `system_prompt_mode` and `setting_sources` says a hand-built result with `None` \"renders as 'not reported'\". `_render_optional` in `review/persistence.py:317` returns the shared `_NOT_COMPUTED` sentinel, which is \"not computed\". The new test `test_unreported_values_render_the_shared_sentinel` asserts `- System prompt: not computed`. So the test and the code agree and the comment is wrong. Fix the comment, or define a single name for the sentinel and refer to it.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/squadron/review/models.py#ReviewResult"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test helpers return `object`, which forces many `# type: ignore` comments in strict-checked tests",
+      "description": "The Python rules include tests in strict pyright. `scripted_session`, `sdk_text`, `sdk_result`, `sdk_task_*`, `failing_reconnect_patch` and `typed_config` are all annotated as returning `object`. `typed_config` also takes a bare `type`. As a result, `tests/pipeline/test_sdk_session.py` is full of `# type: ignore[attr-defined]` on `session.dispatch(...)`, `session.background_tasks_waited`, `ledger.active` and similar. `_ledger_after` has the same problem. A blanket ignore also hides real attribute typos. `test_failed_reconnect_marks_session_unusable` already needs an `assert isinstance(session, SDKExecutionSession)` to narrow the type.\n\n- Return `SDKExecutionSession` from `scripted_session`.\n- Return `BackgroundLedger` from `_ledger_after`.\n- Return `AssistantMessage`, `ResultMessage` and so on from the message builders.\n- Return `AbstractContextManager[ScriptedClient]` from `failing_reconnect_patch`.\n- Type `typed_config` as `Callable[..., object]`.\n\nThen drop the ignores.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/conftest.py#scripted_session"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Every SDK agent now gets an explicit `env`, and `base_env` is dead at this call site",
+      "description": "The old code set `env` only when `setting_sources == []`. The new code always sets `kwargs[\"env\"]`. Because `AgentConfig.auto_memory` defaults to `False`, any SDK agent built outside the pipeline paths, including `sq serve` agents with `setting_sources=None`, now runs with auto-memory disabled. The comment says this is a deliberate per-path choice, so I'm not flagging it as a bug. It is a behavior change for callers outside this slice's tests, so make sure that was intended.\n\nAlso, `base_env=kwargs.get(\"env\")` can never return anything, because nothing sets `env` earlier in `create_agent`. The `# type: ignore[arg-type]` there is noise. Either remove the argument or keep it with a comment that it is a hook for a future env source.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/provider.py:81-90"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Rendering helpers and string constants now live in the data-model module",
+      "description": "`SystemPromptMode`, `describe_system_prompt`, `describe_setting_sources`, `describe_run_settings` and the `SETTING_SOURCES_*` display strings sit next to the Pydantic models. They are artifact and metadata rendering, not model definitions. `describe_system_prompt` also depends on the table in the `AgentConfig` comment (\"the four rows of the table above\"), so editing the model can silently invalidate the enum's docstring. A small `core/run_settings.py` would keep `models.py` to data definitions. It isn't urgent.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/core/models.py:92-130"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The idle-timeout `except TimeoutError` is broader than the timer it guards",
+      "description": "While waiting on background agents, any `TimeoutError` that escapes `_read_turn_with_retry` is treated as the idle timeout. That includes one raised by the SDK or transport itself. The agents are then stopped and the partial text is returned as a normal result, with only a warning that says \"no activity for Ns\". In practice only `asyncio.timeout` should raise `TimeoutError` here, so this is low risk. Compare the elapsed time against `idle_s` before acting. Or catch the error inside `_read_turn`, where the timer is created, and re-raise it as a private subclass.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:225-229"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Comment says unreported values render as \"not reported\", but the code renders \"not computed\"",
+      "location": "src/squadron/review/models.py#ReviewResult",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Test helpers return `object`, which forces many `# type: ignore` comments in strict-checked tests",
+      "location": "tests/pipeline/conftest.py#scripted_session",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Every SDK agent now gets an explicit `env`, and `base_env` is dead at this call site",
+      "location": "src/squadron/providers/sdk/provider.py:81-90",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Rendering helpers and string constants now live in the data-model module",
+      "location": "src/squadron/core/models.py:92-130",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The idle-timeout `except TimeoutError` is broader than the timer it guards",
+      "location": "src/squadron/pipeline/sdk_session.py:225-229",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:27:35.006066",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 384862,
+  "cached_tokens": 246370,
+  "cache_write_tokens": 138486,
+  "completion_tokens": 7078,
+  "reasoning_tokens": null,
+  "duration_seconds": 57.37088875006884,
+  "cost_usd": 0.6558396,
+  "cost_basis": "provider"
+}

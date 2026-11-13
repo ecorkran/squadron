@@ -1,0 +1,204 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Provider failure in review is logged as \"unexpected error\" and no longer re-raised",
+      "description": "The `except ProviderError` branch used to `raise` into `execute`'s handler. It now calls `_logger.exception(\"review: unexpected error in step %s\", ...)` and returns `_exception_result(...)` directly. A named provider failure is an expected condition, and `dispatch` deliberately logs those at ERROR without a traceback. The new message is misleading and dumps a stack trace for a known failure. The path also skips the handling the re-raise used to reach in `execute`. I can't confirm from the diff that `execute` had no other `ProviderError` handling.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py#_review_part"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Helper called inside the failure handler can raise and hide the original error",
+      "description": "`effort_sent_by_profile` (in `usage_capture.py`) calls `get_profile`, `ensure_provider_loaded` and `get_provider`. The review action calls it inside the `except ProviderError` block. If any of those lookups fail, the new exception replaces the provider error. The failure artifact and usage record would then be lost, which is the case this block exists to cover. Compute the effort before the `try`, or guard the lookup.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py#_review_part"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reordered `except ProviderError` in dispatch changes catch precedence",
+      "description": "`except ProviderError` moved ahead of `except (ModelResolutionError, ModelPoolNotImplemented, KeyError)` and the other specific handlers. Any exception class that also derives from `ProviderError` would now take the generic provider path instead of its specific one. I did not check whether such a class exists. Please confirm there is no subclass relationship, or keep the original order.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py:401-433"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fresh pricing-warning set on every review call defeats once-per-alias warning",
+      "description": "`resolve_cost(alias, ..., set())` is called with a new empty set each time. The pipeline path shares one `UsageCapture` warning set per run, so a run's pipeline-review step and its standalone-style call can warn differently. `UsageCapture` documents WARNING-once-per-alias, but a review-heavy run will repeat the pricing warning. Consider passing the run's set through.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/review/review_client.py:313-321"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parameter creep and long signatures in one-shot dispatch plumbing",
+      "description": "`one_shot_dispatch_with_telemetry` gains `max_output_tokens` and `usage_metadata`, and `_one_shot` takes seven positional parameters. The side-channel `usage_metadata` dict (mutated by callee, read by caller via `EFFORT_SENT_KEY`) is implicit coupling. A small result object would be cleaner. `usage_capture.py` also imports `ReviewResult` from the review package into the pipeline layer. This is acceptable but worth watching.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py#_one_shot"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Line length likely exceeds the 88-character standard",
+      "description": "Several new lines look longer than 88 characters. Examples are the `cells = [step, row.action_type, _model_cell(record), ...]` line in `stats_views.py`, the `_one_shot(...)` call in `dispatch.py`, and the `unrecorded` property in `usage_report.py`. The project may configure a wider limit in `pyproject.toml`; I couldn't check. Run `ruff format` and `ruff check`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats_views.py:104"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test coverage is strong",
+      "description": "New tests cover:\n- usage capture, including partial and stalled records;\n- the missing-capture error;\n- cancellation propagating with no record written;\n- the SDK usage reader against a real result fixture;\n- the stats report cores and the CLI;\n- the state round-trip for pre-slice run files.\n\nThe failure-mode tests assert observable log signals, as the review rules require. The `except ProviderError: raise` path in `review.py` has a test (`test_failed_review_records_error_telemetry_and_logs`), but it asserts only that some ERROR record exists. It would not catch the misleading message above.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/test_usage_capture.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stats reviews reports a missing directory as exit 0 on stdout",
+      "description": "With `--json`, a missing review directory prints a plain-text message instead of JSON. Scripted consumers would fail to parse it. This is minor but worth deciding on explicitly.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:60-62"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Provider failure in review is logged as \"unexpected error\" and no longer re-raised",
+      "location": "src/squadron/pipeline/actions/review.py#_review_part",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Helper called inside the failure handler can raise and hide the original error",
+      "location": "src/squadron/pipeline/actions/review.py#_review_part",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Reordered `except ProviderError` in dispatch changes catch precedence",
+      "location": "src/squadron/pipeline/actions/dispatch.py:401-433",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Fresh pricing-warning set on every review call defeats once-per-alias warning",
+      "location": "src/squadron/review/review_client.py:313-321",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Parameter creep and long signatures in one-shot dispatch plumbing",
+      "location": "src/squadron/pipeline/actions/dispatch.py#_one_shot",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Line length likely exceeds the 88-character standard",
+      "location": "src/squadron/cli/stats_views.py:104",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test coverage is strong",
+      "location": "tests/pipeline/test_usage_capture.py",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Stats reviews reports a missing directory as exit 0 on stdout",
+      "location": "src/squadron/cli/commands/stats.py:60-62",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:29:02.102024",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 1,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 327709,
+  "cached_tokens": 42369,
+  "cache_write_tokens": 285336,
+  "completion_tokens": 2628,
+  "reasoning_tokens": null,
+  "duration_seconds": 25.66226441715844,
+  "cost_usd": 1.1818778,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

@@ -107,3 +107,24 @@ Append one dated line per batch: cases, configs, runs per config, recall, link t
   | deepseek4-flash | 2 of 9 | 39 | $0.14 | 634 s |
 
   By case: 921 sonnet 0/3, sonnet-high 2/3, deepseek 1/3 (hits: the blocking `mt-run` that stops `fire_unit_until` from ever stopping early, found twice by reading `deploy/mt-run`; and an empty session judged partial and refetched until retries run out, found once); 225 sonnet 1/3, sonnet-high 2/3, deepseek 1/3 (the raw-count scan not scoped to the product); 175 all 0/9 (the running-total cost bug was never found). 921's seed-floor bug was never found. One sonnet run on 225 returned PASS. Hit counts are small and each is one run; the ordering sonnet-high first is a lead, not a result. Precision not scored yet.
+- 20261112 grid 2: all 10 cases (14 bugs), 7 configs, 3 runs each = 210 runs (grid 1's 27 reused). Outputs, the keyword screen (`screen.py`), per-candidate grades and the case list: `review-recall-results/20261112-grid2/`. **Grading was a first pass by agents, not a person**: a keyword screen flagged 253 findings, four agents graded each HIT / ADJACENT / NO from the finding text alone, and I read five hits against the source (both 307 bugs, 921 B2, and the screen's controls); all five were real. Re-grade before relying on any single cell. Control bugs were not graded reliably (my looser scan found the trading-ui-103 late-mount control in 3 runs; the grader found none), so ignore the control rows.
+
+  Runs with at least one real-bug hit, of 30 (14 bugs; 21 hits are on trading-ui-103's latent bug, which every config found, so also shown without it):
+
+  | Config | Bug-hits of 42 | Without u103 (of 39) | Runs with a hit (of 30) | Median tool calls | Cost/run | Time/run (median) | Verdicts |
+  |---|---|---|---|---|---|---|---|
+  | haiku-xhigh (sdk) | 16 | 13 | 14 | 34 | $0.62 sub | 368 s | 16 FAIL, 14 CONCERNS |
+  | sol (codex) | 12 | 9 | 12 | not counted | $0.02 | 97 s | 26 FAIL, 4 CONCERNS |
+  | sonnet-high (sdk) | 7 | 4 | 7 | 9.5 | $0.57 sub | 68 s | 27 CONCERNS, 2 FAIL, 1 PASS |
+  | deepseek4-flash | 6 | 3 | 6 | 38 | $0.13 | 720 s | 24 CONCERNS, 4 FAIL, 2 PASS |
+  | luna (codex) | 6 | 4 | 6 | not counted | $0.001 | 37 s | 29 CONCERNS, 1 FAIL |
+  | sonnet no-tools (sdk) | 5 | 2 | 5 | 0 | $0.50 sub | 43 s | 30 CONCERNS |
+  | sonnet (sdk) | 4 | 1 | 4 | 2 | $0.52 sub | 28 s | 28 CONCERNS, 2 PASS |
+
+  Notes:
+  - haiku-xhigh found the only hits on both 307 bugs (the nested `phases` payload once, the `estimate_only` verdict 3 of 3) by reading the producer (`pass_to_dict`, `spend_guard`), the check the verification prompt asked for in the earlier grid. It also found 921's blocking `mt-run` 3 of 3, and 921 B1 and a122 B2.
+  - sol was second, with 921's blocking `mt-run` 3 of 3 and squadron-932's early dispatch end 3 of 3. luna found amoeba-122 B2 once and the 921 seed floor once. Both are Codex runs; they read files natively and squadron does not count it (#322).
+  - Nobody found 175's running-total cost, 188's inclusive candle window, 197's merged-slice check, or amoeba-122's `-p slice=N` argv (0 of 21 runs each).
+  - Sonnet with no tools found almost as much as sonnet with tools (5 vs 4), so on this set sonnet's tools did not help it.
+  - Verdict strength varies: sol and haiku-xhigh issue FAIL often (26 and 16 of 30). Precision (how many of those findings are real) is not scored; a high-recall config that cries FAIL on everything is not yet shown to be better.
+  - Cost for sdk configs is the SDK's reported number on a subscription, not a charge. Haiku-xhigh took the longest of the sdk runs, 6 minutes median.

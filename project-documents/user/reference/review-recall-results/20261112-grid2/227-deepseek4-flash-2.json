@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`die` echoes its own exit-code argument into the message",
+      "description": "The new helper `die() { echo \"error: $*\" >&2; exit \"${2:-1}\"; }` prints the whole argument list, so every call that passes an exit code as the second argument renders the code as part of the message. In `b2_lifecycle.sh` the four call sites are `die \"unknown argument: $1\" 2`, `die \"${pair%%:*} is required\" 2`, `die \"at least one prefix is required\" 2`, and `die \"--days must be a whole number: $DAYS\" 2`; each produces `error: unknown argument: -x 2`, `error: --days must be a whole number: abc 2`, etc. The exit code is correct, but the operator-facing message is wrong. The pattern is copied from `deploy/lib/render_cron.sh` (pre-existing), so the new file inherits it; the fix is `echo \"error: $1\"` so the message stays the first argument.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/lib/b2_lifecycle.sh:39"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`render_cron.sh` prints the exit code in the `--pgdata` error",
+      "description": "The new `die \"no --pgdata for cluster $name\" 2` call goes through the same `die` helper, so `render_cron.sh --pgdata ...` prints `error: no --pgdata for cluster 17/tick 2`. The test `test_missing_pgdata_for_a_row_refused` only asserts the substring `no --pgdata for cluster 17/tick`, so it does not catch the trailing `2`. The fix is the same as above: `die` should echo `$1` only.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/lib/render_cron.sh:102"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`grep -v` on a comment-only template exits under `set -e`",
+      "description": "`CLUSTER_TEXT=$(grep -v '^##' \"$CLUSTER_TEMPLATE\")` runs under `set -euo pipefail`. `grep -v` exits 1 when it produces no output, so a template that contains only `##` lines (or an empty file) terminates the render with a bare non-zero exit instead of a diagnostic. The current template has nine lines, so this is not hit today, but a template edit that removes the last job line would fail with no explanation. Adding `|| true` or a `[ -s ... ]` check keeps the error message.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/lib/render_cron.sh:98"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`die` echoes its own exit-code argument into the message",
+      "location": "deploy/lib/b2_lifecycle.sh:39",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`render_cron.sh` prints the exit code in the `--pgdata` error",
+      "location": "deploy/lib/render_cron.sh:102",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`grep -v` on a comment-only template exits under `set -e`",
+      "location": "deploy/lib/render_cron.sh:98",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:52:49.077988",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 26,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 516390,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1712416,
+  "cached_tokens": 1579977,
+  "cache_write_tokens": null,
+  "completion_tokens": 160056,
+  "reasoning_tokens": 157231,
+  "duration_seconds": 1536.2037613329012,
+  "cost_usd": 0.10851933,
+  "cost_basis": "alias_pricing"
+}

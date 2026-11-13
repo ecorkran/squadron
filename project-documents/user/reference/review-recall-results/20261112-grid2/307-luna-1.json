@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Resubmit matching can accept an older request when it shares a range with a newer one",
+      "description": "`resubmit_origins` collapses jobless requests with the same schema and range to their earliest timestamp. If an older request and a new cutover request share that key, the estimate\u2019s resubmit matches the older timestamp and is refused, even though the new request may be the one being resubmitted. Conversely, the range alone cannot identify which request produced the estimate row. Match using a stable request identity or otherwise make ambiguous matches stop rather than silently selecting the earliest.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:151-153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Coverage report does not verify that rows belong to the requested family",
+      "description": "`not_caught_up_report` iterates every product and session in `coverage[\"products\"]` but labels and judges them using the caller-provided `product` and `schema`. If a coverage response contains more than the requested product/family, unrelated sessions can be reported or counted against the wrong family. Filter or validate the returned entries against the requested product and schema before evaluating them.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py:278-288"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Resubmit matching can accept an older request when it shares a range with a newer one",
+      "location": "scripts/cutover_304_checks.py:151-153",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Coverage report does not verify that rows belong to the requested family",
+      "location": "scripts/purchase_verdicts.py:278-288",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:19:26.506128",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 79089,
+  "cached_tokens": 77824,
+  "cache_write_tokens": null,
+  "completion_tokens": 268,
+  "reasoning_tokens": 0,
+  "duration_seconds": 44.55558241601102,
+  "cost_usd": 0.00103874,
+  "cost_basis": "alias_pricing"
+}

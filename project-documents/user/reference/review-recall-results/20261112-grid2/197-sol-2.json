@@ -1,0 +1,129 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Design-batch resumes reject already-created designs",
+      "description": "A `slices-plan` item whose design was created but whose review exhausted its rounds is no longer returned by `cf.undesigned_slices`. Both retry and accept therefore reject the flagged item instead of resolving it. Reproduced with an open slice having a design file. The planning-batch test hides this by returning no design whenever queried with the plan. Support recovery from the post-design state and test that realistic case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:286-304"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Validate worktree registration before restoring the target",
+      "description": "Unlike `enter_slice_branch`, this path never checks worktree registration before using cf\u2019s integration target. In an unregistered linked worktree, that target belongs to the primary checkout. `restore_target` can commit leftovers and attempt checkout before the later branch action rejects the worktree; planning batches have no branch action to perform that check. Enforce registration before any mutation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:232-235"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Item-resume preparation blocks the event loop",
+      "description": "The async resume path directly performs state-file reads, synchronous git subprocesses, cf calls, and report writes. These cannot satisfy the required sub-millisecond synchronous-work bound and prevent other asyncio tasks from progressing during slow operations. Offload blocking preparation and persistence, with explicit ownership of mutable report state, and add an event-loop responsiveness test.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:146-155"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed report items escape schema-error handling",
+      "description": "`cast` does not validate the external JSON structure. A report containing `\"items\": [null]` raises `AttributeError` in `BatchItemRecord.from_json`, bypassing `BatchReportLoadError` and the resume command\u2019s controlled rejection path. Reproduced directly. Validate the report and item shapes with Pydantic and test malformed nested values.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:330-340"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Design-batch resumes reject already-created designs",
+      "location": "src/squadron/pipeline/item_resume.py:286-304",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Validate worktree registration before restoring the target",
+      "location": "src/squadron/pipeline/item_resume.py:232-235",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Item-resume preparation blocks the event loop",
+      "location": "src/squadron/pipeline/item_resume.py:146-155",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Malformed report items escape schema-error handling",
+      "location": "src/squadron/pipeline/batch_report.py:330-340",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:24:42.402506",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 116707,
+  "cached_tokens": 114432,
+  "cache_write_tokens": null,
+  "completion_tokens": 619,
+  "reasoning_tokens": 143,
+  "duration_seconds": 108.76856220886111,
+  "cost_usd": 0.0221832,
+  "cost_basis": "alias_pricing"
+}

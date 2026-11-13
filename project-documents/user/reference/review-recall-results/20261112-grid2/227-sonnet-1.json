@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Health step can pass on a stale log line",
+      "description": "`run_health` runs the cron health command through `shell()` and ignores its return code. It then takes the last line of `backup-health.log` and checks the `FLAGS` values. If the job fails to start or crashes before logging, the last line is still the previous run's output. Steps 7 and 10 then pass or fail on old data, and step 10 is meant to prove the state after the weekly and metadata jobs. The step should check the exit status. It should also confirm the line is newer than the run, for example by comparing the log's line count or mtime before and after the call.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:run_health"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unguarded `[-1]` indexing on log files",
+      "description": "`step_production` reads `(ctx.main.backup_root / \"backup-health.log\").read_text().splitlines()[-1]` with no existence or emptiness check. A missing or empty production log raises `FileNotFoundError` or `IndexError`. Neither is caught by `run_steps`, which handles only `StepFailed` and `CalledProcessError`. The run then crashes before the report is written. That breaks the stated guarantee that the report is always written. `run_health` and `step_weekly` guard this case, so this step should do the same, or `run_steps` should also catch `OSError` and `IndexError`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:step_production"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`assert` used for runtime narrowing in production code",
+      "description": "`block_commands` asserts `match is not None`, and `run_health` asserts `flags is not None`. Both are control flow, and `python -O` strips them. The `run_health` assert follows a `require()` call that the type checker cannot see through. Replace them with an explicit `if ...: raise StepFailed(...)`, or make `require` a `NoReturn`-style guard.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:block_commands"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Host block identified by the literal user `root`",
+      "description": "`production_lines` finds the host block with `j.split()[5] == \"root\"`. `main()` derives the cron user from the first production job line. Both depend on the user column of rendered text instead of the structure the template defines (the `# host:` marker and the `# cluster` markers). The project rules say not to use user-visible labels as logical structure. This check breaks if the host job's user changes. Parse by block marker instead.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:production_lines"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Provisioning-script tests assert on source text",
+      "description": "The new tests regex-extract function bodies and assignments from `provision_tick_cluster.sh`. They then assert on literal strings such as `'-v with_replication=1 -f - < \"$ROLES_SQL\"'`, or run a reconstructed program. This checks the implementation text, not behaviour, and breaks on harmless refactors. `test_roles_sql_grants_replication_only_when_asked` only compares string positions in the SQL file. The `hba_content` test runs the real function, so it is acceptable. The others should be exercised against the real SQL, or a stubbed `psql`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_provision_tick_lib.py:_script_function"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`render_cron.sh` aborts silently if the cluster template is all comments",
+      "description": "`CLUSTER_TEXT=$(grep -v '^##' \"$CLUSTER_TEMPLATE\")` returns 1 when no lines remain. Under `set -e` the script then exits with no message. This is unlikely with the current template, but a named `die` would be clearer.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/lib/render_cron.sh:98"
+    },
+    {
+      "severity": "PASS",
+      "title": "Cluster table parsers and per-cluster cron rendering",
+      "description": "I read `backup_clusters.sh` and `backup_clusters.py`. They apply the same rules for field count, duplicates, url_key and root prefix, and the diff states that parity tests hold them together. The renderer quotes its replacement strings to avoid the bash 5.2 `&` substitution issue, and a regression test covers that. `b2_lifecycle.sh` is read-only and never sets a rule. `setup-backup.sh` parses the table before any step runs, so a bad row changes nothing.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "deploy/lib/backup_clusters.sh"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Health step can pass on a stale log line",
+      "location": "scripts/cutover_227_tick_backup.py:run_health",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unguarded `[-1]` indexing on log files",
+      "location": "scripts/cutover_227_tick_backup.py:step_production",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`assert` used for runtime narrowing in production code",
+      "location": "scripts/cutover_227_helpers.py:block_commands",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Host block identified by the literal user `root`",
+      "location": "scripts/cutover_227_helpers.py:production_lines",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Provisioning-script tests assert on source text",
+      "location": "test/unit/test_provision_tick_lib.py:_script_function",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`render_cron.sh` aborts silently if the cluster template is all comments",
+      "location": "deploy/lib/render_cron.sh:98",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Cluster table parsers and per-cluster cron rendering",
+      "location": "deploy/lib/backup_clusters.sh",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:24:37.217925",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 353229,
+  "cached_tokens": 161162,
+  "cache_write_tokens": 192059,
+  "completion_tokens": 3767,
+  "reasoning_tokens": null,
+  "duration_seconds": 40.26169045781717,
+  "cost_usd": 0.8281392,
+  "cost_basis": "provider"
+}

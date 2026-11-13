@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`_window` couples the period predicate to a truthy `extra` dict",
+      "description": "`_window` takes a generic `extra: dict[str, Any] | None`. It merges that dict into the bind parameters, and then, if `extra` is truthy, it appends a hard-coded `period = %(period)s` clause. Nothing in the signature says that `extra` must contain a `period` key. A future caller who passes any other extra parameter would get a `period` predicate with no bound value. That fails at execution time with a psycopg missing-parameter error. A caller who passes an empty dict would silently drop the period filter. Make `period: int | None` an explicit keyword argument and add the clause when it is not `None`. That removes the implicit contract and the untyped dict.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:177-200"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplicated ceiling check between the executor closure and `_admit_rows`",
+      "description": "The `if count > max_rows` branch inside `_read` and the later `_admit_rows(read.count, max_rows)` both encode the same ceiling comparison, in `get_candlesticks` and again in `get_trades`. The two checks have to stay in step: if the first is relaxed, `_admit_rows` still refuses, and if the second is removed, the response is built from empty rows and reports a false `count`. The two near-identical `_read` closures also repeat the seek, 404, count, guard and fetch sequence. Consider a shared helper that takes the counter and fetcher and returns `_Read`, with a single predicate such as `read.over_ceiling`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:93-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Load test relies on a private pool attribute and class-level mutable state",
+      "description": "`_client` reaches into `pool._pool` with `# noqa: SLF001`. This is a psycopg_pool private detail, and a library upgrade can break it silently. The coverage is also incomplete: connections created after startup (pool growth or replacement) never receive the recording cursor factory. For assertion 2 the effect is that a missed connection records nothing. The `not fetches` assertion then passes vacuously, because the guard on `counts` only proves that some connection was recorded. `_RecordingCursor.statements` is also a class-level list that tests reassign, which makes the recorder shared global state. Pass `kwargs={\"cursor_factory\": ...}` when constructing the pool, or patch a connection class. Alternatively, assert on server-side statement logging.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:~120-165"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`TradeRecord.from_row` depends on positional indexing of `TradeRow.values`",
+      "description": "`TradeRow.values` is `tuple[Any, ...]`, and `from_row` reads `values[0]` to `values[7]` by position. The order is implied by `TRADE_VALUE_COLUMNS`, which is derived from `TRADE_COLUMNS` minus `market_ticker`. This contradicts the module's claim that a column added to the repository mapping is served without an edit. Reordering or adding a trade column would shift the fields without a type error. This is weaker than the candle path, which walks `CANDLE_COLUMNS`. Build the record from `zip(TRADE_VALUE_COLUMNS, values)`, or have the reader return named fields. `TradeRow.values` is also typed `Any`, which hides mismatches at the boundary.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:~115-130"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tape_facts` raises `RuntimeError` for a half-populated state row",
+      "description": "This fails explicitly rather than falling back, which is consistent with the project rules. The cost is that a corrupt `sync_state` row turns every trades request into a 500. That seems acceptable, and it is worth noting that the same guard already exists in `read_trade_status`. The two copies could share a helper to avoid duplication.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:~125-140"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_window`/`_count` build SQL through `sql.SQL(table)` with a suppressed lint",
+      "description": "The table argument is a module-local literal, so this is not injectable today. Using `sql.Identifier` with a schema and table pair, such as `sql.Identifier(\"kalshi\", \"trades\")`, would remove the need for the `noqa: S608` and make the safety structural.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:~203-210"
+    },
+    {
+      "severity": "PASS",
+      "title": "Window resolution and day-boundary extraction",
+      "description": "Moving `window_start_utc` and `window_end_utc` into one shared module keeps the inclusive-end convention in a single place. `resolve_window` is well documented, and unit tests cover bare dates, naive datetimes, omitted bounds and reversed ranges. The connection is released before the 422 refusal, and a test asserts it. The count-then-fetch ordering with no `LIMIT` is well reasoned, and the integration tests cover inclusive bounds and `count == len(fetch)`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/windows.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_window` couples the period predicate to a truthy `extra` dict",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:177-200",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Duplicated ceiling check between the executor closure and `_admit_rows`",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:93-100",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Load test relies on a private pool attribute and class-level mutable state",
+      "location": "test/load/test_188_kalshi_api_nfr.py:~120-165",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`TradeRecord.from_row` depends on positional indexing of `TradeRow.values`",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:~115-130",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`tape_facts` raises `RuntimeError` for a half-populated state row",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:~125-140",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`_window`/`_count` build SQL through `sql.SQL(table)` with a suppressed lint",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:~203-210",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Window resolution and day-boundary extraction",
+      "location": "src/manta_trading/api_server/routes/windows.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:23:46.267137",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 188821,
+  "cached_tokens": 16654,
+  "cache_write_tokens": 172163,
+  "completion_tokens": 2903,
+  "reasoning_tokens": null,
+  "duration_seconds": 28.271072708070278,
+  "cost_usd": 0.7241417,
+  "cost_basis": "provider"
+}

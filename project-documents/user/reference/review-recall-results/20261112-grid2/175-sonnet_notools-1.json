@@ -1,0 +1,204 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews --json` emits plain text when the review directory is missing",
+      "description": "`stats_reviews` checks `report.missing_dir` before the `as_json` branch. It prints `No review directory at ...` to stdout and returns with exit 0, even under `--json`. A script that pipes `--json` output into a JSON parser will fail on this path. Emit a valid JSON document for the missing-directory case, with `missing_dir: true` and empty rows. Or print the message to stderr when `--json` is set. The test `test_reviews_missing_dir_exits_0_with_message` only covers the table mode.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:60-63"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A review provider failure is now returned as a result instead of re-raised",
+      "description": "`_review_part` used to re-raise `ProviderError` after saving the failure artifact, so it reached `execute`'s catch-all. It now returns `self._exception_result(...)` directly. I could not check whether callers of `_review_part` (the split and gated multi-part paths, `_gated_parts`) inspect `success` on the returned part. If they only expect exceptions for failures, a failed part could be treated as a normal part. The log call also uses `_logger.exception(\"review: unexpected error ...\")` for a named `ProviderError`. The dispatch path logs named provider failures as a single ERROR line without a traceback (issue 200), so the two paths are now inconsistent. The wording \"unexpected\" is misleading for a named failure. Confirm the callers handle a failed part result, and add a test for a multi-part review where one part fails.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:483-493"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`except ProviderError` is placed ahead of the other specific handlers in `DispatchAction.execute`",
+      "description": "The diff moves `except ProviderError` above `except (ModelResolutionError, ModelPoolNotImplemented, KeyError)` and the handlers below it. If any of those exception types, or `ContextForgeError` or `ProjectRulesError`, subclasses `ProviderError`, it would now be routed to `_provider_failure` and lose its specific handling. I could not verify the class hierarchy. Check the hierarchy and add a test that each specific handler is still reached.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py:404-405"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`UsageCapture.effort_for_session` has a side effect and a constant return value",
+      "description": "The method is named like a getter and always returns `None`. Its real work is logging a DEBUG message once, via a mutable flag. Callers write `effort_sent = capture.effort_for_session(resolved)`, which reads as if the effort varies. Split it into a logging method such as `note_session_effort_gap`, and pass `None` explicitly as the sent effort.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py#UsageCapture.effort_for_session"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overly broad exception tuple used to absorb a malformed top-level value",
+      "description": "`except (OSError, ValueError, AttributeError, SchemaVersionError)` catches `AttributeError` to cover a state file whose top-level JSON value is not an object. Catching `AttributeError` can hide real programming errors inside `StateManager.load` and report them as \"cannot read file\". Validate the shape inside `StateManager.load`, or raise a specific error there.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/stats/usage_report.py:104-107"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Pricing-warning dedupe is lost on the review path",
+      "description": "`run_review_with_profile` calls `resolve_cost(..., set())` with a fresh set each time. The pipeline path deduplicates via the run's `UsageCapture`, but standalone reviews and split-review parts warn on every call. Consider accepting an optional shared warning set.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/review/review_client.py:313-321"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Large positional parameter plumbing",
+      "description": "`usage_capture` is threaded through about ten `_execute_*` functions, which take `Any`-typed collaborators. This follows the existing pattern, but each new run-scoped collaborator widens every signature. Consider bundling the run-scoped collaborators into one object later.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test coverage for the new reporting and capture code is good",
+      "description": "The tests cover partial records, malformed usage, pre-slice run files, cancellation propagation, and the missing-capture error. They use a real captured `ResultMessage` fixture, which fits the parser-fixture rule in CLAUDE.md. The one gap is the `--json` missing-directory case noted above.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/stats/test_usage_report.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats reviews --json` emits plain text when the review directory is missing",
+      "location": "src/squadron/cli/commands/stats.py:60-63",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A review provider failure is now returned as a result instead of re-raised",
+      "location": "src/squadron/pipeline/actions/review.py:483-493",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`except ProviderError` is placed ahead of the other specific handlers in `DispatchAction.execute`",
+      "location": "src/squadron/pipeline/actions/dispatch.py:404-405",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`UsageCapture.effort_for_session` has a side effect and a constant return value",
+      "location": "src/squadron/pipeline/usage_capture.py#UsageCapture.effort_for_session",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Overly broad exception tuple used to absorb a malformed top-level value",
+      "location": "src/squadron/stats/usage_report.py:104-107",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Pricing-warning dedupe is lost on the review path",
+      "location": "src/squadron/review/review_client.py:313-321",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Large positional parameter plumbing",
+      "location": "src/squadron/pipeline/executor.py",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test coverage for the new reporting and capture code is good",
+      "location": "tests/stats/test_usage_report.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:29:00.621168",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 290984,
+  "cached_tokens": 54205,
+  "cache_write_tokens": 236775,
+  "completion_tokens": 5629,
+  "reasoning_tokens": null,
+  "duration_seconds": 44.57434658310376,
+  "cost_usd": 1.0188274000000002,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

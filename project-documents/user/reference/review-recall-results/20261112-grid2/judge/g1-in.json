@@ -1,0 +1,140 @@
+[
+ {
+  "bug": "921-B1",
+  "description": "Session with no bar inside it after a long provider publication delay is always judged PARTIAL by judge_chunk_by_sessions; the gap row stays open and is re-requested every walk (burning quota), never converging.",
+  "candidates": [
+   {
+    "run": "921-deepseek4-flash-1",
+    "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:85",
+    "title": "A chunk with bars but no judgeable session keeps `PARTIAL`, contradicting the stated removal of the weekend tolerance",
+    "text": "`judge_chunk_by_sessions` returns the classifier's verdict unchanged when `judged` is empty. `src/manta_trading/data/acquisition/daemon/minute.py:889-901` justifies deleting the old four-day tolerance with \"a weekend or holiday tail has no session to be missing, so a chunk whose sessions are all covered is SUCCESS however far its last bar sits before chunk_end\" \u2014 but a chunk containing *no* session at all is the case where \"all its sessions are covered\" is vacuously true, and there the code does not return `SUCCESS`.\n\nConcretely: for a range lying wholly between two sessions (the shape a legacy midnight-anchored row takes, e.g. `[Sat 00:00, Sun 00:00]`), `fetch_session_bounds` returns `{}`, so `judged` is empty and a response carrying only the spillover bar keeps the classifier's `PARTIAL`. The removed tolerance (`(chunk_end.date() - latest.date()).days <= 4`) turned exactly that response into `SUCCESS`, which deleted the row. Now the row survives, is re-picked each cycle (it is the most recent actionable gap), and `_advance_minute_gap` increments `attempt_count` each time until it promotes to `RETRY_EXHAUSTED` at `MAX_RETRY_COUNT` \u2014 a terminal row that makes `data_status.health` read `FAILED` for that symbol forever, which is the \"a unit that is always failed is not an alarm\" pathology slice 921 exists to remove.\n\nThe behaviour is deliberate and pinned by `test_no_judgeable_se"
+   },
+   {
+    "run": "921-haiku-xhigh-1",
+    "location": "src/manta_trading/data/acquisition/daemon/minute.py:901-916",
+    "title": "Per-session judgement turns any empty session in a chunk into a terminal failure",
+    "text": "`judge_chunk_by_sessions` returns PARTIAL if any judged session in the chunk lacks a bar in (open, close] (`minute_sessions.py:66-91`). The code cannot distinguish that from a session not yet published, a halt, a session before provider history, or an illiquid name with no trades that day. PARTIAL maps to UNKNOWN, which increments `attempt_count` (`minute.py:1142-1151`). The whole chunk is then re-requested each hourly cycle until `attempt_count` reaches `MAX_RETRY_COUNT` (5), at which point the row becomes RETRY_EXHAUSTED and is excluded from selection. Under the old classifier this chunk was SUCCESS.\n\nBars are still inserted, so no data is lost. But up to five full-chunk requests are spent, a fully collected gap ends terminal, and the log at lines 909-916 asserts \"provider has not published them\", which the code cannot know. The tests cover single-session fixtures only; none has a legitimately empty session inside a multi-session chunk. Decide the policy explicitly, reword the log to what is known, and add that test."
+   },
+   {
+    "run": "921-sonnet-high-2",
+    "location": "src/manta_trading/data/acquisition/daemon/minute.py:901-904",
+    "title": "An extra pool connection and query for every minute chunk",
+    "text": "Each chunk now opens a separate `pool.connection()` just to run `fetch_session_bounds`. The chunk loop already opens a connection for the write a few lines later. Across thousands of symbols with many chunks, that is an added round-trip per chunk. Reuse the per-chunk connection, or fetch the bounds once per symbol for the gap's range.\n\nA related behavior change is worth confirming. A session the provider hasn't published now produces PARTIAL, which increments `attempt_count` and can promote the row to `RETRY_EXHAUSTED`. That is correct for the 01:05 case. A permanently empty session, such as a half day with no data, could also exhaust its retries. The tests don't cover that path."
+   },
+   {
+    "run": "921-sonnet-high-3",
+    "location": "src/manta_trading/data/acquisition/daemon/minute.py:891-907",
+    "title": "Per-session judging can retry quota-limited fetches indefinitely for symbols with no-trade sessions",
+    "text": "`judge_chunk_by_sessions` returns PARTIAL whenever any session whose close is at or before `chunk_end` has no bar in `(open, close]`. That is right for the unpublished-day case. It also fires for sessions where the symbol simply didn't trade: halts, illiquid names, or an IPO session that opens before the first print.\n\nFor a multi-session backfill chunk of up to 120 days, one such session turns the whole chunk PARTIAL. `_advance_minute_gap` then keeps the row and increments `attempt_count`, so the same chunk is refetched until it reaches RETRY_EXHAUSTED. Each attempt spends credits against a limited quota, and the cutover itself gates on credits.\n\nThe old 4-day tolerance did not have this failure for mid-chunk gaps. I found no test for \"bars on sessions before and after an empty session in one chunk\". Add one, and decide explicitly whether only the newest session should be judged for the unpublished case."
+   },
+   {
+    "run": "921-sonnet_notools-2",
+    "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py#judge_chunk_by_sessions",
+    "title": "Per-session judgement can keep a gap row forever for a symbol with no bars in a session",
+    "text": "The old weekend and holiday tolerance is replaced by \"every session in the chunk must hold a bar\". A halted, newly listed or illiquid symbol can legitimately have no bars for a whole session. Its chunk then returns PARTIAL on every pass, the row is kept, and `attempt_count` climbs. That is the \"re-fetches forever\" behavior the removed comment described. Cap the retries or add a staleness exit. The tests cover only the all-sessions-empty and all-sessions-covered cases."
+   },
+   {
+    "run": "921-sonnet_notools-3",
+    "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py#judge_chunk_by_sessions",
+    "title": "Removing the weekend tolerance can bring back the endless re-fetch",
+    "text": "When no session closes inside the chunk, the function keeps the `classify_outcome` verdict. The deleted block existed to turn PARTIAL into SUCCESS for a chunk that ends on a non-trading day. A legacy row that spans only a weekend or holiday, or a chunk whose sessions are missing from `trading_sessions` (unverified), now stays PARTIAL. It will be re-fetched forever with `attempt_count` climbing, which is the failure the old comment described. The tests do not cover a chunk with no judgeable session and bars from before the chunk. Decide the outcome for that case explicitly and test it."
+   }
+  ]
+ },
+ {
+  "bug": "921-B2",
+  "description": "The seed's truncated-day scan starts at the 7-day trailing floor, and the seed deletes UNKNOWN rows in its window, so truncated sessions older than 7 days are erased instead of fetched.",
+  "candidates": [
+   {
+    "run": "921-deepseek4-flash-2",
+    "location": "src/manta_trading/data/acquisition/daemon/minute.py#_build_truncated_index",
+    "title": "`_build_truncated_index` handles its own timeout but not the other faults its sibling survives",
+    "text": "`_build_truncated_index` catches `RepairScanTimeout` and fails safe (logged at ERROR, `None` returned, documented). Anything else `build_truncated_day_index` raises \u2014 a lost connection, `psycopg.OperationalError`, a timeout that surfaces as something other than `QueryCanceled` \u2014 propagates out of `run_minute_cycle` (the call site is outside the per-symbol `try`) and ends the pass at `runner._logger.exception(\"runner: run_minute_cycle raised\")`.\n\nThe function sitting three lines above it in the same `with pool.connection()` block makes the opposite choice for the same class of failure: `build_minute_coverage_index` \u2192 `_run_coverage_query` catches `psycopg.OperationalError` and returns `None`, precisely so a degraded read does not take down the cycle. Two adjacent best-effort index builds with different fault tolerance is the kind of asymmetry that reads as intent when it is not. (Whether failing *open* on `RepairScanTimeout` is right at all is a separate question the docstring argues for the scan and the module's `RepairScanTimeout` docstring argues against \u2014 \"an unmeasured universe must never be reported as a clean one\". Both positions are defensible; the mismatch between the two builders is not.)"
+   },
+   {
+    "run": "921-haiku-xhigh-2",
+    "location": "src/manta_trading/data/acquisition/daemon/minute.py:752-772",
+    "title": "The truncated-day fix reaches the seed only on some daemon code paths",
+    "text": "`uncovered_days` only takes effect inside `if seed_from is not None` (line 752). `seed_from` is set when the symbol has UNKNOWN gap rows (full seed, lines 738-739) or when the gap frontier `MAX(gap_end)` trails `target_end` (lines 740-750). In the frontier case the seed covers only sessions at or after the frontier. A truncated session older than the newest gap row, on a symbol with no UNKNOWN rows, is never passed to the seed. That contradicts the docstring of `_build_truncated_index` (minute.py:355-363), which says truncated sessions are re-seeded. The only forwarding test, `test_do_minute_symbol_forwards_uncovered_days_to_the_seed`, forces `has_unknown_gaps=True`, so it covers only the full-seed branch. Add a frontier-branch test with an older truncated day, then either change the seed decision or document the limit. I did not check this against production data."
+   },
+   {
+    "run": "921-luna-2",
+    "location": "src/manta_trading/data/acquisition/daemon/minute.py:300-302",
+    "title": "Trailing seeding can miss truncated sessions older than the priority window",
+    "text": "The truncated-day index is built only from `trailing_floor`, but that floor is the short trailing-priority window. A truncated session older than this window is therefore not passed as `uncovered_days`; if the coarse coverage index marks it covered, the normal seed still will not recreate its gap. This leaves older truncated sessions dependent on a separate repair run, despite the new cycle seeding logic. Consider scanning the full seedable history or explicitly bounding and documenting which truncations this cycle can recover."
+   }
+  ]
+ },
+ {
+  "bug": "921-B3",
+  "description": "fire_unit_until starts the unit with blocking `mt-run` (which only returns when the unit ends), so the 'trailing phase complete' early-stop can never act and the cutover waits for the whole firing.",
+  "candidates": [
+   {
+    "run": "921-deepseek4-flash-3",
+    "location": "scripts/cutover_common.py:341-362",
+    "title": "`fire_unit_until` cannot stop the firing early \u2014 `mt-run` already blocks until the unit exits",
+    "text": "The whole point of this change (#22) is stated in the docstring: \"a minute firing is unbounded \u2026 a cutover that waits for the unit to END waits for days. It waits for the line it needs instead,\" and the inline comment in `cutover_921_minute_sessions.py:176-179` says \"the unit is stopped once that line lands and the timers own the backfill.\"\n\nThat cannot happen. `deploy/mt-run`'s `start_and_stream` runs `systemctl start --no-block` and then blocks in `while is_running \"${unit}\"; do sleep 2; done` until the unit exits, exiting with its code. `run(...)` here is a synchronous `subprocess.run`, so line 356 (`run([\"mt-run\", *mt_run_args], sudo=True, check=False, stream=True)`) returns only *after* the pass has ended. By the time control reaches `wait_for_unit_or_line` (line 357), `unit_active(unit)` is False, the loop body never executes, and `stop_unit` (line 360) is unreachable in production. `mt-minute-pass.service` carries `TimeoutStartSec=infinity`, so the blocking wait is exactly the days-long wait the change exists to avoid.\n\nThe test cannot catch this: `test_the_minute_firing_stops_once_the_trailing_phase_completes` (`test/unit/test_cutover_921.py:482`) patches `cutover_common.run` to a `MagicMock` and drives `unit_active` from a hand-written list, so the real blocking contract of `mt-run` is never exercised. Either `mt-run` needs a non-blocking start verb, or the stop must b"
+   },
+   {
+    "run": "921-haiku-xhigh-1",
+    "location": "scripts/cutover_common.py:341-363",
+    "title": "Bounded minute firing cannot stop early: the streaming `mt-run` call blocks until the pass ends",
+    "text": "`fire_unit_until` calls `run([\"mt-run\", *mt_run_args], sudo=True, check=False, stream=True)` at line 356. `run()` is a plain `subprocess.run` with no Popen, so the call blocks until `mt-run` exits (lines 65-70). `mt-run minute` does not exit early: after `systemctl start --no-block` it loops `while is_running \"${unit}\"; do sleep 2; done` (deploy/mt-run:127-129). So `wait_for_unit_or_line` (line 357) is only reached after the unbounded minute pass has already ended. That is the ten-hour firing #22 is meant to end. The stop-on-trailing-line path only runs if an operator interrupts `mt-run`.\n\nThe unit tests miss this. `_fire` in `test/unit/test_cutover_921.py#TestBoundedFiringAndRecord` patches `cutover_common.run` to return immediately, so the blocking is never modelled. Fix: start the unit without blocking (Popen, or `systemctl start --no-block` directly) and let the journal poll own the wait. Add a test whose fake `run` blocks."
+   },
+   {
+    "run": "921-haiku-xhigh-1",
+    "location": "scripts/cutover_common.py:341-383",
+    "title": "`fire_unit_until` duplicates `fire_unit`",
+    "text": "Both functions take the journal cursor, record the start, print the streaming notice, run `mt-run`, wait, print the `sudo -v` notice, and run `sudo -v`. The diff copied the `sudo -v` print into `fire_unit`. `wait_for_unit_to_end` and `wait_for_unit_or_line` also repeat the same poll-and-print loop. CLAUDE.md asks for no duplicated logic. One `fire_unit(unit, args, until=None)` covers both, and the fix for the blocking-call finding above naturally unifies them."
+   },
+   {
+    "run": "921-haiku-xhigh-2",
+    "location": "scripts/cutover_common.py:356-358",
+    "title": "fire_unit_until cannot stop a firing early because mt-run blocks until the unit exits",
+    "text": "`fire_unit_until` calls `run([\"mt-run\", *mt_run_args], sudo=True, check=False, stream=True)` and only afterwards calls `wait_for_unit_or_line` (line 357). `deploy/mt-run` does not return while the unit runs. `start_and_stream` issues `systemctl start --no-block` (deploy/mt-run:127), then loops `while is_running \"${unit}\"; do sleep 2; done` (line 129). `subprocess.run` therefore blocks for the whole unbounded firing. By the time the trailing-line check runs, the unit has ended, so `reached and unit_active(unit)` (line 358) is false and `stop_unit` never runs. The cutover still waits for the full backfill, which is the problem #22 was meant to fix.\n\nThe test `test_the_minute_firing_stops_once_the_trailing_phase_completes` mocks `run` and `unit_active`, so it cannot detect this. Fix: start the unit directly with `sudo systemctl start --no-block <unit>` (already allowed by `MT_UNITS`) and poll with `wait_for_unit_or_line`. Add a test that asserts the start call does not block."
+   },
+   {
+    "run": "921-haiku-xhigh-2",
+    "location": "scripts/cutover_common.py:352-355",
+    "title": "Ctrl-C does not leave the script waiting; it aborts it and restarts the timers",
+    "text": "The printed text \"Ctrl-C only detaches, the script keeps waiting\" is not true for the Python process. Nothing in `cutover_common` installs a SIGINT handler, so Ctrl-C raises `KeyboardInterrupt` inside `subprocess.run`, which kills the `mt-run` child and unwinds `main()`. The unwind runs `finally: _release_timers(held)` (scripts/cutover_921_minute_sessions.py:274-275), which restarts the minute and daily timers while the unit may still be running. The same wording exists in the pre-existing `fire()` and `fire_unit()`, but `fire_unit_until` copies it. Catch the interrupt around the firing and wait for the unit (or keep the timers held) instead of releasing them."
+   },
+   {
+    "run": "921-haiku-xhigh-3",
+    "location": "scripts/cutover_common.py:356",
+    "title": "The minute firing is never stopped early because `mt-run` blocks until the unit exits",
+    "text": "`fire_unit_until` calls `run([\"mt-run\", ...], sudo=True, check=False, stream=True)` and only then calls `wait_for_unit_or_line` (line 357). `deploy/mt-run` starts the unit with `systemctl start --no-block` (line 127) and then loops `while is_running \"${unit}\"; do sleep 2; done` (line 129). So `mt-run minute` returns only after the minute unit has stopped. The minute firing is unbounded (backfill runs until quota is gone), so the call at line 356 blocks for the whole firing. By the time line 357 runs, the unit is inactive, and the stop branch at lines 358\u2013360 never acts on a live unit. The result is the ~10-hour firing that #22 was meant to end.\n\nThe test `test/unit/test_cutover_921.py#TestBoundedFiringAndRecord._fire` mocks `run` to return at once and feeds `unit_active` a scripted sequence. It encodes the assumption that `mt-run` returns while the unit is still active, so it cannot catch this.\n\nFix: start the unit without blocking (`sudo systemctl start --no-block mt-minute-pass.service` is already covered by `MT_UNITS`), or run `mt-run minute` as a `Popen` child, poll the journal for the line, stop the unit, then wait for the child. Add a test that fails if the stop happens only after the `mt-run` process has exited."
+   },
+   {
+    "run": "921-sol-1",
+    "location": "scripts/cutover_common.py:356-360",
+    "title": "Journal monitoring starts only after the pass exits",
+    "text": "`run()` uses blocking `subprocess.run()`. Meanwhile, `deploy/mt-run:129` waits until the service finishes. Consequently, `wait_for_unit_or_line()` cannot observe trailing completion or stop backfill while it runs\u2014the original unbounded wait remains. Start the service non-blockingly before polling. Add a regression test that exercises the wrapper\u2019s blocking behavior."
+   },
+   {
+    "run": "921-sol-2",
+    "location": "scripts/cutover_common.py:356-360",
+    "title": "Bounded firing waits for the entire pass before polling",
+    "text": "`run()` uses blocking `subprocess.run()`. Meanwhile, `deploy/mt-run:129` waits until the service exits. Consequently, journal polling and the early-stop logic cannot execute while the pass runs\u2014the cutover still waits through unbounded backfill. Start the service non-blockingly, then monitor its journal. Add a test that exercises the real wrapper\u2019s blocking behavior rather than mocking `run()` to return immediately."
+   },
+   {
+    "run": "921-sol-3",
+    "location": "scripts/cutover_common.py:356-357",
+    "title": "The bounded firing still waits for the entire pass",
+    "text": "`run()` uses blocking `subprocess.run()`. The invoked `deploy/mt-run` waits for the service to finish in `start_and_stream()` (lines 127\u2013129). Consequently, journal polling cannot begin while the pass is running, and the new stop-on-trailing-completion behavior does not work. Start the unit non-blockingly before polling. Add a test exercising the wrapper\u2019s blocking behavior rather than mocking it away."
+   },
+   {
+    "run": "921-sonnet-high-2",
+    "location": "scripts/cutover_common.py:342-355",
+    "title": "`fire_unit_until` blocks until the unit ends, so the early stop never runs",
+    "text": "`fire_unit_until` calls `run([\"mt-run\", *mt_run_args], sudo=True, check=False, stream=True)` and only then calls `wait_for_unit_or_line`. `run` wraps a blocking `subprocess.run`. `deploy/mt-run` `start_and_stream` (lines 127-143) starts the unit and loops `while is_running \"${unit}\"; do sleep 2; done`. So `mt-run minute` returns only after the pass has ended. By the time the journal-line polling starts, the unit is already gone, and `reached and unit_active(unit)` is never true. The ten-hour firing that issue #22 set out to fix is unchanged.\n\nThe new tests patch `cutover_common.run` and `unit_active`, so they can't see this. The function needs to start the unit without waiting. Options are `systemctl start --no-block` through the sudoers-listed commands, or running `mt-run` under `Popen` and polling while it runs. The tests should then model a blocking `mt-run`."
+   },
+   {
+    "run": "921-sonnet_notools-2",
+    "location": "scripts/cutover_common.py:41-62",
+    "title": "Narration log uses module-global state and truncates on open",
+    "text": "`_LOG_FILE` is a mutable global. `start_log` overwrites the file, and `say` reopens it on every call. Streamed subprocess output and the bare `print` lines in `wait_for_unit_or_line` and `fire_unit_until` never reach the log. The docstring calls the narration \"the cutover's report\", but the log is incomplete. The timestamped filename makes the truncation low risk."
+   }
+  ]
+ }
+]

@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Visible-range effect is gated on a ref that is not a dependency, so the advertised seam does not activate on the first series",
+      "description": "The effect reads `seriesCountRef.current === 0` as its data guard but lists only `[mount.ready, chart, range]` as dependencies. `seriesCountRef` is a ref (src/chart/use-chart-provider.ts:72), written by `series.onAdded`/`onRemoved` (lines 147\u2013151); writing it does not re-render and cannot re-run an effect. So when the count goes 0 \u2192 1 while `range` is unchanged, the effect does not re-run and `chart.setVisibleRange(range)` is never issued.\n\nThe comment at lines 328\u2013338 asserts \"The effect and its dependency array stay wired as the seam initiative 120 activates the moment it adds the first series.\" That is not what the code does: it activates on the *next* range change after a series exists. The initiative-120 flow this seam is built for (range set \u2192 data fetched \u2192 `addSeries`) would therefore apply the range only if the range happens to change again afterwards. The test that appears to cover this, `src/test/use-chart-provider.translation.test.tsx:135-145` (\"applies the range once a series exists\"), passes only because it calls `setRange` *after* `addSeries` \u2014 it exercises the incidental ordering, not the claim in the comment. The current-slice behaviour is still correct (the chart is empty by design, so the call is always withheld), which is why this is a CONCERN rather than a FAIL.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:340-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`ready`/`error` \"xor\" and \"first error\" comments contradict the code they document",
+      "description": "Two doc claims are contradicted by the implementation:\n\n- `src/chart/chart-operations.ts:83-85` (repeated at `src/chart/use-chart-provider.ts:84-86`) states \"They are never independent \u2014 a chart is ready xor failed \u2014 so they are committed together in a single state update.\" But `setOperationError` (src/chart/use-chart-provider.ts:96-99) deliberately preserves `ready: true` while setting `error`, and the suite asserts exactly that state (`src/test/use-chart-provider.errors.test.tsx`: `{ ready: 'true', error: 'resize exploded' }`). A live chart with an operation error is a supported, tested state \u2014 it is not xor.\n- `src/chart/chart-operations.ts:77` documents `error` as \"The first error from any provider operation, or null.\" `setOperationError` overwrites unconditionally, so the field holds the *most recent* error, not the first. The test at `src/test/use-chart-provider.errors.test.tsx` (\"keeps the first error rather than being reset by a later success\") only proves a success does not clear it; a later failure does replace it.\n\nBoth comments are load-bearing for maintainers \u2014 the xor wording invites a future \"fix\" that would break the intentional operation-error state, and the \"first error\" wording misdescribes the retention rule.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/chart-operations.ts:77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Playwright config header still claims the e2e run exercises the production artifact",
+      "description": "The header says \"Specs run against the PRODUCTION build served by `vite preview` (not the dev server) so e2e exercises the same artifact `pnpm build` ships,\" but the `webServer.command` in this diff (playwright.config.ts:44) is now `pnpm build --mode e2e && pnpm preview --mode e2e ...`. With `MODE=e2e` the artifact is *not* the one a default `pnpm build` produces, and it is not the one that ships. The new inline comment at lines 35\u201343 explains the gate correctly, so the file now contradicts itself.\n\nThe consequence beyond the comment: nothing in the automated suite builds or exercises the production-mode bundle any more, so a production-only regression (e.g. a mistake in the harness `MODE` gate at src/routes/router.ts:44, or any mode-conditional branch) is no longer caught by CI. The slice design verifies the production gate with a manual `grep` over `dist/assets/*.js`, which is not reproducible in CI. Either correct the header or add a CI check that builds the default mode and asserts the harness is absent.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "playwright.config.ts:6-7"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Smoke spec points readers at the wrong chart spec",
+      "description": "The comment says \"The chart itself is asserted in chart-render.spec.ts; this spec covers the shell around it.\" `e2e/chart-render.spec.ts:14` navigates to `/__chart-harness` (the slice-102 harness), not to `/`. The product chart at `/` is asserted by `e2e/chart-live.spec.ts`. The same drift appears at src/routes/routes.tsx:4, where `RootLayout` is described as rendering \"the shell chrome and an `<Outlet/>`\" although its body (line 15) renders only `<Outlet />`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "e2e/smoke.spec.ts:10"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The route's error region is never exercised by any test",
+      "description": "The `{error !== null && \u2026}` block is reachable (the hook sets `error` on mount failure and on any post-mount operation failure) but no test renders it: `grep` for `Chart error` across `src/test/` and `e2e/` finds only the component itself and three e2e assertions of `toHaveCount(0)`. The hook's `error` state is well covered at the hook level, but the mapping from `error` to user-visible output \u2014 the part that satisfies \"surface, don't swallow\" for the product route \u2014 is asserted nowhere. A single component test forcing a `create` throw and asserting the alert text would close it.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/routes/chart-route.tsx:96-105"
+    },
+    {
+      "severity": "PASS",
+      "title": "Lifecycle, teardown ordering, and StrictMode handling verified against the implementation",
+      "description": "I read the full hook rather than the hunk. `teardown` (line 192) sets `disposedRef` before disposing, disposes each retained `Unsubscribe` in a per-disposer `try/catch`, disconnects the observer, destroys the provider in its own `try/catch`, and nulls `providerRef`; both the mount-failure path (line ~308) and the effect cleanup (line 317) route through it, so there is one disposal path. `disposers` and `observer` are declared before any `teardown()` invocation, so the forward references in the closure are safe, and the per-`push` retention (lines ~283, ~290) correctly avoids the argument-evaluation leak the design's Outcomes section describes. The StrictMode test's \"creates \u2212 1 destroys at rest\" invariant matches this code.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:192-325"
+    },
+    {
+      "severity": "PASS",
+      "title": "Facade extraction preserves the contract, including the `getCapability` generic",
+      "description": "`buildChartOperations` forwards every member through the injected `runGuarded` and never touches the provider directly, so `create`/`destroy` remain unreachable from the returned object \u2014 asserted behaviourally at `src/test/use-chart-provider.facade.test.tsx` (`'create' in surface === false`). The generic arrow on `getCapability` is the correct form to keep `K` flowing to the return type rather than collapsing to `CapabilityMap[CapabilityKey]`, and `chart-operations.ts` declares the matching `CapabilityMap[K] | undefined`. `toError` narrows `unknown` per the TypeScript rules rather than assuming `Error`, and there is no `any` anywhere in the new source (only `unknown` in the test spy).",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/chart/chart-facade.ts:100-103"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Visible-range effect is gated on a ref that is not a dependency, so the advertised seam does not activate on the first series",
+      "location": "src/chart/use-chart-provider.ts:340-345",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`ready`/`error` \"xor\" and \"first error\" comments contradict the code they document",
+      "location": "src/chart/chart-operations.ts:77",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Playwright config header still claims the e2e run exercises the production artifact",
+      "location": "playwright.config.ts:6-7",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Smoke spec points readers at the wrong chart spec",
+      "location": "e2e/smoke.spec.ts:10",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The route's error region is never exercised by any test",
+      "location": "src/routes/chart-route.tsx:96-105",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Lifecycle, teardown ordering, and StrictMode handling verified against the implementation",
+      "location": "src/chart/use-chart-provider.ts:192-325",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Facade extraction preserves the contract, including the `getCapability` generic",
+      "location": "src/chart/chart-facade.ts:100-103",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:51:54.821388",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 656018,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 1267179,
+  "cached_tokens": 1149184,
+  "cache_write_tokens": null,
+  "completion_tokens": 166307,
+  "reasoning_tokens": 161518,
+  "duration_seconds": 1481.9417192919645,
+  "cost_usd": 0.1054786,
+  "cost_basis": "alias_pricing"
+}

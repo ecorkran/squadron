@@ -1,0 +1,434 @@
+[
+ {
+  "bug": "932-B1",
+  "description": "_collect_turns ends a dispatch once the result is in and the background-agent ledger is empty, but a completion notice arriving mid-turn clears the agent from the ledger before the follow-up turn it triggers, so the dispatch returns early and loses its artifact.",
+  "candidates": [
+   {
+    "run": "932-deepseek4-flash-2",
+    "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._collect_turns",
+    "title": "`except TimeoutError` around `_read_turn_with_retry` conflates the dispatch idle timer with any lower-layer timeout",
+    "text": "`TimeoutError` in 3.11+ is both `asyncio.TimeoutError` and (since 3.10) the alias of `socket.timeout`, and it is an `OSError` subclass. The handler is deliberately meant to catch the idle timer raised by `async with asyncio.timeout(idle_s)` inside `_read_turn`, but it wraps the entire `_read_turn_with_retry(...)` call, so a `TimeoutError` originating anywhere beneath it \u2014 SDK transport/socket, or an `asyncio.wait_for` inside the SDK \u2014 is caught by the same handler. When that happens on a waiting turn, the code calls `_stop_background`, kills the background agents, and returns partial text as if the run had merely gone idle, turning a transport failure into a successful-looking partial dispatch. That is the \"silent failure path\" shape the failure-mode rules call out.\n\nThe mirror case makes the contract visible: on a *foreground* turn `idle_s` is `None` so `asyncio.timeout` can never fire, and a `TimeoutError` from below is not covered by any of `dispatch()`'s `except` clauses (`CLINotFoundError`, `ProcessError`, `CLIConnectionError`/`CLIJSONDecodeError`/`ClaudeSDKError`), so it escapes as a bare `TimeoutError` rather than the `ProviderError` the docstring promises. Narrowing the catch to the timer's own signal \u2014 or converting it at the `asyncio.timeout` site so the two are distinguishable \u2014 would keep both cases honest. I have not inspected the SDK's internals from this checkout"
+   },
+   {
+    "run": "932-deepseek4-flash-2",
+    "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._read_turn",
+    "title": "The `receive_response()` iterator is abandoned without `aclose()` on the timeout and retry paths",
+    "text": "`_read_turn` builds a fresh `stream = aiter(self.client.receive_response())` on every attempt and drives it with `anext`. There is no `finally`/`aclose()`. Two paths drop a half-consumed generator:\n\n- the idle timeout, where `asyncio.timeout` raises out of the `anext` and the exception propagates through `_collect_turns`;\n- the retry loop in `_read_turn_with_retry`, which starts a *new* `receive_response()` after a throttle while the previous generator is still open.\n\nThis got materially wider with the slice: the abandoned-on-throttle case was already rare, but the timeout path is now a designed, reachable outcome. On that path `_stop_background` immediately issues `stop_task(task_id)` against the same client while a dangling `receive_response()` generator still holds a read on the transport, and `dispatch()` then returns normally, leaving the generator to garbage collection. Closing the iterator (`contextlib.aclosing`, or consuming it inside a `try/finally`) on both exits would bound the resource the timeout path leaves behind."
+   },
+   {
+    "run": "932-deepseek4-flash-2",
+    "location": "src/squadron/pipeline/sdk_session.py:452-461",
+    "title": "The same config keys are resolved against two different project roots within one run",
+    "text": "`open_pipeline_session` reads `pipeline.user_settings` and `pipeline.auto_memory` with `cwd = str(Path.cwd())`, and `_background_idle_timeout_s` later resolves `pipeline.background_idle_timeout_s` from `self.base_options.cwd or Path.cwd()` \u2014 which is the process cwd, because that is what `open_pipeline_session` stored. The one-shot path resolves the same two keys from the step's cwd: `one_shot_dispatch_with_telemetry` uses `config_cwd = cwd or \".\"` (`src/squadron/pipeline/actions/dispatch.py:143`), where `cwd` is `context.cwd`, i.e. `execute_pipeline`'s `effective_cwd`.\n\nWhen a run is started with a `cwd` other than the process cwd (a worktree, or `--cwd` pointing elsewhere), a `.squadron.toml` at that root is consulted by dispatch but not by the persistent session, so a single run can answer \"should this load user settings?\" and \"should auto-memory be on?\" differently per step. `load_config` merges user config with `project_config_path(cwd)`, so the divergence is real file resolution, not a formatting difference. Passing the run's effective cwd into `open_pipeline_session` (or reading the keys once at run scope) would restore one value from one source."
+   },
+   {
+    "run": "932-haiku-xhigh-1",
+    "location": "src/squadron/pipeline/sdk_session.py:215-260",
+    "title": "No load test covers the new background-wait path",
+    "text": "`tests/load/` exists (`test_grep_timeout.py`, `test_worktree_concurrency.py`), and the project rule requires at least one load test for code on network or concurrency paths, asserting on latency, throughput, or resource bounds. `_collect_turns` adds a per-message idle timer, a ledger of concurrent background agents, and a stop fan-out. Every new test runs in-process against `ScriptedClient` with sleeps of 0.05 to 0.15 s, so none of them measures a bound. The slice doc does not mention a load test. Whether this path counts as network or concurrency is a judgment call, and I would treat it as one. Fix: add a load test that drives many background agents through `dispatch()` and asserts both the wall-clock bound and that the idle stop fires within the configured window."
+   },
+   {
+    "run": "932-haiku-xhigh-1",
+    "location": "src/squadron/pipeline/sdk_session.py:1",
+    "title": "`sdk_session.py` is 472 lines",
+    "text": "The project guide asks for source files around 300 lines where practical. The slice split `sdk_turns.py` out \"for size\", but the remaining module still holds the client lifecycle, rotation and seeding, rate-limit retry, the background wait and stop loop, and the pipeline session builder. The wait machinery (`_collect_turns`, `_read_turn_with_retry`, `_read_turn`, `_background_idle_timeout_s`, `_stop_background`) is about 130 lines and is the obvious next extraction. It needs only the client, so it can move to `sdk_turns.py` or a sibling module without a new dependency."
+   },
+   {
+    "run": "932-haiku-xhigh-2",
+    "location": "src/squadron/pipeline/sdk_session.py:344",
+    "title": "`background_tasks_stopped` counts attempts, not successful stops",
+    "text": "`_stop_background` logs and continues when `stop_task` fails (sdk_session.py:336-341). It then sets `self.background_tasks_stopped = len(ids)` (line 344) and logs every description as \"stopped\" (lines 345-349). A failed stop is therefore reported as stopped in the step metadata (dispatch.py:369) and in the WARNING, even though the agent may still be running. The test `test_stop_task_failure_is_logged_and_next_id_still_stopped` (tests/pipeline/test_sdk_session.py, `TestBackgroundIdleTimeout`) checks the ERROR log and the call order, but not the count. Count only successful stops and name only those in the WARNING, or report failures separately."
+   },
+   {
+    "run": "932-haiku-xhigh-2",
+    "location": "src/squadron/pipeline/sdk_session.py:323",
+    "title": "Synchronous config reads run on the event loop in async functions",
+    "text": "`_background_idle_timeout_s` is called from the async `_collect_turns` (sdk_session.py:224) and calls `get_typed_config`, which reads TOML synchronously. The same pattern appears in the async `one_shot_dispatch_with_telemetry` (dispatch.py:142-153) and the async `open_pipeline_session` (sdk_session.py:455-461). `python.md` requires synchronous code in an async function to run in under 1 ms worst case. This can be exceeded: `_config_dir()` (src/squadron/config/manager.py:24-32) can run `shutil.copytree` on first use after a config migration. The steady-state cost is small, but the rule is explicit and these are new call sites. Read the config at a synchronous boundary, or move the read to `asyncio.to_thread`."
+   },
+   {
+    "run": "932-haiku-xhigh-2",
+    "location": "src/squadron/pipeline/sdk_session.py:215",
+    "title": "`sdk_session.py` is 473 lines, and the session class also does turn collection",
+    "text": "The file is 473 lines against the roughly 300-line guideline. `SDKExecutionSession` now covers lifecycle (connect, reconnect, seeding), turn collection (`_collect_turns`, `_read_turn_with_retry`, `_read_turn`), the idle-timeout stop (`_stop_background`), and settings policy. `DispatchTurns` was already split into `sdk_turns.py`, but that module is documented as having \"no client, no I/O\", so the client-bound loop cannot move there without breaking that contract. A sibling module that takes the client as a parameter would keep the session class to lifecycle."
+   },
+   {
+    "run": "932-haiku-xhigh-2",
+    "location": "src/squadron/pipeline/sdk_session.py:215",
+    "title": "No load-tier test for the new wait and idle-timeout path",
+    "text": "`python.md` requires at least one `tests/load/` test for code on concurrency or network paths, asserting latency, throughput, or resource bounds, and requires CI to gate it. The background-wait loop with per-message `asyncio.timeout`, the idle stop, and the leftover-turn discard fit that description. `tests/load/` contains `test_grep_timeout.py` and `test_worktree_concurrency.py`, and nothing for this slice. Earlier reviews under `project-documents/user/reviews/` waived load tests when the design stated no NFR, and this slice's design states none, so the PM may decide this is a waiver. Either add a load test or record the waiver."
+   },
+   {
+    "run": "932-haiku-xhigh-3",
+    "location": "src/squadron/pipeline/sdk_session.py:344",
+    "title": "Stopped-agent count includes agents whose stop call failed",
+    "text": "`_stop_background` catches a failed `stop_task` per id and continues, but then sets `self.background_tasks_stopped = len(ids)` unconditionally. The count is written into step metadata as `background_tasks_stopped`, and the warning at line 345 lists every id as \"stopped\". If one of two stops fails, the metadata reports 2. The test `test_stop_task_failure_is_logged_and_next_id_still_stopped` in `tests/pipeline/test_sdk_session.py` checks the logged error and the call order, but never asserts the count. Track successes separately and assert the count in that test."
+   },
+   {
+    "run": "932-haiku-xhigh-3",
+    "location": "src/squadron/pipeline/sdk_session.py:323",
+    "title": "Synchronous config-file reads run on the event loop",
+    "text": "`_background_idle_timeout_s` is called from the async `_collect_turns` (line 224). `open_pipeline_session` (lines 458\u2013460) and `one_shot_dispatch_with_telemetry` (`dispatch.py:147,153`) are also async and call `get_typed_config`. Each call runs `load_config`, which does two synchronous `open()` and `tomllib` reads (`config/manager.py:82\u2013102`). The project rule requires that synchronous code in async functions be guaranteed under 1 ms, and file reads cannot guarantee that. The same pattern predates this diff (`openai/provider.py:63`, `tools/cf_tools.py:221`), but the new call sites add to it. Read the config once in `open_pipeline_session`, store the value on the session, and reuse it. Use `asyncio.to_thread` for any remaining reads."
+   },
+   {
+    "run": "932-haiku-xhigh-3",
+    "location": "src/squadron/pipeline/sdk_session.py",
+    "title": "`sdk_session.py` is 473 lines and holds too many responsibilities",
+    "text": "The project guideline is about 300 lines per source file. The class now owns rotation, the turn-read loop, rate-limit retry, the idle timer, background-agent stopping, and the settings builder. The read loop (`_collect_turns`, `_read_turn_with_retry`, `_read_turn`, `_stop_background`, roughly lines 215\u2013349) depends only on the client and the turn ledger. Move it to a module that takes the client as a parameter, next to `sdk_turns.py`."
+   },
+   {
+    "run": "932-haiku-xhigh-3",
+    "location": "src/squadron/pipeline/sdk_session.py:336",
+    "title": "Blanket `except Exception` that does not re-raise",
+    "text": "`_stop_background` catches `Exception` with `# noqa: BLE001`, logs with `logger.exception`, and continues. Project rule (a) requires re-raising after the log, and rule (b) requires a specific exception type. The comment gives a reason, but the rule does not allow a blanket catch in this position. The failure is logged but its outcome is not recorded (see the count finding above). Either record failures and surface them in the dispatch result, or catch the narrowest type the SDK actually raises."
+   },
+   {
+    "run": "932-haiku-xhigh-3",
+    "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._collect_turns",
+    "title": "No load test for the new concurrency path",
+    "text": "The project's Python rules require at least one `tests/load/` test for code on concurrency or network paths, and assert latency or resource bounds there. This change adds an idle-timer read loop with stop and reconnect behavior, and no `tests/load/` file is in the diff. The slice's task review (`project-documents/user/reviews/932-review.tasks.pipeline-sdk-session-\u2026md`, line 109) judged no load test necessary, but on NFR grounds, which is narrower than the rule. Either add a bounded-latency load test with a scripted client, or record an explicit exception against the rule."
+   },
+   {
+    "run": "932-luna-1",
+    "location": "src/squadron/pipeline/sdk_session.py:248-267",
+    "title": "Background completion can discard the dispatch\u2019s own result",
+    "text": "When a background follow-up arrives, `_collect_turns` returns as soon as the ledger is clear and the follow-up result is seen. But after the dispatch\u2019s own result, the follow-up turn may contain only a task notification and no `ResultMessage`; `_read_turn` then returns `None`, and the `ledger.active` check is false, so dispatch returns the text accumulated so far. It can also return after a notification clears the ledger but before the follow-up turn\u2019s result arrives. In either case, the follow-up text/result may be incomplete or omitted. Keep waiting for the relevant turn boundary, and test the notification-only and notification-before-result cases."
+   },
+   {
+    "run": "932-luna-1",
+    "location": "src/squadron/pipeline/sdk_session.py:338-355",
+    "title": "Failed background-task stops are reported as stopped",
+    "text": "`_stop_background` logs `stop_task` failures but then clears every task from the ledger and sets `background_tasks_stopped` to the number it attempted to stop. A timed-out or rejected stop request does not establish that the agent stopped; the dispatch then returns success with potentially running agents and metadata claiming they were stopped. Preserve failed task state and report attempted versus confirmed stops distinctly, or fail the dispatch when cleanup cannot be confirmed."
+   },
+   {
+    "run": "932-luna-2",
+    "location": "src/squadron/pipeline/sdk_session.py:191-220",
+    "title": "Add load coverage for background-task waiting",
+    "text": "This introduces network-stream waiting, timeout handling, and remote task stopping, but the added coverage shown is scripted unit testing; there is no realistic load test exercising concurrent/background tasks and asserting latency or resource bounds. The project\u2019s Python rules require a CI-gated load test for concurrency and network paths."
+   },
+   {
+    "run": "932-luna-3",
+    "location": "src/squadron/pipeline/sdk_session.py:245-258",
+    "title": "Dispatch can mistake an earlier background turn for the current response",
+    "text": "`_collect_turns` returns as soon as it sees an own `ResultMessage` and the ledger is empty. If a previous dispatch left a background agent running, its injected follow-up can arrive after the new dispatch\u2019s own result. That result returns immediately, leaving the injected turn unread; the next dispatch may then collect or discard it as stale. This undermines the new wait-and-join behavior. Account for outstanding work from earlier dispatches before deciding the current dispatch is complete."
+   },
+   {
+    "run": "932-sol-1",
+    "location": "src/squadron/pipeline/sdk_session.py:252-253",
+    "title": "Task completion before the original result drops the continuation",
+    "text": "A task can finish before the original turn\u2019s result while its notification still triggers a subsequent parent continuation. The empty ledger then causes dispatch to return prematurely. Reproduced with the project\u2019s scripted client: start \u2192 notification \u2192 original result returned `\"Waiting\"` without reading the queued `\"Artifact written\"` continuation. Track pending continuations or authoritative session-idle state, and add this ordering as a regression test."
+   },
+   {
+    "run": "932-sol-1",
+    "location": "src/squadron/pipeline/sdk_session.py:223-229",
+    "title": "Background timeout also interrupts active parent continuations",
+    "text": "The timeout remains enabled throughout `_read_turn`, even after a notification clears the last background task and the parent resumes foreground work. A slow parent operation can therefore cause dispatch to return partial text as success while that operation remains unfinished. Reproduced with a notification followed by a delayed continuation: dispatch returned `\"Waiting\\nWorking\"` before its final result and logged a timeout with no agents to stop. Disable the background-only timer once no tracked tasks remain, and test a slow continuation after task completion."
+   },
+   {
+    "run": "932-sol-2",
+    "location": "src/squadron/pipeline/sdk_session.py:252-253",
+    "title": "Completed tasks can still have an unread continuation turn",
+    "text": "An empty task ledger does not prove the dispatch is finished. A task notification can arrive before the human-origin result, while its parent continuation remains pending. This branch returns prematurely; the next dispatch then discards that continuation as leftover text. Reproduced with the existing scripted client: dispatch returned `\"Waiting.\"` without reading the queued final answer. Track pending continuations or authoritative session-idle state, and add this ordering as a regression test."
+   },
+   {
+    "run": "932-sol-2",
+    "location": "src/squadron/pipeline/sdk_session.py:297-301",
+    "title": "Background timeout also interrupts foreground continuation work",
+    "text": "Once a background-wait turn starts, `idle_s` remains applied even after a terminal notification clears the ledger and the parent resumes foreground work. A slow continuation therefore times out and returns partial text as success, contrary to the foreground-no-timer policy. Reproduced with a completed task followed by a delayed parent answer: dispatch returned only `\"Starting final work.\"` with zero tasks stopped. Disable the background timer when foreground work resumes and test this transition."
+   },
+   {
+    "run": "932-sol-3",
+    "location": "src/squadron/pipeline/sdk_session.py:299-308",
+    "title": "Background timeout also interrupts foreground continuation work",
+    "text": "Once `_read_turn` receives an idle timeout, it applies that timeout to every subsequent message wait\u2014even after a task notification clears the ledger and the parent starts its continuation. Reproduced: notification \u2192 parent text \u2192 slow foreground work returns partial text as success, with no tasks stopped. Disable the background timer when foreground work resumes and test this transition."
+   },
+   {
+    "run": "932-sol-3",
+    "location": "src/squadron/pipeline/sdk_session.py:251-252",
+    "title": "Completed tasks can still owe a continuation turn",
+    "text": "An empty active-task ledger does not establish that the response is complete. If a task notification arrives before the dispatch\u2019s own result, this branch returns without consuming the parent\u2019s pending continuation. Reproduced with the scripted client: only \u201cWaiting\u201d was returned; the subsequent \u201cWrote design\u201d turn remained unread. Track pending continuations or authoritative session-idle state, and cover this ordering."
+   },
+   {
+    "run": "932-sonnet-1",
+    "location": "tests/pipeline/test_sdk_session.py (TestBackgroundIdleTimeout)",
+    "title": "Timing-based tests rely on wall-clock sleeps",
+    "text": "The idle-timeout tests patch the timeout to 0.05s and script a 0.15s sleep. `test_slow_foreground_turn_has_no_timer` sleeps 0.1s. The 3x margin can fail on a loaded CI box. Making the timeout much smaller than the sleep (for example 0.01s against 0.5s), or driving the clock deterministically, would remove the flake risk."
+   },
+   {
+    "run": "932-sonnet-high-3",
+    "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._collect_turns",
+    "title": "`TimeoutError` catch in `_collect_turns` can mistake a foreign timeout for an idle timeout",
+    "text": "`except TimeoutError` wraps all of `_read_turn_with_retry`, not only the `asyncio.timeout(idle_s)` block in `_read_turn`. `_read_turn_with_retry` also covers the retry `asyncio.sleep` and the SDK iteration. If anything inside raises a `TimeoutError` of its own, it is handled as \"background agents idle\". The agents are stopped and the dispatch returns partial text as if it succeeded, with a misleading warning. Narrow the handler. For example, have `_read_turn` convert its own timeout into a dedicated `IdleTimeout` exception and catch that. A bare `TimeoutError` can then still propagate as a real failure."
+   },
+   {
+    "run": "932-sonnet-high-3",
+    "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._background_idle_timeout_s",
+    "title": "Config reads inside the session and dispatch hot path (dependency inversion)",
+    "text": "`SDKExecutionSession._background_idle_timeout_s` and `open_pipeline_session` call `get_typed_config` directly. `one_shot_dispatch_with_telemetry` in `pipeline/actions/dispatch.py` does the same. These are low-level classes and functions that reach into the global config store, so their tests must `patch(f\"{_MOD}.get_typed_config\", ...)`. The review rules treat that kind of monkeypatching as a sign of inverted dependencies. The timeout reads from `base_options.cwd or Path.cwd()` on every dispatch with a waiting agent. Resolve the three pipeline settings once at the composition root (executor or `open_pipeline_session`). Pass them into the session as constructor fields, for example `idle_timeout_s`. Pass `auto_memory` and `user_settings` into `one_shot_dispatch_with_telemetry` the same way. This also lets one place validate the timeout value."
+   },
+   {
+    "run": "932-sonnet-high-3",
+    "location": "src/squadron/pipeline/sdk_session.py",
+    "title": "`sdk_session.py` has grown large and mixes responsibilities",
+    "text": "The diff adds turn collection, rate-limit retry, idle timeout, background-agent stop, an unusable-session state, seeding and settings policy to `SDKExecutionSession`. Moving the pure bookkeeping into `sdk_turns.py` was the right call. The stream-reading loop (`_collect_turns`, `_read_turn_with_retry`, `_read_turn`, `_stop_background`, about 100 lines) still lives in the session class. It is also hard to follow: `_collect_turns` has five exit paths and mutates `turns` flags (`own_result_seen`, `waiting_logged`, `progressed`) from outside. That is Law of Demeter pressure and works against the project's roughly 300-line file guideline. Consider moving the read loop into `DispatchTurns` or a small collaborator that takes the stream as input."
+   },
+   {
+    "run": "932-sonnet_notools-1",
+    "location": "src/squadron/pipeline/sdk_session.py#_background_idle_timeout_s",
+    "title": "Blocking config file reads inside async paths",
+    "text": "`get_typed_config` loads and parses TOML files synchronously. It is now called from `async def` code in three places: `SDKExecutionSession._background_idle_timeout_s`, `open_pipeline_session`, and `one_shot_dispatch_with_telemetry` (two reads each). The Python rules require synchronous code inside awaitables to run in under 1ms in the worst case. Two small TOML reads usually meet that, but slow or networked home directories do not guarantee it. Resolve the settings once at pipeline start and pass them in, or wrap the reads in `run_in_executor`. Reading the config once per session rather than per dispatch would also fit the project's \"one value, one source\" intent."
+   },
+   {
+    "run": "932-sonnet_notools-3",
+    "location": "src/squadron/pipeline/sdk_session.py#_collect_turns",
+    "title": "Wait loop and idle-timeout path ship without a load or latency test",
+    "text": "The project's Python rules require a load test for code on concurrency or event-loop paths. `dispatch` now has a per-message `asyncio.timeout`, a stream re-read loop and `stop_task` cleanup. The new tests use `ScriptedClient` with small sleeps (0.05\u20130.15 s). They show the logic works but don't assert bounds on latency or resource use. This is worth adding, but it shouldn't block the change."
+   },
+   {
+    "run": "932-sonnet_notools-3",
+    "location": "src/squadron/pipeline/sdk_session.py#_collect_turns",
+    "title": "`TimeoutError` handler in the wait loop can mistake other timeouts for idle expiry",
+    "text": "While background agents are running, `_collect_turns` catches any `TimeoutError` from `_read_turn_with_retry` and treats it as an idle timeout. It stops the agents and returns the partial text. If the SDK or CLI client raises its own `TimeoutError` inside `receive_response()`, the handler also swallows that. The warning then says \"no activity for Ns\", which would be misleading. Consider scoping the timeout, for example by checking that `asyncio.timeout(...).expired()` is true before treating it as an idle timeout. Let other `TimeoutError`s propagate."
+   }
+  ]
+ },
+ {
+  "bug": "197-B1",
+  "description": "A slice merged into the target with unchecked task boxes still reads as open in cf, so batch selection (cf.slices_ready_to_implement) reselects it and item resume flags its dependents as incomplete; both look only at cf status, not git.",
+  "candidates": [
+   {
+    "run": "197-deepseek4-flash-1",
+    "location": "src/squadron/pipeline/item_resume.py#resume_item",
+    "title": "A dependency cycle (or a bad plan arg) escapes `resume_item` as a traceback",
+    "text": "The module docstring states the CLI-facing contract explicitly: \"Every refusal names the fact that refused it,\" and `resume_item`'s own docstring says \"never raises for an expected refusal.\" Its handler chain, however, catches only `_Stop`, `GitEnvironmentError` and `OSError`. `_resume_locked` calls `evaluate_each_source(source, params, cf_client)`, which invokes the source function; `_cf_slices_ready_to_implement` in `src/squadron/pipeline/sources.py` deliberately raises `ValueError` for a dependency cycle (and re-logs it at ERROR before re-raising), and `_plan_arg` raises `ValueError` for a plan that is not all digits. Neither is a `_Stop`, a `GitEnvironmentError`, or an `OSError`, so the exception propagates out of `resume_item`, out of `handle_item_resume` (which only catches `typer.Exit`), and out of the Typer command as an unhandled traceback rather than a `REJECTED` outcome with a named reason. The cycle path is reachable in production: a plan with a cyclic `dependencies:` frontmatter pair makes every `sq run implement-plan <plan>` fail, and `--item` then fails differently. Converting these to `_Stop(ResumeExit.REJECTED, ...)` (or adding a `ValueError` arm) would keep the documented contract true."
+   },
+   {
+    "run": "197-deepseek4-flash-1",
+    "location": "src/squadron/pipeline/item_resume.py#_select_item",
+    "title": "A git timeout in `_select_item` is reported as \"not merged\"",
+    "text": "```python\nmerged = run_git([\"merge-base\", \"--is-ancestor\", branch, target], cwd=cwd)\nif merged is not None and merged.returncode == 0:\n```\n\n`run_git` returns `None` when git timed out or could not run \u2014 that is exactly the condition `squadron/pipeline/git_ops.py` treats as an unknown state everywhere else (`verify_git_state` counts \"git timed out or could not run\" as a failure; `_rev_count` raises `GitStateUnknownError`). Here `None` falls through and is reported to the operator as `status complete but {branch} is not merged into {target}`. The outcome is fail-safe (nothing runs), but the reason is a guess presented as a fact, which violates \"Never use silent fallback values\" and \"get the actual error message before diagnosing\": the operator will go looking for an unmerged branch when the real problem is a hung git. Distinguishing `result is None` (unanswerable \u2192 HALTED/GitStateUnknownError) from `returncode == 1` (genuinely not merged) matches the convention the rest of `git_ops` follows."
+   },
+   {
+    "run": "197-deepseek4-flash-3",
+    "location": "src/squadron/pipeline/item_resume.py#resume_item",
+    "title": "`resume_item` reports every `OSError` as a report-write failure",
+    "text": "`resume_item` wraps the whole locked body in `except OSError as exc: return ResumeOutcome(ResumeExit.HALTED, f\"cannot write the batch report: {exc}\")`. Only one of the OSErrors that can reach that handler comes from a report write. `_resume_locked` also runs `state_manager.load` (`state.py` `path.read_text`), `load_pipeline` (`open(path)`), `evaluate_each_source` \u2192 `_review_flag` \u2192 `read_frontmatter` (`Path.read_text`), and `run_git` plumbing \u2014 any of which can raise `OSError` (EACCES on a runs dir, a vanished design file, a full disk during a state write). In those cases the operator is told \"cannot write the batch report\", which names a cause that was never established, and `ResumeExit.HALTED` folds a possibly-transient read failure into the same bucket as a mid-item git halt. The design's D12 row (\"Report temp write or rename | OSError | logger.exception, then re-raised \u2026 ERROR with the path\") is narrower than what this handler actually catches. Catch the report-write failure where it is raised (or catch a dedicated error from `BatchReport.write`) and let other OSErrors name their own failure."
+   },
+   {
+    "run": "197-haiku-xhigh-1",
+    "location": "src/squadron/pipeline/item_resume.py:130-135",
+    "title": "Item resume lets cf errors escape as tracebacks and mislabels unrelated OSErrors",
+    "text": "`resume_item` maps only `_Stop`, `GitEnvironmentError`, and `OSError`. Several calls after the git precondition reach cf directly and raise `ContextForgeError` or `ContextForgeNotAvailable` unwrapped. `_select_item` (item_resume.py:277) calls `evaluate_each_source` (executor.py:1441), which runs the cf source functions. `_open_dependencies` calls `list_slices` directly. The fresh-run path maps these errors to a typed exit (`_check_cf`, run.py:172-188), and `commit_run.py:82` and `branch_run.py:46` catch them. `handle_item_resume` (run_item.py:99-103) catches only `typer.Exit`, so a cf outage during item resume ends in an uncaught exception, which exits 1. Exit 1 means FLAGGED in the handoff contract. The slice design (`project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md`, line 467) reserves exit 3 for environment faults. An automated caller would read a cf outage as \"flagged again\". Separately, `load_pipeline(state.pipeline)` at item_resume.py:186 is unwrapped. The plain resume path handles that `FileNotFoundError` (run.py:1217-1220).\n\nThe `OSError` branch (item_resume.py:133-135) has the opposite problem. It catches any OSError from the whole resume, including source reads and body work, and reports it as \"cannot write the batch report\". It logs nothing at this layer.\n\nSuggested fix: in `resume_item`, catch the cf exceptions and return HALTE"
+   },
+   {
+    "run": "197-haiku-xhigh-1",
+    "location": "src/squadron/pipeline/item_resume.py:113",
+    "title": "`item_resume` types the cf client as `Any` in five places",
+    "text": "`resume_item`, `_resume_locked`, `_git_precondition`, `_select_item`, and `_open_dependencies` all take `cf_client: Any`. The rest of the pipeline types this boundary: `sources.py` takes `ContextForgeClient`, and `branch_ops.py` takes `CfClientProtocol`. `CfClientProtocol.list_slices` (review/persistence.py:58) takes no `plan` argument, so it does not fit the calls here, which pass one. With `Any`, strict pyright accepts the module, and nothing checks `e.index`, `e.status`, or `e.design_file`.\n\nSuggested fix: define a small Protocol beside `ConfigReader` with `list_slices(plan)`, `list_tasks(plan)`, and `get_config(key)`. Or type the parameter as `ContextForgeClient`, which is what `run_item.py` passes."
+   },
+   {
+    "run": "197-haiku-xhigh-2",
+    "location": "src/squadron/pipeline/item_resume.py:325",
+    "title": "Item resume and the batch selector disagree on dependencies, and resume overrides source flags",
+    "text": "`_open_dependencies` blocks on any in-plan dependency whose status is not `complete`. The batch selector in `sources.py:257-276` builds `open_in_plan` from entries minus `_EXCLUDED_STATUSES`, which includes `deferred`. So in a batch run, a dependent of a deferred slice is not flagged and runs. On resume, the same item is flagged with `dependency N not complete` and no body runs. An item the batch ran can then never be retried while its dependency stays deferred.\n\nPrecedence also differs. `_resume_locked` (`item_resume.py:153`) calls `_open_dependencies` before the body, so it replaces a source's `not_ready` flag with `dependency`. In the batch, `_pre_flag` (`executor.py:1613`) gives the source flag precedence.\n\nNo test covers a deferred dependency. `test_item_resume_source.py` only uses a `not_started` one. The \"is this dependency open\" rule now lives in three places (sources, `executor._dependency_flag_reason`, and `item_resume`) and they disagree. One shared predicate would fix it."
+   },
+   {
+    "run": "197-haiku-xhigh-2",
+    "location": "src/squadron/pipeline/item_resume.py:113",
+    "title": "`cf_client` is typed `Any` across item resume",
+    "text": "`resume_item`, `_resume_locked`, `_git_precondition`, `_select_item`, and `_open_dependencies` all take `cf_client: Any`. The helpers they call already have typed contracts: `read_integration_target(cf_client: ConfigReader)` (`git_ops.py:60`) and `CfClientProtocol` (`persistence.py:55`). Explicit `Any` passes strict pyright, so nothing checks what `list_slices` must return. `run_body` in `run_item.py:78` returns `object`, which also erases the `PipelineResult` contract. Type the parameters against a small protocol with `list_slices` and `list_tasks`."
+   },
+   {
+    "run": "197-haiku-xhigh-3",
+    "location": "src/squadron/pipeline/item_resume.py:124",
+    "title": "cf failures during item resume escape as uncaught exceptions, and exit 1 reads as FLAGGED",
+    "text": "`resume_item` catches `_Stop`, `GitEnvironmentError` and `OSError`. It does not catch `ContextForgeError` or `ContextForgeNotAvailable` (`integrations/context_forge.py:29-34`). Those can come from `evaluate_each_source` (line 287, which calls the cf source and its `list_tasks`/`list_slices`), from `_select_item` (line 291), and from `_open_dependencies` (line 333). `handle_item_resume` catches only `typer.Exit` (`run_item.py:99`). An uncaught exception exits with status 1, which is `ResumeExit.FLAGGED`, so an automated caller would read a crash as \"flagged again\". D8's table assigns HALTED (3) to environment faults. The target read is wrapped (`read_integration_target`, `git_ops.py:66-73`), but the source reads are not. No test injects a cf failure mid-resume. Catch `ContextForgeError` in `resume_item` as HALTED with an ERROR log, and add a test."
+   },
+   {
+    "run": "197-haiku-xhigh-3",
+    "location": "src/squadron/pipeline/item_resume.py:334",
+    "title": "\"Dependency is open\" has two definitions, and they disagree for deferred slices",
+    "text": "Batch selection treats DEFERRED as not open. `_EXCLUDED_STATUSES` contains DEFERRED (`sources.py:48`), and `open_in_plan` excludes it (`sources.py:257`). A batch will therefore run a slice whose dependency is deferred. `_open_dependencies` flags any status other than COMPLETE (`item_resume.py:334`), so the same dependent is refused on resume with \"dependency N not complete\". Put one predicate in one place. Which behavior is right is a design call, but the two paths must agree. The out-of-plan case also differs: the dependency loop in `_cf_slices_ready_to_implement` logs a warning, while `_open_dependencies` skips it silently."
+   },
+   {
+    "run": "197-luna-1",
+    "location": "src/squadron/pipeline/item_resume.py:157-160",
+    "title": "HALTED item resumes can leave the report showing the old outcome",
+    "text": "The executor replaces the report record only after the item body finishes. If the body raises a git/environment exception, `resume_item()` returns `HALTED` without rewriting the report, so the record remains flagged/not-run and does not show that this resume attempt halted. This conflicts with the report\u2019s role in recording item-resume decisions and failures; persist the halted attempt before returning, or explicitly model the in-progress/halted state."
+   },
+   {
+    "run": "197-luna-3",
+    "location": "src/squadron/pipeline/sources.py:257-280",
+    "title": "Deferred dependencies are treated inconsistently",
+    "text": "The batch source excludes deferred slices from `open_in_plan`, so a dependent slice is not flagged and may be implemented even though its dependency is unfinished. Item resume uses a stricter check at `src/squadron/pipeline/item_resume.py:325-335`, where every dependency not marked complete blocks execution. Treat deferred dependencies consistently as incomplete in the batch source."
+   },
+   {
+    "run": "197-sol-1",
+    "location": "src/squadron/pipeline/item_resume.py:146-155",
+    "title": "Synchronous subprocesses block the item-resume event loop",
+    "text": "The async resume path directly performs synchronous state reads, git operations, cf subprocess calls, and report writes. Git commands alone permit 30-second timeouts, violating the required sub-millisecond synchronous-work bound. Move blocking operations off-loop and add a responsiveness/load test."
+   },
+   {
+    "run": "197-sol-2",
+    "location": "src/squadron/pipeline/item_resume.py:146-155",
+    "title": "Item-resume preparation blocks the event loop",
+    "text": "The async resume path directly performs state-file reads, synchronous git subprocesses, cf calls, and report writes. These cannot satisfy the required sub-millisecond synchronous-work bound and prevent other asyncio tasks from progressing during slow operations. Offload blocking preparation and persistence, with explicit ownership of mutable report state, and add an event-loop responsiveness test."
+   },
+   {
+    "run": "197-sol-3",
+    "location": "src/squadron/pipeline/item_resume.py:146-155",
+    "title": "Item resume performs blocking operations on the event loop",
+    "text": "The async resume path directly performs synchronous state reads, git subprocesses, Context Forge calls, and report writes. Git calls can block for 30 seconds; Context Forge subprocesses have no timeout. This violates the explicit async execution rule and can stall all other coroutine work while holding the checkout lock. Move blocking operations off-loop, bound subprocess execution, and test timeout observability."
+   },
+   {
+    "run": "197-sonnet-1",
+    "location": "src/squadron/pipeline/item_resume.py#_resume_locked",
+    "title": "Blocking sync git, cf and file work inside async `resume_item`",
+    "text": "The async path calls `run_git`, `restore_target`, `dirty_paths`, `verify_git_state`, `cf_client.list_slices` and `list_tasks`, and `report.write` directly. All of these are subprocess or file I/O. The Python rules require sync code inside `async def` to be under 1 ms or moved to an executor. The impact is low today because the CLI runs a single task under `asyncio.run`. The rule still applies, and `_write_each_report` in the executor already uses `asyncio.to_thread` for the same write."
+   },
+   {
+    "run": "197-sonnet-2",
+    "location": "src/squadron/pipeline/item_resume.py#_resume_locked",
+    "title": "Blocking git and file I/O inside `async def` resume path",
+    "text": "`resume_item` and `_resume_locked` are coroutines. They call synchronous, potentially slow code directly on the event loop: `run_git` subprocesses (`current_branch`, `restore_target`, `dirty_paths`, `verify_git_state`, `merge-base` in `_select_item`) and `report.write(...)` in `_reconcile` and the dependency-flag path. The Python rules require sync work inside async functions to be under 1ms or offloaded. The executor's `_write_each_report` already uses `asyncio.to_thread` for exactly this reason, so the same module family is inconsistent. This is low impact today because the CLI runs one coroutine. It does break the stated rule, and it becomes a real stall if `resume_item` is ever embedded in a longer-lived loop."
+   },
+   {
+    "run": "197-sonnet-2",
+    "location": "src/squadron/pipeline/item_resume.py#resume_item",
+    "title": "Loose typing at the resume boundary",
+    "text": "`cf_client: Any` is threaded through `resume_item`, `_select_item`, `_open_dependencies` and `_git_precondition`. A `CfClientProtocol` already exists in `branch_ops`. `BodyRunner` returns `object`. The CLI's `run_body` therefore returns a `PipelineResult` that is discarded, and nothing checks the pipeline's final status. `_resume_locked` infers success only from `rerun.record` being set. That gap is deliberate, but a typed result would make the HALTED mapping explicit."
+   },
+   {
+    "run": "197-sonnet-high-2",
+    "location": "src/squadron/pipeline/item_resume.py#resume_item",
+    "title": "`resume_item` labels any `OSError` as a report-write failure",
+    "text": "`except OSError` wraps the whole `_resume_locked` call, but the comment and message assume the error came from the report write. The same call also reads state, loads the pipeline, evaluates the source (which reads design and review files) and runs git. An `OSError` from any of those is reported as `cannot write the batch report: ...` with `HALTED`. This handler does not log at ERROR itself and relies on `batch_report` having already logged. The wrong message sends the operator to the wrong place. Catch the error where the write happens, or log with `logger.exception` here and use a neutral message."
+   },
+   {
+    "run": "197-sonnet-high-2",
+    "location": "src/squadron/pipeline/item_resume.py:resume_item",
+    "title": "Untyped boundaries in the new resume module",
+    "text": "`cf_client: Any` is threaded through `resume_item`, `_select_item`, `_git_precondition` and `_open_dependencies`. The code calls `list_slices` on it and reads `.status`, `.design_file`, `.index` and `.name` from the results. `CfClientProtocol` already exists in `squadron.review.persistence`, and `branch_ops` uses it. `BodyRunner` returns `Awaitable[object]` and the result is discarded, so the contract does not say that completion is signalled through `rerun.record`. `run_body` can finish without setting it, and the code handles that case only through the `rerun.record is None` check. Use a protocol for the client and type the runner's result. `_Run.params` and `_select_item` are also loosely typed."
+   },
+   {
+    "run": "197-sonnet-high-3",
+    "location": "src/squadron/pipeline/item_resume.py:139-160",
+    "title": "Blocking subprocess work runs inside `async def` functions",
+    "text": "`_resume_locked`, `_select_item`, `_open_dependencies` and `_git_precondition` run on the event loop. `_git_precondition` is called synchronously from `_resume_locked`. They synchronously call `project_run_lock` (via `git rev-parse`), `dirty_paths`, `restore_target`, `run_git([\"merge-base\", ...])`, `verify_git_state`, and the `cf_client.list_slices` / `list_tasks` subprocess wrappers. The Python rules require sync work inside async functions to complete in under 1 ms or go through an executor. Practical impact is low, because `asyncio.run` hosts a single task at the CLI boundary. The rule is still unmet, and the executor path already uses `asyncio.to_thread` for the report write. Either wrap the git and cf phase in `asyncio.to_thread`, or make that phase a plain function and keep only `run_body` and `evaluate_each_source` async."
+   },
+   {
+    "run": "197-sonnet-high-3",
+    "location": "src/squadron/pipeline/item_resume.py:109-116",
+    "title": "`cf_client: Any` erases the contract at several new boundaries",
+    "text": "`resume_item`, `_select_item`, `_git_precondition` and `_open_dependencies` all take `cf_client: Any`, and `item_resume.py` calls `cf_client.list_slices(...)` on it. `branch_ops` already defines a `CfClientProtocol`. Using a Protocol, as the project's \"program to interfaces\" rule says, would let strict pyright check the calls. `BodyRunner` also returns `Awaitable[object]`. That makes `run_body`'s result unused by design, but it hides that the real contract is `rerun.record` being set as a side effect. Nothing at the type level connects a successful body run to `rerun.record`. The `rerun.record is None` check is the only guard."
+   },
+   {
+    "run": "197-sonnet_notools-3",
+    "location": "src/squadron/pipeline/item_resume.py#resume_item",
+    "title": "`Any`-typed cf client and a circular import across the CLI boundary",
+    "text": "`resume_item`, `_resume_locked`, `_select_item`, `_open_dependencies` and `_git_precondition` all take `cf_client: Any`, even though `CfClientProtocol` already exists in `branch_ops` and is used for `read_integration_target`. This hides contract errors under strict pyright and breaks the \"program to interfaces\" rule. Type these parameters with the protocol, extended with `list_slices` and `list_tasks` if needed."
+   },
+   {
+    "run": "197-sonnet_notools-3",
+    "location": "src/squadron/pipeline/item_resume.py#resume_item",
+    "title": "Blanket `OSError` handler can mislabel unrelated failures",
+    "text": "`except OSError` returns \"cannot write the batch report\" and relies on `batch_report` having already logged the failure. Any `OSError` raised elsewhere under the lock produces that same message and is not logged here. Examples are state loading, the `Path.open` call, or a git or file operation in `restore_target`. Narrow the catch to the report-write call, or log with `_logger.exception` before returning HALTED."
+   }
+  ]
+ },
+ {
+  "bug": "307-B1",
+  "description": "The purchase script judged the whole `pass --estimate-only --json` payload as the plan summary; the plan is nested under phases[purchase].summary, so the first key lookup raised KeyError.",
+  "candidates": [
+   {
+    "run": "307-deepseek4-flash-2",
+    "location": "scripts/cutover_304_checks.py#resubmit_origins",
+    "title": "`resubmit_origins` accepts a naive timestamp where its sibling stops",
+    "text": "`resubmit_origins` parses `requested_at` with `datetime.fromisoformat` and stores the result with no `tzinfo` check; `_check_resubmit` then compares it to `since`, which `judge()` builds as an aware datetime (`datetime.fromisoformat(start)` from the start file). A naive value therefore raises `TypeError` at `made < since`, and `main`'s handlers \u2014 `(CutoverError, subprocess.CalledProcessError, OSError)` and `(KeyError, ValueError)` \u2014 do not catch `TypeError`, so the cutover would end in an uncaught traceback rather than the named stop the module's style promises. The sibling parser added in the same change, `purchase_verdicts._edge_of`, treats exactly this case as a refusal (\"is not a UTC instant\"). Both parse the output of the same `_cell` renderer, so they should agree; the column is `TIMESTAMPTZ` (`market/schema/migrations/tick.py:146`), which makes the practical risk low."
+   },
+   {
+    "run": "307-haiku-xhigh-1",
+    "location": "scripts/cutover_304_first_purchase.py:152-163",
+    "title": "The estimate parser reads top-level keys from a payload that nests the summary under `phases`",
+    "text": "`fetch_estimate` returns the parsed stdout of `mt data tick pass --estimate-only --json` unchanged. `judge_estimate` then reads `summary[\"wanted_days\"]`, `summary[\"verdict\"]`, and `summary[\"requests\"]` at the top level (`scripts/cutover_304_checks.py:196`). The real payload has none of those keys. `print_pass` calls `pass_to_dict`, which is `PassResult.to_dict()` plus `exit_code` (`src/manta_trading/cli/commands/tick_pass_render.py:146-148`, `:285-287`). That method places each phase's summary under `phases[i].summary` (`src/manta_trading/data/tick/pass_contract.py:119-135`). The purchase summary is at `phases[name == \"purchase\"].summary`, which `scripts/cutover_234_checks.py:145` already reads that way. Here `_check_scope` raises `KeyError: 'wanted_days'`. `main` catches it as \"unexpected payload\" and exits 1 (`cutover_304_first_purchase.py:249-252`). The full run and the new `--estimate` mode both stop there, before any spend, so the PM never gets the ceiling command.\n\nThe tests miss this because the fixtures are flat. `NOTHING` (`test/unit/scripts/test_cutover_304_first_purchase.py:47-56`) and `_summary()` (`test/unit/scripts/test_cutover_304_checks.py:59-80`) are hand-written. `_summary`'s docstring says it mirrors `plan_summary`, which is the inner summary and not what the CLI prints. The CLAUDE.md parser rule requires fixtures in the production format. Only the coverage, "
+   },
+   {
+    "run": "307-sonnet-high-3",
+    "location": "scripts/cutover_304_checks.py:147-165",
+    "title": "Resubmit time comparison has no timezone guard, unlike the dataset-edge parser",
+    "text": "`resubmit_origins` parses `requested_at` with `datetime.fromisoformat` and only checks that it parses. `_check_resubmit` then compares it with `since`, which is tz-aware (`datetime.now(UTC).isoformat`). If a row ever renders a naive timestamp, `made < since` raises `TypeError`. `main` catches only `KeyError` and `ValueError` (`scripts/cutover_304_first_purchase.py:246-252`), so this becomes an unrecorded traceback after the install step, not a narrated `FAILED:` stop. `purchase_verdicts._edge_of` already guards this case (`edge.tzinfo is None`). The two parsers handle timestamps inconsistently. Fix: reject a naive `requested_at` in `resubmit_origins` with a `CutoverError`, as `_edge_of` does. Add a test for it."
+   },
+   {
+    "run": "307-sonnet_notools-2",
+    "location": "test/unit/scripts/test_cutover_304_first_purchase.py#_accounting",
+    "title": "Tests depend on private helpers of production modules",
+    "text": "`_accounting` calls `accounting_futures._product_payload`. `test_bar_job_dirs_read_the_rows_the_real_cli_renders` calls `tick_debug_cmds._cell`. This does follow the project rule that parser fixtures use the real format. But it ties the tests to private function names, so a rename will break unrelated tests. Expose a public rendering function, or add a contract test on the CLI side."
+   },
+   {
+    "run": "307-sonnet_notools-3",
+    "location": "test/unit/scripts/test_cutover_304_first_purchase.py#_accounting",
+    "title": "Tests depend on private helpers and exact message text",
+    "text": "The tests call `accounting_futures._product_payload` and `tick_debug_cmds._cell`, which are private. They also assert on message fragments such as `\"--estimate run prints\"`. Using the real CLI shapes is the right idea, because it keeps the parser tests honest. But a rename of either private helper will break the tests with no behavior change. Consider exposing a public serializer, or adding one contract test that pins these shapes."
+   }
+  ]
+ },
+ {
+  "bug": "307-B2",
+  "description": "The judge required verdict `allowed`, but --estimate-only reports `estimate_only` whenever there is something to buy, so the buy step was unreachable.",
+  "candidates": [
+   {
+    "run": "307-haiku-xhigh-1",
+    "location": "scripts/cutover_304_checks.py:242-245",
+    "title": "A real estimate can never reach BUY: its verdict is `estimate_only`, and the judge accepts only `allowed`",
+    "text": "`pass --estimate-only` calls `evaluate_spend(..., estimate_only=True)`, which sets `VerdictStatus.ESTIMATE_ONLY` whenever the plan is non-empty (`src/manta_trading/data/tick/spend_guard.py:266-269`; `purchase_plan.py:252-260`; `purchase_phase.py:158-163`). An integration test pins that value: `test/integration/data/test_tick_purchase_phase.py:240` asserts `summary[\"verdict\"] == \"estimate_only\"`. `judge_estimate` returns BUY only when the verdict equals `VERDICT_ALLOWED` (`\"allowed\"`). So on the full path, every non-empty plan is refused: by the ceiling checks, or by this verdict check once they pass. The `--estimate` mode avoids the check only because `check_ceilings=False` returns early (next finding). The `_summary` fixture uses `\"verdict\": \"allowed\"`, which the real estimate never produces, so the tests cannot see this. A fix has to decide BUY from the ceilings and from `reasons`. The archive-space shortfall reaches the estimate only through `reasons` (`purchase_plan.py:304`), and the verdict will never say \"refused\" for it."
+   },
+   {
+    "run": "307-haiku-xhigh-1",
+    "location": "scripts/cutover_304_checks.py:225-226",
+    "title": "`--estimate` returns BUY for any refusal and prints the ceiling command as the fix",
+    "text": "With `check_ceilings=False`, `judge_estimate` returns `Estimate.BUY` before it reads the verdict. So any refusal is reported as a buy. `_estimate_only` then prints `verdict refused: buy` and \"the PM runs: sudo \u2026set-tick-spend-ceilings.sh \u2026\" (`scripts/cutover_304_first_purchase.py:271-275`). One refusal that raising a ceiling cannot fix is the archive-space shortfall, which `plan_summary` appends to `reasons` (`purchase_plan.py:304`; `spend_guard.py:117-124`). The PM would set ceilings, and the real run would then stop on space. `test_estimate_prints_the_command_and_buys_nothing` uses only `reasons: [\"ceiling\"]`, so this path is untested. When the two FAILs are fixed, the `--estimate` branch also has to refuse on non-ceiling reasons."
+   },
+   {
+    "run": "307-haiku-xhigh-2",
+    "location": "scripts/cutover_304_checks.py:242",
+    "title": "Estimate verdict check refuses the verdict every estimate-only run emits, so no purchase can run",
+    "text": "`judge_estimate` buys only when `summary[\"verdict\"] == \"allowed\"` (lines 242-245). The producer never emits that value in estimate-only mode:\n\n- `build_plan` passes `estimate_only` into `evaluate_spend` (`src/manta_trading/data/tick/purchase_plan.py:259`). `spend_guard.py:266-267` then sets `ESTIMATE_ONLY` whenever that flag is true, so the status can never be `ALLOWED` or `REFUSED`.\n- `plan_summary` emits `spend.status.value` as `verdict` (`purchase_plan.py:303`).\n- `test/integration/data/test_tick_purchase_phase.py:240` asserts `verdict == \"estimate_only\"`, and `test_spend_guard.py:127-130` says estimate-only \"never allows\".\n\nThe cutover calls `fetch_estimate()` with `--estimate-only` (`ESTIMATE_ARGS`, `cutover_304_first_purchase.py:80`). `_steps` judges that output at line 290 and again at line 298. For a non-empty plan within the ceilings, `judge_estimate` reaches the verdict check and raises `estimate: verdict estimate_only`. The run exits 1 before `mt-run tick`, so the buy path is unreachable.\n\nThe check predates this diff, but the diff rewires this path, and its tests fake the verdict as `\"allowed\"` or `\"refused\"`. That is why it was not caught.\n\nI verified this by reading the producer and an existing integration test, not by running the CLI. The fix should judge the figures and scope on the estimate-only status, and leave the buy decision to the real pass's own guard. A"
+   },
+   {
+    "run": "307-haiku-xhigh-2",
+    "location": "scripts/cutover_304_checks.py:225-226",
+    "title": "`--estimate` prints \"buy\" and the ceiling command for every non-nothing verdict",
+    "text": "With `check_ceilings=False`, `judge_estimate` returns `Estimate.BUY` before it reads the verdict or the reasons. `_estimate_only` (`cutover_304_first_purchase.py:255-276`) then prints `verdict ...: buy` and \"the PM runs: sudo ...\".\n\nThe reasons can include a disk-space refusal (`_space_reason`, `purchase_plan.py:304` and `:312`), not only spend reasons. For a space refusal the printed ceiling command cannot fix anything. The unit test at `test_cutover_304_first_purchase.py:544` uses `verdict: \"refused\"`, which estimate-only output never emits, so it does not exercise this case.\n\nWhen the reasons are not ceiling lines, `--estimate` should print the reasons and omit the command."
+   },
+   {
+    "run": "307-haiku-xhigh-2",
+    "location": "test/unit/scripts/test_cutover_304_checks.py:80",
+    "title": "Test fixtures use a verdict vocabulary the producer does not emit",
+    "text": "The checks fixture is built with `\"verdict\": \"allowed\"` (line 80), and `test_an_unbuyable_estimate_refuses...` uses `\"refused\"` (line 107). The first-purchase fixtures use `\"refused\"` at line 544. The real estimate-only verdict is `\"estimate_only\"`, so these tests cannot catch Finding 1.\n\nTwo other gaps in the same area:\n\n- The `judge()` wrapper's resubmit branch (`cutover_304_first_purchase.py:166-175`, which calls `debug requests` and `resubmit_origins`) has no test.\n- The `resubmit_origins` fixture is hand-written, while the symbols test renders its row through `_cell`. I checked that `_cell` produces aware ISO timestamps and ISO dates, which is what the parser expects. The test does not pin that format."
+   },
+   {
+    "run": "307-haiku-xhigh-3",
+    "location": "scripts/cutover_304_checks.py:242",
+    "title": "The full cutover requires verdict \"allowed\", which the planner never emits for an estimate",
+    "text": "`judge_estimate` raises unless `summary[\"verdict\"] == \"allowed\"` (lines 242-245). The cutover's step 3 gets its summary from `pass --estimate-only --json` (`ESTIMATE_ARGS`, first_purchase.py:80). That command never returns \"allowed\" for a non-empty plan:\n\n- `evaluate_spend` sets `VerdictStatus.ESTIMATE_ONLY` whenever `estimate_only` is passed, regardless of breach (src/manta_trading/data/tick/spend_guard.py:266-267).\n- `plan_summary` writes that status as `verdict` (purchase_plan.py:303).\n- The integration test asserts the same thing: test/integration/data/test_tick_purchase_phase.py:240 expects `\"estimate_only\"`.\n\nConsequences:\n\n- For any non-empty plan, the full run installs the release (step 2), then stops at step 3 with \"verdict estimate_only\". It does this even when both ceilings are correct.\n- The new `--estimate` path skips this check (`check_ceilings=False` returns BUY at lines 225-226). It prints \"the PM runs: sudo \u2026\", the PM sets the ceilings as instructed, and the full run still refuses.\n- The unit tests pass only because their fixtures use shapes the CLI does not print: `\"allowed\"` at test/unit/scripts/test_cutover_304_checks.py:80 and test/unit/scripts/test_cutover_304_first_purchase.py:402, and `\"refused\"` at test_cutover_304_first_purchase.py:544 for the `--estimate` test. CLAUDE.md requires parser fixtures to match production output.\n- The 232 slice note (`proje"
+   },
+   {
+    "run": "307-sonnet-2",
+    "location": "scripts/cutover_304_checks.py:225",
+    "title": "`--estimate` reports BUY for any non-\"nothing_to_buy\" verdict, including refusals",
+    "text": "When `check_ceilings=False`, `judge_estimate` returns `Estimate.BUY` immediately after the scope check. It returns before the later `summary[\"verdict\"] != VERDICT_ALLOWED` branch, so that branch never runs in this mode. A verdict of `refused` for a reason other than the ceilings (for example, a provider or planner refusal) is therefore reported as BUY. `_estimate_only` then prints `verdict refused: Estimate.BUY` and the PM's ceiling command. The test `test_estimate_prints_the_command_and_buys_nothing` only exercises a `refused` verdict whose reason is \"ceiling\", so it hides this. Skipping only the ceiling comparisons would be correct, but the verdict check should still run, or `--estimate` should print the verdict reasons."
+   },
+   {
+    "run": "307-sonnet-3",
+    "location": "test/unit/scripts/test_cutover_304_first_purchase.py:test_estimate_prints_the_command_and_buys_nothing",
+    "title": "Unrecoverable `--estimate` mode relies on a hand-copied state-write guard in tests",
+    "text": "The test asserts that no install, pass or baseline call happens by monkeypatching `install_release`, `run_passes` and `record_start_and_baselines`. `_estimate_only` also calls `evidence.mt_json` inside `judge` only when `since is not None`, which `--estimate` never triggers. That test therefore confirms the happy path but not that `judge` skips the `debug requests` read for `start=None`. Add a case in which a resubmit exists and `start=None`. It should expect the \"is a resubmit\" refusal and make no extra `mt_json` call."
+   },
+   {
+    "run": "307-sonnet-high-3",
+    "location": "scripts/cutover_304_checks.py:225-226",
+    "title": "`--estimate` reports BUY and prints a ceiling command for a refusal that may not be about ceilings",
+    "text": "With `check_ceilings=False`, `judge_estimate` returns `Estimate.BUY` as soon as the verdict is not `nothing_to_buy`. That skips the `summary[\"verdict\"] != VERDICT_ALLOWED` check, along with the ceiling checks (lines 242-245). `_estimate_only` (`scripts/cutover_304_first_purchase.py:273-275`) then prints `the PM runs: sudo ... --per-pass N --cap-30d M` whenever the outcome is BUY. Only the ceiling-based refusals are meant to be skipped. Any other refusal reason in `summary[\"reasons\"]` is reported as BUY, with a ceiling command that will not clear it. The operator would run the root command and only learn of the real refusal on the real run. The docstring says only \"short or unset ceilings are not a stop\". The code skips the whole verdict check instead. The test `test_estimate_prints_the_command_and_buys_nothing` uses `reasons: [\"ceiling\"]`, so it never exercises a non-ceiling refusal. Fix: in estimate mode, still stop on a refused verdict whose reasons are not ceiling-only, or print `summary[\"reasons\"]` alongside the command. Add a test for a non-ceiling refusal."
+   }
+  ]
+ }
+]

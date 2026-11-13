@@ -1,0 +1,186 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Trade rows are mapped by positional index, unlike the candle path",
+      "description": "`CandleRecord.from_row` walks `CANDLE_COLUMNS`, so it follows the repository mapping. `TradeRecord.from_row` instead reads `values[0]` through `values[7]` by hand. The order is defined by `TRADE_COLUMNS` minus `market_ticker`, in `serve_timeseries.TRADE_VALUE_COLUMNS`. If the repository reorders or adds a column, the API would silently put values in the wrong fields. Several are `Decimal`, and two or three are `str | None`, so some swaps would not even fail validation. The integration test only checks the number of values, not their order. Build the record from `zip(TRADE_VALUE_COLUMNS, row.values)` as the candle path does. Alternatively, add a test that pins the column order.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`tape_filtered` depends on a parameter key defined inside `trades_filter_sql`",
+      "description": "The function reads `selection.params[\"trades_excluded_categories\"]` and checks `isinstance(bound, list)`, with the guard marked `# pragma: no cover`. The key name and list type are an implicit contract with `selection.trades_filter_sql`. I did not confirm that key against `selection.py`. The docstring says the check is \"not re-spelled\", but the key and the `COALESCE(category, '')` semantics are both re-spelled here. A parity test exists, which is good. The cleaner fix is for `selection.py` to expose the evaluation itself, for example a `is_trades_excluded(category, excluded)` function that the SQL rendering and this code both use.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#tape_filtered"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_window` ties the `period` clause to whether `extra` is truthy",
+      "description": "`period = %(period)s` is added only when `extra` is non-empty, and `extra` is a general-purpose parameter dict. Any later caller that passes other extras would get a `period` clause but no `period` parameter, which is a runtime error. The reverse also holds: a caller that wants a period predicate must pass it through `extra`. Make `period` an explicit optional argument, or let the candle path append its own clause.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#_window"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The load test's recording cursor uses private pool internals and misses new connections",
+      "description": "The recording sets `cursor_factory` on the connections in `pool._pool` (a private attribute, with `# noqa: SLF001`) after startup. `_RecordingCursor.statements` is also class-level mutable state. A connection the pool opens later would not record, so the \"no fetch ran\" assertion could pass without actually checking. This is only a risk if the pool replaces connections mid-test. The pool's `configure` callback or a connection class passed at construction would avoid both problems.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py#_client"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_CANDLE_OBJECTS` values are never used",
+      "description": "Only the keys of `_CANDLE_OBJECTS` are used, to seed `nested`. The comment says the dict records which model each object uses, but `from_row` hard-codes `CandleBidAsk` and `CandlePrice` in the constructor call. Either use the mapping to construct the objects or reduce it to a tuple of names.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:46-52"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The \"trades sync_state has no watermark\" check is duplicated",
+      "description": "`tape_facts` repeats the check that `read_trade_status` makes, down to near-identical error text. Promoting `effective_tape_floor` shows the intent not to derive things twice, so consider sharing this check too. The `RuntimeError` also becomes a bare 500 on the request path. That is explicit and consistent with the \"no silent fallback\" rule.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#tape_facts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Window helpers moved correctly into a shared module",
+      "description": "`bars.py` now imports the shared `window_start_utc` and `window_end_utc`, so there is one day-boundary derivation. Naive datetimes are documented as UTC. The unit tests cover bare dates, naive datetimes, omitted bounds, and reversed ranges through the routes. The count-before-fetch ordering and the connection release before the 422 are both tested.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/windows.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Trade rows are mapped by positional index, unlike the candle path",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`tape_filtered` depends on a parameter key defined inside `trades_filter_sql`",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#tape_filtered",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`_window` ties the `period` clause to whether `extra` is truthy",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#_window",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The load test's recording cursor uses private pool internals and misses new connections",
+      "location": "test/load/test_188_kalshi_api_nfr.py#_client",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_CANDLE_OBJECTS` values are never used",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:46-52",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The \"trades sync_state has no watermark\" check is duplicated",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#tape_facts",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Window helpers moved correctly into a shared module",
+      "location": "src/manta_trading/api_server/routes/windows.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:29:25.075319",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 180397,
+  "cached_tokens": 74584,
+  "cache_write_tokens": 105809,
+  "completion_tokens": 6048,
+  "reasoning_tokens": null,
+  "duration_seconds": 45.140278209000826,
+  "cost_usd": 0.49596869999999993,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

@@ -1,0 +1,111 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Resume rejects planning items once their design exists",
+      "description": "A `slices-plan` item whose design was created but whose review exhausted its rounds is no longer returned by `cf.undesigned_slices`. Consequently, both retry and accept are rejected despite the report marking it `review_unresolved`. Reproduced with an open slice containing a design file. The planning-resume test masks this by returning no design whenever a plan argument is supplied. Support resuming existing flagged designs and test that real post-failure state.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:286-304"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed report items escape validation",
+      "description": "The casts do not validate JSON structure. A report containing `\"items\": [null]` raises `AttributeError` from `from_json`, bypassing `BatchReportLoadError` and the intended REJECTED outcome. Reproduced directly. Validate the report and item shapes at the file boundary, preferably with Pydantic, and cover malformed entries.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:330-340"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Item resume performs blocking operations on the event loop",
+      "description": "The async resume path directly performs synchronous state reads, git subprocesses, Context Forge calls, and report writes. Git calls can block for 30 seconds; Context Forge subprocesses have no timeout. This violates the explicit async execution rule and can stall all other coroutine work while holding the checkout lock. Move blocking operations off-loop, bound subprocess execution, and test timeout observability.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:146-155"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Resume rejects planning items once their design exists",
+      "location": "src/squadron/pipeline/item_resume.py:286-304",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Malformed report items escape validation",
+      "location": "src/squadron/pipeline/batch_report.py:330-340",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Item resume performs blocking operations on the event loop",
+      "location": "src/squadron/pipeline/item_resume.py:146-155",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:24:30.342200",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 111325,
+  "cached_tokens": 108416,
+  "cache_write_tokens": null,
+  "completion_tokens": 358,
+  "reasoning_tokens": 0,
+  "duration_seconds": 88.4581367499195,
+  "cost_usd": 0.0202396,
+  "cost_basis": "alias_pricing"
+}

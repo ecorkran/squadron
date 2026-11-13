@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`over` sessions are named per product, not per family, so each family row lists every family's sessions",
+      "description": "`_family_evidence` collects the named `over` sessions into a dict keyed by **product only** (`scripts/cutover_304_evidence.py`, `named.setdefault(product, []).extend(accounting.over_sessions(entry))`), and `over_failures` then reuses that one list for every family row of that product. The coverage document it is built from is the *statistics* read, whose `volume_checks` cover **every** volume family the entry wants \u2014 `tick_coverage_statistics._volume_checks` iterates `family_wants(entry)` filtered to `VOLUME_FAMILIES` = (`tick_tier`, `bar_1m`) (`src/manta_trading/data/tick/tick_coverage_statistics.py:55-70`), and `volume_verdict_dict` emits each verdict's `family` (`src/manta_trading/data/tick/tick_coverage.py:87-97`). `over_sessions` ignores that `family` field and does not filter.\n\nConsequence: when ES `tbbo` has one `over` session and ES `ohlcv-1m` has three, both rows are emitted and both print all four session names \u2014 so the failure string under `ES tbbo` names bar sessions, and vice-versa. D6 item 4 asks for the `over` sessions named per family, and the counts in the same string (`row.cross_tier[VolumeClass.OVER.value]`) are correctly per-family, so the number and the names disagree. The fix is local: pass the family into `over_sessions` and filter on the verdict's `family` field (it is already in the document), or key `named` by `(product, family)`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py#over_failures"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`EXIT_USAGE` is defined but never referenced",
+      "description": "`EXIT_USAGE = 2` was added with the argparse work but no longer has a use: `main` returns the code argparse itself chose (`return int(exc.code or 0)`), which is exactly the convention `scripts/wal_segment_name.py` still spells with its own `EXIT_USAGE`. A named constant that no code path reads is dead, and it duplicates a value that argparse owns. Either drop it, or use it where the usage exit is produced so the value is defined once.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`--estimate` prints no ceiling command when the estimate is `nothing_to_buy`, while the unset-ceiling hint points at that run",
+      "description": "`_estimate_only` only prints the command under `if outcome is Estimate.BUY`. In estimate mode `judge_estimate` returns `BUY` for any verdict except `nothing_to_buy` (`scripts/cutover_304_checks.py`, `if not check_ceilings: return Estimate.BUY`), so a `nothing_to_buy` estimate returns `NOTHING_TO_BUY` and no command is printed. But `check_env_text` runs unconditionally in the full cutover and raises `NO_CEILING_HINT` = \"the PM sets the ceilings with the command the --estimate run prints\" (`scripts/cutover_304_checks.py:39`). In that combination the operator is sent looking for a command the run never emitted. Printing the command whenever `summary[\"planned_usd\"]` is parseable (harmless when nothing is to be bought) removes the dead end.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#_estimate_only"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`totals_delta` guards a family missing before the purchase but not one that vanishes after it",
+      "description": "The docstring states the one-directional rule (\"a family absent before the purchase is a stop, not zero\") and the code implements exactly that: `missing = sorted(set(after) - set(before))` raises, then the dict is built over `after` only. A family present in the baseline and absent in the after-read \u2014 the shape a reset, supersession or a dropped family would take \u2014 is silently omitted from the \"before, after, delta\" narration for D6 item 6 rather than reported. Checking the difference in both directions (or asserting the two key sets match) costs one line.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py#totals_delta"
+    },
+    {
+      "severity": "PASS",
+      "title": "Resubmit matching, ceiling derivation and gate ordering hold against the real producers",
+      "description": "Verified outside the diff: `ceiling_values`/`ceiling_command` use exact `Decimal` arithmetic with `ROUND_CEILING` on the step division and do not raise an exact multiple (89\u219290, 90\u219290, 6.3+4=10.3\u219215), and `:f` on a `steps * 5` product yields an integer literal because `to_integral_value` normalizes the exponent. `resubmit_origins` keys `(schema, range_start, range_end)` align with the estimate's `req[\"start\"]`/`req[\"end\"]` (`purchase_plan.py:290-293` \u2192 `TickRequest.start.isoformat()`) and with `_cell`'s date rendering, with the earliest `requested_at` winning on a shared range \u2014 a conservative choice that cannot report a match newer than it is. `run_gates` calls `check_gate_issue` then `check_dataset_edge` before `install_release` and before `record_start_and_baselines`, and `latest_want_end()` derives 2026-12-01T00:00Z from `_HISTORY_WANTS` rather than restating it in the script.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py#ceiling_command"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`over` sessions are named per product, not per family, so each family row lists every family's sessions",
+      "location": "scripts/purchase_accounting.py#over_failures",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`EXIT_USAGE` is defined but never referenced",
+      "location": "scripts/cutover_304_first_purchase.py:79",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`--estimate` prints no ceiling command when the estimate is `nothing_to_buy`, while the unset-ceiling hint points at that run",
+      "location": "scripts/cutover_304_first_purchase.py#_estimate_only",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`totals_delta` guards a family missing before the purchase but not one that vanishes after it",
+      "location": "scripts/purchase_accounting.py#totals_delta",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Resubmit matching, ceiling derivation and gate ordering hold against the real producers",
+      "location": "scripts/cutover_304_checks.py#ceiling_command",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:59:18.702861",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 386448,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2016229,
+  "cached_tokens": 1615360,
+  "cache_write_tokens": null,
+  "completion_tokens": 107767,
+  "reasoning_tokens": 101676,
+  "duration_seconds": 443.40198020800017,
+  "cost_usd": 0.11598603999999998,
+  "cost_basis": "alias_pricing"
+}

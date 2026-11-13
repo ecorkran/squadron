@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "A failed review part no longer aborts the split review, and the fold then fails with a misleading error",
+      "description": "`_run_part` used to re-raise a `ProviderError`. It now returns `self._exception_result(...)`, which has `success=False`, `outputs={}` and `verdict=None`.\n\nThe loop in `_review` (review.py:283-294) appends that result and moves on to the next part. That makes further LLM calls after a failure, which spends tokens on a review that has already failed.\n\n`fold_review_parts` then runs over the mixed list. It calls `_part_input` and `_part_verdict` (review_fold.py:102-112) on the failed part. That raises `TypeError(\"review part must name exactly one input file\u2026\")` or `TypeError(\"review part has no verdict\")`.\n\n`execute`'s catch-all converts the `TypeError` into the step error. The real provider error, such as an auth failure or a 500, is lost from `ActionResult.error`. The failure also gets logged as a spurious \"unexpected error\".\n\nIf a failed part ever did have an input file and a verdict, the fold would return `success=True`, which hides the failure entirely.\n\nThe single-part path works, and the new test covers only that path. Nothing tests a split review in which one part fails.\n\nFix options: re-raise after recording usage, or have the loop short-circuit on `success=False`. Either way, add a multi-part failure test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:486-493"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Split reviews record usage for part 1 only",
+      "description": "`_metadata` copies `parts[0].metadata` and sums only `TOOL_CALLS_MADE_KEY`. Each part now carries its own `USAGE_KEY` record (review.py:506), so the folded result keeps only part 1's record.\n\n`sq stats run` therefore under-reports tokens, turns, cost and time for any split review. That undercounting is the thing slice 175 exists to prevent. Sum the records across parts, or emit one record per part.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review_fold.py:85-91"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Copy-pasted `logger.exception` and a fragile call inside the `except` block",
+      "description": "The handler logs `\"review: unexpected error in step %s\"` with `_logger.exception`. This is a provider failure, not an unexpected error, and the handler has just logged a WARNING for the same event. The message is copied from `execute`, and it produces a traceback and a duplicate line.\n\n`effort_sent_by_profile(...)` (usage_capture.py:62-70) also calls `get_profile`, `ensure_provider_loaded` and `get_provider` while handling the error. If any of these raise, the original `ProviderError` is replaced by an unrelated exception. The effort could be computed before the `try`, or this step could be made non-fatal.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:486-492"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--json` output is corrupted when the reviews directory is missing",
+      "description": "When `report.missing_dir` is true, the command prints the plain text `No review directory at \u2026` to stdout and returns. It does this even with `--json`, so the output is not parseable JSON for scripts. Emit an empty report as JSON when `as_json` is set, or send the message to stderr.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:60-62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A fresh `warned` set per review defeats the \"warn once per alias per run\" pricing warning",
+      "description": "`run_review_with_profile` calls `resolve_cost(alias, ..., set())` on both the success path and the failure path. `UsageCapture` exists so that a run's pricing warning fires once per alias, and the test `test_pricing_warning_once_per_capture` asserts that behaviour.\n\nA pipeline review step calls `run_review_with_profile` once per part and once per step. A partially priced alias therefore warns on every call instead of once per run. Pricing is also resolved in two places, `review_client` and `UsageCapture._build`. Pass the capture's `warned` set through, or move pricing out of `review_client`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/review/review_client.py:313-319"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Compact records carry no alias, so cost labelling and alias pricing never apply",
+      "description": "The comment says \"the compact model is the alias the step named; no resolution is needed\". But `record_from_telemetry(None, \u2026)` is called with `resolved=None`, so `UsageRecord.alias` is `None`.\n\n`cost_cell` (stats_views.py:170) therefore never shows `api-rate equiv.` for a subscription alias's compact row, even though it shows it for dispatch rows. Alias pricing also can't fill in a missing cost. The comment contradicts the code.\n\nA failed compact (compact.py:82-89) also discards the spend carried on `exc.telemetry`. The other LLM actions record it under D5.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py:91-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`run_usage_report` catches `AttributeError`, which can mask programming errors",
+      "description": "`except (OSError, ValueError, AttributeError, SchemaVersionError)` re-declares what `STATE_READ_ERRORS` in state.py:103 already enumerates. That tuple is documented as the full set of errors a present state file can raise, and it already covers `ValidationError`.\n\nCatching `AttributeError` turns real bugs in `load` into \"cannot read file\" errors. Reuse `STATE_READ_ERRORS` and fix the non-object top-level case at its source in `StateManager`.\n\n`_row` also raises a `ValueError` just to catch it a few lines later. A direct branch to the unreadable result would be clearer.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/stats/usage_report.py:104-107"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fixed `\"subscription\"` string and an unvalidated `cost_tier` read in the view layer",
+      "description": "`SUBSCRIPTION_TIER = \"subscription\"` is defined in the CLI view. The same literal appears as a key in `models/aliases.py`, `pools/strategies.py` and `cli/commands/models.py`. It should be defined once, next to `ModelAlias`.\n\n`_is_subscription` also calls `get_all_aliases()` once per table row. Hoist the lookup out of the row loop.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats_views.py:28-29"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`UsageCapture(set())` makes callers supply an implementation detail",
+      "description": "Every call site, including more than 20 tests, passes `set()` positionally. Default it inside `__init__` (`warned: set[str] | None = None`), or drop the parameter.\n\nOther small inconsistencies:\n- `usage_capture.py` uses `logging.getLogger`, while `sdk_turns.py` uses `squadron.logging.get_logger`.\n- `tests/pipeline/test_usage_capture.py` imports helpers from `tests.pipeline.test_executor`, a cross-test dependency.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py:76-80"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Compact and summary raise on a missing capture, while dispatch and review convert it into a failed result",
+      "description": "`require_capture` raises `UsageCaptureMissingError`.\n- In dispatch and review, the action's catch-all turns it into `success=False`.\n- In compact and summary, it propagates out of `execute` as an exception. The tests assert both behaviours.\n\nThe executor always supplies a capture, so this is low risk. The two behaviours should still be unified.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py:73"
+    },
+    {
+      "severity": "PASS",
+      "title": "SDK usage reading and the session telemetry plumbing",
+      "description": "The usage reader is defensive: it rejects `bool`, warns on malformed fields, and keeps sibling fields. Tokens are summed over `ResultMessage`s only. The telemetry is attached to the error in `SDKExecutionSession.dispatch` and `ClaudeSDKAgent.handle_message`. `StateManager` is the only path the stats reports use to load run state. Tests use a real captured result fixture, and the usage keys have round-trip and pre-slice state tests.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/usage.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A failed review part no longer aborts the split review, and the fold then fails with a misleading error",
+      "location": "src/squadron/pipeline/actions/review.py:486-493",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Split reviews record usage for part 1 only",
+      "location": "src/squadron/pipeline/actions/review_fold.py:85-91",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Copy-pasted `logger.exception` and a fragile call inside the `except` block",
+      "location": "src/squadron/pipeline/actions/review.py:486-492",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`--json` output is corrupted when the reviews directory is missing",
+      "location": "src/squadron/cli/commands/stats.py:60-62",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "A fresh `warned` set per review defeats the \"warn once per alias per run\" pricing warning",
+      "location": "src/squadron/review/review_client.py:313-319",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Compact records carry no alias, so cost labelling and alias pricing never apply",
+      "location": "src/squadron/pipeline/actions/compact.py:91-99",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`run_usage_report` catches `AttributeError`, which can mask programming errors",
+      "location": "src/squadron/stats/usage_report.py:104-107",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Fixed `\"subscription\"` string and an unvalidated `cost_tier` read in the view layer",
+      "location": "src/squadron/cli/stats_views.py:28-29",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`UsageCapture(set())` makes callers supply an implementation detail",
+      "location": "src/squadron/pipeline/usage_capture.py:76-80",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Compact and summary raise on a missing capture, while dispatch and review convert it into a failed result",
+      "location": "src/squadron/pipeline/actions/compact.py:73",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "SDK usage reading and the session telemetry plumbing",
+      "location": "src/squadron/providers/sdk/usage.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:03:01.072568",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 795803,
+  "cached_tokens": 776414,
+  "cache_write_tokens": 19375,
+  "completion_tokens": 8528,
+  "reasoning_tokens": null,
+  "duration_seconds": 68.55631399992853,
+  "cost_usd": 0.2504582000000001,
+  "cost_basis": "provider"
+}

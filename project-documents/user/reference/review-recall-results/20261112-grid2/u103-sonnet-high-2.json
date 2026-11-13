@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Visible-range translation never fires when the first series is added",
+      "description": "The range effect is keyed on `[mount.ready, chart, range]` and gated on `seriesCountRef.current === 0`. A ref is not reactive, so adding a series does not re-run the effect. If the range was set while the chart was empty, the call is withheld and then never applied once data arrives. It only runs on the next change to `range`.\n\nThe comment says the seam activates \"the moment [initiative 120] adds the first series\", which overstates what the code does. The translation test sets the range after `addSeries`, so it never covers this ordering. Either re-apply the current range from the facade's `addSeries` path (for example through the `onAdded` callback), or correct the comment and add a test that pins the ordering.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:237-242"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Theme-token read silently falls back to library defaults",
+      "description": "`readChartStyle()` returns `undefined`, or leaves individual fields `undefined`, when a CSS token resolves empty. The chart then renders with the library's default white background. The project rule is \"Never use silent fallback values. Fail explicitly.\" The e2e spec catches this case, but the running app would show a white chart with no error and no log. A missing `--color-surface`, `--color-text-muted` or `--color-grid` is a configuration bug. Throw, or surface it through the same error region the route already renders.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/routes/chart-route.tsx:30-52"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Subscription callbacks and the indicator effect are empty no-ops",
+      "description": "`subscribeCrosshairMove` and `subscribeVisibleRangeChange` are given handlers whose only body is `if (disposedRef.current) { return }`. The indicator-observer effect (around lines 252-260) also does nothing. These are labelled as deliberate placeholders, but they are dead code that runs in production, and they affect the tests. The \"makes a subscription callback fired after teardown inert\" test in `use-chart-provider.errors.test.tsx` passes vacuously, because the handlers can't call anything whether or not the disposed guard exists. Keep the subscription lifecycle if you want to prove disposer handling, but don't count the inertness test as coverage of the disposed flag until a handler does real work.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:293-304"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Blanket `react-hooks/refs` disable for the hook file",
+      "description": "The rule is disabled for all of `use-chart-provider.ts`, so any future real ref-during-render bug in that file goes undetected. The justification is documented and scoped, which is good. `chart-facade.ts` was extracted to get under the 300-line guide, and the hook is still about 366 lines, so the extraction didn't meet that goal. A narrower option is a line-level `eslint-disable-next-line` on the `useMemo` that builds the facade, so the rest of the file stays linted.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "eslint.config.js:55-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stale task references and misplaced comment blocks in the hook",
+      "description": "The header says the file is \"built up across tasks 8/10/12/14\", and the teardown comment says \"subscriptions join here in task 12\". Both are historical process notes that are now wrong, since subscriptions are already in the file. The \"forwarding facade\" comment block sits directly above the `series` counter `useMemo`, not above `chart`, which it describes, so two unrelated comment blocks are stacked back to back. Remove the task numbers and move the comment next to `chart`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:17-20"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplicated measurement and Host scaffolding across four test files",
+      "description": "`MEASURED` and `measuredRect()` are copy-pasted into the errors, facade and translation suites. The resize suite inlines the same stub. All four also hand-roll the same `measure` ref callback. `render-with-contexts.tsx` and `chart-provider-spy.ts` were centralized to avoid this kind of divergence. Move the stubbed-rect helper into `src/test/support/` so a change to the measurement stub is a one-place edit.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.errors.test.tsx:34-62"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Imports split by a constant in the translation test",
+      "description": "`LINE_SERIES` is declared between import statements, with the `chart-provider-spy` and `render-with-contexts` imports below it. The rules ask for sorted imports, and this breaks that. Move the constant below the imports.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.translation.test.tsx:16-27"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Router harness gating is correct and well explained",
+      "description": "The direct `===` comparisons on `import.meta.env.MODE` let Vite fold the expression and tree-shake the harness. The comment explains why a `.includes()` form wouldn't work, and `playwright.config.ts` builds in `e2e` mode to match. I did not verify the production bundle output.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/routes/router.ts:36-55"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test-double casts lack the required justification comment",
+      "description": "`ResizeObserverStub as unknown as typeof ResizeObserver` and the `as DOMRect` casts in the test files are `as` assertions with no stated reason, which the TypeScript rules require. Test doubles justify the casts, so this is minor. The existing \"jsdom does not implement ResizeObserver\" comment covers most of it, but add one line about the structural mismatch.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/test/support/chart-provider-spy.ts:228"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Visible-range translation never fires when the first series is added",
+      "location": "src/chart/use-chart-provider.ts:237-242",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Theme-token read silently falls back to library defaults",
+      "location": "src/routes/chart-route.tsx:30-52",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Subscription callbacks and the indicator effect are empty no-ops",
+      "location": "src/chart/use-chart-provider.ts:293-304",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Blanket `react-hooks/refs` disable for the hook file",
+      "location": "eslint.config.js:55-79",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Stale task references and misplaced comment blocks in the hook",
+      "location": "src/chart/use-chart-provider.ts:17-20",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Duplicated measurement and Host scaffolding across four test files",
+      "location": "src/test/use-chart-provider.errors.test.tsx:34-62",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Imports split by a constant in the translation test",
+      "location": "src/test/use-chart-provider.translation.test.tsx:16-27",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Router harness gating is correct and well explained",
+      "location": "src/routes/router.ts:36-55",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Test-double casts lack the required justification comment",
+      "location": "src/test/support/chart-provider-spy.ts:228",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:27:12.994914",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 296836,
+  "cached_tokens": 186340,
+  "cache_write_tokens": 110490,
+  "completion_tokens": 5667,
+  "reasoning_tokens": null,
+  "duration_seconds": 48.7377910411451,
+  "cost_usd": 0.5215486,
+  "cost_basis": "provider"
+}

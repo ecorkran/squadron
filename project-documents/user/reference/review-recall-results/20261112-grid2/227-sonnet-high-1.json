@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Cutover can crash without writing its report, and health verdicts can rest on a stale log line",
+      "description": "The module docstring says the first failure stops the run and the report is still written. That only holds for `StepFailed` and `CalledProcessError`, the two types `run_steps` catches. Several steps can raise something else:\n- **`run_health`:** `log.read_text().splitlines()[-1]` raises `IndexError` on an empty log.\n- **`step_production`:** the same `[-1]` read has no `exists()` guard at all, so a missing log raises `FileNotFoundError`.\n- **`conf_sums`:** `next(...)` raises `StopIteration` if `17/main` is absent from `pg_lsclusters`.\n- **`main()`:** `production_lines(...)[0]` raises a bare `IndexError` on an empty cron file.\n\nAny of these aborts `main()` before `report.write_text(...)`. That loses the evidence on exactly the failure path the report exists for. A `try/finally` around `run_steps` that writes the report, or converting these reads into `StepFailed`, would fix it.\n\nSeparately, `run_health` ignores the exit code of `shell(...)` and takes the last line of an append-only log with no freshness check. The same log is also written by the installed 30-minute cron job. If the health command fails before it appends, for example when the append to the log fails under `set -e`, steps 7 and 10 read the previous run's `archive=0 stale=0` line and pass. I'd check `result.returncode` and require that the line's timestamp is newer than the start of the call.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#run_health"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A table value and several host facts are hard-coded again in the cutover scripts",
+      "description": "`strip_new_args` hard-codes `\" --replication-host 127.0.0.1\"`. That value belongs to `deploy/backup-clusters.conf` (the `17/main` row's `replication_host`), which `BackupCluster.replication_host` already exposes. If the row changes, the table, the rendered cron file and this stripping helper drift apart. When that happens the TD3 \"production lines gain only the new arguments\" guard reports a false change and blocks the cutover, or masks a real one. It should take the value from `ctx.main`, as it already does for `url_key`.\n\nOther constants are duplicated between the shell and Python tiers in the same way, against the \"define once\" rule in CLAUDE.md:\n- **`RCLONE_REMOTE = \"b2\"`:** also defined in `setup-backup.sh`.\n- **`CRON_FILE`:** also `CRON_TARGET` in `setup-backup.sh`.\n- **`ARM_FILE = \"RECONCILE-ARMED\"`:** also defined in `setup-backup.sh`.\n- **`HOST_BACKUP_ROOT = Path(\"/data/backup\")`:** the same literal as the `17/main` row's `backup_root`.\n- **`TICK_UNIT = \"postgresql@17-tick\"`:** derivable from `TICK`.\n\nEach one is a single-edit hazard.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:87"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Cron structure is recovered from a comment marker and the `root` user",
+      "description": "`block_lines` finds a cluster's block through the `# cluster <name>` comment. `production_lines` identifies host-block lines by `j.split()[5] == \"root\"`. The marker is documented in the cron template header and covered by tests, so this is a deliberate coupling. It is still a label used as structure, which CLAUDE.md warns against. If the cron user ever becomes `root`, or a cluster block gains a root-run job, `production_lines` silently returns the wrong set. A distinct host marker comment, mirroring `# cluster`, would be sturdier.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py#production_lines"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Arm-file messaging contradicts what the cutover does for the tick cluster",
+      "description": "For a missing arm file, `setup-backup.sh` reports \"created after the first watched reconcile; see runbook\". Its header also says it never creates the arm file. The cutover's `step_weekly` calls `arm.touch()` after one unarmed weekly run. Slice 227 documents this as intended: the tick prefix starts empty, so there is nothing to wrongly delete. The message is therefore misleading for `17/tick`. `cron_weekly_backup.sh` says the same thing, \"create it after watching a reconcile by hand\". A short note in the report text that the tick cluster's file is armed by the cutover would remove the contradiction.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh (Step 3, arm-file report)"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unexplained exemption weakens the unfilled-placeholder assertion",
+      "description": "The assertion changed from `\"@\" not in text` to `\"@\" not in text.replace(\"@192\", \"\")`. Nothing in the templates, the table or the render path produces `@192`, and I grepped `deploy/` to confirm. The exemption has no explanation, and it would hide a real unfilled `@192\u2026` token. It should be restored to the strict form, or commented with its source if one exists.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_setup_backup.py:777"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`assert` used for type narrowing in production code",
+      "description": "`assert flags is not None` after `require(...)`, and `assert match is not None` in `block_commands`, are stripped under `python -O`. `require` could return the narrowed value, or the code could raise `StepFailed`. Low risk, because the script is run directly.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#run_health"
+    },
+    {
+      "severity": "PASS",
+      "title": "Cluster table parsers, cron render and provisioning changes are consistent and tested",
+      "description": "- **Parsers:** `backup_clusters.sh` and `backup_clusters.py` apply the same field count, duplicate check, `MT_` key regex and `/data/` root rule. The table is parsed before any `setup-backup.sh` step, so a bad row changes nothing, and a test covers that.\n- **Render:** `render_cron.sh` refuses unfilled placeholders and unescaped `%`, and requires a `--pgdata` for every row. Its tests compare the `17/main` and host lines against the real pre-227 fixture line for line.\n- **Lifecycle:** `b2_lifecycle.sh` is read-only, passes the application key through the environment rather than argv, and a test asserts it never passes `-o`.\n- **Provisioning:** the replication grant in `provision_tick_roles.sql` is opt-in, and `provision_tick_cluster.sh` keeps the data directory at 0700 while opening only its parents.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "deploy/lib/render_cron.sh"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Cutover can crash without writing its report, and health verdicts can rest on a stale log line",
+      "location": "scripts/cutover_227_tick_backup.py#run_health",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "A table value and several host facts are hard-coded again in the cutover scripts",
+      "location": "scripts/cutover_227_helpers.py:87",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Cron structure is recovered from a comment marker and the `root` user",
+      "location": "scripts/cutover_227_helpers.py#production_lines",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Arm-file messaging contradicts what the cutover does for the tick cluster",
+      "location": "deploy/setup-backup.sh (Step 3, arm-file report)",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Unexplained exemption weakens the unfilled-placeholder assertion",
+      "location": "test/unit/test_setup_backup.py:777",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`assert` used for type narrowing in production code",
+      "location": "scripts/cutover_227_tick_backup.py#run_health",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Cluster table parsers, cron render and provisioning changes are consistent and tested",
+      "location": "deploy/lib/render_cron.sh",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:28:00.566036",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 21,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 22,
+  "prompt_tokens": 1208206,
+  "cached_tokens": 1046268,
+  "cache_write_tokens": 161920,
+  "completion_tokens": 17397,
+  "reasoning_tokens": null,
+  "duration_seconds": 144.84474966698326,
+  "cost_usd": 0.9324128,
+  "cost_basis": "provider"
+}

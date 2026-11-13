@@ -1,0 +1,186 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Raw-count scan is not restricted to the product's instruments",
+      "description": "`raw_counts` counts every `tick_trade` row in the session windows, grouped by instrument. The ledger side (`ledger_totals`) is filtered to the product's shape: dataset, symbols, stype and current tier units. `_session_row` takes the union of instrument ids from both maps and compares them. If `tick_trade` ever holds instruments from another product or shape, every one of them shows up as `ledger 0, raw N`. That would produce false `mismatch` results and exit code 3. `tick_coverage` loops over all universe entries, so this applies as soon as the universe has more than one product. The integration tests only exercise ES. I'd either scope the raw scan to the shape's instrument ids (for example via the ledger's instrument set) or add a test with a second product's rows.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py#raw_counts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Status and check values are bare strings instead of enums",
+      "description": "`MISMATCH, OK = \"mismatch\", \"ok\"` and the `CoverageSession.condition` and `status` fields typed as `str` go against the project rules. Those rules say to define comparison values once as an enum or constant, and to use `StrEnum` for choices. The tests then repeat the literals `\"ok\"` and `\"mismatch\"`. A `StrEnum` for the check result, and typing `condition` and `status` with the existing `DatasetCondition` and `TickSessionStatus`, would remove the drift risk. `jsonable` could serialize the enum values.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py:28"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Module-level `assert` guards an invariant",
+      "description": "The check that `_BUCKET_ROWS` covers every `TickSessionStatus` is a bare `assert`. It is stripped under `python -O`, so the guard silently disappears in optimized runs. If a status is added without updating `_BUCKET_ROWS`, `status` would then hide that bucket without any error. Raise an explicit exception, or cover it with a unit test.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:30"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`Any`-typed connection and callback at the CLI seam",
+      "description": "`_read` takes `Callable[[Any, str], ...]`, and the inner `read` in `tick_coverage` takes `conn: Any`. The tick modules already have a `Conn` alias in `manifest_reads`. Using it keeps strict pyright meaningful at this boundary and stops `Any` leaking into `build_status` and `build_coverage`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:_read"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Public helpers lack docstrings and a few functions are long",
+      "description": "`print_status`, `coverage_to_dict`, `print_coverage`, `shape_of`, `session_verdicts`, `jsonable` and `build_status` are public but have no docstrings. `_product_lines` runs to about 55 lines and `_product_status` to about 50, which is at the ~50-line guideline. `age()` returns odd text for a negative duration, for example if `observed_at` is in the future, and has no test.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py#print_status"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`jsonable` is a shared helper living in the status builder",
+      "description": "`tick_coverage` imports `jsonable`, `calendar_sessions`, `session_verdicts` and `shape_of` from `tick_status_build`. This is acceptable, but a small shared module would make the dependency direction clearer. In `_product_status`, `[c for c in lines if c not in spreads]` compares dataclasses by equality, and filtering on `instrument_class` directly would be simpler and cheaper.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:jsonable"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exit-code mapping, calendar I/O and test database safety",
+      "description": "- **Exit codes:** `TickDatabaseUnreachable` subclasses `TickPreflightError`, so writers keep their existing exit code. The new `storage` argument is checked first, so `status` and `coverage` exit with the storage code. The `except Exception` in `run_mapped` is a documented process-boundary handler that re-raises unmapped errors.\n- **Event loop:** the blocking calendar reads run through `asyncio.to_thread`.\n- **Error translation:** `calendar_sessions` re-raises specific exceptions as `TickCalendarError` with `from exc`.\n- **Test database safety:** the integration tests use throwaway databases from fixtures, never read a production URL variable, and delete rows by primary key.\n- **Refactor:** the `session_days` / `days_touched` / `utc_midnight` extraction removes duplicated logic with the same behavior.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py#run_mapped"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Raw-count scan is not restricted to the product's instruments",
+      "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Status and check values are bare strings instead of enums",
+      "location": "src/manta_trading/data/tick/tick_coverage.py:28",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Module-level `assert` guards an invariant",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:30",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`Any`-typed connection and callback at the CLI seam",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:_read",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Public helpers lack docstrings and a few functions are long",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py#print_status",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`jsonable` is a shared helper living in the status builder",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:jsonable",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Exit-code mapping, calendar I/O and test database safety",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py#run_mapped",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:28:43.214356",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 150543,
+  "cached_tokens": 111514,
+  "cache_write_tokens": 39025,
+  "completion_tokens": 4650,
+  "reasoning_tokens": null,
+  "duration_seconds": 35.704938125098124,
+  "cost_usd": 0.21705789999999997,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

@@ -1,0 +1,171 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Settings policy centralized and enforced per path",
+      "description": "The setting-sources and auto-memory decisions now live in one module and are consumed by the provider, the pipeline session, one-shot dispatch and review templates. `tests/providers/sdk/test_settings_policy.py` drives every automated path's real builder and asserts that none resolves to `None`. This removes the earlier gap where the CLI fell back to user settings.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/settings.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Reconnect failure and stop-task handling are observable",
+      "description": "`_reconnect` logs with `logger.exception`, records `unusable_reason`, and re-raises. `_stop_background` catches the SDK's bare `Exception` with a justifying comment and `# noqa: BLE001`, and logs each failure. Tests assert the ERROR log, the failure on later calls, and that the next stop still runs. This meets the exception-handling rule and the failure-mode-enumeration rule.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:215"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_collect_turns` is long and mixes several concerns",
+      "description": "`_collect_turns` handles timer selection, stream-end detection, leftover-turn discard and wait logging in one loop. It looks longer than the ~50-line guideline. Turn bookkeeping already moved into `sdk_turns.py`, so extracting the \"idle timeout vs. foreground read\" branch would shorten it. This is not blocking.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:215"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test helpers live in `conftest.py` and are imported directly, with loose return types",
+      "description": "`scripted_session` and `typed_config` return `object`. That forces many `# type: ignore[attr-defined]` comments in `tests/pipeline/test_sdk_session.py`, which weakens the strict-pyright coverage of test code. Returning `SDKExecutionSession` and a `Callable` would remove those ignores. Plain helpers such as `ScriptedClient` and `sdk_text` are imported from `conftest` by name. A `tests/pipeline/helpers.py` module would match the convention that `conftest.py` holds fixtures.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/conftest.py:196"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The dispatch artifact error defaults a missing response to an empty string",
+      "description": "`context.result.outputs.get(\"response\", \"\")` renders `(empty response)` both when the agent said nothing and when the key is absent. The agent-visible diagnostic is still useful, but the two cases are indistinguishable. Under the project's \"no silent fallback values\" principle, that is worth keeping in mind. It is low risk here because the text is only used for the error message.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/events/builtin/dispatch_artifact.py:147"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Config file read inside an async dispatch path",
+      "description": "`_background_idle_timeout_s` calls `get_typed_config`, which loads TOML synchronously. It runs once per waiting dispatch, so the cost is small. The Python rules require sync code in async functions to stay under 1ms in the worst case, so it is worth resolving the value once at session construction if it ever shows up in profiling.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:323"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Settings policy centralized and enforced per path",
+      "location": "src/squadron/providers/sdk/settings.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Reconnect failure and stop-task handling are observable",
+      "location": "src/squadron/pipeline/sdk_session.py:215",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_collect_turns` is long and mixes several concerns",
+      "location": "src/squadron/pipeline/sdk_session.py:215",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test helpers live in `conftest.py` and are imported directly, with loose return types",
+      "location": "tests/pipeline/conftest.py:196",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The dispatch artifact error defaults a missing response to an empty string",
+      "location": "src/squadron/events/builtin/dispatch_artifact.py:147",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Config file read inside an async dispatch path",
+      "location": "src/squadron/pipeline/sdk_session.py:323",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:25:30.769855",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 366899,
+  "cached_tokens": 239025,
+  "cache_write_tokens": 127868,
+  "completion_tokens": 3833,
+  "reasoning_tokens": null,
+  "duration_seconds": 33.06557824998163,
+  "cost_usd": 0.5801831000000001,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,111 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Series-count changes do not activate range translation",
+      "description": "The visible-range effect depends on `mount.ready`, `chart`, and `range`, but not on `seriesCountRef`. Adding or removing a series updates only the ref, so it does not trigger a render or rerun the effect. As a result, setting a range after the chart is populated does not apply it until some unrelated dependency changes. The translation test can miss this because it calls `setRange` after adding the series. Consider tracking the count in state or explicitly triggering translation when series membership changes.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:317-322"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Partial theme tokens fall back to library defaults",
+      "description": "When at least one token is present, `readChartStyle()` returns a style object containing `undefined` for any missing tokens. The stated fallback only applies when *all* tokens are missing. A partially applied stylesheet can therefore mix theme colors with provider defaults rather than consistently applying theme styling. Handle each missing token explicitly, or reject an incomplete token set.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/routes/chart-route.tsx:43-51"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hook and route exceed the project\u2019s approximate file-size guide",
+      "description": "`use-chart-provider.ts` is 366 lines and `chart-route.tsx` is 108 lines; the hook\u2019s responsibilities include lifecycle, resize, subscriptions, error handling, facade wiring, and context translation. The project asks to keep files near 300 lines where practical. Consider further extraction if this complexity is expected to grow.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Series-count changes do not activate range translation",
+      "location": "src/chart/use-chart-provider.ts:317-322",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Partial theme tokens fall back to library defaults",
+      "location": "src/routes/chart-route.tsx:43-51",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Hook and route exceed the project\u2019s approximate file-size guide",
+      "location": "src/chart/use-chart-provider.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:18:39.129383",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 60522,
+  "cached_tokens": 52352,
+  "cache_write_tokens": null,
+  "completion_tokens": 350,
+  "reasoning_tokens": 0,
+  "duration_seconds": 24.029498750111088,
+  "cost_usd": 0.00151552,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Duplicated \"want has no end date\" check",
+      "description": "`coverage_reads()` in `scripts/cutover_304_evidence.py` loops over `TICK_UNIVERSE`, raises `CutoverError` for an open-ended want, and builds the `{product} {schema} want has no end date` message. `latest_want_end()` in `scripts/purchase_verdicts.py:56-68` repeats the same loop, check and message. The project rules require DRY. One shared helper that yields `(entry, want)` pairs with an end date would give a single place to change. It would also remove the need for two separate tests of the same rule.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py:72-90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New tests use bare generics, which strict pyright rejects",
+      "description": "The Python rules require strict pyright over tests, with zero errors as a merge blocker. `test_purchase_verdicts.py` has several loose annotations:\n- `_request(...) -> dict`\n- `_unit(...) -> dict`\n- `_coverage(...) -> dict`\n- `exhausted: list | None`\n- `units: list[dict] | None`\n- `_status(...) -> object`\n\nThese are `reportMissingTypeArgument` errors under strict mode. Use `dict[str, Any]` and `list[ExhaustedRequest]`, or `Sequence[Any]`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_purchase_verdicts.py:197-205"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`cutover_304_evidence.py` is over the ~300-line guideline",
+      "description": "The file is now 312 lines. `collect()` (about 40 lines) and `_family_evidence()` (about 35 lines) are near or over the ~50-line and 20-line targets. The `purchase_verdicts` and `purchase_accounting` split was meant to avoid this. Moving `coverage_reads` and `_family_evidence` into one of those modules would bring the file back under the limit.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Script names no longer match their scope",
+      "description": "The docstring now says the script is shared by every purchase slice, and it takes `--slice`. The module, its tests and the `cutover_304_*` imports still carry the `304` name. This is not wrong. It will mislead readers as more purchase slices reuse it, so a rename is worth considering once 307 is closed.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:1-12"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`SystemExit` caught around `argparse` in `main`",
+      "description": "Catching `SystemExit` to turn argparse's exit into a return code is justified by the inline comment. It is a process-boundary handler, so it meets the exception-handling rule. `BLE` does not flag it.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:240-246"
+    },
+    {
+      "severity": "PASS",
+      "title": "Resubmit, ceiling and gate logic fails closed",
+      "description": "- **Ceiling rounding.** `_round_up` uses `ROUND_CEILING` on `Decimal`, so multiples are not raised (the tests cover 90 \u2192 90).\n- **Resubmit matching.** The key is `(schema, start, end)`. It matches `debug requests` rows because the `range_*` columns are dates. A missing original or a malformed `requested_at` is a stop, never a default.\n- **Estimate mode.** `check_ceilings=False` (`--estimate`) skips only the ceiling checks, and scope is still judged.\n- **Preflight gates.** `check_gate_issue` and `check_dataset_edge` treat every parse or exit failure as a stop. The tests assert that a `gh` failure is never read as closed.\n- **Session buckets.** `_unaccounted` raises on an unknown session bucket instead of passing it.\n- **Tests.** They use real CLI renderers (`_cell`, `_product_payload`, `coverage_to_dict`) for fixtures, as the parsing rules require.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:83-240"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Duplicated \"want has no end date\" check",
+      "location": "scripts/cutover_304_evidence.py:72-90",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "New tests use bare generics, which strict pyright rejects",
+      "location": "test/unit/scripts/test_purchase_verdicts.py:197-205",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`cutover_304_evidence.py` is over the ~300-line guideline",
+      "location": "scripts/cutover_304_evidence.py",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Script names no longer match their scope",
+      "location": "scripts/cutover_304_first_purchase.py:1-12",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`SystemExit` caught around `argparse` in `main`",
+      "location": "scripts/cutover_304_first_purchase.py:240-246",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Resubmit, ceiling and gate logic fails closed",
+      "location": "scripts/cutover_304_checks.py:83-240",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:28:02.781212",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 611706,
+  "cached_tokens": 486640,
+  "cache_write_tokens": 125054,
+  "completion_tokens": 5303,
+  "reasoning_tokens": null,
+  "duration_seconds": 48.365872082998976,
+  "cost_usd": 0.6071975,
+  "cost_basis": "provider"
+}

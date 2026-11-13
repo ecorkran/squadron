@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The operator docstring's step list omits both gates the preflight now runs",
+      "description": "The module docstring (the operator's instructions, and the source of `description=__doc__.split(\"\\n\")[0]`) still describes step 1 as \"ref exists and is on origin; env file has no plan and both ceilings; start instant and baselines recorded (first run)\". `_steps` now calls `run_gates(gate_issue)` \u2014 the closed-issue gate (D2) and the `check_dataset_edge` check (D1) \u2014 between the env checks and `record_start_and_baselines`, so two hard refusals that stop the cutover before anything is installed or written are undocumented in the file an operator reads. Step 5 (\"reconciliation, status, coverage, counts, session placement\") also no longer matches `collect`, which now reads `mt data accounting`, narrates family rows, ledger record deltas, the not-caught-up sessions and the retry-exhausted requests. The `--estimate` mode appears in the usage lines but not in the Steps list, and the resubmit rule (`_check_resubmit`: a resubmit is accepted only when its original was made at or after the recorded start) is not mentioned at all. The runbook was updated under task 5.3; this in-file text was not.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:1-29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`EXIT_USAGE` is defined and never used",
+      "description": "`EXIT_USAGE = 2` is dead. `main` returns argparse's own code (`except SystemExit as exc: return int(exc.code or 0)`), and a grep for `EXIT_USAGE` under `scripts/` returns only this definition plus the unrelated `scripts/wal_segment_name.py`. The test that appears to pin the value, `test_no_argument_prints_usage_and_exits_two`, passes because argparse defaults to 2, not because of this constant \u2014 so the constant can drift away from the behaviour it looks like it governs without any test failing. Either use it when the parse fails or delete it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`resubmit_origins` accepts a naive timestamp where its sibling stops",
+      "description": "`resubmit_origins` parses `requested_at` with `datetime.fromisoformat` and stores the result with no `tzinfo` check; `_check_resubmit` then compares it to `since`, which `judge()` builds as an aware datetime (`datetime.fromisoformat(start)` from the start file). A naive value therefore raises `TypeError` at `made < since`, and `main`'s handlers \u2014 `(CutoverError, subprocess.CalledProcessError, OSError)` and `(KeyError, ValueError)` \u2014 do not catch `TypeError`, so the cutover would end in an uncaught traceback rather than the named stop the module's style promises. The sibling parser added in the same change, `purchase_verdicts._edge_of`, treats exactly this case as a refusal (\"is not a UTC instant\"). Both parse the output of the same `_cell` renderer, so they should agree; the column is `TIMESTAMPTZ` (`market/schema/migrations/tick.py:146`), which makes the practical risk low.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py#resubmit_origins"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two spellings of the `mt data tick` exit codes now live side by side",
+      "description": "`purchase_verdicts.py` imports the canonical `EXIT_OK`/`EXIT_PARTIAL` from `manta_trading.cli.commands.tick_exit` \u2014 the module whose docstring states the integers live there only \u2014 while its direct sibling `cutover_304_evidence.py` keeps its own `EXIT_OK, EXIT_PARTIAL = 0, 3` literal for the same `mt data tick` verbs and passes it to `mt_json`. The literal is pre-existing, but this change is what introduced the second (canonical) spelling, so the two are now one grep apart from disagreeing. Importing the same constants in the evidence module would leave one source for the pair.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The resubmit rule rests on a production behaviour no test here pins (unverified)",
+      "description": "`_check_resubmit` is only as strong as the assumption that `tick_request.requested_at` still holds the *first* time a request was made after `mt data tick reset` puts its units back to `requested`. Nothing in this diff pins that: `test_resubmit_origins_use_jobless_rows_and_the_earliest_on_a_shared_range` and the other resubmit tests feed `resubmit_origins` rows they build themselves, and no test drives `reset.py`/`manifest_repo.reset_exhausted` to show the column is untouched. If reset ever rewrote `requested_at`, every resubmit would match as \"made after this cutover started\" and the rule would silently become a no-op \u2014 the one check here whose failure costs money rather than time. I did not read `manifest_repo.reset_exhausted`, so I can neither confirm nor refute it; flagging it as unverified rather than as a defect.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_cutover_304_checks.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`--estimate` still writes a narration log into the notes directory",
+      "description": "`_estimate_only`'s docstring says it \"buys nothing, writes no state (D4)\", and the task asked for the same, but `main` calls `start_log(log_path)` before it inspects `args.estimate`; `start_log` creates `cutover-{slice}-{ref}-{stamp}.log` and its parent directory on every run, estimate included. The new test accommodates this by excluding `cutover-307*` names from its \"nothing was written\" assertion, so it is likely intended. Still, \"writes no state\" beside state files in the same directory reads as contradictory, and one word in the docstring would remove the ambiguity.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#_estimate_only"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tests arrive with the checks and use the producers' real shapes",
+      "description": "The new behaviour is tested alongside it, not after: ceiling rounding (three parametrized cases including the not-raised multiple), the resubmit acceptance/refusal matrix including `since=None`, each gate failure mode separately (`gh` raising, non-JSON, missing `state`, absent/null/unparseable/naive edge, non-0-or-3 exit), each `_unaccounted` bucket on its own, and the stop-not-default paths (`accounting output has no ... key`, `tick accounting is unavailable`, family absent from baseline). The fixtures deliberately build documents through the real producers \u2014 `accounting_futures._product_payload`, `coverage_to_dict`, `tick_debug_cmds._cell` \u2014 so a shape change on the production side fails the test rather than escaping it, which is the \"real format\" requirement the project conventions ask for.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_purchase_verdicts.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "The new modules respect the layering and define each value once",
+      "description": "`purchase_verdicts` and `purchase_accounting` import only from `cutover_common`, `cutover_304_checks` and `manta_trading.*`, and nothing imports them except `cutover_304_evidence` and `cutover_304_first_purchase`; I found no cycle. Every comparison value that the new logic branches on is a named constant referenced from one place \u2014 `CEILING_STEP_USD`, `ACQUISITION_FAILED`, `PUBLICATION_AFTER_WANT_END`, `NO_ERROR_TEXT`, `ISSUE_CLOSED`, `STATUS_ACCEPTED_EXITS` \u2014 and the bucket sets in `purchase_verdicts` key on `TickSessionStatus` members rather than literals. The `_unaccounted` fallback raises `CutoverError` for an unknown bucket instead of defaulting, and `totals_delta` refuses a family absent from the baseline rather than treating it as zero, which matches the project's no-silent-fallback rule.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The operator docstring's step list omits both gates the preflight now runs",
+      "location": "scripts/cutover_304_first_purchase.py:1-29",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`EXIT_USAGE` is defined and never used",
+      "location": "scripts/cutover_304_first_purchase.py:79",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`resubmit_origins` accepts a naive timestamp where its sibling stops",
+      "location": "scripts/cutover_304_checks.py#resubmit_origins",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Two spellings of the `mt data tick` exit codes now live side by side",
+      "location": "scripts/cutover_304_evidence.py",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The resubmit rule rests on a production behaviour no test here pins (unverified)",
+      "location": "test/unit/scripts/test_cutover_304_checks.py",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`--estimate` still writes a narration log into the notes directory",
+      "location": "scripts/cutover_304_first_purchase.py#_estimate_only",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests arrive with the checks and use the producers' real shapes",
+      "location": "test/unit/scripts/test_purchase_verdicts.py",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The new modules respect the layering and define each value once",
+      "location": "scripts/purchase_verdicts.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:55:04.452223",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 308983,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2045446,
+  "cached_tokens": 1783680,
+  "cache_write_tokens": null,
+  "completion_tokens": 87204,
+  "reasoning_tokens": 82951,
+  "duration_seconds": 309.8702835000586,
+  "cost_usd": 0.09110663999999999,
+  "cost_basis": "alias_pricing"
+}

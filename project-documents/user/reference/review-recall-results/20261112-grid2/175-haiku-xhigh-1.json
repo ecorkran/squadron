@@ -1,0 +1,297 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Multi-part review usage is dropped when parts fold",
+      "description": "`_metadata()` keeps only `parts[0].metadata` and sums only `TOOL_CALLS_MADE_KEY`. Each part now stamps its own usage record in `_run_part` (`src/squadron/pipeline/actions/review.py:506`), and `_review` folds all parts (`review.py:293-294`). The folded result therefore carries only part 1's `USAGE_KEY`, so turns, tokens, and cost for parts 2..N never reach run state or `sq stats run`. This hits every review the action splits, such as a split tasks breakdown. The existing parity test checks summed `tool_calls_made` after the fold (`tests/pipeline/actions/test_review_action_parts.py:286`), but nothing checks usage. Fix: sum the per-part `UsageRecord`s in `_metadata`, and add a two-part test asserting the folded record equals the sum.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review_fold.py:85"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Compact drops the spend of failed or partly successful calls",
+      "description": "The failure branch returns an `ActionResult` with no metadata, so any telemetry on the exception is lost. `dispatch()` does attach telemetry to a `ProviderError` (`src/squadron/pipeline/sdk_session.py:232-235`), but the compact action never reads it. Separately, `compact()` captures the summary (`sdk_session.py:493-495`) and then calls `_reconnect` (`sdk_session.py:499`). If the reconnect raises, the captured reply and its spend are discarded. D5 requires failed calls to record what they spent. Fix: stamp `exc.telemetry` in the failure branch, and have `compact()` attach the captured telemetry to any exception raised after the capture.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py:82"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Compact's success path drops the alias, so subscription cost is mislabeled",
+      "description": "The success path passes `resolved=None` to `record_from_telemetry`. `_build` then sets `alias=None` (`src/squadron/pipeline/usage_capture.py:200`), and `_is_subscription(None)` returns False (`src/squadron/cli/stats_views.py:175-179`). A provider cost on a subscription alias therefore renders as `prov` instead of `api-rate equiv.` (`stats_views.py:170`), which breaks D3. The record's `model` also holds the alias name rather than the resolved model id (`compact.py:97`), and `tests/pipeline/actions/test_compact.py:291` asserts `record.model == \"haiku\"`, locking that in. The comment at `compact.py:91-92` says no resolution is needed, but the alias is still needed for labeling. Fix: resolve the summary model via `context.resolver.resolve_full`, as the summary action does, and record the resolved model id and alias.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py:96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two LLM paths discard their spend, and the stats rationale says gates carry none",
+      "description": "The findings-addressed judge leg calls `judge_residue` (`policy.py:62-67`), which calls `run_review_with_profile` (`src/squadron/review/addressed/judge.py:107-112`). That call's turns, usage, and cost are dropped: `JudgeLegResult` has no spend fields (`judge.py:38-44`), and the gate's metadata is `evidence.to_metadata()` with no usage (`policy.py:117`). `ActionType.GATE` is excluded from `LLM_ACTION_TYPES`, and the comment at `src/squadron/stats/usage_report.py:24-25` says gates are \"not expected to\" carry usage, so the judge's spend is invisible even to the \"no usage recorded\" line. Separately, prompt-only compact (`src/squadron/pipeline/actions/compact.py:107-150`) calls `claude_agent_sdk.query` and returns at `compact_boundary` without reading the `ResultMessage`, so its spend is never recorded. Fix: carry the judge's usage into `JudgeLegResult` and stamp it on the gate result, read the result message in prompt-only compact, and correct the comment.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/findings_addressed/policy.py:62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Frontmatter key names are duplicated between the writer and the stats reader",
+      "description": "The writer spells the keys as literals in `src/squadron/review/run_cost.py:53-61`. The reader repeats them in `_INT_KEYS` and in its `_int`, `_float`, and `_basis` calls (`reviews_report.py:27-31, 118-121, 152`). `_int` and `_float` return None for an absent key without warning, so renaming a key on the writer side silently blanks that whole column. This breaks the project's one-value-one-source rule. Fix: define the key names once beside `RunCost.frontmatter_lines` and import them in the reader.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py:27"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The stats reviews reader is tested only against hand-written frontmatter",
+      "description": "`_artifact` (`test_reviews_report.py:15`) and `_review` (`tests/cli/test_stats.py:162`) write frontmatter by hand. Neither uses the real writer, `format_review_markdown` (`src/squadron/review/persistence.py:499`). The project rule is that a parser's fixture must match what production writes, and the reader's silent `None` defaults make drift invisible. Fix: generate fixtures with `format_review_markdown` (and `format_provider_failure_markdown` for the failure shape), then parse them with `reviews_usage_report`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/stats/test_reviews_report.py:15"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fold and one-shot plumbing are duplicated across the agent, session, and summary paths",
+      "description": "`ClaudeSDKAgent._fold_result` (`agent.py:248-254`) and `DispatchTurns.fold_result` (`src/squadron/pipeline/sdk_turns.py:141-147`) are the same logic: read the result's usage, warn once with the same message, and fold into telemetry. Each keeps its own warn-once flag. The two one-shot runners repeat three steps: the effort note, the output-budget gate, and the usage copy (`src/squadron/pipeline/actions/dispatch.py:223-224, 240, 261` and `src/squadron/pipeline/summary_oneshot.py:115-116, 132, 172`). Fix: move the fold into one helper that takes the telemetry and a warned flag, and move the one-shot plumbing into a shared function.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/agent.py:248"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Functions and files grew well past the length guideline",
+      "description": "`_execute_summary` runs about 210 lines (from line 187 to the end of the 398-line file). `_dispatch_via_session` runs about 105 lines (`dispatch.py:515-620`), and `dispatch.py` is now 931 lines. The guide asks for roughly 50-line functions and 300-line files. Part of the length predates this diff, but the diff adds usage branching to both functions. Fix: extract the SDK-versus-one-shot capture block into helpers in `usage_capture.py`, and extract the session record building out of `_dispatch_via_session`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/summary.py:187"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`effort_for_session` returns None and is used as a value",
+      "description": "`effort_for_session` is declared `-> None` but is used as `effort_sent = capture.effort_for_session(resolved)` (`dispatch.py:572`, `summary.py:274`). The value is always None, which is correct under D7, but the call reads as if it computes the sent effort. Fix: make it a logging helper and pass `effort_sent=None` at the two call sites.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py:176"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Review pricing warnings repeat once per review",
+      "description": "`resolve_cost(..., set())` creates a new dedupe set on each call (`review_client.py:315` and `:321`). The run-level set (`executor.py:549-550`) is not shared with reviews, so a partly priced alias logs its warning once per review rather than once per run. Fix: pass the capture's warned set into `run_review_with_profile`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/review/review_client.py:315"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Gated and pre-call review failures count as LLM actions with no usage",
+      "description": "`LLM_ACTION_TYPES` counts every `review` row. A gated task review (`src/squadron/pipeline/actions/review.py:279-282`, whose results from `_gated_parts` at `review.py:529` carry no usage) never calls a model. Its row shows a dash and adds to \"N LLM action(s) have no usage recorded\", which reads as missing data. Fix: count a row as an LLM action only when a model call was attempted, or mark no-call rows explicitly.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/usage_report.py:26"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Lint, type checks, and tests were not run",
+      "description": "Bash was disabled, so ruff, pyright, and pytest did not run. Checked by reading and grep: no changed Python line exceeds the 104-column limit set in `pyproject.toml:71`. Run `ruff format --check`, `ruff check`, `pyright`, and the touched tests before merging.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "PASS",
+      "title": "Executor wiring and failure accounting check out",
+      "description": "Every executor path that reaches an LLM action passes `usage_capture`: the `common` kwargs at line 798, the loop, each, and fan-out paths, and the commit context at 1520-1531. An `is_error` result is folded before it raises and is not folded again by `collect()` (`sdk_session.py:361-367`). `DispatchStalledError` subclasses `ProviderError` (`sdk_session.py:123`), so moving the `ProviderError` clause up in `dispatch.py:404` still routes stalls through `_provider_failure`. `resolve()` is a projection of `resolve_full()` (`resolver.py:176-177`), so the session-path switch does not change model selection.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:798"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Multi-part review usage is dropped when parts fold",
+      "location": "src/squadron/pipeline/actions/review_fold.py:85",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Compact drops the spend of failed or partly successful calls",
+      "location": "src/squadron/pipeline/actions/compact.py:82",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Compact's success path drops the alias, so subscription cost is mislabeled",
+      "location": "src/squadron/pipeline/actions/compact.py:96",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Two LLM paths discard their spend, and the stats rationale says gates carry none",
+      "location": "src/squadron/pipeline/actions/findings_addressed/policy.py:62",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Frontmatter key names are duplicated between the writer and the stats reader",
+      "location": "src/squadron/stats/reviews_report.py:27",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The stats reviews reader is tested only against hand-written frontmatter",
+      "location": "tests/stats/test_reviews_report.py:15",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Fold and one-shot plumbing are duplicated across the agent, session, and summary paths",
+      "location": "src/squadron/providers/sdk/agent.py:248",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Functions and files grew well past the length guideline",
+      "location": "src/squadron/pipeline/actions/summary.py:187",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`effort_for_session` returns None and is used as a value",
+      "location": "src/squadron/pipeline/usage_capture.py:176",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Review pricing warnings repeat once per review",
+      "location": "src/squadron/review/review_client.py:315",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Gated and pre-call review failures count as LLM actions with no usage",
+      "location": "src/squadron/stats/usage_report.py:26",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Lint, type checks, and tests were not run",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Executor wiring and failure accounting check out",
+      "location": "src/squadron/pipeline/executor.py:798",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:06:45.279588",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 68,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 69,
+  "prompt_tokens": 14757141,
+  "cached_tokens": 14323564,
+  "cache_write_tokens": 433469,
+  "completion_tokens": 97996,
+  "reasoning_tokens": null,
+  "duration_seconds": 474.50881187501363,
+  "cost_usd": 1.4047001000000003,
+  "cost_basis": "provider"
+}

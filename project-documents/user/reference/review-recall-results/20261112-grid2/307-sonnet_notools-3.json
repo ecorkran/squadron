@@ -1,0 +1,168 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Session-range matching compares dates as strings",
+      "description": "`_label` tests `request.start <= day < request.end` on strings built with `str(row[\"range_start\"])` and `str(session[\"session_date\"])`. This is only correct if both sides are always zero-padded ISO `YYYY-MM-DD`. If `debug requests` ever renders a datetime (`2026-11-01T00:00:00+00:00`), the comparison silently mislabels sessions. A mislabel can hide an unaccounted session behind \"acquisition failed\", or fail a session that is accounted for. The same string-key fragility applies to `RequestKey` in `resubmit_origins` and `_check_scope`, where `req[\"start\"]` must match `str(row[\"range_start\"])` exactly. A mismatch there fails safe, with \"no recorded original\". Parse to `date` and compare dates, or assert the format at the boundary.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py#_label"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplicated open-ended-want check",
+      "description": "`latest_want_end` and `cutover_304_evidence.coverage_reads` both loop over `TICK_UNIVERSE` histories and raise the same \"want has no end date\" `CutoverError`. This is the logic duplication the project's DRY rule forbids. Put one iterator of bounded history wants in a shared module. Both functions can then consume it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py#latest_want_end"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests depend on private helpers and exact message text",
+      "description": "The tests call `accounting_futures._product_payload` and `tick_debug_cmds._cell`, which are private. They also assert on message fragments such as `\"--estimate run prints\"`. Using the real CLI shapes is the right idea, because it keeps the parser tests honest. But a rename of either private helper will break the tests with no behavior change. Consider exposing a public serializer, or adding one contract test that pins these shapes.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_cutover_304_first_purchase.py#_accounting"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Scripts named for slice 304 now serve every purchase slice",
+      "description": "The `cutover_304_*` module names, `prog=\"cutover_304_first_purchase.py\"` and the `PASS_*` constants now describe a shared tool. The docstring explains this, but the names mislead. Renaming is optional and can wait for a later cleanup.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`__doc__` is read without a None guard",
+      "description": "`__doc__.split(\"\\n\")[0]` raises `AttributeError` under `python -OO`. This is minor for an operator script.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#_parser"
+    },
+    {
+      "severity": "PASS",
+      "title": "Explicit failure behavior and exception handling",
+      "description": "Missing keys, an unmapped product, an unparseable timestamp, an unknown session bucket, a failing `gh` call and an unreadable dataset edge all raise `CutoverError` with distinct messages. No silent defaults were introduced. The `SystemExit` catch in `main` is at the process boundary and has a justifying comment. The new modules stay under about 300 lines. The tests cover each stop condition and the boundary cases: an edge equal to the minimum, and a session one position before the publication tail.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Session-range matching compares dates as strings",
+      "location": "scripts/purchase_verdicts.py#_label",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Duplicated open-ended-want check",
+      "location": "scripts/purchase_verdicts.py#latest_want_end",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests depend on private helpers and exact message text",
+      "location": "test/unit/scripts/test_cutover_304_first_purchase.py#_accounting",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Scripts named for slice 304 now serve every purchase slice",
+      "location": "scripts/cutover_304_first_purchase.py",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`__doc__` is read without a None guard",
+      "location": "scripts/cutover_304_first_purchase.py#_parser",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Explicit failure behavior and exception handling",
+      "location": "scripts/purchase_accounting.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:30:41.431317",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 194278,
+  "cached_tokens": 133549,
+  "cache_write_tokens": 60725,
+  "completion_tokens": 4870,
+  "reasoning_tokens": null,
+  "duration_seconds": 38.66258070804179,
+  "cost_usd": 0.31022590000000005,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

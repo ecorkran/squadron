@@ -1,0 +1,189 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Observer state is pruned to the current project, defeating the poll interval and fault recurrence",
+      "description": "`RunnerTenant.__init__` builds one `RunObserver` (`src/amoeba/runner/tenant.py`, `observer=self._observer`) and hands that same instance to every `ProjectTick` (`src/amoeba/runner/tenant.py#RunnerTenant._tick_project`). Each project's tick calls `observe()` with **only its own** unresolved entries (`src/amoeba/runner/tick.py`, `self._observer.observe(self._run_entries(), ...)`, where `_run_entries` filters on `self._project_id`). `observe()` then discards every entry id not in that project's set:\n\n```python\nlive = {entry.id for entry in entries}\nself._last_poll = {k: v for k, v in self._last_poll.items() if k in live}\nself._overdue &= live\nself._faulted = {k: v for k, v in self._faulted.items() if k in live}\n```\n\nWith projects `a` and `b` that each have an in-flight run, the tick order is `[a, b]`. `a`'s pass records `_last_poll[a1]` and polls; `b`'s pass immediately deletes it. On the next tick `_poll_due(a1)` sees `last is None` and returns `True`, so `a1` is polled again on a tick that is roughly one `idle_interval_seconds` later \u2014 not after `run_poll_interval_seconds`. The same mechanism silently drops `_overdue` and `_faulted` between two ticks of the same project, so:\n\n- The `launch_overdue` fault stops recurring, and `ProjectTick._close_recovered` therefore closes the escalation on the very next COMPLETE tick, only for it to be re-raised and re-opened on the tick after \u2014 escalation churn on the feed, which is exactly what the comment above `_faulted` says the replay exists to prevent (\"replayed on ticks between polls so a fault that stands does not look recovered (and its escalation close)\").\n- A standing `run_observation_failed` fault likewise disappears for a tick and its escalation closes and re-opens.\n\nThis contradicts the slice's own success criterion (\"A confirmed in-flight run is polled no more than once per tick and no more often than `run_poll_interval_seconds`\") and `docs/process-contract.md`'s \"at most once per tick per run and no more often than `--run-poll-interval`, least recently polled first\". It is also the exact cost the design measured and built the interval to avoid (\u22481 s wall and \u22480.7 s CPU per `sq runs wait` call, per the slice design's D10 rationale) \u2014 here it is paid once per project per tick.\n\nSingle-project supervisors are unaffected, which is why the whole `tests/runner/` suite is green: `test_tenant.py` registers multiple projects but never gives two of them concurrent in-flight entries, and `observe_support.Rig` / `tick_support.Rig` are single-project. Keying the three dictionaries by project as well as entry (or holding one observer per project) fixes it; a regression test with two projects each holding an in-flight run is what is missing.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:108-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Squadron's \"usage error\" exit code 2 is defined in two places",
+      "description": "`src/amoeba/process/sq_outcome.py:51` establishes the fact in prose and delegates it: \"Squadron's exit code for each outcome. Usage errors exit 2 and are not here.\" `src/amoeba/runner/observe.py` then re-states the same Squadron contract as a literal, `USAGE_ERROR_EXIT_CODE = 2`, and compares against it at `src/amoeba/runner/observe.py:245`. This is the case AGENTS.md names directly \u2014 \"Never scatter comparison values across code\u2026 define it once (enum, constant, or config)\" \u2014 and `USAGE_ERROR_EXIT_CODE` reaches the process-level decision in `ProjectTick._record_finished` that raises `UpstreamShapeError` and exits with `UPSTREAM_SHAPE`. `amoeba.process` is already an allowed import root for the Runner under boundary rule 11, so the constant can live once in `sq_outcome.py` (beside `OUTCOME_EXIT_CODES`) and be exported; changing Squadron's usage exit code should require editing one file, not three.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:44"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"exactly one broad except\" test asserts on file text, not on syntax",
+      "description": "`test_the_runner_package_has_exactly_one_broad_except` counts `path.read_text(encoding=\"utf-8\").count(\"except Exception\")` over every `*.py` in `src/amoeba/runner`. That is a substring count, so it passes just as happily for `except BaseException as error:` (which would catch `KeyboardInterrupt` and `SystemExit` at this boundary), for `except Exception:` in a comment or docstring, and it would silently become `2` if a comment quoted the phrase. The invariant the slice actually needs \u2014 one broad handler, at the documented process boundary in `tenant.py` \u2014 is stated in the module docstring and enforced only by this count. Parsing the AST and asserting on `ast.ExceptHandler` nodes whose `type` is `Exception` (and on which file they appear in) tests the property rather than a rendering of it.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/runner/test_tenant.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`build_argv` is called twice per launch: once to validate, once to execute",
+      "description": "`_launch` calls `build_argv(action.pipeline, run_id, action.params)` purely for its side effect (the `ValueError` before journaling, as the inline comment says) and discards the result; `launch()` then rebuilds the same argv from the journal entry's parameters. The two calls agree today because `journal_issue` round-trips `str` values through JSON and `_params_parameter` re-checks them, but \"what was validated\" and \"what is executed\" are two different computations. Passing the validated argv into `launch()` (or extracting the parameter check into one function both call) would keep D2's \"call this before journaling\" guarantee without relying on the two paths staying in lock-step.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py#ProjectTick._launch"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slice document still records `UPSTREAM_SHAPE` as exit code 8",
+      "description": "Under \"API Contracts\" the slice design says \"New exit code `UPSTREAM_SHAPE` (8): a launch exited 2\u2026\". The implementation uses 15, with a comment explaining why (`src/amoeba/cli/main.py`: \"8 is already `NOT_RUNNING_STATUS`, so this is the next free value\"), and `tests/test_cli_lifecycle.py` pins 15. `docs/process-contract.md` and the CHANGELOG agree with the code, so only the slice design's API-contract line is stale. It is the artifact a reader consults before wiring a consumer to this exit code.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "project-documents/user/slices/122-slice.runner-tenant-and-control-surface.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Block-then-resolve is idempotent and the crash proof exercises it",
+      "description": "I checked the ordering claim rather than taking it from the hunk. Every path through `record` writes the block before `journal_resolve`, `_block_once` returns early when `store.blocked_state_for(entry.node_id)` is not `None`, and `Store.block` itself refuses a second block (`_refuse_if_blocked`). The `BETWEEN_BLOCK_AND_RESOLVE` kill point in `tests/runner/crash_entry.py` (which patches `Store.journal_resolve` to `SIGKILL` itself) plus `test_kill_between_block_and_resolve_finishes_the_sequence` asserting `len(harness.open_blocks(...)) == 1` is the right test for that invariant, and it is written as a real subprocess crash rather than a mocked one.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/finish.py#record"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exception handling follows the specific-type discipline the project requires",
+      "description": "Reading the modules rather than the diff: every `except` in `src/amoeba/runner/` names a specific type with an inline justification (`OSError` in `launch()` and `_tail_or_error`, `subprocess.TimeoutExpired` and `OSError` in `probe_link`, `OSError` in `_check_line`), and the single broad handler is the per-project boundary in `tenant.py`, where it logs with `logger.exception`, escalates, and deliberately lets a failing escalation write propagate. `STORE_FAILURES` and `UpstreamShapeError` re-raise before it, so a broken store still stops the process instead of running blind. That matches both the project rule and the slice's D8.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py#RunnerTenant._tick_project"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Observer state is pruned to the current project, defeating the poll interval and fault recurrence",
+      "location": "src/amoeba/runner/observe.py:108-111",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Squadron's \"usage error\" exit code 2 is defined in two places",
+      "location": "src/amoeba/runner/observe.py:44",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The \"exactly one broad except\" test asserts on file text, not on syntax",
+      "location": "tests/runner/test_tenant.py",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`build_argv` is called twice per launch: once to validate, once to execute",
+      "location": "src/amoeba/runner/tick.py#ProjectTick._launch",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Slice document still records `UPSTREAM_SHAPE` as exit code 8",
+      "location": "project-documents/user/slices/122-slice.runner-tenant-and-control-surface.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Block-then-resolve is idempotent and the crash proof exercises it",
+      "location": "src/amoeba/runner/finish.py#record",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Exception handling follows the specific-type discipline the project requires",
+      "location": "src/amoeba/runner/tenant.py#RunnerTenant._tick_project",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:49:53.144007",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 687579,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2506283,
+  "cached_tokens": 2106496,
+  "cache_write_tokens": null,
+  "completion_tokens": 183047,
+  "reasoning_tokens": 171899,
+  "duration_seconds": 1360.2547625000589,
+  "cost_usd": 0.15690196,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,111 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Coverage compares counts from different database snapshots",
+      "description": "The CLI supplies an autocommit connection, so ledger and raw counts are separate snapshots. If ingestion commits between these reads, coverage compares the old ledger with new raw rows and falsely reports corruption (exit 3). Supersession can cause the same problem. Run the report within a read-only REPEATABLE READ transaction and add a concurrent-ingest regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py:109-113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Raw counts are not scoped to the selected request shape",
+      "description": "`ledger_totals` filters by dataset, symbols and symbology, but `raw_counts` counts every instrument in the session windows. Records ingested under another request shape therefore appear as raw-only mismatches for the selected product. Apply equivalent ownership scoping to the raw query while retaining detection of unexpected rows within that scope.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:166-173"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Coverage repeatedly scans all count keys on the event loop",
+      "description": "Every session reconstructs and scans all ledger/raw keys, making report assembly quadratic in the session count. An isolated execution of this function with 250 sessions and 100 instruments took approximately 244 ms synchronously, violating the project's event-loop discipline. Group counts by session once, and move potentially substantial report assembly off the event loop.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py:81-82"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Coverage compares counts from different database snapshots",
+      "location": "src/manta_trading/data/tick/tick_coverage.py:109-113",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Raw counts are not scoped to the selected request shape",
+      "location": "src/manta_trading/data/tick/status_reads.py:166-173",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Coverage repeatedly scans all count keys on the event loop",
+      "location": "src/manta_trading/data/tick/tick_coverage.py:81-82",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:20:52.151119",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 93792,
+  "cached_tokens": 93440,
+  "cache_write_tokens": null,
+  "completion_tokens": 334,
+  "reasoning_tokens": 0,
+  "duration_seconds": 82.63708170806058,
+  "cost_usd": 0.013388,
+  "cost_basis": "alias_pricing"
+}

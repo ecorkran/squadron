@@ -1,0 +1,315 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Unexpected exceptions skip the cutover report",
+      "description": "`run_steps` catches only `StepFailed` and `CalledProcessError`. Any other exception escapes it, and `main()` writes the report only after `run_steps` returns (lines 309-312). The run then ends in a traceback with no report, the failing step stays `not run`, and the docstring's promise (lines 4-6) that \"the report is still written\" is broken.\n\nConcrete triggers in the code: `step_production` reads `backup-health.log` with `.splitlines()[-1]` (line 224), which raises `IndexError` on an empty file and `FileNotFoundError` if it is missing. `tick_locks_held` calls `int(psql(...))` (`scripts/cutover_227_host.py:96`), which raises `ValueError` on empty output. `conf_sums` uses an unguarded `next()` (`scripts/cutover_227_host.py:82`), which raises `StopIteration` if 17/main is absent from `pg_lsclusters`. `step_production` runs after step 4 has already installed the cron file, so an exception there leaves the operator with no record of the state.\n\nFix: wrap the `run_steps` call in `try/finally` in `main()` so the report is always written and records the exception. That is the top-level process-boundary handler CLAUDE.md allows (option c). Add a test that drives `main()` with a step raising `IndexError` and asserts the report exists. No test here exercises `main()`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:269-284"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A test asserts nothing, and the report-path test never reaches `main()`",
+      "description": "`assert all(\"manta \" not in c.split(\"/\")[0] for c in commands.values())` cannot fail. Every command from `block_commands` starts with the absolute checkout path, so `split(\"/\")[0]` is always `\"\"`. The intended check is that the cron user field was stripped, e.g. `not c.startswith(\"manta \")`.\n\nSeparately, `test_failed_step_stops_later_steps_and_report_still_written` (line 194) never calls `main()` and never checks a file on disk. It calls only `render_report` (line 212), so the \"report is still written\" contract is untested. That is why the crash path above is not caught.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_cutover_227.py:101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The REPLICATION branch of the roles SQL runs in no database test",
+      "description": "The `\\if :{?with_replication}` branch (`ALTER ROLE %I REPLICATION`) is the one manta9000's tick cluster will run for the first time, via `ensure_databases` in `scripts/provision_tick_cluster.sh:274`. The shared `provisioned_tick_db` fixture (`test/tick_support/database.py:43-48`) applies the file without `with_replication`, so that branch never executes in any database-backed test. The unit tests in `test/unit/test_provision_tick_lib.py:250-258` check only the literal text of the call and the order of two substrings in the SQL file.\n\nA psql syntax error or `\\gexec` mistake in that branch would first surface during the production cutover's provisioning step. Fix: parametrize the fixture to apply the file with `-v with_replication=1` and assert `pg_roles.rolreplication` for the migrate role, including the re-run case.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "scripts/provision_tick_roles.sql:116-125"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Constants are duplicated across shell and Python",
+      "description": "`PUSH_MIN_AGE_S = 120` duplicates the push's `MIN_AGE=2m` (`scripts/sync_wal_offsite.sh:34`) and `PUSH_MIN_AGE_SEC=120` (`scripts/cron_weekly_backup.sh:54`). The `--min-age` arithmetic at lines 213-214 re-implements `check_since` (`cron_weekly_backup.sh:134`). Divergence is mostly fail-safe, since a larger push age makes the check report a false difference, but the value should be defined once.\n\nOther duplicates: the `-` sentinel `TABLE_NONE=-` in `deploy/lib/render_cron.sh:39` and `deploy/lib/b2_lifecycle.sh:34`, plus `_NONE = \"-\"` in `scripts/backup_clusters.py:19`; `ARM_FILE` in `cutover_227_tick_backup.py:69` and `deploy/setup-backup.sh:80`; the cron path in `cutover_227_helpers.py:16` and `deploy/setup-backup.sh:65`; and the literal `127.0.0.1` in `strip_new_args` (`cutover_227_helpers.py:87`), even though the table value is available as `ctx.main.replication_host`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:68"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Health and push exit statuses are discarded",
+      "description": "`step_offsite` calls `shell(tick_commands()[\"push\"], step)` and ignores the result. `run_health` does the same at line 158. `shell()` (`scripts/cutover_227_host.py:53-56`) records only the command line, not stdout, stderr, or the exit code. A failing push is caught only indirectly by the `rclone check` that follows, and the report cannot show why. Record the exit code and stderr tail as `step_weekly` does, and fail the step on a non-zero push exit.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:209"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The run-lib failure message names `env`",
+      "description": "`run_lib` shifts off the prefix and then uses `basename \"$1\"`. For the pg-settings call (line 225), the first remaining argument is `env`, so a failure prints `MISSING 17/main env exited 1` instead of naming `pg_settings.sh`. This function was rewritten in the diff and kept the bug. Pass the library path as an explicit argument.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh:159"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Shell-built SQL in the tick lock guard",
+      "description": "`tick_locks_held` builds its SQL with an f-string and passes it to `psql -c`. The interpolated values are integer constants, so there is no injection path, but CLAUDE.md says never to f-string SQL. Pass the keys through `psql -v` variables instead.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "scripts/cutover_227_host.py:91-96"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The report is written to a git-tracked directory without the credential scan",
+      "description": "`provision_tick_cluster.sh` runs `log_scrub` on its copied log before writing to `project-documents/user/notes/` (lines 340 and 353). The cutover writes its report to the same directory with no scan, and the report includes captured setup-backup and psql output (`scripts/cutover_227_host.py:109-114`). The current content looks harmless (hashes, cron lines with key names only), so this is a policy-consistency gap, not a confirmed leak. Run `log_scrub` over the report before writing it.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:310-312"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The proof_226 harness still expects the removed proof database",
+      "description": "`provision_tick_cluster.sh` no longer writes `MT_PROOF_226_*` URLs or creates `trading_tick_proof`. The 227 slice design calls for this (`project-documents/user/slices/227-slice.backup-coverage-for-tick-archive-and-database.md:57`). The proof harness still reads those keys and raises `ProofSetupError` when they are absent, so the failure is loud. Decide whether the harness is retired or re-pointed, and say so in its docs.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/proof_226/common.py:21-22"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Pre-227 compatibility fallbacks have no removal step",
+      "description": "The scripts the cron lines call keep fallbacks for the pre-227 form. `backup_health_cron.sh:22` reads `MT_TIMESCALE_MAINTENANCE_URL` when `--url-key` is absent. `cron_nightly_metadata.sh:17-19` and `:32-35` default `--remote`. `cron_weekly_backup.sh:62-64` rewrites a hard-coded `@192.168.1.144:` to `@127.0.0.1:`. Each comment says the form \"goes after the cutover\", but neither the cutover script nor this diff removes them or checks that the installed cron file no longer uses them. These files are outside the diff. I flag them because the cutover is the natural place to retire them. CLAUDE.md prohibits silent fallback values.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cron_weekly_backup.sh:60-64"
+    },
+    {
+      "severity": "PASS",
+      "title": "The advisory-lock guard query matches how the locks are taken",
+      "description": "The tick run takes its lock with `pg_try_advisory_lock(%s)` on a single bigint key (`src/manta_trading/data/tick/store_context.py:216`). The keys are 220_000_001 and 220_000_002 (`src/manta_trading/data/tick/constants.py:172,240`). A single bigint below 2^32 appears in `pg_locks` with `classid = 0`, `objsubid = 1`, and `objid = key`, so the `classid = 0 AND objsubid = 1 AND objid IN (...)` filter matches.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_host.py:90-96"
+    },
+    {
+      "severity": "PASS",
+      "title": "The cron lines pass only flags their scripts accept",
+      "description": "`--url-key` and `--replication-host` are parsed in `scripts/cron_weekly_backup.sh:77-78` and `scripts/backup_health_cron.sh:50`. `--url-key`, `--remote`, and `--dest` are parsed in `scripts/cron_nightly_metadata.sh:44-47`. The 17/main metadata line gains `--remote b2:<bucket>`, which equals the script's pre-227 default (`cron_nightly_metadata.sh:57-60`), so the production destination does not change.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "deploy/cron.d/manta-trading-backup.cluster:6-9"
+    },
+    {
+      "severity": "PASS",
+      "title": "The offsite check's age window is computed correctly",
+      "description": "The WAL check passes `--min-age (elapsed + 120)s`, so it compares only segments older than the push's own cutoff. That is the same window `check_since` uses in `scripts/cron_weekly_backup.sh:134`. The only remaining issue is the constant duplication noted above.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:207-217"
+    },
+    {
+      "severity": "PASS",
+      "title": "The lifecycle probe is read-only and reads the same env keys as the restic path",
+      "description": "The script calls only `rclone backend lifecycle`, with no write arguments, so it cannot replace bucket rules. It prints any missing rule for manual entry in the B2 console. The three key names match `deploy/lib/restic_repo.sh:21`. Key values reach rclone through environment variables, not argv. The test `test_never_sets_a_rule` in `test/unit/test_setup_backup.py` guards the read-only property.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/lib/b2_lifecycle.sh:31-33"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unexpected exceptions skip the cutover report",
+      "location": "scripts/cutover_227_tick_backup.py:269-284",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "A test asserts nothing, and the report-path test never reaches `main()`",
+      "location": "test/unit/test_cutover_227.py:101",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The REPLICATION branch of the roles SQL runs in no database test",
+      "location": "scripts/provision_tick_roles.sql:116-125",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Constants are duplicated across shell and Python",
+      "location": "scripts/cutover_227_tick_backup.py:68",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Health and push exit statuses are discarded",
+      "location": "scripts/cutover_227_tick_backup.py:209",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The run-lib failure message names `env`",
+      "location": "deploy/setup-backup.sh:159",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Shell-built SQL in the tick lock guard",
+      "location": "scripts/cutover_227_host.py:91-96",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The report is written to a git-tracked directory without the credential scan",
+      "location": "scripts/cutover_227_tick_backup.py:310-312",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The proof_226 harness still expects the removed proof database",
+      "location": "scripts/proof_226/common.py:21-22",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Pre-227 compatibility fallbacks have no removal step",
+      "location": "scripts/cron_weekly_backup.sh:60-64",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The advisory-lock guard query matches how the locks are taken",
+      "location": "scripts/cutover_227_host.py:90-96",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The cron lines pass only flags their scripts accept",
+      "location": "deploy/cron.d/manta-trading-backup.cluster:6-9",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The offsite check's age window is computed correctly",
+      "location": "scripts/cutover_227_tick_backup.py:207-217",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The lifecycle probe is read-only and reads the same env keys as the restic path",
+      "location": "deploy/lib/b2_lifecycle.sh:31-33",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:09:57.796719",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 42,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 43,
+  "prompt_tokens": 3645486,
+  "cached_tokens": 3304390,
+  "cache_write_tokens": 341064,
+  "completion_tokens": 96610,
+  "reasoning_tokens": null,
+  "duration_seconds": 433.64912616601214,
+  "cost_usd": 0.6993360000000001,
+  "cost_basis": "provider"
+}

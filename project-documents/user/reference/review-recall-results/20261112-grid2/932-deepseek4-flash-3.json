@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`auto_memory` property has no `None` guard while its sibling does",
+      "description": "```python\n@property\ndef auto_memory(self) -> bool:\n    \"\"\"Whether this session's clients load Claude Code auto-memory.\"\"\"\n    return AUTO_MEMORY_DISABLE_ENV not in self.base_options.env\n```\n\n`setting_sources`, two lines above, explicitly handles the `None` case (`return None if sources is None else list(sources)`); `auto_memory` does not. `SDKExecutionSession` is a public dataclass requiring only `client` and `base_options`, and both test helpers construct it from `ClaudeAgentOptions(cwd=\".\", permission_mode=\"bypassPermissions\")` with no `env` (`tests/pipeline/conftest.py#scripted_session`, `tests/pipeline/test_sdk_session.py#_make_options`). If `ClaudeAgentOptions.env` defaults to `None` \u2014 which the `base_env: Mapping[str, str] | None` parameter of `sdk_settings_options` and the `# type: ignore[arg-type]` on `kwargs.get(\"env\")` in `provider.py#create_agent` both hint at \u2014 this raises `TypeError: argument of type 'NoneType' is not iterable` rather than returning a value.\n\nToday `open_pipeline_session` is the only production constructor and it always passes a dict, so this is latent rather than live. It is also untested on that path: `tests/pipeline/actions/test_dispatch_session.py` sets `session.auto_memory = True` on an `AsyncMock(spec=SDKExecutionSession)`, so the real property body is never exercised with `env=None`. A `return not self.base_options.env or AUTO_MEMORY_DISABLE_ENV not in self.base_options.env` (or a `(self.base_options.env or {})` guard) plus one test would close it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:141-143"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`env` is now set on every SDK spawn, including as `{}` on the default pipeline path",
+      "description": "The diff replaces the previous conditional merge with:\n\n```python\nsettings = sdk_settings_options(config.setting_sources or [], auto_memory=config.auto_memory, base_env=kwargs.get(\"env\"))\nkwargs[\"env\"] = settings[\"env\"]\n```\n\nThis is a real change of shape, not only of content. Before, `kwargs[\"env\"]` existed only when `config.setting_sources == []` (the PR-review path); now an `env` key is always present. `open_pipeline_session` does the same (`env=settings[\"env\"]`), and with `pipeline.auto_memory` at its `True` default and `pipeline.user_settings` at `False`, `sdk_settings_options` returns `env == {}`. So the default pipeline SDK session and the default one-shot pipeline dispatch now pass an **empty but present** mapping where the key was previously absent.\n\nWhether that is equivalent depends on the SDK's merge semantics, and the SDK is not in this repository, so I could not verify it \u2014 I am flagging it rather than asserting it. If `ClaudeAgentOptions.env` is merged over `os.environ` the change is inert; if a supplied mapping is treated as the complete subprocess environment, the default pipeline path spawns the CLI without `PATH` and fails immediately. The existing tests assert only on the *contents* of `options.env` (`tests/providers/sdk/test_settings.py`, `tests/pipeline/test_sdk_session.py#test_builder_applies_policy`); none establishes that a spawn with `env={}` still works. One assertion against the installed SDK's merge behavior (or a single smoke spawn) converts this from an open question into a fact.\n\nNote also that the `# type: ignore[arg-type]` on `kwargs.get(\"env\")` is now the only thing standing between the call and the type checker; `sdk_settings_options` accepts `Mapping[str, str] | None` but the `<object>` value from `kwargs` is being passed unvalidated.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/provider.py#create_agent"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`docs/TEMPLATES.md` still documents `setting_sources: null` as \"no project settings loaded\"",
+      "description": "`_resolve_setting_sources` now resolves an absent **or null** key to `REVIEW_SETTING_SOURCES = (\"project\",)`, and the built-in `arch` and `tasks` templates were changed from `setting_sources is None` to `[\"project\"]` (asserted in `tests/review/test_builtin_arch.py`, `tests/review/test_builtin_tasks.py`, and `tests/review/test_templates.py#TestSettingSourcesResolution`). The author-facing guide was not updated and now contradicts the loader in three places:\n\n- line 31: `setting_sources: null | [string]` / `# null: no project settings loaded`\n- line 128: the worked example ends with `setting_sources: null`\n- line 154: \"arch \u2026 Does not load project settings (`setting_sources: null`)\"\n\nAfter this change a template that omits the key (or sets it to `null`) **does** load `.claude/settings.json` and `CLAUDE.md` from its `cwd`. For `arch` and `tasks` that is the intended new behavior, but a reader following this guide to author a custom template would be told the opposite of what the code does \u2014 and the reason `null` was load-bearing (slice 382 D8, untrusted-cwd isolation for PR reviews) makes the distinction worth stating explicitly rather than silently inverting.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "docs/TEMPLATES.md:31"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The resume-seed log now fires where no session exists to seed",
+      "description": "The refactor moved the state load out of the `start_from is not None and sdk_session is not None` guard. `_load_resume_seed` now runs for *every* resumed run, including prompt-only runs (`ExecutionMode.PROMPT_ONLY`, where `run.py` passes `from_step` and no session). In that case it reads the state file, finds the applicable `CompactSummary`, emits\n\n```\nexecutor: resuming at step %d; seeding session from compact summary %s\n```\n\nand returns text that `execute_pipeline` then discards, because `sdk_session is None` means neither the rotate branch nor `_connect_lazy_session` consumes it. The operator sees an INFO line claiming a seed that never happened. Moving the log into the two places that actually seed (the rotate branch and `_connect_lazy_session`) would make the signal truthful; the computation itself is cheap enough that leaving it is fine.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py#_load_resume_seed"
+    },
+    {
+      "severity": "PASS",
+      "title": "Seed framing is now applied exactly once",
+      "description": "Verified against the underlying files rather than the hunk: `_execute_restore` no longer imports or calls `frame_summary_for_seed` and passes raw text to `seed_context`, and `_reconnect` routes through `_seeded_options`, which is the only caller of `frame_summary_for_seed`. `tests/pipeline/actions/test_summary.py#test_restore_frames_summary_exactly_once` pins this by counting `_SEED_FRAMING_PREFIX` occurrences in the new client's `system_prompt[\"append\"]`, which is the right assertion for the defect (a doubled frame) rather than for the implementation. The companion assertions that the rotated client received no `query` cover the #162 safety property.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/summary.py#_execute_restore"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`auto_memory` property has no `None` guard while its sibling does",
+      "location": "src/squadron/pipeline/sdk_session.py:141-143",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`env` is now set on every SDK spawn, including as `{}` on the default pipeline path",
+      "location": "src/squadron/providers/sdk/provider.py#create_agent",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`docs/TEMPLATES.md` still documents `setting_sources: null` as \"no project settings loaded\"",
+      "location": "docs/TEMPLATES.md:31",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The resume-seed log now fires where no session exists to seed",
+      "location": "src/squadron/pipeline/executor.py#_load_resume_seed",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Seed framing is now applied exactly once",
+      "location": "src/squadron/pipeline/actions/summary.py#_execute_restore",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:44:03.666978",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 51,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 521027,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2475248,
+  "cached_tokens": 2019840,
+  "cache_write_tokens": null,
+  "completion_tokens": 137393,
+  "reasoning_tokens": 130263,
+  "duration_seconds": 728.9639499171171,
+  "cost_usd": 0.14079599999999998,
+  "cost_basis": "alias_pricing"
+}

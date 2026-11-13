@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A launch that raises after journaling is never recorded as a launch failure",
+      "description": "`_launch` journals the entry with `journal_issue` and then calls `launch()`. `launch()` raises `ValueError` for unusable parameters. Examples are an empty `checkout`, a non-string `params` value, or a `build_argv` rejection of a `,` in a value. `_launch` re-runs `build_argv` before journaling, but only on `action.params`. The checks in `launch()` (`_text_parameter`, `_params_parameter`) run only after the entry is written. If one of them raises, the entry is left unresolved with no tracked child and no launch log. The tenant's broad catch then escalates it. The node has a run in flight, so `escalate` takes the project-scoped path. On later ticks the observer treats the untracked entry as confirmed, polls it and gets `not_found`. That resolves it as `RunVanished` (\"vanished: Squadron has no state\"), a misleading cause. Validate `checkout` (non-empty) before journaling. Alternatively, catch the `ValueError` in `_launch` and record it through `finish.record` as a `LaunchFailed` with `SPAWN_ERROR`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py:166-186"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`observe.py` exceeds the file-size guideline and mixes several concerns",
+      "description": "The file is about 326 lines, over the project's ~300-line guideline. It combines poll cadence, confirmed-run classification, unconfirmed-launch handling, overdue and fault replay state (`_overdue`, `_faulted`, `_last_poll`), and log reading. `_after_launch_poll` takes seven arguments. Splitting the unconfirmed-launch path into its own module would improve cohesion and bring the file under the limit.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Settings validation uses string-keyed `getattr` and skips one new bound",
+      "description": "`validate_settings` looks up fields with `getattr(settings, name)` from a tuple of string names. A renamed field would fail at runtime instead of under pyright strict. `launch_grace_seconds` is consumed by the observer but is not checked for being non-negative. A negative value would silently make every launch overdue immediately. Access the fields directly, for example with `(name, value)` pairs built from attributes. Also add `launch_grace_seconds` to the checks.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/amoeba/runner/factory.py:34-52"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tests reach into private state and use loose typing",
+      "description": "Several tests use `rig.tenant._tracker`, `tenant._planners` and `# type: ignore` / `# pyright: ignore` comments. `test_the_runner_package_has_exactly_one_broad_except` counts the substring `except Exception` across source files. A comment or docstring containing that phrase would break it. Matching on the AST would be sturdier.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/runner/test_tenant.py:176"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Crash-proof entry point patches `Store` at class level",
+      "description": "`_arm_resolve_kill` monkeypatches `Store.journal_resolve` for the whole process. That is acceptable in a throwaway subprocess whose only purpose is to be killed. It stays isolated because the arming only happens when `PROOF_KILL_AT=between_block_and_resolve` is set.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/runner/crash_entry.py:118-126"
+    },
+    {
+      "severity": "PASS",
+      "title": "Process-boundary exception handling and import boundaries",
+      "description": "The single broad catch is annotated with `noqa: BLE001`, logged with `logger.exception`, and escalated. Store failures and `UpstreamShapeError` re-raise. The other expected-failure catches (`OSError` in `launch`, `_check_line` and `probe_link`) are narrow and commented. Import-boundary tests (rules 10 and 11) cover the new package. The tick budget is checked before every subprocess call, and `test_budget_coverage.py` enforces that.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py:132-148"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A launch that raises after journaling is never recorded as a launch failure",
+      "location": "src/amoeba/runner/tick.py:166-186",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`observe.py` exceeds the file-size guideline and mixes several concerns",
+      "location": "src/amoeba/runner/observe.py",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Settings validation uses string-keyed `getattr` and skips one new bound",
+      "location": "src/amoeba/runner/factory.py:34-52",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests reach into private state and use loose typing",
+      "location": "tests/runner/test_tenant.py:176",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Crash-proof entry point patches `Store` at class level",
+      "location": "tests/runner/crash_entry.py:118-126",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Process-boundary exception handling and import boundaries",
+      "location": "src/amoeba/runner/tenant.py:132-148",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:24:57.631692",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 265852,
+  "cached_tokens": 16698,
+  "cache_write_tokens": 249150,
+  "completion_tokens": 3214,
+  "reasoning_tokens": null,
+  "duration_seconds": 29.100157959153876,
+  "cost_usd": 1.0390044,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,147 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Run totals omit earlier loop iterations",
+      "description": "The report reads only persisted `action_results`. Loop executors retain earlier iterations in `StepResult.prior_rounds`, but `StateManager._append_step` does not serialize them, and `RunStateRecorder.round_completed` records nothing. A three-call probe persisted only one action. Preserve earlier iterations\u2019 usage and test totals across multiple rounds.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/usage_report.py:112-115"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Split reviews retain only the first part\u2019s usage",
+      "description": "Each part receives a usage record, but `fold_review_parts` copies the first part\u2019s metadata without summing usage. Two $1 parts consequently report $1 rather than $2. Their pipeline artifacts are also excluded from standalone review statistics, so the missing spend appears nowhere. Aggregate every part\u2019s usage before returning the folded result.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:505-506"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Failed split-review parts violate the folding contract",
+      "description": "The new failure return produces an `ActionResult` with empty outputs. For multipart reviews, execution continues into `fold_review_parts`, which requires each part to identify its input file. A probe raised `TypeError: review part must name exactly one input file, got []`. The outer handler then replaces the accumulated results, losing their usage and obscuring the provider failure. Preserve part identity and explicitly handle failed parts during folding.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:487-493"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Fan-out usage is discarded before persistence",
+      "description": "Passing the capture into branches records usage temporarily, but the fan-in reducers discard action metadata. The successful executor result retains only the reduced action; failed branches return an empty action list. A `CollectReducer` probe confirmed empty metadata despite populated branch usage. Preserve all branch usage independently of the selected output and test both successful and failed fan-outs.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:2043-2046"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failed compaction drops available telemetry",
+      "description": "Usage is stamped only after successful compaction. A `ProviderError` carrying completed-turn telemetry is caught and returned without metadata; a probe confirmed that reported spend disappears. Capture exception telemetry before returning failure, and preserve completed summary usage if subsequent session rotation fails.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py:75-89"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Run totals omit earlier loop iterations",
+      "location": "src/squadron/stats/usage_report.py:112-115",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Split reviews retain only the first part\u2019s usage",
+      "location": "src/squadron/pipeline/actions/review.py:505-506",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Failed split-review parts violate the folding contract",
+      "location": "src/squadron/pipeline/actions/review.py:487-493",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fan-out usage is discarded before persistence",
+      "location": "src/squadron/pipeline/executor.py:2043-2046",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Failed compaction drops available telemetry",
+      "location": "src/squadron/pipeline/actions/compact.py:75-89",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:22:23.174564",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 141006,
+  "cached_tokens": 140544,
+  "cache_write_tokens": null,
+  "completion_tokens": 740,
+  "reasoning_tokens": 191,
+  "duration_seconds": 151.70362866693176,
+  "cost_usd": 0.0223784,
+  "cost_basis": "alias_pricing"
+}

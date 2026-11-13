@@ -1,0 +1,261 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Estimate verdict check refuses the verdict every estimate-only run emits, so no purchase can run",
+      "description": "`judge_estimate` buys only when `summary[\"verdict\"] == \"allowed\"` (lines 242-245). The producer never emits that value in estimate-only mode:\n\n- `build_plan` passes `estimate_only` into `evaluate_spend` (`src/manta_trading/data/tick/purchase_plan.py:259`). `spend_guard.py:266-267` then sets `ESTIMATE_ONLY` whenever that flag is true, so the status can never be `ALLOWED` or `REFUSED`.\n- `plan_summary` emits `spend.status.value` as `verdict` (`purchase_plan.py:303`).\n- `test/integration/data/test_tick_purchase_phase.py:240` asserts `verdict == \"estimate_only\"`, and `test_spend_guard.py:127-130` says estimate-only \"never allows\".\n\nThe cutover calls `fetch_estimate()` with `--estimate-only` (`ESTIMATE_ARGS`, `cutover_304_first_purchase.py:80`). `_steps` judges that output at line 290 and again at line 298. For a non-empty plan within the ceilings, `judge_estimate` reaches the verdict check and raises `estimate: verdict estimate_only`. The run exits 1 before `mt-run tick`, so the buy path is unreachable.\n\nThe check predates this diff, but the diff rewires this path, and its tests fake the verdict as `\"allowed\"` or `\"refused\"`. That is why it was not caught.\n\nI verified this by reading the producer and an existing integration test, not by running the CLI. The fix should judge the figures and scope on the estimate-only status, and leave the buy decision to the real pass's own guard. Add a test that uses the real `estimate_only` verdict shape.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:242"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--estimate` prints \"buy\" and the ceiling command for every non-nothing verdict",
+      "description": "With `check_ceilings=False`, `judge_estimate` returns `Estimate.BUY` before it reads the verdict or the reasons. `_estimate_only` (`cutover_304_first_purchase.py:255-276`) then prints `verdict ...: buy` and \"the PM runs: sudo ...\".\n\nThe reasons can include a disk-space refusal (`_space_reason`, `purchase_plan.py:304` and `:312`), not only spend reasons. For a space refusal the printed ceiling command cannot fix anything. The unit test at `test_cutover_304_first_purchase.py:544` uses `verdict: \"refused\"`, which estimate-only output never emits, so it does not exercise this case.\n\nWhen the reasons are not ceiling lines, `--estimate` should print the reasons and omit the command.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py:225-226"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The baseline's shape is validated after the purchase has run",
+      "description": "`record_start_and_baselines` returns an existing baseline without checking for the `records` key. `_steps` then installs and buys. Only `collect()` calls `_baseline_records` (`cutover_304_evidence.py:237-241`, used at `:268-270`) and raises \"predates 307\".\n\nFor example, a re-run under `--slice 304` with the old `304-cutover-baseline.json` would spend money under the new 307 wants and only then stop. The check belongs in the reuse branch, before install.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:110-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--slice` is free text that names the state files",
+      "description": "`_nonempty` only strips whitespace, although the help text says \"slice number\". The value becomes part of `{slice}-cutover-start.txt` and `{slice}-cutover-baseline.json`.\n\nA mistyped id finds no state files, so the script records a fresh start instant and a fresh baseline after any purchase already made. That makes the \"before\" figures and the resubmit `since` cutoff wrong with no error. Validate it as an integer or a strict slice-number pattern.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:223-225"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exit codes and bucket names are defined twice",
+      "description": "`cutover_304_evidence.py` declares its own `EXIT_OK, EXIT_PARTIAL = 0, 3` (line 42) and `COMPLETE = \"complete\"` (line 45). `purchase_verdicts.py` imports the canonical `EXIT_OK` and `EXIT_PARTIAL` from `manta_trading.cli.commands.tick_exit` (line 25), and uses `TickSessionStatus.COMPLETE`. The Python rules say to define a value once. Import the canonical values in `cutover_304_evidence.py` too.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_304_evidence.py:42"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test fixtures use a verdict vocabulary the producer does not emit",
+      "description": "The checks fixture is built with `\"verdict\": \"allowed\"` (line 80), and `test_an_unbuyable_estimate_refuses...` uses `\"refused\"` (line 107). The first-purchase fixtures use `\"refused\"` at line 544. The real estimate-only verdict is `\"estimate_only\"`, so these tests cannot catch Finding 1.\n\nTwo other gaps in the same area:\n\n- The `judge()` wrapper's resubmit branch (`cutover_304_first_purchase.py:166-175`, which calls `debug requests` and `resubmit_origins`) has no test.\n- The `resubmit_origins` fixture is hand-written, while the symbols test renders its row through `_cell`. I checked that `_cell` produces aware ISO timestamps and ISO dates, which is what the parser expects. The test does not pin that format.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_cutover_304_checks.py:80"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`EXIT_USAGE` is never used",
+      "description": "A grep finds only the definition. `main` returns argparse's own exit code. Remove the constant.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Docstring says volume keys are never defaulted, but one is",
+      "description": "The module docstring says every key is required and \"never a default\". `over_sessions` uses `coverage.get(\"volume_checks\") or ()`. That default is needed: `tick_coverage.py:76-79` drops `volume_checks` from the JSON when it is `None`. Say so in the docstring.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "scripts/purchase_accounting.py:112"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Some test fixtures build dataclasses through `__class__`",
+      "description": "Several tests build `TickUniverseEntry` and `HistoryWant` through `universe[0].__class__(...)` and `.history[0].__class__`. Import the two classes and construct them directly.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_cutover_304_first_purchase.py#test_coverage_reads_derive_from_the_universe"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The new scripts are outside the type-check gate",
+      "description": "The mypy `files` setting covers only `src/manta_trading`, so the new `scripts/purchase_*.py` modules are not type-checked. I could not run a checker here to confirm they are clean.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "pyproject.toml:74"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Checked and consistent with the producer",
+      "description": "I checked these against the source and found no defect:\n\n- Every `TickSessionStatus` member falls into one of the four buckets in `purchase_verdicts.py`, so the `raise` in `_unaccounted` is unreachable.\n- `unit_ids` survives JSON serialization, because `NON_TICK_ONLY_KEYS` does not include it.\n- `_cell` renders `requested_at` as an aware ISO timestamp and `range_start` as an ISO date, which matches the string handling.\n- `planned_usd` is always a string, so `Decimal(...)` on it is safe.\n- No line in the changed scripts exceeds 88 characters.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py#retry_exhausted_requests"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Estimate verdict check refuses the verdict every estimate-only run emits, so no purchase can run",
+      "location": "scripts/cutover_304_checks.py:242",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`--estimate` prints \"buy\" and the ceiling command for every non-nothing verdict",
+      "location": "scripts/cutover_304_checks.py:225-226",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The baseline's shape is validated after the purchase has run",
+      "location": "scripts/cutover_304_first_purchase.py:110-111",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`--slice` is free text that names the state files",
+      "location": "scripts/cutover_304_first_purchase.py:223-225",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Exit codes and bucket names are defined twice",
+      "location": "scripts/cutover_304_evidence.py:42",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test fixtures use a verdict vocabulary the producer does not emit",
+      "location": "test/unit/scripts/test_cutover_304_checks.py:80",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`EXIT_USAGE` is never used",
+      "location": "scripts/cutover_304_first_purchase.py:79",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Docstring says volume keys are never defaulted, but one is",
+      "location": "scripts/purchase_accounting.py:112",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Some test fixtures build dataclasses through `__class__`",
+      "location": "test/unit/scripts/test_cutover_304_first_purchase.py#test_coverage_reads_derive_from_the_universe",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "The new scripts are outside the type-check gate",
+      "location": "pyproject.toml:74",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Checked and consistent with the producer",
+      "location": "scripts/purchase_verdicts.py#retry_exhausted_requests",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:17:55.170951",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 31,
+  "prompt_tokens": 3790969,
+  "cached_tokens": 3536433,
+  "cache_write_tokens": 254502,
+  "completion_tokens": 60162,
+  "reasoning_tokens": null,
+  "duration_seconds": 278.79295437503606,
+  "cost_usd": 0.58340891,
+  "cost_basis": "provider"
+}

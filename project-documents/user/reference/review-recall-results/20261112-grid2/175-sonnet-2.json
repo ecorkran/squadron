@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Review provider failure now returns a result with a misleading \"unexpected error\" log",
+      "description": "The `except ProviderError` branch used to re-raise into `execute`'s catch-all. It now returns `_exception_result(...)` itself. It also logs `_logger.exception(\"review: unexpected error in step %s\")` for what is a named provider failure. The branch has already logged a WARNING with the artifact path. The result is a second, differently worded record of one failure, with a full traceback for an expected error. Dispatch and summary deliberately log named provider failures as a single ERROR line with no traceback (issue 200). Use `_logger.error` with the message, or drop the extra log.\n\nTwo related risks in the same handler:\n- `effort_sent_by_profile()` at line 491 calls `get_profile` and `ensure_provider_loaded`. If either raises, it replaces the original `ProviderError` and no usage record is written. Resolve it defensively, or compute it before the `try`.\n- The handler now returns a failed `ActionResult` for a part. I did not verify that the split-review caller treats a failed part the same way it treated the earlier raise (aborting the remaining parts). Confirm this in `_review` / the parts loop.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:486"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews --json` prints plain text when the directory is missing",
+      "description": "`report.missing_dir` is checked before `as_json`, so `--json` with no review directory writes `No review directory at ...` to stdout. A script piping it to a JSON parser fails. Emit a valid JSON document (empty rows, `missing_dir: true`) when `--json` is set. Alternatively, send the message to stderr.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:61-63"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`UsageCapture(set())` makes callers supply the constructor's internal state",
+      "description": "Every caller passes an empty set for `warned`, and `review_client` passes a fresh `set()` to `resolve_cost` on each call. That means a pricing warning repeats on every standalone review. A default-constructed `UsageCapture()` would be simpler, and the dedupe set could be shared where the intent is once-per-alias.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py:77"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Alias table looked up once per cell render",
+      "description": "`_is_subscription` calls `get_all_aliases()` for every cost cell. This is harmless at current report sizes. Resolving it once per report would be cleaner.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats_views.py:152-156"
+    },
+    {
+      "severity": "PASS",
+      "title": "Usage capture design and test coverage",
+      "description": "Record construction is centralised in `UsageCapture` and `stamp`. The SDK usage reader treats malformed values defensively and logs a warning. The new tests cover success, failure, partial, cancellation, missing-capture, and state round-trip paths. I did not run the tests. The reorder of the `except ProviderError` branch in `dispatch.py` is safe: `ModelResolutionError`, `ModelPoolNotImplemented`, `ContextForgeError` and `ProjectRulesError` do not subclass `ProviderError`, and `DispatchStalledError` does.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Review provider failure now returns a result with a misleading \"unexpected error\" log",
+      "location": "src/squadron/pipeline/actions/review.py:486",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats reviews --json` prints plain text when the directory is missing",
+      "location": "src/squadron/cli/commands/stats.py:61-63",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`UsageCapture(set())` makes callers supply the constructor's internal state",
+      "location": "src/squadron/pipeline/usage_capture.py:77",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Alias table looked up once per cell render",
+      "location": "src/squadron/cli/stats_views.py:152-156",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Usage capture design and test coverage",
+      "location": "src/squadron/pipeline/usage_capture.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:01:36.565977",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 246306,
+  "cached_tokens": 240882,
+  "cache_write_tokens": 5418,
+  "completion_tokens": 2686,
+  "reasoning_tokens": null,
+  "duration_seconds": 23.447360291145742,
+  "cost_usd": 0.0826385,
+  "cost_basis": "provider"
+}

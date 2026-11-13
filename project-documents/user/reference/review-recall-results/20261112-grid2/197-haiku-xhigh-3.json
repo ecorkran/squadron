@@ -1,0 +1,351 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Item resume reports a missing pipeline as a batch-report write failure",
+      "description": "`_validate` calls `load_pipeline(state.pipeline)` at line 186 with no handler. `load_pipeline` raises `FileNotFoundError` for an unknown name (`tests/pipeline/test_loader.py`, `test_unknown_name_raises`). Plain `--resume` handles this at `run.py:1217-1220`. Here the error reaches the blanket `except OSError` at line 133, which returns HALTED with \"cannot write the batch report: [Errno 2] \u2026\". The message is wrong, and so is the exit code (3 instead of 2). Map a missing pipeline to REJECTED with a \"pipeline not found\" message, and narrow the OSError catch to the report write.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "cf failures during item resume escape as uncaught exceptions, and exit 1 reads as FLAGGED",
+      "description": "`resume_item` catches `_Stop`, `GitEnvironmentError` and `OSError`. It does not catch `ContextForgeError` or `ContextForgeNotAvailable` (`integrations/context_forge.py:29-34`). Those can come from `evaluate_each_source` (line 287, which calls the cf source and its `list_tasks`/`list_slices`), from `_select_item` (line 291), and from `_open_dependencies` (line 333). `handle_item_resume` catches only `typer.Exit` (`run_item.py:99`). An uncaught exception exits with status 1, which is `ResumeExit.FLAGGED`, so an automated caller would read a crash as \"flagged again\". D8's table assigns HALTED (3) to environment faults. The target read is wrapped (`read_integration_target`, `git_ops.py:66-73`), but the source reads are not. No test injects a cf failure mid-resume. Catch `ContextForgeError` in `resume_item` as HALTED with an ERROR log, and add a test.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:124"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Item resume writes the batch run's state as if it were a new step result",
+      "description": "`_run_pipeline` skips `init_run` when a `run_id` is given (`run.py:238`), but it still calls `state_mgr.finalize(run_id, result)` (`run.py:279`). The step callback also appends a `slices` StepState (`state.py:319`). Two effects follow:\n\n- The run's terminal status becomes the result of this one item.\n- After a git halt the batch run has no `slices` entry, because `on_step_complete` runs only on normal return (`executor.py:576-577`). Item resume appends one, so `first_unfinished_step` (`state.py:459-471`) returns None. A later plain `sq run --resume <id>` then prints \"All steps already completed\" while items are still `not_run`.\n\nUnless D8 intends this, item resume should not finalize the run or append a step to it. The item-resume tests miss it: `tests/pipeline/item_resume_support.py` `body_runner` calls `execute_pipeline` directly, never reaches `_run_pipeline`, and omits the `from_step` argument that production passes (`run_item.py:84`).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py:279"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`BatchReport.load` breaks its contract and turns missing keys into \"None\"",
+      "description": "The `load` docstring (line 314) promises that any problem raises `BatchReportLoadError`. `from_json` does not keep that promise:\n\n- It builds `values = {attr: data.get(key)}` (line 165). A missing `index` or `name` becomes the literal string `\"None\"` (lines 168-169) without an error.\n- A non-object entry in `items` raises `AttributeError` at `data.get`. `load` catches only `(KeyError, TypeError, ValueError)` (line 339), so the error escapes `load` and `resume_item` and crashes the command.\n\n`report.json` is a file boundary. Validate it with a Pydantic model, which `python.md` requires at external boundaries, or check required keys explicitly and catch `AttributeError`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:163"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_write_atomic` leaks its temp file on every failure",
+      "description": "`NamedTemporaryFile(..., delete=False)` leaves a `.<name>.XXXX` file behind. The except branch logs and re-raises without unlinking it, and if `handle.write` fails, `temp` is never bound. The test for this path (`test_a_failed_write_keeps_the_previous_report_and_logs_error`, `tests/pipeline/test_batch_report.py`) patches `Path.replace` and never checks for the leftover file. Unlink the temp file in the except branch, and assert on the directory contents in the test. The leftover names do not end in `.json`, so `list_runs` will not read them as runs.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:343"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A halted item loses its partial results, including the slice branch",
+      "description": "`item_results` is assigned only after `_run_each_item` returns (`executor.py:1562`). When a `GitEnvironmentError` escapes mid-item, it is still `[]`. `_finish_each_report` then builds the record with `from_item(item, position, [], \u2026)` (line 1490). The record drops the `branch` the item entered, although `BatchItemRecord.branch` is documented as \"the slice branch, when the item entered one\" (`batch_report.py:107`). Item resume's `_reconcile` copies that `branch` into the reconciled record (`item_resume.py:317`). Have the item's results accumulate in a list that the except path can read. `tests/pipeline/test_each_report_writes.py` asserts outcomes but not `branch`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:1490"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Dependency is open\" has two definitions, and they disagree for deferred slices",
+      "description": "Batch selection treats DEFERRED as not open. `_EXCLUDED_STATUSES` contains DEFERRED (`sources.py:48`), and `open_in_plan` excludes it (`sources.py:257`). A batch will therefore run a slice whose dependency is deferred. `_open_dependencies` flags any status other than COMPLETE (`item_resume.py:334`), so the same dependent is refused on resume with \"dependency N not complete\". Put one predicate in one place. Which behavior is right is a design call, but the two paths must agree. The out-of-plan case also differs: the dependency loop in `_cf_slices_ready_to_implement` logs a warning, while `_open_dependencies` skips it silently.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:334"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A source flag without a kind gets a silent default of NOT_READY",
+      "description": "`_pre_flag` defaults a missing `flag_kind` to `NOT_READY`. The one producer that sets `flag_reason` without a kind, `_cf_slices_needing_tasks` (`sources.py:211-213`), relies on that default. `test_a_source_flag_without_a_kind_is_not_ready` in `tests/pipeline/test_executor_each.py` locks it in. The default happens to be right for these flags, but CLAUDE.md forbids silent fallbacks. Set `FLAG_KIND_KEY` explicitly at `sources.py:213` through `_flag`, and make `_pre_flag` fail when the kind is missing.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:1617"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`list_tasks` now hard-requires `completed` and `total`",
+      "description": "`int(e[\"completed\"])` and `int(e[\"total\"])` are hard key lookups. A missing key raises a bare `KeyError`, not `ContextForgeError`, which the rest of the client uses for bad output (`_run_json`, line 145). `list_tasks` also feeds the pre-existing `slices_needing_tasks` source (`sources.py:202`) and `review/persistence.py:144`, so a cf that omits these keys breaks those callers too. Nothing in the diff shows which cf version emits them. Validate the keys, raise `ContextForgeError` naming the missing key, and document the minimum cf version.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/integrations/context_forge.py:183"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`run_item.py` imports private helpers from `run.py`, which imports `run_item`",
+      "description": "`run.py` imports `check_item_flags` and `handle_item_resume` at module load. `run_item.py` then imports `_apply_param_overrides` and `_run_pipeline_sdk` from `run.py` inside the function, with pyright ignores for `reportPrivateUsage` (lines 61-65). That is a cycle hidden behind a local import. Move `_apply_param_overrides` into a module both files can import, and pass the session runner in as a callable from `run.py`. The `run_body` closure already has that shape.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:61"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Three atomic-write helpers, and a duplicated flock sequence",
+      "description": "`_write_atomic` exists three times, and each handles failure differently:\n\n- `batch_report.py:343` uses a unique temp file and does not clean up.\n- `state.py:188` uses a fixed `.tmp` name and does not wrap errors.\n- `metrology/store.py:129` uses a fixed `.tmp` name and wraps errors in `MetrologyStoreError`.\n\nSeparately, `run_lock.py:111-141` repeats the fcntl probe, the append-mode open, and the non-blocking flock from `codehost/metadata_lock.py:66-123`, with no shared primitive. Put one atomic-write helper in `squadron.core`, and have both lock modules share a try-flock primitive.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:343"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`batch_report.py` has grown past the ~300-line guideline and mixes responsibilities",
+      "description": "The file is now 380 lines. It holds the record model, Markdown rendering, the `report.json` schema and load, file I/O, and the `ItemRerun` mutator, so \"describe it without 'and'\" fails. Moving persistence (`to_json`, `from_json`, `load`, `write`, `_write_atomic`) into its own module would bring it under the limit. `executor.py` (1862 lines) and `sources.py` (361 lines) also grew in this diff.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Reconcile treats a git timeout as \"not merged\"",
+      "description": "`run_git` returns None on timeout. The check `merged is not None and merged.returncode == 0` then falls through to \"is not merged into {target}\" (line 301). A missing branch (exit 128) also reads as \"not merged\". Report a timeout separately.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:298"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The report filename convention is repeated, and `resume_item` is structured awkwardly",
+      "description": "`_validate` builds `f\"{request.run_id}.{each.name}.report.json\"` by hand, but `batch_report.py` already defines `REPORT_JSON_SUFFIX` and `json_path()`. Use one definition. Separately, `resume_item` uses an `ExitStack` for a single context manager and ends with an unreachable `raise AssertionError` (lines 118-136). A plain `with` nested in the `try` would be clearer. `item_params` also pops keys inside a `sorted(...)` generator (line 257), which hides a side effect.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:187"
+    },
+    {
+      "severity": "PASS",
+      "title": "Validation runs before any git or model work",
+      "description": "`_resume_locked` calls `_validate` (line 146) before `_git_precondition` (line 147), `_select_item`, or `run_body`. `tests/pipeline/test_item_resume_validation.py` `test_a_refused_record_touches_nothing` snapshots the branch, the refs, and the report, and asserts that nothing changed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:146"
+    },
+    {
+      "severity": "PASS",
+      "title": "The run lock is released on every path",
+      "description": "`project_run_lock` closes the descriptor if `_acquire` fails (lines 89-93) and again on exit (lines 94-98). A killed holder releases the lock because the OS closes the descriptor. `test_a_killed_holder_releases_the_lock` exercises that path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py:87"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Item resume reports a missing pipeline as a batch-report write failure",
+      "location": "src/squadron/pipeline/item_resume.py:133",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "cf failures during item resume escape as uncaught exceptions, and exit 1 reads as FLAGGED",
+      "location": "src/squadron/pipeline/item_resume.py:124",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Item resume writes the batch run's state as if it were a new step result",
+      "location": "src/squadron/cli/commands/run.py:279",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`BatchReport.load` breaks its contract and turns missing keys into \"None\"",
+      "location": "src/squadron/pipeline/batch_report.py:163",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`_write_atomic` leaks its temp file on every failure",
+      "location": "src/squadron/pipeline/batch_report.py:343",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A halted item loses its partial results, including the slice branch",
+      "location": "src/squadron/pipeline/executor.py:1490",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "\"Dependency is open\" has two definitions, and they disagree for deferred slices",
+      "location": "src/squadron/pipeline/item_resume.py:334",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "A source flag without a kind gets a silent default of NOT_READY",
+      "location": "src/squadron/pipeline/executor.py:1617",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`list_tasks` now hard-requires `completed` and `total`",
+      "location": "src/squadron/integrations/context_forge.py:183",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`run_item.py` imports private helpers from `run.py`, which imports `run_item`",
+      "location": "src/squadron/cli/commands/run_item.py:61",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Three atomic-write helpers, and a duplicated flock sequence",
+      "location": "src/squadron/pipeline/batch_report.py:343",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`batch_report.py` has grown past the ~300-line guideline and mixes responsibilities",
+      "location": "src/squadron/pipeline/batch_report.py",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Reconcile treats a git timeout as \"not merged\"",
+      "location": "src/squadron/pipeline/item_resume.py:298",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The report filename convention is repeated, and `resume_item` is structured awkwardly",
+      "location": "src/squadron/pipeline/item_resume.py:187",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Validation runs before any git or model work",
+      "location": "src/squadron/pipeline/item_resume.py:146",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The run lock is released on every path",
+      "location": "src/squadron/pipeline/run_lock.py:87",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:18:35.669543",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 38,
+  "prompt_tokens": 3658913,
+  "cached_tokens": 3398729,
+  "cache_write_tokens": 260152,
+  "completion_tokens": 86261,
+  "reasoning_tokens": null,
+  "duration_seconds": 382.5309539171867,
+  "cost_usd": 0.65410515,
+  "cost_basis": "provider"
+}

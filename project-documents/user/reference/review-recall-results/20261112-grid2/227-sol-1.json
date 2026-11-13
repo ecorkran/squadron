@@ -1,0 +1,111 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Cron comparison prevents recovery by rerunning the cutover",
+      "description": "`production_changes()` strips new arguments only from `new`. After cron installation, a rerun captures the already-updated file as `old`, so identical cron files compare as different and step 4 fails. This blocks the documented recovery path for failures in later steps. Normalize both sides and add a post-installation rerun regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py:95-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failed health commands can pass using stale results",
+      "description": "`run_health()` ignores the command result and reads the existing log\u2019s last line without checking that this invocation appended it. If execution or log redirection fails, an earlier clean summary can incorrectly pass the health gates. Require fresh log evidence and distinguish expected unhealthy results from execution failures.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:157-165"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Host I/O failures bypass the promised failure report",
+      "description": "Only `StepFailed` and `CalledProcessError` are handled. File reads, `arm.touch()`, or a missing executable can raise `OSError`, escaping before `main()` writes the report. Handle these failures at the process boundary and ensure completed-step evidence is written on failure. Add coverage for a host I/O exception.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:269-281"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cron comparison prevents recovery by rerunning the cutover",
+      "location": "scripts/cutover_227_helpers.py:95-99",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Failed health commands can pass using stale results",
+      "location": "scripts/cutover_227_tick_backup.py:157-165",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Host I/O failures bypass the promised failure report",
+      "location": "scripts/cutover_227_tick_backup.py:269-281",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:22:00.210557",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 109423,
+  "cached_tokens": 104192,
+  "cache_write_tokens": null,
+  "completion_tokens": 512,
+  "reasoning_tokens": 197,
+  "duration_seconds": 69.90373966610059,
+  "cost_usd": 0.026001200000000002,
+  "cost_basis": "alias_pricing"
+}

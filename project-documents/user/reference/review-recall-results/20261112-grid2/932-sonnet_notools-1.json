@@ -1,0 +1,222 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Test imports a conftest helper that the diff never defines",
+      "description": "`test_flag_reason_carries_agents_final_text` imports `phase_artifact_cf_client` from `tests.pipeline.conftest`. The added conftest hunk defines `sdk_text`, `sdk_result`, `ScriptedClient`, `scripted_session`, `failing_reconnect_patch` and `typed_config`, but not this helper. It may already exist earlier in that file, but I did not confirm that. If it is missing, the test fails with an `ImportError` and the batch-flag behaviour is untested. Confirm the helper exists, or add it.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/test_executor_each.py#TestFinalTextInBatchFlags"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Blocking config file reads inside async paths",
+      "description": "`get_typed_config` loads and parses TOML files synchronously. It is now called from `async def` code in three places: `SDKExecutionSession._background_idle_timeout_s`, `open_pipeline_session`, and `one_shot_dispatch_with_telemetry` (two reads each). The Python rules require synchronous code inside awaitables to run in under 1ms in the worst case. Two small TOML reads usually meet that, but slow or networked home directories do not guarantee it. Resolve the settings once at pipeline start and pass them in, or wrap the reads in `run_in_executor`. Reading the config once per session rather than per dispatch would also fit the project's \"one value, one source\" intent.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#_background_idle_timeout_s"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq serve` SDK agents now silently get auto-memory disabled while reporting \"cli default\"",
+      "description": "`kwargs[\"env\"]` is now always set from `config.auto_memory`, and `AgentConfig.auto_memory` defaults to `False`. An agent created with `setting_sources=None` therefore gets `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, a behaviour change from before. `describe_setting_sources` still labels that case \"cli default\", which reads as if nothing is overridden. If this change is intended (D11), say so in the `AgentConfig.auto_memory` comment and `SETTING_SOURCES_CLI_DEFAULT`. Otherwise `None` should not touch the env.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/provider.py (create_agent, settings block)"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Idle-timeout cancellation abandons a live stream",
+      "description": "`asyncio.timeout` wraps `anext(stream)`. On expiry, cancellation is thrown into the SDK's async generator, and `_stop_background` then calls `stop_task` on the same client. All tests use `ScriptedClient`, a fake. Nothing exercises this path against the real SDK, so check that cancelling mid-`anext` leaves `receive_response()` usable for the following dispatch.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py#_read_turn"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Resume seed can be dropped without a signal",
+      "description": "`_load_resume_seed` now runs even when no session ever connects. If `sdk_session` is None and the pool policy is not LAZY, `resume_seed` is computed and never used, with no log. That is harmless for non-SDK pipelines, but a debug log or a skipped load would make it observable.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:484-500"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test helpers return `object`, forcing `# type: ignore` throughout",
+      "description": "`scripted_session`, `sdk_text`, `sdk_result` and similar helpers are typed `-> object`. Every caller needs `# type: ignore[attr-defined]`, which conflicts with the strict-pyright \"zero errors\" rule. Typing them as `SDKExecutionSession`, `AssistantMessage` and so on would remove the ignores. `typed_config` also uses a bare `type` parameter.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/conftest.py#scripted_session"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Naming drift: `ReviewResult.setting_sources` is a rendered string",
+      "description": "Elsewhere `setting_sources` is `list[str]`: `AgentConfig`, `ReviewTemplate`, `SDKExecutionSession`. On `ReviewResult` it holds the `describe_setting_sources` output (`str | None`). A name such as `setting_sources_label` would avoid confusion.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/review/models.py (ReviewResult.setting_sources)"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Docstring refers to a table that may not exist",
+      "description": "The docstring says \"the four rows of the table above\", but the diff shows no such table above the class. I did not confirm one exists elsewhere in the file. Reword it or reference the actual source.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/squadron/core/models.py#SystemPromptMode"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exception handling and layering of the new session machinery",
+      "description": "The broad catches are `_stop_background`, which has a `noqa` and a justification comment, and `_reconnect`, which re-raises after `logger.exception`. Both meet the rule. Turn tracking is split into a pure module (`sdk_turns.py`) with parametrized tests. The failed-reconnect state is observable and tested, and subagent prose is excluded from the response. Settings policy is centralized in `providers/sdk/settings.py` with a per-path policy test.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_turns.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test imports a conftest helper that the diff never defines",
+      "location": "tests/pipeline/test_executor_each.py#TestFinalTextInBatchFlags",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Blocking config file reads inside async paths",
+      "location": "src/squadron/pipeline/sdk_session.py#_background_idle_timeout_s",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`sq serve` SDK agents now silently get auto-memory disabled while reporting \"cli default\"",
+      "location": "src/squadron/providers/sdk/provider.py (create_agent, settings block)",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Idle-timeout cancellation abandons a live stream",
+      "location": "src/squadron/pipeline/sdk_session.py#_read_turn",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Resume seed can be dropped without a signal",
+      "location": "src/squadron/pipeline/executor.py:484-500",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Test helpers return `object`, forcing `# type: ignore` throughout",
+      "location": "tests/pipeline/conftest.py#scripted_session",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Naming drift: `ReviewResult.setting_sources` is a rendered string",
+      "location": "src/squadron/review/models.py (ReviewResult.setting_sources)",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Docstring refers to a table that may not exist",
+      "location": "src/squadron/core/models.py#SystemPromptMode",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Exception handling and layering of the new session machinery",
+      "location": "src/squadron/pipeline/sdk_turns.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:30:47.141440",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 219123,
+  "cached_tokens": 65384,
+  "cache_write_tokens": 153735,
+  "completion_tokens": 12287,
+  "reasoning_tokens": null,
+  "duration_seconds": 83.35514741693623,
+  "cost_usd": 0.7508225,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

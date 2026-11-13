@@ -1,0 +1,129 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Observing one project erases other projects\u2019 polling state",
+      "description": "`RunnerTenant` shares one observer across projects, but each `observe()` retains only the current project\u2019s entries. Visiting project B\u2014even with no runs\u2014deletes A\u2019s poll timestamps, overdue markers, and cached faults. Consequently, A is polled every tick instead of respecting `run_poll_interval_seconds`, and least-recently-polled fairness breaks. Scope observer state and cleanup per project; add a multi-project regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:108-111"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Launch can start after the budget expires or shutdown is requested",
+      "description": "The budget check precedes journal creation and its synchronous database commit. If that operation consumes the remaining deadline, or a stop request arrives during it, `launch()` still starts the subprocess without another check. Pass the budget through to the launch boundary and explicitly handle a journaled command whose launch is deferred. Test deadline expiry and shutdown during `journal_issue()`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py:176-187"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unconfirmed launches falsely recover between failed polls",
+      "description": "A failed launch poll caches `RUN_OBSERVATION_FAILED` in `_faulted`, but this interval-skipping branch never replays it. The next tick reports `LAUNCHING` without that fault, allowing `ProjectTick._close_recovered()` to close the escalation despite no successful observation. Replay standing poll faults here, as `_confirmed()` does, and test consecutive ticks with fresh fault collections.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:186-187"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Runtime validation was unavailable",
+      "description": "The local interpreter lacks `pydantic`; type checking also encountered unresolved dependencies. Tests and a clean strict-typecheck result could not be verified.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Observing one project erases other projects\u2019 polling state",
+      "location": "src/amoeba/runner/observe.py:108-111",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Launch can start after the budget expires or shutdown is requested",
+      "location": "src/amoeba/runner/tick.py:176-187",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unconfirmed launches falsely recover between failed polls",
+      "location": "src/amoeba/runner/observe.py:186-187",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Runtime validation was unavailable",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:22:52.436242",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 112808,
+  "cached_tokens": 110080,
+  "cache_write_tokens": null,
+  "completion_tokens": 409,
+  "reasoning_tokens": 0,
+  "duration_seconds": 60.440369207877666,
+  "cost_usd": 0.020554,
+  "cost_basis": "alias_pricing"
+}

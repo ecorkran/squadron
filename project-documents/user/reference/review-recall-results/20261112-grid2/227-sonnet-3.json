@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Provisioning drops the proof database and URLs, but the 226 proof harness still depends on them",
+      "description": "`provision_tick_cluster.sh` no longer creates `trading_tick_proof`. It no longer writes `MT_PROOF_226_DB_URL` or `MT_PROOF_226_MAINTENANCE_URL` to `.env`. It also stops admitting `trading_tick_proof` in pg_hba, and `test_provision_tick_lib.py:230` asserts the name is absent from the script. The proof harness still expects all of these:\n- `scripts/proof_226/common.py:21-22` reads the two `MT_PROOF_226_*` variables.\n- `scripts/proof_226_tick.py` and `scripts/proof_226/guard.py` target the database.\n- `src/manta_trading/data/tick/constants.py:288` still defines `TICK_PROOF_DB_NAME`.\n\nNothing in the diff retires the harness or says it is superseded by the 228 restore drill. A fresh provision can no longer run it, which leaves dead or unrunnable code. Either remove or mark the harness as retired, or state in the slice docs that it is intentionally orphaned.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/provision_tick_cluster.sh:79-93"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An unguarded failure in the production-verification step skips the report",
+      "description": "The module docstring promises that the report is written even when a step fails. `run_steps` only catches `StepFailed` and `CalledProcessError`. In `step_production`, `(ctx.main.backup_root / \"backup-health.log\").read_text().splitlines()[-1]` raises `FileNotFoundError` if the log is missing, or `IndexError` if it is empty. Either one escapes `run_steps` and `main`, so no report is written. This is the last step, after all the tick changes have been applied, so the record matters most here. `run_health` already guards the same pattern with `log.exists()`. Reuse that guard, or turn the failure into `require(...)`. Similarly, `main()` at line ~296 does `production_lines(...)[0]` and raises `IndexError` on a cron file with no job lines.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:211-220"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Lifecycle OK lines are echoed but not counted as OK",
+      "description": "The loop prints `OK <cluster> lifecycle ...` lines directly with `echo` instead of going through `report`. A lifecycle OK therefore never appears in the OK tally, unlike every other item. This looks deliberate, because a missing rule must not be tallied as a failure (TD10). The asymmetry deserves a comment. An empty `b2_lifecycle.sh` output would also fall into the `*)` branch and report `lifecycle-read` with an empty detail.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh (Step 3, lifecycle loop)"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hard-coded cluster literals and file size in the cutover scripts",
+      "description": "`TICK_UNIT = \"postgresql@17-tick\"` duplicates the `TICK = \"17/tick\"` constant and has to be kept in sync by hand. `cutover_227_tick_backup.py` is about 320 lines, slightly over the ~300-line guideline. Both are minor for a one-off cutover script.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_227_host.py:25"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Provisioning drops the proof database and URLs, but the 226 proof harness still depends on them",
+      "location": "scripts/provision_tick_cluster.sh:79-93",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "An unguarded failure in the production-verification step skips the report",
+      "location": "scripts/cutover_227_tick_backup.py:211-220",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Lifecycle OK lines are echoed but not counted as OK",
+      "location": "deploy/setup-backup.sh (Step 3, lifecycle loop)",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Hard-coded cluster literals and file size in the cutover scripts",
+      "location": "scripts/cutover_227_host.py:25",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:24:46.920705",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 353503,
+  "cached_tokens": 226277,
+  "cache_write_tokens": 127218,
+  "completion_tokens": 3514,
+  "reasoning_tokens": null,
+  "duration_seconds": 32.18032620800659,
+  "cost_usd": 0.5727572,
+  "cost_basis": "provider"
+}

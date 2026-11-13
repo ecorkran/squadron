@@ -1,0 +1,279 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Ceiling-sized responses are built and serialized on the event loop",
+      "description": "`get_candlesticks` awaits the executor for the reads, then runs `CandlesResponse.build` (line 125, up to 75,000 pydantic records) and `timeseries_response` (line 126) on the loop thread. `get_trades` does the same at lines 168-174. `timeseries_response` runs `model_dump(mode=\"json\")` and then `orjson.dumps` or `msgpack.packb` on up to ~35 MB (`serialization.py:38-44`). The Python rules say an `async def` may call synchronous code only if it runs in under 1 ms in the worst case, and CPU-bound work must go to `run_in_executor`. This work takes on the order of a second per request and stalls every other request, including `/health`.\n\nThe diff's own load-test docstring measures a 1.034 s median for the trades ceiling request. That figure includes executor time, so the loop-blocking time is at most that. The load tier misses the problem: the ceiling tests run sequentially, and the only concurrency test (`test/load/test_188_kalshi_api_nfr.py:322`) exercises market detail, which does not build a large response. The bars route (`routes/bars.py:210-218`) has the same shape at the same ceiling, so that part predates this diff. The new routes repeat it at the same scale. The fix is to move the build and serialization into the executor function, then add a test that runs a ceiling-sized request alongside small requests and asserts the small requests' latency.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:125-126"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`tape_complete_through` is described as the newest trade's time, but it is the trades watermark",
+      "description": "The field description says \"Created time of the newest stored trade.\" `tape_facts` actually returns `watermark_ts` from `kalshi.sync_state['trades']` (`serve_timeseries.py:141-144`), and the integration test `TestTapeFacts` asserts equality with the watermark. The watermark is how far the trades phase has walked, and it can be later than the newest stored trade. A client that follows the published text will misjudge freshness on a quiet market. The candle field `complete_through` (lines 124-130) states the watermark semantics explicitly, so this description is the outlier.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188-193"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`tape_filtered` says no trades are stored, but stored trades are still returned",
+      "description": "The description says \"True means no trades are stored for it by policy.\" `fetch_trades` and `count_trades` filter only on ticker and window (`serve_timeseries.py:257-296`). The exclusion applies only at collection time, so trades stored before a category was added to `MT_KALSHI_TRADES_EXCLUDED_CATEGORIES` are still served while the flag reports `true`. Either the description should say the exclusion governs future collection and earlier trades still appear, or the route should filter. Which one is intended is a design call for you.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:194-200"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`tape_filtered` re-spells the membership test and hard-codes the parameter key, against its own docstring",
+      "description": "The docstring says \"The membership test is not re-spelled here\u2026 so a change to one cannot leave the other behind.\" The function re-implements `COALESCE(s.category, '') = ANY(...)` as `(category or \"\") in bound`, and reads `selection.params[\"trades_excluded_categories\"]`, a literal duplicated from `selection.py:168-170`. The integration test `TestTapeFiltered.test_agrees_with_the_sql_predicate` does catch divergence, so the risk is covered by a test rather than by construction. Either move the membership rule into one helper in `selection.py` that both the SQL and the Python path use, or correct the docstring to name the test as the guard.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:147-166"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The candle re-nesting docstring says new columns need no edit, but they are silently dropped",
+      "description": "The module docstring (lines 5-9) and `from_row` say a column added to `CANDLE_COLUMNS` \"is served here without an edit.\" That is false. `CandleBidAsk`, `CandlePrice`, and `CandleRecord` list their fields by hand, and `from_row` hard-codes `flat[\"volume_fp\"]` and `flat[\"open_interest_fp\"]`. Pydantic's default `extra=\"ignore\"` means a new nested column such as `(\"yes_bid\", \"volume_dollars\")` is discarded without error. A new top-level object name would raise `KeyError` at `nested[obj]`. `test_nested_field_set_is_exactly_what_candle_columns_describes` would fail in that case, so the test catches it. The docstring should say that, and the models should be derived from the mapping or the claim removed.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:86-98"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Trade rows are mapped by position into an untyped tuple",
+      "description": "Candles are mapped by name through `CANDLE_COLUMNS`. Trades read `values[0]` through `values[7]` by position, and `TradeRow.values` is `tuple[Any, ...]` (`serve_timeseries.py:79-82`), so strict pyright cannot check the mapping. The positions match `TRADE_COLUMNS` today (I checked this). Nothing ties them together, though: the SQL order comes from `TRADE_VALUE_COLUMNS`, the unit test hand-writes the same order, and the integration test checks only the length. Swapping the yes and no price columns in `TRADE_COLUMNS` would keep every current test green while the API returned wrong prices. Zip the row with `TRADE_VALUE_COLUMNS` by name, as the candle side does.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:162-175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`gaps.py` keeps its own window helpers, which is the duplication the new module warns about",
+      "description": "`windows.py`'s docstring says the day-boundary convention lives there because \"two route families now depend on it,\" and that two derivations of \"the last instant of a day\" is how one ends up exclusive by accident. `gaps.py` still defines `_window_start_utc`, identical to `windows.window_start_utc`, and `_window_end_utc`, which uses a different end convention (next midnight, half-open). `test/integration/test_gaps_window_sql.py:25-26` imports these copies. Either move the shared helpers into `windows.py` and document the half-open variant there, or narrow the docstring's claim.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/gaps.py:54"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two load-tier tests assert no latency or size bound, and a recorded constant is never checked",
+      "description": "`test_candles_at_the_admission_ceiling_records_its_response_size` measures the response size, prints it, and asserts only the row count (line 266). `CANDLES_CEILING_RESPONSE_MB = 34.80` (line 120) appears nowhere else in the repository, so the recorded measurement is not enforced. `test_markets_list_scoped_to_the_dense_event` (line 348) asserts only a count and an event ticker. The load-tier rule requires load tests to assert on latency, throughput, or resource bounds. Assert the size against the constant with a bound, and give the candle test a latency bound. The module docstring also says \"Four assertions,\" but the file has six test functions.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:241-266"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Helper and test files exceed the size guidance",
+      "description": "`_seed_kalshi_dense` runs from line 446 to about line 546, roughly 100 lines against the ~50-line guidance. `test/integration/test_kalshi_serving.py` is about 550 non-empty lines and `test/load/conftest.py` about 476, both over the ~300-line guidance. `conftest.py` was already over before this diff. Move the Section 4 reader tests into their own module, and split the dense seeder into one helper per `COPY` table.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "test/load/conftest.py:446"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The serving read path imports write-side repository modules for two constants",
+      "description": "`candle_repository` imports `CatalogRepository` and the private `_MAX_BIND_PARAMS` from `repository`, and `trade_repository` pulls in the writer. The API process therefore loads collection write-path modules to read two column tuples. There is no cycle, but a small shared module holding the two mappings would separate the read and write paths.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:21-24"
+    },
+    {
+      "severity": "PASS",
+      "title": "Renames and moves left no stale references",
+      "description": "I checked the rename of `models/kalshi.py` to `kalshi_catalog.py`, the move of the window helpers out of `bars.py`, and the rename of `_effective_floor` to `effective_tape_floor`. No stale imports or references remain in code. `bars.py` has no leftover `datetime`, `UTC`, or `time` uses. `kalshi_helpers.py` still uses `psycopg`, and the catalog unit test imports `Any`. The `gaps.py` duplicate is covered in its own finding above.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/bars.py:25"
+    },
+    {
+      "severity": "PASS",
+      "title": "The new readers' queries are served by the tables' primary keys",
+      "description": "`kalshi.candlesticks` has primary key `(market_ticker, period, end_period_ts)`, which matches the count and fetch predicates and their `ORDER BY`. `kalshi.trades` has primary key `(market_ticker, created_time, trade_id)` at line 415, which matches the `ORDER BY created_time, trade_id`. The \"milliseconds against an indexed range\" claim in `constants.py` holds for the query shape.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/market/schema/migrations/kalshi.py:329"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Ceiling-sized responses are built and serialized on the event loop",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:125-126",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`tape_complete_through` is described as the newest trade's time, but it is the trades watermark",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188-193",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`tape_filtered` says no trades are stored, but stored trades are still returned",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:194-200",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`tape_filtered` re-spells the membership test and hard-codes the parameter key, against its own docstring",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:147-166",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The candle re-nesting docstring says new columns need no edit, but they are silently dropped",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:86-98",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Trade rows are mapped by position into an untyped tuple",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:162-175",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`gaps.py` keeps its own window helpers, which is the duplication the new module warns about",
+      "location": "src/manta_trading/api_server/routes/gaps.py:54",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Two load-tier tests assert no latency or size bound, and a recorded constant is never checked",
+      "location": "test/load/test_188_kalshi_api_nfr.py:241-266",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Helper and test files exceed the size guidance",
+      "location": "test/load/conftest.py:446",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The serving read path imports write-side repository modules for two constants",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:21-24",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Renames and moves left no stale references",
+      "location": "src/manta_trading/api_server/routes/bars.py:25",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "The new readers' queries are served by the tables' primary keys",
+      "location": "src/manta_trading/market/schema/migrations/kalshi.py:329",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:05:13.990648",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 27,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 28,
+  "prompt_tokens": 1822475,
+  "cached_tokens": 1564811,
+  "cache_write_tokens": 257642,
+  "completion_tokens": 61143,
+  "reasoning_tokens": null,
+  "duration_seconds": 276.0685864579864,
+  "cost_usd": 0.45129035000000006,
+  "cost_basis": "provider"
+}

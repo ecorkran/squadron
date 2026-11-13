@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Blocking git and file I/O inside `async def` resume path",
+      "description": "`resume_item` and `_resume_locked` are coroutines. They call synchronous, potentially slow code directly on the event loop: `run_git` subprocesses (`current_branch`, `restore_target`, `dirty_paths`, `verify_git_state`, `merge-base` in `_select_item`) and `report.write(...)` in `_reconcile` and the dependency-flag path. The Python rules require sync work inside async functions to be under 1ms or offloaded. The executor's `_write_each_report` already uses `asyncio.to_thread` for exactly this reason, so the same module family is inconsistent. This is low impact today because the CLI runs one coroutine. It does break the stated rule, and it becomes a real stall if `resume_item` is ever embedded in a longer-lived loop.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py#_resume_locked"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Circular dependency worked around with a function-local import of private symbols",
+      "description": "`run.py` imports `run_item`, and `run_item.handle_item_resume` imports `_apply_param_overrides` and `_run_pipeline_sdk` back from `run.py`. It silences pyright's `reportPrivateUsage` to do so. This is a layering cycle. Consuming underscore-private functions across modules signals that they belong in a shared module, or should be injected as parameters. `handle_item_resume` could take the runner and the override parser as arguments, as `resume_item` already does with `run_body`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:56-62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Loose typing at the resume boundary",
+      "description": "`cf_client: Any` is threaded through `resume_item`, `_select_item`, `_open_dependencies` and `_git_precondition`. A `CfClientProtocol` already exists in `branch_ops`. `BodyRunner` returns `object`. The CLI's `run_body` therefore returns a `PipelineResult` that is discarded, and nothing checks the pipeline's final status. `_resume_locked` infers success only from `rerun.record` being set. That gap is deliberate, but a typed result would make the HALTED mapping explicit.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py#resume_item"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unreachable code and a fragile `next()` inside coroutines",
+      "description": "`raise AssertionError(\"unreachable\")` after the `with ExitStack()` block is dead code. The block always returns or raises, so it only exists to quiet a type checker. Separately, `ItemRerun.replace` and `_outcome` use bare `next(...)` with no default. If the record is missing, a `StopIteration` raised inside a coroutine surfaces as an opaque `RuntimeError`. An explicit error would honor the fail-fast and \"name the fact\" convention the rest of the module follows.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:121, src/squadron/pipeline/batch_report.py#ItemRerun.replace"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplicated step-run dispatch in `run()` and an oversized function",
+      "description": "`run()` is now very long, well over the ~50-line guideline. The SDK vs PROMPT_ONLY `match`, wrapped in `_locked(...)`, is copied in the resume and implicit-resume branches. The resume branch also assigns `resume_model` with an operator-precedence-ambiguous conditional (line 1228, pre-existing). This diff adds another copy of the dispatch instead of extracting a helper, which worsens an existing DRY problem.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py:1199-1340"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Verified items",
+      "description": "I checked that `definition` is bound in every branch that now calls `_locked(definition, ...)`: explicit resume, implicit resume and fresh run all load it first. `_locked` closes the unstarted coroutine when the lock fails, so no \"never awaited\" warning is left behind. The line length of 104 in `pyproject.toml` covers the long signatures. The lock, atomic report writes, reserved-param rejection and failure-mode logging each have tests that assert the observable signal.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py:1217"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Blocking git and file I/O inside `async def` resume path",
+      "location": "src/squadron/pipeline/item_resume.py#_resume_locked",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Circular dependency worked around with a function-local import of private symbols",
+      "location": "src/squadron/cli/commands/run_item.py:56-62",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Loose typing at the resume boundary",
+      "location": "src/squadron/pipeline/item_resume.py#resume_item",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Unreachable code and a fragile `next()` inside coroutines",
+      "location": "src/squadron/pipeline/item_resume.py:121, src/squadron/pipeline/batch_report.py#ItemRerun.replace",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Duplicated step-run dispatch in `run()` and an oversized function",
+      "location": "src/squadron/cli/commands/run.py:1199-1340",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Verified items",
+      "location": "src/squadron/cli/commands/run.py:1217",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:25:36.619229",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 429798,
+  "cached_tokens": 278406,
+  "cache_write_tokens": 151384,
+  "completion_tokens": 3279,
+  "reasoning_tokens": null,
+  "duration_seconds": 29.325028417166322,
+  "cost_usd": 0.6745313000000001,
+  "cost_basis": "provider"
+}

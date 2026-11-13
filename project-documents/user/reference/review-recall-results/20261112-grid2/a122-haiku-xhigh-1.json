@@ -1,0 +1,369 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Observer poll state is wiped by every other project's observe() call",
+      "description": "`RunnerTenant` builds one `RunObserver` (tenant.py:74) and passes it to every `ProjectTick` (tenant.py:133). `observe()` starts by rebuilding `_last_poll`, `_overdue` and `_faulted` from only the entries it was given (observe.py:108-111). Each tick observes projects in turn, so project B's call discards project A's poll times and A's next call discards B's. This happens even when B has no runs, because `observe([])` still prunes everything. In practice every in-flight run is polled on every tick, not at most once per `run_poll_interval_seconds`, which is the documented contract (settings.py:83-84; slice 122 D10). With the poll times gone, least-recently-polled ordering sees every run as never polled (observe.py:112-114), so the starvation guard in the slice doc (line 327) does not hold across ticks. Overdue and fault state are also dropped between calls.\n\nNo test covers this. Every observer test uses one project (`Rig` in tests/runner/observe_support.py), and the two-project tenant tests do not assert poll counts. Fix: prune once per tick against every project's live entries, or key state by project and prune only that project's keys. Add a test where one project has no runs and assert one poll per interval per run.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:108"
+    },
+    {
+      "severity": "FAIL",
+      "title": "No load test for the Runner's budgeted subprocess and poll path",
+      "description": "`tests/load/` holds load tests for crash loops, cf_watch, inbox, recovery, serve, verdict and feed. None exercises the Runner (`grep` for runner in tests/load finds nothing). The Additional Review Rules (python.md, Testing & Quality) require at least one load test for code on the concurrency or environment-layer paths, and say the load tier asserts on latency, throughput or budget bounds. `RunnerTenant.tick` launches detached children, polls them, and bounds each tick with `TickBudget` (D10). That is the case the rule names, and the bug above is the kind a unit test misses. The slice doc never mentions a load test. Add one in `tests/load/` that runs several projects with in-flight runs against the stub `sq`, asserts poll count per interval and tick wall time against `tick_deadline_seconds`, and gate it in CI.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py:93"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A poll fault on an unconfirmed launch is not replayed between polls",
+      "description": "For a confirmed run, `_confirmed` replays the standing fault from `_faulted` on ticks between polls (lines 140-145). The comment at lines 92-93 says that is so an escalation does not look recovered. The unconfirmed path never reads `_faulted`. `_unconfirmed` returns LAUNCHING (line 185) or calls `_still_overdue` (line 187), which adds a fault only for an entry already in `_overdue`. A poll failure in `_after_launch_poll` (lines 233-234) stores the fault and returns, and the next tick adds nothing. `_close_recovered` then closes the `run_observation_failed` escalation, and it reopens at the next poll. The escalation flaps. The test that covers this, `test_a_failed_poll_after_an_exit_is_a_fault_and_the_entry_stays` in tests/runner/test_observe_launch.py, checks one tick only. Fix: replay `_faulted` in `_unconfirmed` the way `_confirmed` does, and add a second-tick assertion.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:171-193"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Expected faults lose detail: first payload wins, and each recurring fault costs a write",
+      "description": "`raise_expected_faults` calls `store.raise_project_escalation` once per fault. The store returns an already-open row unchanged (src/amoeba/store/project_escalations.py:58-59), so the escalation keeps the payload of the first fault of that kind ever raised. Two `run_observation_failed` faults for different runs in one tick: the second run's id and detail are dropped. A `launch_overdue` escalation keeps the stderr tail from when it first opened, so an operator sees stale evidence. Each recurring fault also opens a `BEGIN IMMEDIATE` write transaction every tick even when nothing is written. Fix: update the open row's payload, or raise once per kind with the current details, and skip the store call for kinds already open this tick.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py:120-143"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The tenant's re-raise branch does not log before re-raising",
+      "description": "`except (*STORE_FAILURES, UpstreamShapeError): raise` re-raises without `logger.exception`. The Python rules require re-raise after logging at ERROR via `logger.exception`, and the slice's own task doc says the same (122-tasks line 46). Partial coverage downstream: `sqlite3.Error` reaches the CLI's `logger.exception` (cli/main.py:318-322), but `UpstreamShapeError` is printed as one line with no traceback (cli/main.py:295-297). The codebase's other re-raise handlers log first (recovery.py:226-230, review_scan.py:53-54). Fix: add `logger.exception(\"runner tick aborted for project %s\", project_id)` before the `raise`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py:142-144"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The one broad catch is not at a process boundary",
+      "description": "The rules allow a broad catch only as a top-level handler at a process boundary (python.md, Functions & Error Handling). `ResidentProcess` calls `tenant.tick(self)` with no try (src/amoeba/process/host.py:275), so the process boundary is the CLI handler at cli/main.py:318. The catch at tenant.py:145 isolates one project: it logs with `logger.exception`, writes an escalation and returns. That is a deliberate design (D8; slice doc lines 277 and 436; the count test in tests/runner/test_tenant.py), and it does not swallow silently. But it fits neither clause (a) nor clause (c) as written, so the rules do not cover it. Either add a scoped, commented exception for per-unit isolation to the rules and keep the count test, or narrow the catch to the exceptions a tick can raise.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py:145"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Journal parameter keys are defined in three places",
+      "description": "`PARAM_PIPELINE = \"pipeline\"` and `PARAM_PARAMS = \"params\"` are defined here, again in src/amoeba/process/observers/sq_runs.py:42-43, and as literals in src/amoeba/store/journal_models.py:81 (the required keys for `SQ_RUN`). This slice added `PARAM_CHECKOUT` to the store beside `PARAM_RUN_ID`, but left the other two keys in the runner. Changing one key now means editing three modules, which goes against \"define it once\". Fix: define `PARAM_PIPELINE` and `PARAM_PARAMS` in `journal_models.py`, build `REQUIRED_PARAMETER_KEYS` from them, and import them in the runner and in `sq_runs.py`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/amoeba/runner/launch.py:121-122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "LaunchTracker.confirm is dead in production, and launch state is set elsewhere",
+      "description": "No code under `src/` calls `LaunchTracker.confirm`. Production confirms launches by writing `tracked.confirmed = True` directly in `RunObserver._confirm` (observe.py:275-277), which bypasses the tracker that owns the state. Only tests call `tracker.confirm`. The method also raises `KeyError` for an unknown id (line 259), while `forget` tolerates one (line 263). Fix: have the observer call `LaunchTracker.confirm` and remove the direct write, or delete the method and make `TrackedLaunch` immutable.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/launch.py:257-259"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "faults.py's docstring says escalation writes come later; they are already here",
+      "description": "The module docstring says \"Escalation writes join this module in a later task.\" The module now contains `raise_expected_faults` (line 120) and `escalate` (line 152), both of which write to the store, plus the runtime objects `NodeContext` and `TickFaults`. It is no longer only a shared vocabulary. Fix: correct the docstring, or move the store-writing functions to their own module so the vocabulary module has no store writes.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py:4"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test typing and lint suppressions in the crash harness",
+      "description": "`_hooked` returns `tuple[object, object]` (line 91), so `main` casts with `# type: ignore[arg-type]` (lines 161 and 163). The `resolve` hook (line 119) has no return annotation and carries `# noqa: ANN202`, although ANN is not in the selected ruff rules. `observe` in tests/runner/observe_support.py:148 has no return annotation, and `Scenario.__init__` in tests/runner/test_end_to_end.py:70 lacks `-> None`. The rules require type hints on all signatures, and pyright runs strict over tests. I could not run pyright, so I have not confirmed which of these it flags. Fix: give the hooks real `Popen` and poll types, add return annotations, and drop the unused noqa comments.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "tests/runner/crash_entry.py:91"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The crash proof duplicates the factory's wiring",
+      "description": "`main` repeats the directory creation, the `probe_sq` call and the `RunnerTenant` construction that `runner_tenant` already does (lines 146-166). The crash proof therefore never exercises `validate_settings` or the factory's `partial(poll_run, ...)`. `factory.py` also re-spells `_now` as `partial(datetime.now, UTC)` elsewhere. Separately, tests/runner/test_budget_coverage.py imports the private helper `_link` from `runner.test_probes` instead of `tick_support`. Fix: extend `runner_tenant` to accept the test hooks (popen, poll) and have `crash_entry` call it, then move `_link` into `tick_support`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "tests/runner/crash_entry.py:149"
+    },
+    {
+      "severity": "NOTE",
+      "title": "build_argv is called for its exception, and its result is discarded",
+      "description": "`_launch` calls `build_argv` and drops the result, only so a `ValueError` fires before journaling. `launch()` then builds the same argv again (launch.py:203). A named validator, such as `validate_launch_parameters`, would say what the call is for and avoid building the argv twice.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py:173-175"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Loose types at the runner boundary, and unchecked settings",
+      "description": "`validate_settings` reads fields by name through `getattr`, so a renamed field fails at start-up with an AttributeError instead of at type-check time. `launch_grace_seconds`, which the observer uses, is not checked. `probe_sq` takes `poll: Callable[..., RunPoll]` (probes.py:49-52), and `CfRun` is `Callable[..., CompletedProcess[str]]`, so the callables have no named or typed keyword contract. Fix: check the fields explicitly and add `launch_grace_seconds > 0`. Type the poll collaborator as a Protocol with `__call__(self, run_id: str, *, timeout_seconds: float) -> RunPoll`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/amoeba/runner/factory.py:38-45"
+    },
+    {
+      "severity": "NOTE",
+      "title": "escalate() drops an unexpected fault when the node is already blocked",
+      "description": "If the node in context is already blocked, `escalate` returns without writing anything. The fault then exists only in the log (tenant.py:146). This is the documented \"no storm\" rule, but the operator sees nothing in the store. Fix: raise a project-scoped escalation keyed by the fault kind, which the store already deduplicates, or record the error in the existing block's context.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py:171-182"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The crash proof's \"no relaunch\" assertions are guaranteed by the test planner",
+      "description": "`ProofPlanner` in crash_entry.py touches a marker file before it emits a launch and never emits again for that node. So `all_sq_run_calls() == 0` holds whatever the Runner does with the NOT_APPLIED entry. These assertions test the harness, not the Runner. Fix: have the planner re-offer the node after NOT_APPLIED, and assert on what the Runner does with that second launch.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/runner/test_crash_recovery.py:54-57"
+    },
+    {
+      "severity": "NOTE",
+      "title": "amoeba start now requires a working sq on PATH",
+      "description": "`runner_tenant` runs `sq runs wait <fresh id> --timeout 0 --json` before the loop (factory.py:73), so `amoeba start` exits 7 on any host without a compatible `sq`, even when no project has a runnable node. This follows D9 and has a test (test_cli_lifecycle.py). Operators should know the start-up contract changed. The harnesses I checked (`cli_environment`, `load_harness`, the contract harness, `test_recovery`) put a stub `sq` on PATH. I did not check every caller.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/amoeba/cli/lifecycle.py:57-60"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every subprocess call site checks the tick budget first",
+      "description": "`_act` checks `budget.allows_call()` before each action, and `_launch` is its only path to `popen`. The probe loop checks before each `cf` call (probes.py:113). The observer checks before each poll (observe.py:146 and 188). `TickBudget` reads `host.stop_requested`, which is a property on `ResidentProcess` (host.py:128-131), so a stop request also refuses calls. This matches D10 and the coverage test in tests/runner/test_budget_coverage.py. I verified the call sites by reading; I did not run the test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py:161-168"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Observer poll state is wiped by every other project's observe() call",
+      "location": "src/amoeba/runner/observe.py:108",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No load test for the Runner's budgeted subprocess and poll path",
+      "location": "src/amoeba/runner/tenant.py:93",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A poll fault on an unconfirmed launch is not replayed between polls",
+      "location": "src/amoeba/runner/observe.py:171-193",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Expected faults lose detail: first payload wins, and each recurring fault costs a write",
+      "location": "src/amoeba/runner/faults.py:120-143",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The tenant's re-raise branch does not log before re-raising",
+      "location": "src/amoeba/runner/tenant.py:142-144",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The one broad catch is not at a process boundary",
+      "location": "src/amoeba/runner/tenant.py:145",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Journal parameter keys are defined in three places",
+      "location": "src/amoeba/runner/launch.py:121-122",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "LaunchTracker.confirm is dead in production, and launch state is set elsewhere",
+      "location": "src/amoeba/runner/launch.py:257-259",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "faults.py's docstring says escalation writes come later; they are already here",
+      "location": "src/amoeba/runner/faults.py:4",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Test typing and lint suppressions in the crash harness",
+      "location": "tests/runner/crash_entry.py:91",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The crash proof duplicates the factory's wiring",
+      "location": "tests/runner/crash_entry.py:149",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "build_argv is called for its exception, and its result is discarded",
+      "location": "src/amoeba/runner/tick.py:173-175",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Loose types at the runner boundary, and unchecked settings",
+      "location": "src/amoeba/runner/factory.py:38-45",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "escalate() drops an unexpected fault when the node is already blocked",
+      "location": "src/amoeba/runner/faults.py:171-182",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The crash proof's \"no relaunch\" assertions are guaranteed by the test planner",
+      "location": "tests/runner/test_crash_recovery.py:54-57",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "amoeba start now requires a working sq on PATH",
+      "location": "src/amoeba/cli/lifecycle.py:57-60",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Every subprocess call site checks the tick budget first",
+      "location": "src/amoeba/runner/tick.py:161-168",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:12:11.851673",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 40,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 17,
+    "in_fences": 0,
+    "in_section": 17,
+    "surviving": 17
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 41,
+  "prompt_tokens": 2596113,
+  "cached_tokens": 2211477,
+  "cache_write_tokens": 384614,
+  "completion_tokens": 93274,
+  "reasoning_tokens": null,
+  "duration_seconds": 416.4852610831149,
+  "cost_usd": 0.73697045,
+  "cost_basis": "provider"
+}

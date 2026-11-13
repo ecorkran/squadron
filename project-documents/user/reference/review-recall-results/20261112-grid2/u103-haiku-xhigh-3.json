@@ -1,0 +1,459 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Range translation is not applied when the first series is added after the range is set",
+      "description": "The visible-range effect depends on `[mount.ready, chart, range]`. The series count lives in `seriesCountRef` (line 72), which is a ref. `addSeries` through the facade increments it (`src/chart/chart-facade.ts:49-56`) but triggers no render, so the effect does not re-run. If the Context range is set while the chart is empty, the effect returns early at line 341. When the first series is added later, nothing re-runs the effect, so the current range is not applied until the range changes again.\n\nThe comment at lines 337-338 says the seam \"activates the moment it adds the first series.\" That is not what happens. The test `use-chart-provider.translation.test.tsx:135-145` passes only because it adds the series before calling `setRange`. Its comment at lines 166-167 shows the ordering was chosen on purpose. No test covers \"range set, then first series added,\" which is the case initiative 120 will hit first. Fix: make the \"has series\" fact part of state so the effect depends on it, and add the missing ordering to the tests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:340-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Calls made before the chart is live are dropped silently",
+      "description": "`runGuarded` returns `undefined` when `providerRef.current` is null or `disposedRef` is set. It does not log and does not change state. The comment at lines 101-107 justifies the drop only for the torn-down case. Before mount, the drop is silent too. React runs child effects before the parent's effect, so a child that calls `chart.addSeries(...)` from its own mount effect has the call dropped, and nothing in `error` or `ready` reports it. A null `containerRef` (lines 168-171) also leaves `ready` false with `error` null and no message. CLAUDE.md says \"never use silent fallback values.\" Fix: report a pre-ready call explicitly, and surface the null-container case through `error`. Only the post-teardown drop should stay silent.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:108-113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A missing theme token silently falls back to library default colors",
+      "description": "`readChartStyle` maps an empty token to `undefined` (lines 37-40) and returns `undefined` when all three are empty (lines 46-48). The provider then uses its own defaults, with no log and no error. The doc comment at lines 30-34 frames this as \"the stylesheet has not been applied.\" In the shipped app, an empty token means a renamed or misspelled entry in `CHART_TOKENS`, and the chart would render with white defaults and no signal. CLAUDE.md says to fail explicitly. No unit test covers this branch, and the e2e spec only passes for the real tokens. Fix: throw, or surface through `error`, when a required token is empty.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/routes/chart-route.tsx:35-55"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A failed `create()` produces a second, misleading teardown error, and the spy hides it",
+      "description": "On a `create()` failure, the catch block calls `teardown()`, which calls `provider.destroy()` (line 217). `LightweightChartsProvider.destroy()` calls `assertReady()` (`src/chart/providers/lightweight-charts-provider.ts:67-72, 79-86`), and that throws because `this.chart` is still null. The teardown catch then logs \"provider teardown failed: ... not ready,\" which points at the wrong problem. One failure yields two error logs.\n\nThe tests cannot see this. `src/test/support/chart-provider-spy.ts` never throws from `destroy`, and `use-chart-provider.lifecycle.test.tsx` asserts `destroy` was called once after a failed create, which passes against the spy. Fix: skip `destroy()` when `create()` did not succeed, and add a test where `destroy` throws when create never ran, so the spy models the real contract.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:302-309"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"inert after teardown\" tests cannot fail",
+      "description": "The hook's subscription handlers (`src/chart/use-chart-provider.ts:286-301`) have a body that is only `if (disposedRef.current) { return }`. They never call the provider, never resize, and never read a range. The test \"makes a subscription callback fired after teardown inert\" checks that the handlers don't throw, that `getVisibleRange` isn't called, and that `resize` ran once. Removing the guard changes none of those, so the test passes either way. It gives false coverage for the teardown race.\n\nThe subscriptions are also dead code in production. The comment at lines 276-278 says they exist to prove the disposer lifecycle under React, so production mounts subscriptions only to exercise them in tests. That runs against CLAUDE.md's \"resist adding complexity.\" Fix: give the handlers an observable effect a test can assert on, or remove them and test the disposer lifecycle directly against the spy.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.errors.test.tsx:255-271"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`error` keeps the latest failure, but the contract says it keeps the first",
+      "description": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation, or null\" (`src/chart/chart-operations.ts:77`). `setOperationError` overwrites unconditionally: `setMount((current) => ({ ...current, error: failure }))`. A second failing operation replaces the first.\n\nThe test named \"keeps the first error rather than being reset by a later success\" (`use-chart-provider.errors.test.tsx:234-247`) only checks that a later success does not clear the error. Its second call succeeds, so it never checks a later failure. Decide which contract is intended. If it is \"first,\" keep the existing error when one is set and add a two-failure test. If it is \"latest,\" fix the doc and rename the test.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:97-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`use-chart-provider.ts` is over the size guidance, and its mount effect is 158 lines",
+      "description": "The file is 366 lines against the project's ~300-line guideline. The mount `useEffect` runs from line 167 to 324 and holds the mount sequence, the teardown closure, the observer, the subscriptions, and the failure path. That is well past the ~50-line function guideline. The facade and type surface were already split out. The mount lifecycle (create, size, observe, subscribe, teardown) could move to a helper in its own module, leaving the effect as a short call plus cleanup.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:167-324"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `react-hooks/refs` rule is disabled for the entire hook file",
+      "description": "The suppression applies to every line of `use-chart-provider.ts`, which is where a real render-time `ref.current` read would be written. The rule's purpose is to catch that bug class. The comment justifies the suppression for two `useMemo` calls, at `use-chart-provider.ts:144-154` (the counter) and `:156-159` (the facade). Narrow the suppression to those lines with an inline `eslint-disable-next-line react-hooks/refs` carrying a reason. Then confirm with `pnpm lint` that it is the only trigger. The comment's sentence about the file \"~60% over\" the guide is also unclear and should be rewritten.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "eslint.config.js:55-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The provider stack is composed in two places",
+      "description": "`App.tsx:16-24` nests `SymbolTimeframeProvider` and `IndicatorProvider` around the router. `ChartContexts` repeats the same nesting for tests. If App adds or removes a provider, the hook suites still pass and stop reflecting the real tree. CLAUDE.md asks for DRY. Export one composition component and use it in both places.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/test/support/render-with-contexts.tsx:20-26"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The e2e run no longer exercises the production artifact, and nothing checks that the harness is excluded from it",
+      "description": "The header at lines 6-7 says specs run against the production build. The `webServer` command now builds with `--mode e2e` (line 44), so e2e exercises a build that contains `/__chart-harness`. The only check that the harness is tree-shaken from production is a comment at `src/routes/router.ts:42` saying it was \"verified by grepping the production bundle.\" I found no test that repeats that check. A change such as `MODES.includes(import.meta.env.MODE)`, which the router comment says would ship the harness, would pass every suite. Fix: add a check that builds in production mode and asserts the harness route and test IDs are absent from `dist/`, and update the header.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "playwright.config.ts:44"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Several doc comments no longer match the code",
+      "description": "The smoke spec says \"the chart itself is asserted in chart-render.spec.ts.\" That spec only navigates to `/__chart-harness` (`chart-render.spec.ts:14`). The live chart on \"/\" is asserted in `chart-live.spec.ts`. Other drift:\n\n- `src/test/support/render-with-contexts.tsx:8` says \"the four hook suites\" share the wrapper. Five suites import it: errors, facade, lifecycle, resize, and translation.\n- `src/test/support/chart-provider-spy.ts:14` shows `vi.mock('../chart/index.ts', () => chartProviderMockFactory())`. As written, this will not work. The factory references a static import, which hoisting makes unavailable, and the suites use the dynamic-import form the lifecycle test comment explains. Correct the snippet.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "e2e/smoke.spec.ts:8-10"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`ChartOperations` claims to cover every post-lifecycle operation, but `resize` is missing",
+      "description": "The doc calls the type \"a SUBSET of IChartProvider: every post-lifecycle operation, and deliberately NOT create/destroy.\" `IChartProvider` also has `resize(width, height)` (`src/chart/i-chart-provider.ts:101`), and the facade does not forward it. This is probably intentional, since the hook owns sizing through its ResizeObserver, but the doc should say so.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/chart-operations.ts:30"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Planning task numbers are left in source comments",
+      "description": "Comments refer to planning tasks: \"task 14\" (line 10), \"tasks 8/10/12/14\" (line 16), and \"task 12\" (line 185). Test headers do the same (\"Task 13,\" \"Task 15,\" \"Task 17\"), and `render-with-contexts.tsx:4` says \"task 16.\" These mean nothing to a future reader and will go stale. Describe the behavior instead. Slice references such as \"slice 102\" match the repo's existing convention.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:10"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The indicator placeholder effect does nothing in production",
+      "description": "This effect is guarded and then does nothing. It runs on every indicator change. The comment calls it deliberate, and the test at `use-chart-provider.translation.test.tsx:177-188` mostly asserts that it does nothing. It is a reasonable seam marker, but CLAUDE.md asks to resist complexity that does not earn its place. Consider removing the effect and leaving a TODO for initiative 120, unless the dependency wiring is needed to prove the Context split.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:358-363"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The initial size and the observer size use different box models",
+      "description": "`getBoundingClientRect()` includes the border, but `ResizeObserver`'s `contentRect` excludes it. The chart container (`src/routes/chart-route.tsx:92`) has a 1px border on each side. So the first `resize` makes the chart 2px larger in each dimension than its drawing box, until the observer fires on `observe()` and corrects it. The comment at lines 243-248 says the first paint already matches the container. The gap is small, but the two measurement paths should agree.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:249-250"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test fixtures are copied across the hook suites",
+      "description": "`MEASURED` and `measuredRect()` appear in errors (lines 30-43), facade (33-35), and translation (38-51). `resize.test.tsx:39` inlines the same measurement. Four files write out a near-identical measuring `Host`: errors (45), facade (52), translation (61), and resize (32). `state()` (errors 67) and `readState()` (lifecycle 48) do the same job. The spy module centralizes the mocks but not these fixtures. Move the measurement helper and a shared probe host into `src/test/support/`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.errors.test.tsx:30-72"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The error region and style branches have no unit tests, and the alert's accessible name hides its message",
+      "description": "The `role=\"alert\"` region and the `readChartStyle` branches have no unit tests. The e2e specs only assert that the alert is absent (`smoke.spec.ts:23`, `chart-live.spec.ts`), so nothing proves an error is shown. Also, `aria-label=\"Chart error\"` (line 99) replaces the element's accessible name, so the message text is not part of it. Drop the `aria-label` and let the visible text name the element.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/routes/chart-route.tsx:95-104"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The e2e sizing assertion is weaker than its comment",
+      "description": "The comment says the chart is \"sized to its container,\" but the assertion only requires the canvas to be wider than 50% of the container. A chart at half width would pass. Assert the canvas width is within a few pixels of the container's content width, or change the comment.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "e2e/chart-live.spec.ts:124-128"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The mock reset is incomplete, and the mock is not checked against the interface",
+      "description": "The comment at lines 248-249 says a leftover `mockImplementationOnce` must not carry into the next test. The reset only sets default implementations on four spies. Vitest's `mockClear` does not clear queued once-implementations, so an unconsumed one on `create`, `resize`, `destroy`, or `unsubscribe*` would carry over. No current test leaves one unconsumed, so this is latent. Use `mockReset()` on all spies and re-apply defaults. Separately, `MockChartProvider` (line 90) does not `implements IChartProvider` and takes `unknown` parameters, so an interface change would not fail type-checking here.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/test/support/chart-provider-spy.ts:237-254"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Import placement and style are inconsistent",
+      "description": "The suite declares `LINE_SERIES` between two import blocks (lines 14-21), then imports the spy and the render helper after it (lines 22-23). Imports belong at the top. Extensions are also mixed: `App.tsx:12` imports `'../routes/router'` without one, while lines 13-14 use `.tsx`, and `routes/router.ts:11-13` mixes bare `./routes` with `.ts` elsewhere. The tests also live under `src/test/`, while the testing rule's example uses a package-level `tests/`. The existing repo already follows the `src/test/` layout, so that is a question for the PM rather than a defect in this slice.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.translation.test.tsx:14-22"
+    },
+    {
+      "severity": "PASS",
+      "title": "Teardown order and StrictMode handling are correct",
+      "description": "Teardown disposes subscriptions first, disconnects the observer, destroys the provider, and then nulls `providerRef`. Each StrictMode effect run creates a fresh provider and resets `disposedRef` and `seriesCountRef` (lines 173-178). The cleanup at lines 317-323 matches the mount. The exception is the destroy-after-failed-create path reported above.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:192-224"
+    },
+    {
+      "severity": "PASS",
+      "title": "The facade forwards every member through one guarded runner and exposes no lifecycle methods",
+      "description": "Every member goes through `runGuarded`. `create` and `destroy` are absent from `ChartOperations`. `getCapability` keeps its generic through the facade. The type-level assertion in `use-chart-provider.facade.test.tsx` is part of the `src` tree that `tsconfig.app.json` includes, so `tsc -b` type-checks it and it is a real check. I did not run `tsc`, so this rests on reading the config.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/chart-facade.ts:44-105"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Range translation is not applied when the first series is added after the range is set",
+      "location": "src/chart/use-chart-provider.ts:340-345",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Calls made before the chart is live are dropped silently",
+      "location": "src/chart/use-chart-provider.ts:108-113",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A missing theme token silently falls back to library default colors",
+      "location": "src/routes/chart-route.tsx:35-55",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A failed `create()` produces a second, misleading teardown error, and the spy hides it",
+      "location": "src/chart/use-chart-provider.ts:302-309",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The \"inert after teardown\" tests cannot fail",
+      "location": "src/test/use-chart-provider.errors.test.tsx:255-271",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`error` keeps the latest failure, but the contract says it keeps the first",
+      "location": "src/chart/use-chart-provider.ts:97-99",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`use-chart-provider.ts` is over the size guidance, and its mount effect is 158 lines",
+      "location": "src/chart/use-chart-provider.ts:167-324",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "The `react-hooks/refs` rule is disabled for the entire hook file",
+      "location": "eslint.config.js:55-79",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The provider stack is composed in two places",
+      "location": "src/test/support/render-with-contexts.tsx:20-26",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The e2e run no longer exercises the production artifact, and nothing checks that the harness is excluded from it",
+      "location": "playwright.config.ts:44",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Several doc comments no longer match the code",
+      "location": "e2e/smoke.spec.ts:8-10",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`ChartOperations` claims to cover every post-lifecycle operation, but `resize` is missing",
+      "location": "src/chart/chart-operations.ts:30",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Planning task numbers are left in source comments",
+      "location": "src/chart/use-chart-provider.ts:10",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The indicator placeholder effect does nothing in production",
+      "location": "src/chart/use-chart-provider.ts:358-363",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The initial size and the observer size use different box models",
+      "location": "src/chart/use-chart-provider.ts:249-250",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Test fixtures are copied across the hook suites",
+      "location": "src/test/use-chart-provider.errors.test.tsx:30-72",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The error region and style branches have no unit tests, and the alert's accessible name hides its message",
+      "location": "src/routes/chart-route.tsx:95-104",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The e2e sizing assertion is weaker than its comment",
+      "location": "e2e/chart-live.spec.ts:124-128",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The mock reset is incomplete, and the mock is not checked against the interface",
+      "location": "src/test/support/chart-provider-spy.ts:237-254",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Import placement and style are inconsistent",
+      "location": "src/test/use-chart-provider.translation.test.tsx:14-22",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Teardown order and StrictMode handling are correct",
+      "location": "src/chart/use-chart-provider.ts:192-224",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The facade forwards every member through one guarded runner and exposes no lifecycle methods",
+      "location": "src/chart/chart-facade.ts:44-105",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:15:47.665152",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 22,
+    "in_fences": 0,
+    "in_section": 22,
+    "surviving": 22
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 35,
+  "prompt_tokens": 2160018,
+  "cached_tokens": 1957847,
+  "cache_write_tokens": 202147,
+  "completion_tokens": 82389,
+  "reasoning_tokens": null,
+  "duration_seconds": 372.6254067081027,
+  "cost_usd": 0.44921901000000003,
+  "cost_basis": "provider"
+}

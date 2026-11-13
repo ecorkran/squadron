@@ -1,0 +1,147 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Run totals omit earlier loop iterations",
+      "description": "The report reads only persisted `action_results`. Earlier loop iterations live in `StepResult.prior_rounds`, which `StateManager._append_step()` does not serialize. A verified two-round example costing $1 and $2 reports only $2. Persist every round\u2019s usage and add a multi-iteration report regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/usage_report.py:112-116"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Split reviews retain only the first part\u2019s usage",
+      "description": "Each part receives a usage record, but `fold_review_parts()` copies only the first part\u2019s metadata. A verified $1 plus $2 split review reports $1. Because pipeline artifacts are excluded from standalone review statistics, the remaining spend disappears from both views. Aggregate all parts\u2019 usage before persistence.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:505-506"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failed split-review parts violate the folding contract",
+      "description": "The returned exception result has empty outputs and ordinarily no verdict. The multi-part caller continues and passes it to `fold_review_parts()`, which requires exactly one input file and a verdict per part. Verified reproduction raises `TypeError`, replacing the provider failure and losing captured usage. Stop on failure while preserving accumulated spend, or return a fold-compatible failure result.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:493"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failed compaction discards available usage",
+      "description": "The failure result omits usage even when the provider exception carries telemetry. A successful summary followed by reconnect failure also loses the summary\u2019s spend because `compact()` returns telemetry only after reconnecting. Preserve capture telemetry through both failure paths and test their resulting records.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py:82-89"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed cost basis crashes the reviews report",
+      "description": "Set membership raises `TypeError` when valid YAML supplies a list or mapping for `costBasis`. Verified reproduction with `costBasis: [provider]` crashes instead of warning and retaining the row. Validate that the value is a string before membership testing; add list and mapping cases.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py:155"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Run totals omit earlier loop iterations",
+      "location": "src/squadron/stats/usage_report.py:112-116",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Split reviews retain only the first part\u2019s usage",
+      "location": "src/squadron/pipeline/actions/review.py:505-506",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Failed split-review parts violate the folding contract",
+      "location": "src/squadron/pipeline/actions/review.py:493",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Failed compaction discards available usage",
+      "location": "src/squadron/pipeline/actions/compact.py:82-89",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Malformed cost basis crashes the reviews report",
+      "location": "src/squadron/stats/reviews_report.py:155",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:22:01.267371",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 127139,
+  "cached_tokens": 126848,
+  "cache_write_tokens": null,
+  "completion_tokens": 491,
+  "reasoning_tokens": 0,
+  "duration_seconds": 122.18729658401571,
+  "cost_usd": 0.0181768,
+  "cost_basis": "alias_pricing"
+}

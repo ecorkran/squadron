@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`caught_up` uses a different test than the scope it summarizes",
+      "description": "`_product_status` computes the effective wanted range once, as `wanted` (line 189), and passes `wanted=None` to `_scope` when either `wanted_start` is `None` **or** `wanted_end` is `None`. But the caught-up flag recomputes the same condition a second way \u2014 `caught_up(verdicts, wanted=wanted_start is not None)` \u2014 which is `True` in exactly the case the scope fell back on held days. That case is reachable: the universe requires `start` when a tier is set (`universe._validate_entry`), `entry.end` may be `None`, and `_wanted_end` (line 141) returns `None` when `tick_dataset_edge` has no row for the dataset (a tier configured before any `pass` has written the edge). Then `verdicts` covers only the sessions a current unit touches, all of which are `complete` by construction, so `tick_status_render._product_lines` prints `caught up: yes` \u2014 a definite claim about an unbounded range, derived from the set of days already held. LLD 225 TD9 says \"without a wanted range: n/a\", and the renderer's `n/a (no wanted range)` branch is never taken here. It is latent today only because `TICK_UNIVERSE` has `tier=None`; 226 sets the tier and makes it live. Use one expression for both: `wanted_range = wanted is not None` and pass that to `caught_up` (or report the unknown edge as n/a). No test covers the tier-set branch of `build_status` (see the test-debt finding below), which is why this passed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:217"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Coverage's raw-count proof cannot see a row that belongs to no session",
+      "description": "`raw_counts` scans `tick_trade` between `min(opens)` and `max(closes)` and then **inner** joins `unnest(...) AS s(session_date, open_ns, close_ns)` on `t.ts_event BETWEEN s.open_ns AND s.close_ns`. A row whose `ts_event` lies in a break between two in-range sessions (CME's daily 21:00\u201322:00 UTC maintenance, a holiday closure) matches no array element, so the join drops it and it never reaches the per-`(instrument, session)` comparison. The scan bound already covers those instants, so the row is read and then discarded. The consequence is one-directional detection: `coverage` reports a `mismatch` when rows are missing (the integration test deletes a row by primary key and gets exit 3), but an out-of-band *insertion* \u2014 a hand-written row, or a defect that mis-stamps `ts_event` \u2014 is invisible, even though `tick_coverage.py`'s docstring says \"a mismatch is evidence of an out-of-band edit or a defect\" and LLD TD10 says \"Raw rows can change after commit only through supersession ... or by hand\". The fix is small: keep the per-session counts as they are and add a companion count of rows in the scanned range that match no session, failing the check when it is non-zero. Note the LLD does prescribe \"a join against the in-scope sessions passed as arrays\", so the join itself is as designed; the gap is that nothing counts what the join excluded.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:166-174"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An out-of-populated-range `--start/--end` exits 4, which the epilog defines as \"database unreachable\"",
+      "description": "`calendar_sessions` converts `OutOfPopulatedRangeError` into `TickCalendarError` alongside the genuinely unreachable cases (`psycopg.OperationalError`, `CalendarNotFoundError`). `exit_code_for` maps `TickCalendarError` to `EXIT_STORAGE` (4). So `mt data tick coverage --start 2030-01-01 --end 2030-02-01`, or a `status` run against a calendar whose populated span does not reach the units' days, exits 4 while `READ_EPILOG` in `src/manta_trading/cli/commands/tick_store_cmds.py` tells the operator \"4 the tick or production (calendar) database is unreachable\" \u2014 and the LLD's API Contract for `status` says the same (\"4 if the tick or production database is unreachable\"). The message text itself is correct (`OutOfPopulatedRangeError` names the populated span and the `mt data extend` remedy), but the exit code sends the operator looking for a connectivity fault. A range outside the populated span is a bad argument, not storage; `EXIT_PREFLIGHT` (1) is what the epilog already advertises for the other bad-argument case (`--end not after --start`). Either map `OutOfPopulatedRangeError` separately for the read verbs, or widen the epilog and the LLD contract to say that 4 also covers a range outside the calendar.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py#calendar_sessions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`shape_units` runs twice per product per status run",
+      "description": "`_scope` fetches the shape's current units (line 155) to build the calendar bounds, and then `session_verdicts` (line 87) issues the identical `shape_units(conn, shape_of(entry))` query again for the same product. `_product_status` therefore makes the same manifest read twice per product, and `_scope` throws its copy away after taking `set(...)`. Passing the units from `_scope` into `session_verdicts` would remove a redundant round trip on the read path (the LLD is explicit that `status` must stay cheap, since the whole reason for TD10 is avoiding a `tick_trade` scan). Small, but it is duplicated I/O on the one code path that was designed around read cost.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:155"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The wanted-range and holed-session branches of status have no test",
+      "description": "`test_tick_status_build.py` builds its status from `TICK_UNIVERSE[0]`, whose `tier` is `None`, so every case exercised goes through the \"no wanted range\" path. As a result `_wanted_end`, the `wanted` tuple, `caught_up` returning a real boolean, and `holed_sessions` are untested at the `build_status` level, and `_product_lines`'s `caught up: yes/no; holed [...]` branch is never rendered \u2014 which is precisely where the first finding lives. `tick_status_render.py` has no unit test at all: `age()` (line 43) is only ever called with an hour-scale value, so its `Nd Nh` and `Nm` branches are unexercised, as are `_product_lines`'s \"tier: not configured\" and \"contracts: none with ingested records yet\" branches. A parametrized unit test over a hand-built `ProductStatus` (the module already takes frozen dataclasses, so no DB is needed) would cover all of it cheaply.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:43"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The Settings+setup_logging patch block is now duplicated in a thirtieth place",
+      "description": "This change adds the same two-line `patch(\"manta_trading.cli.app.Settings\", ...)` / `patch(\"manta_trading.cli.app.setup_logging\")` context manager to `test/unit/cli/commands/test_data_tick_ingest.py`, `test/integration/data/test_tick_ingest_cli.py` and `test/integration/data/test_tick_status_cli.py`; `test_tick_status_cli.py` additionally writes a local `_app_patches` helper for it. A grep shows the same pair in roughly thirty test modules, and `test/unit/test_cli_data.py` already documents a context manager for exactly this purpose (\"patches Settings and setup_logging for CLI tests\"). The comment in each copy (\"as every CLI test does\") is accurate and is a sign the pattern wants to be a shared fixture in `test/unit/conftest.py` / `test/integration/conftest.py`, with the three new sites consuming it. Not a defect in this slice, but each new CLI test pays the duplication cost.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "test/unit/cli/commands/test_data_tick_ingest.py#settings"
+    },
+    {
+      "severity": "PASS",
+      "title": "New reads are parameterized and the comparison values are defined once",
+      "description": "Every statement in the new module binds its inputs (`%(dataset)s`, `%(symbols)s`, `%(stype_in)s`, `%(tiers)s`, `%s::date[]`), and the only interpolated fragments are code constants \u2014 `_UNITS`, `_LEDGER_UNITS`, `_SHAPE_WHERE` over `COVERAGE_PREDICATE`, and `tier_rank_sql`'s rendered tier names, which `constants.py` documents as \"code constants, never input\". `Shape.params()` derives `tiers` from `STORED_TIERS` and `stype_in` from the `SType` enum, so the tier list and symbology cannot drift between the manifest reads and `ingest_select`/`ingest_plan`. `--product` is validated against `TICK_UNIVERSE` in `_entries` before any connection is opened, and the refusal names the known products rather than failing silently.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "The `TickDatabaseUnreachable` subclass preserves the writers' exit code while giving the readers theirs",
+      "description": "`_connect` now raises `TickDatabaseUnreachable(TickPreflightError)`, and `run_mapped`'s new `storage` argument maps it to `EXIT_STORAGE` for `status`/`coverage` while `exit_code_for` still resolves it to `EXIT_PREFLIGHT` for the writers that go through `open_tick_store`/`open_tick_run` \u2014 so 223's documented \"exit 1 for the writers\" behavior is unchanged and no existing test needed editing. The override is explicit and named at the call site (`run_mapped(main, json_output, _read_storage())`), the `isinstance(exc, ())` default is safe, and the failure is still reported through `print_error` with the JSON mode honored. Both branches are covered by `test_an_unreachable_tick_database_exits_4` (parametrized over both verbs) and by the store-context tests.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/store_context.py:76-81"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`caught_up` uses a different test than the scope it summarizes",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:217",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Coverage's raw-count proof cannot see a row that belongs to no session",
+      "location": "src/manta_trading/data/tick/status_reads.py:166-174",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "An out-of-populated-range `--start/--end` exits 4, which the epilog defines as \"database unreachable\"",
+      "location": "src/manta_trading/data/tick/tick_status_build.py#calendar_sessions",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`shape_units` runs twice per product per status run",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:155",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The wanted-range and holed-session branches of status have no test",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:43",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The Settings+setup_logging patch block is now duplicated in a thirtieth place",
+      "location": "test/unit/cli/commands/test_data_tick_ingest.py#settings",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "New reads are parameterized and the comparison values are defined once",
+      "location": "src/manta_trading/data/tick/status_reads.py",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The `TickDatabaseUnreachable` subclass preserves the writers' exit code while giving the readers theirs",
+      "location": "src/manta_trading/data/tick/store_context.py:76-81",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:12:26.654077",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 547727,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1868057,
+  "cached_tokens": 1597440,
+  "cache_write_tokens": null,
+  "completion_tokens": 153186,
+  "reasoning_tokens": 147491,
+  "duration_seconds": 710.2966752911452,
+  "cost_usd": 0.12197771999999998,
+  "cost_basis": "alias_pricing"
+}

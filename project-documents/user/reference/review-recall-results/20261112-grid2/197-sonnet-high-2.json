@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Atomic report write leaks temp files and changes file permissions",
+      "description": "`_write_atomic` creates the temp file with `delete=False`. If `handle.write` or `temp.replace(target)` raises `OSError`, the handler logs and re-raises, but the temp file `.{name}.XXXX` stays in the runs dir. The batch report is rewritten after every item, so a persistent fault such as a full disk leaves one orphan per failed write. `test_a_failed_write_keeps_the_previous_report_and_logs_error` patches `Path.replace` and never checks that the directory is clean afterwards. `NamedTemporaryFile` also creates files with mode 0600, so the report files change from the default umask permissions to owner-only. That may be unintended. Unlink the temp file in the failure path, and either `chmod` it or document the permission change.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py#_write_atomic"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`resume_item` labels any `OSError` as a report-write failure",
+      "description": "`except OSError` wraps the whole `_resume_locked` call, but the comment and message assume the error came from the report write. The same call also reads state, loads the pipeline, evaluates the source (which reads design and review files) and runs git. An `OSError` from any of those is reported as `cannot write the batch report: ...` with `HALTED`. This handler does not log at ERROR itself and relies on `batch_report` having already logged. The wrong message sends the operator to the wrong place. Catch the error where the write happens, or log with `logger.exception` here and use a neutral message.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py#resume_item"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`run_item.py` imports private symbols from `run.py` at call time",
+      "description": "`run.py` imports `run_item`, and `handle_item_resume` imports `_apply_param_overrides` and `_run_pipeline_sdk` back from `run.py` inside the function. The imports are private and carry `pyright: ignore` markers. This is a circular dependency worked around with a deferred import. `run.py` also has to `assert decision is not None  # check_item_flags` because `check_item_flags` does not narrow types. Move the shared helpers (`_apply_param_overrides`, the SDK runner) into a module both can import, or have `run.py` pass them in. Declaring `handle_item_resume` as `NoReturn` would also make the control flow explicit, since it always raises `typer.Exit`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:handle_item_resume"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Untyped boundaries in the new resume module",
+      "description": "`cf_client: Any` is threaded through `resume_item`, `_select_item`, `_git_precondition` and `_open_dependencies`. The code calls `list_slices` on it and reads `.status`, `.design_file`, `.index` and `.name` from the results. `CfClientProtocol` already exists in `squadron.review.persistence`, and `branch_ops` uses it. `BodyRunner` returns `Awaitable[object]` and the result is discarded, so the contract does not say that completion is signalled through `rerun.record`. `run_body` can finish without setting it, and the code handles that case only through the `rerun.record is None` check. Use a protocol for the client and type the runner's result. `_Run.params` and `_select_item` are also loosely typed.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:resume_item"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"mutating pipeline\" check fails open for new step types",
+      "description": "`_MUTATING_STEP_TYPES` is a hard-coded allowlist, and `_step_mutates` walks a hand-parsed `config[\"steps\"]` structure. A step type added later that commits or moves cf state, but is not listed, runs without the lock. Nothing fails or logs, and the lock exists specifically to prevent interleaved mutating runs. This also breaks the \"define once, no scattered values\" rule and OCP. Prefer a flag on the step-type registration (for example `mutates: bool`) that the registry reads, or at least a test that checks every registered step type is classified. The current tests only cover named pipelines.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py:35-58"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplicated accept-decision hook and a larger `_execute_each_step`",
+      "description": "The same `_loop_accept_decision_result` block is pasted into both `_execute_loop_step` and `_execute_loop_body`, next to the existing duplicated `_loop_skip_result` block. This adds a third copy of the pre-round-1 short-circuit, so the two paths can drift. `executor.py` is now about 1,860 lines, far past the ~300-line guideline. `_execute_each_step` (from line 1511) takes on the item-rerun, flag-kind and halt logic and now needs a `halt` variable plus a `kind`/`failed_step` pair threaded through the loop. Extract the shared pre-round short-circuit, and consider moving the each-step and report logic into its own module.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:1154-1160 and 1290-1296"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Out-of-plan dependencies are silently skipped on item resume",
+      "description": "The source logs a WARNING for a dependency outside the plan. `_open_dependencies` drops such dependencies with `d in status`, without logging. This is probably intended, since the source already warned. A one-line debug or warning log would keep the two paths consistent.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:_open_dependencies"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Positive observations",
+      "description": "- Reserved control-param keys are defined once and enforced at three entry points: `-p`, the pipeline `params:` block (loader validation) and stored run state (`item_params`).\n- The lock is a non-blocking `flock` released by the OS, so a killed holder cannot leave a stale lock, and the lock tests include a killed-holder test.\n- Report load validates the schema version and wraps all parse errors in `BatchReportLoadError`.\n- Every new failure mode (lock held, git-dir failure, report unreadable, halt) is logged and has a test that asserts the signal.\n- Ruff `line-length` is 104 in `pyproject.toml`, so the long signatures I checked fit.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/control_params.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Atomic report write leaks temp files and changes file permissions",
+      "location": "src/squadron/pipeline/batch_report.py#_write_atomic",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`resume_item` labels any `OSError` as a report-write failure",
+      "location": "src/squadron/pipeline/item_resume.py#resume_item",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`run_item.py` imports private symbols from `run.py` at call time",
+      "location": "src/squadron/cli/commands/run_item.py:handle_item_resume",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Untyped boundaries in the new resume module",
+      "location": "src/squadron/pipeline/item_resume.py:resume_item",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The \"mutating pipeline\" check fails open for new step types",
+      "location": "src/squadron/pipeline/run_lock.py:35-58",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Duplicated accept-decision hook and a larger `_execute_each_step`",
+      "location": "src/squadron/pipeline/executor.py:1154-1160 and 1290-1296",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Out-of-plan dependencies are silently skipped on item resume",
+      "location": "src/squadron/pipeline/item_resume.py:_open_dependencies",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Positive observations",
+      "location": "src/squadron/pipeline/control_params.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:28:06.388626",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 618491,
+  "cached_tokens": 458263,
+  "cache_write_tokens": 160220,
+  "completion_tokens": 8462,
+  "reasoning_tokens": null,
+  "duration_seconds": 73.23644275008701,
+  "cost_usd": 0.7796925000000001,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,186 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Cron-line field layout and the \"root\" user are hard-coded in several places",
+      "description": "`production_lines` filters host lines with `j.split()[5] == \"root\"`. `main()` in `cutover_227_tick_backup.py` reads the cron user with `production_lines(...)[0].split()[5]`. `_JOB_LINE` encodes the same five-schedule-field layout a third time. The literal `\"root\"` and index `5` also live in the cron template and in the test helper `_host_block`, which matches `\" root \"`. The project rule says a value used in comparisons is defined once. One named constant or parsed-line type, such as a `CronJob` dataclass holding `user` and `command`, would stop these copies from drifting apart. Also, `main()` takes the first production line to be the cron user's line. That holds only while line order is stable, and nothing checks it.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py#production_lines"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`assert` used for runtime narrowing in production code",
+      "description": "`assert match is not None` and `assert flags is not None` in `run_health` are control-flow guards. Under `python -O` they vanish, and the failure becomes an `AttributeError` or `TypeError` with no step context. In an operator cutover tool that records expected against seen, these should raise `StepFailed` explicitly or be restructured so the type checker needs no assert.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py#block_commands"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests for the provisioning script assert source text instead of behavior",
+      "description": "Several new tests regex-extract assignments and functions from `provision_tick_cluster.sh` and compare them with literal strings:\n- `test_parent_directories_755_data_directory_700`\n- `test_only_trading_tick_is_created`\n- `test_roles_are_applied_with_replication`, which asserts that a substring appears in the function body\n- `test_roles_sql_grants_replication_only_when_asked`, which only checks the order of two substrings in the SQL\n\nThese break on harmless reformatting and would still pass if the logic were wrong. `test_hba_admits_*` is better, since it executes `hba_content`. The replication-grant tests should run `provision_tick_roles.sql` against a throwaway database, as the existing role tests apparently do. That is the only way to prove REPLICATION is conferred only with the flag.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_provision_tick_lib.py#test_parent_directories_755_data_directory_700"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cutover script and tests loosen the strict typing and import conventions",
+      "description": "- `sys.path` is mutated before imports, with `# noqa: E402` on every import.\n- The tests type the `ctx` fixture and helper parameters as `Any`, and load modules by file path, which defeats strict pyright.\n- `cutover_227_tick_backup.py` is about 320 lines, a little over the ~300-line guideline.\n\nI could not confirm that `[tool.ruff.lint]` and `[tool.pyright]` are present in `pyproject.toml`, or that pyright is clean on `scripts/`. Packaging `scripts/` as a module would remove the path hack, and a typed `Context` return would remove most of the `Any` uses.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The lifecycle check swallows the helper's exit status and inspects only its output text",
+      "description": "`b2_lifecycle.sh` failures are turned into `MISSING <cluster> lifecycle-read` by parsing the text. If the helper dies before printing anything, for example from a usage error or a missing `jq`, the output is empty. The `while read` loop then runs once on an empty line and reports `lifecycle-read` with a blank detail. The failure is still counted, but the cause is lost. `b2_lifecycle.sh` also does not check that `jq` and `rclone` exist before using them. Capture the exit code and include stderr in the report.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh (cluster loop, `LIFECYCLE_OUT=...|| true`)"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Bash design in `render_cron.sh` and `b2_lifecycle.sh`",
+      "description": "- The quoted replacement strings in the `${x//pat/\"rep\"}` substitutions correctly guard against bash 5.2 `patsub_replacement` mangling `2>&1`, and `test_ampersand_survives_substitution` pins that behavior.\n- Cluster blocks are inserted before the common placeholders are substituted, so `@CHECKOUT@` and the like still resolve inside them.\n- Refusing unfilled placeholders and an unescaped `%` is retained.\n- `b2_lifecycle.sh` is read-only by design, and the comment explains why rclone's `lifecycle` set would replace every rule. That is a sound guard.\n- `grep -v '^##'` under `set -e` and `pipefail` would abort the render with no message if the cluster template ever contained only `##` lines. This is unlikely, but it would be easy to handle explicitly.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "deploy/lib/render_cron.sh"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Operator-facing scripts follow the repo's check-then-act conventions",
+      "description": "- The failure handler in `run_steps` catches specific exception types at a process boundary, records them, and stops. That fits the project's exception rule.\n- The restart step refuses to restart production and re-checks tick advisory locks immediately before restarting.\n- No credentials appear in the source, and the application key reaches rclone only through its environment.\n- The test fixture for the cron parser uses the real pre-227 installed file, which meets the real-format parsing rule. I could not confirm the fixture's contents.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#run_steps"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Cron-line field layout and the \"root\" user are hard-coded in several places",
+      "location": "scripts/cutover_227_helpers.py#production_lines",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`assert` used for runtime narrowing in production code",
+      "location": "scripts/cutover_227_helpers.py#block_commands",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests for the provisioning script assert source text instead of behavior",
+      "location": "test/unit/test_provision_tick_lib.py#test_parent_directories_755_data_directory_700",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Cutover script and tests loosen the strict typing and import conventions",
+      "location": "scripts/cutover_227_tick_backup.py",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The lifecycle check swallows the helper's exit status and inspects only its output text",
+      "location": "deploy/setup-backup.sh (cluster loop, `LIFECYCLE_OUT=...|| true`)",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Bash design in `render_cron.sh` and `b2_lifecycle.sh`",
+      "location": "deploy/lib/render_cron.sh",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Operator-facing scripts follow the repo's check-then-act conventions",
+      "location": "scripts/cutover_227_tick_backup.py#run_steps",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:29:33.399275",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 207275,
+  "cached_tokens": 74584,
+  "cache_write_tokens": 132687,
+  "completion_tokens": 5571,
+  "reasoning_tokens": null,
+  "duration_seconds": 46.34140804200433,
+  "cost_usd": 0.6000254,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Item resume lets cf errors escape as tracebacks and mislabels unrelated OSErrors",
+      "description": "`resume_item` maps only `_Stop`, `GitEnvironmentError`, and `OSError`. Several calls after the git precondition reach cf directly and raise `ContextForgeError` or `ContextForgeNotAvailable` unwrapped. `_select_item` (item_resume.py:277) calls `evaluate_each_source` (executor.py:1441), which runs the cf source functions. `_open_dependencies` calls `list_slices` directly. The fresh-run path maps these errors to a typed exit (`_check_cf`, run.py:172-188), and `commit_run.py:82` and `branch_run.py:46` catch them. `handle_item_resume` (run_item.py:99-103) catches only `typer.Exit`, so a cf outage during item resume ends in an uncaught exception, which exits 1. Exit 1 means FLAGGED in the handoff contract. The slice design (`project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md`, line 467) reserves exit 3 for environment faults. An automated caller would read a cf outage as \"flagged again\". Separately, `load_pipeline(state.pipeline)` at item_resume.py:186 is unwrapped. The plain resume path handles that `FileNotFoundError` (run.py:1217-1220).\n\nThe `OSError` branch (item_resume.py:133-135) has the opposite problem. It catches any OSError from the whole resume, including source reads and body work, and reports it as \"cannot write the batch report\". It logs nothing at this layer.\n\nSuggested fix: in `resume_item`, catch the cf exceptions and return HALTED with an ERROR log, and map a missing pipeline to REJECTED. Narrow the OSError catch to the report writes, or make its message accurate and log it. Add tests where `list_slices` raises and where the pipeline file is missing. No test covers either path, and the failure-mode rule requires an observable signal for each.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:130-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`BatchReport.load` can escape its own error type, and `from_json` turns missing required fields into the string \"None\"",
+      "description": "`from_json` reads every key with `data.get(...)` and applies `str(...)` to `index` and `name`. A missing key becomes the literal `\"None\"`. `load` (batch_report.py:339) catches `(KeyError, TypeError, ValueError)`, but a non-object entry in `items`, such as `\"items\": [\"x\"]`, raises `AttributeError` from `data.get`. That escapes `load` without becoming `BatchReportLoadError`, and then escapes `resume_item` as a traceback, so the REJECTED path never runs. A string `unsaved_parts` also iterates character by character without error.\n\nSuggested fix: check each entry with `isinstance(item, dict)`, require `index`, `name`, and `outcome` explicitly, and raise `BatchReportLoadError` for each failure. The existing tests cover version, JSON syntax, and a missing file, but not a malformed item.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:164-169"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failed atomic writes leave a temp file in the runs directory",
+      "description": "`_write_atomic` creates the temp file with `delete=False`. If `handle.write` fails, `temp` is never assigned. If `temp.replace` fails, the file remains. Neither path unlinks it, so each failed write leaves a `.{name}.<random>` file. The disk-full case that the docstring describes is the one most likely to leave a partial file that holds space. `test_a_failed_write_keeps_the_previous_report_and_logs_error` (tests/pipeline/test_batch_report.py) patches `Path.replace` and checks only the old content, so it would not catch this.\n\nSuggested fix: on `OSError`, unlink the temp file with `missing_ok=True`, then log and re-raise. Create the temp file so its path is known before the write (for example with `mkstemp`). Assert in the test that no temp file is left.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:343-352"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`list_tasks` now requires `completed` and `total`, and the TaskEntry defaults report zero silently",
+      "description": "`list_tasks` parses `int(e[\"completed\"])` and `int(e[\"total\"])`. A cf response without those keys raises `KeyError`, which is not a `ContextForgeError`. Existing callers that catch only `ContextForgeError` would let it through, for example `src/squadron/pipeline/actions/commit.py:97`. I could not confirm that cf emits these fields. The updated fixtures assume it does. The dataclass defaults at context_forge.py:58-59 set both fields to `0`. A TaskEntry built without counts reads as \"no tasks\", which silently disables the \"all tasks checked\" check in `_not_ready_reason`. That is the silent-default pattern the project rules forbid.\n\nSuggested fix: wrap `KeyError` and `ValueError` from the parse in `ContextForgeError` with the command name, as `_run_json` does for bad JSON. Remove the zero defaults, or make `total` optional so the check cannot misfire. Add a test for a response missing these keys.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/integrations/context_forge.py:183-184"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`item_resume` types the cf client as `Any` in five places",
+      "description": "`resume_item`, `_resume_locked`, `_git_precondition`, `_select_item`, and `_open_dependencies` all take `cf_client: Any`. The rest of the pipeline types this boundary: `sources.py` takes `ContextForgeClient`, and `branch_ops.py` takes `CfClientProtocol`. `CfClientProtocol.list_slices` (review/persistence.py:58) takes no `plan` argument, so it does not fit the calls here, which pass one. With `Any`, strict pyright accepts the module, and nothing checks `e.index`, `e.status`, or `e.design_file`.\n\nSuggested fix: define a small Protocol beside `ConfigReader` with `list_slices(plan)`, `list_tasks(plan)`, and `get_config(key)`. Or type the parameter as `ContextForgeClient`, which is what `run_item.py` passes.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`run_item.py` imports private names back from `run.py`, creating a circular dependency",
+      "description": "`run.py` imports `run_item` at module level. `handle_item_resume` then imports `_apply_param_overrides` and `_run_pipeline_sdk` from `run.py` inside the function, with two `pyright: ignore[reportPrivateUsage]` suppressions. Each module depends on the other, and the item-resume module also builds the closure that knows how `sq run` starts a pipeline.\n\nSuggested fix: build the body runner in `run.py` and pass it into `handle_item_resume`, so `run_item.py` depends on an injected callable rather than on `run.py`. Move `_apply_param_overrides` to a shared module if both sides need it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:62-65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The mutating-step classification omits `dispatch`, so a non-committing revise loop can share a checkout with a batch",
+      "description": "`_MUTATING_STEP_TYPES` lists DESIGN, TASKS, IMPLEMENT, DEVLOG, and BRANCH. A loop counts only when `commit_each_iteration` is true. `dispatch` is not in the set. `judge-cycle.yaml:16-29` has a `revise` dispatch inside a loop with no commit, so `pipeline_mutates` returns False and that run takes no lock. A dispatch runs with the checkout as its working directory (`ActionContext.cwd`). A `judge-cycle` run in the same checkout as a batch could change files while the batch checks its clean tree (`dirty_paths`) or enters a branch. I did not trace the agent's writes, so this rests on the step's purpose and its working directory. The docstring follows the design's wording, which counts only commits and cf moves. D11's stated purpose is to stop interleaving in one checkout, and this pipeline falls outside that guarantee.\n\nSuggested fix: treat `dispatch` as mutating, or document the lock's scope precisely. Either way, add a test that `judge-cycle` classifies as mutating.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py:36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `report.json` path is built in two places",
+      "description": "`_validate` builds `f\"{request.run_id}.{each.name}.report.json\"` by hand. `BatchReport.json_path` builds the same name from `REPORT_JSON_SUFFIX`. If the convention changes, item resume reports \"not found\". That is explicit (REJECTED), but the project rule says a value should be defined once. Suggested fix: add one function in `batch_report.py`, such as `report_json_path(runs_dir, run_id, step_name)`, and call it from both places.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:187"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The reserved-key check in `resume_item` runs after git work",
+      "description": "`_git_precondition` can restore the target, which commits leftovers and checks out a branch. Only then does `item_params` reject a reserved key in `param_overrides`. The CLI rejects these earlier, so the CLI path is safe. A programmatic caller gets a refusal after git writes. The item-resume test docstring says refusals happen \"before any git or model work\", so `reserved_param_error` belongs in `_validate`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:148"
+    },
+    {
+      "severity": "NOTE",
+      "title": "On Windows, every mutating `sq run` now exits 2",
+      "description": "Without `fcntl`, `_open` raises `RunLockError`, so each mutating `sq run` and each item resume exits 2 on Windows. The design accepts this (D11), and the message is clear. It is still a behavior change for Windows users of batch pipelines, and the release notes should say so.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py#_open"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `BatchReport.write` docstring overstates atomicity across the two files",
+      "description": "The docstring says a failed write \"leaves the previous report intact\". Each file is replaced atomically, but the Markdown and JSON replaces are separate. A failure after the Markdown replace leaves a new `.md` beside an old `.json`. Resume reads the JSON, so the effect is a stale Markdown line, not a wrong decision. Reword the docstring to say each file is atomic and the pair is not.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:302"
+    },
+    {
+      "severity": "PASS",
+      "title": "The project run lock covers every mutating entry point, with no re-entry",
+      "description": "Checked on disk: the fresh, `--resume`, implicit-resume, SDK, and PROMPT_ONLY paths all call `_locked(definition, ...)` (run.py:1234, 1247, 1292, 1305, 1326), and `definition` is bound before each call (run.py:1217 and 1271). `resume_item` takes the lock once, and its body runner calls `_run_pipeline_sdk` directly, so it never re-enters the lock. Re-entry would fail, because flock is per open file description. When acquisition is refused, `_take_run_lock` exits 2 before any run starts, and `_locked` closes the unstarted coroutine.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py#_locked"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Item resume lets cf errors escape as tracebacks and mislabels unrelated OSErrors",
+      "location": "src/squadron/pipeline/item_resume.py:130-135",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`BatchReport.load` can escape its own error type, and `from_json` turns missing required fields into the string \"None\"",
+      "location": "src/squadron/pipeline/batch_report.py:164-169",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Failed atomic writes leave a temp file in the runs directory",
+      "location": "src/squadron/pipeline/batch_report.py:343-352",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`list_tasks` now requires `completed` and `total`, and the TaskEntry defaults report zero silently",
+      "location": "src/squadron/integrations/context_forge.py:183-184",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`item_resume` types the cf client as `Any` in five places",
+      "location": "src/squadron/pipeline/item_resume.py:113",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`run_item.py` imports private names back from `run.py`, creating a circular dependency",
+      "location": "src/squadron/cli/commands/run_item.py:62-65",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The mutating-step classification omits `dispatch`, so a non-committing revise loop can share a checkout with a batch",
+      "location": "src/squadron/pipeline/run_lock.py:36",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The `report.json` path is built in two places",
+      "location": "src/squadron/pipeline/item_resume.py:187",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The reserved-key check in `resume_item` runs after git work",
+      "location": "src/squadron/pipeline/item_resume.py:148",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "On Windows, every mutating `sq run` now exits 2",
+      "location": "src/squadron/pipeline/run_lock.py#_open",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The `BatchReport.write` docstring overstates atomicity across the two files",
+      "location": "src/squadron/pipeline/batch_report.py:302",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The project run lock covers every mutating entry point, with no re-entry",
+      "location": "src/squadron/cli/commands/run.py#_locked",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:17:35.840568",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 40,
+  "prompt_tokens": 3799580,
+  "cached_tokens": 3456551,
+  "cache_write_tokens": 342995,
+  "completion_tokens": 83957,
+  "reasoning_tokens": null,
+  "duration_seconds": 379.0551541671157,
+  "cost_usd": 0.7340807500000001,
+  "cost_basis": "provider"
+}

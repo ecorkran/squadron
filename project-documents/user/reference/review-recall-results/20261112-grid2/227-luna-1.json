@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Cutover can pass despite failed health and WAL-push commands",
+      "description": "`run_health` ignores the subprocess result from `shell()`, then treats the last line of the existing health log as the result. If the check fails before writing a new line, a previous clean `FLAGS archive=0 stale=0` can make the step pass. Similarly, `step_offsite` ignores the push command\u2019s return code and checks remote parity afterward; a failed push can therefore escape detection if the subsequent checks succeed. Check and record each command\u2019s exit status, and ensure health results correspond to the current invocation before declaring success.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:157-158"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lifecycle read failures are misreported as passing in the cutover",
+      "description": "When `b2_lifecycle.sh` fails, this loop reports a `MISSING ... lifecycle-read` item, which makes `setup-backup --check` non-clean. But `step_check` explicitly allows all `17/tick` items, so it can accept an unreadable lifecycle rule set and proceed with the cutover. The final production step only checks the setup command\u2019s exit status, not whether the output contains lifecycle-read failures. Parse and reject unreadable lifecycle results explicitly; only missing rules should remain informational.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh:240-246"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cutover can pass despite failed health and WAL-push commands",
+      "location": "scripts/cutover_227_tick_backup.py:157-158",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Lifecycle read failures are misreported as passing in the cutover",
+      "location": "deploy/setup-backup.sh:240-246",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:17:43.347260",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 80939,
+  "cached_tokens": 78080,
+  "cache_write_tokens": null,
+  "completion_tokens": 308,
+  "reasoning_tokens": 0,
+  "duration_seconds": 30.985672916984186,
+  "cost_usd": 0.0012207000000000001,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Unexpected exceptions skip the cutover report the docstring promises",
+      "description": "The module docstring says the first failure stops the run and \"the report is still written\". `run_steps` only catches `StepFailed` and `CalledProcessError`. Several steps can raise other exceptions, and those escape `main()` before `report.write_text(...)` runs:\n- `run_health` (lines 157-165) guards with `log.exists()`, but an existing empty log makes `splitlines()[-1]` raise `IndexError`.\n- `step_production` (line 224) reads the production health log with no existence or emptiness check. That is `FileNotFoundError` or `IndexError`.\n- `conf_sums` in `cutover_227_host.py` uses `next(...)` with no default, so it raises `StopIteration`.\n- `tick_locks_held` calls `int(psql(...))`, which raises `ValueError` on unexpected output.\n\nA cutover that dies mid-way on a production host then leaves no `<date>-227-cutover.md`, which is the one record of what was seen. Convert these into `require(...)` failures, or catch `(OSError, IndexError, ValueError, StopIteration)` in `run_steps` with the same record-and-stop treatment.\n\n`run_health` (line 164) and `block_commands` also use `assert x is not None` for type narrowing in production code. `python -O` strips those asserts. Making `require` return `NoReturn` on failure, or raising explicitly, would remove the need.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#run_steps"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Gaps in the cutover tests, and one weakened assertion",
+      "description": "The tests cover the pure helpers, `step_weekly`, `step_restart`, `step_switch` and `step_production` well. The steps that gate production safety have no test:\n- `step_apply`, which runs the \"production cron lines gain only the new args\" gate through `production_changes`.\n- `step_check`, `step_guards` and `step_offsite`, including the `--min-age` arithmetic for `wal/`.\n- `run_health` with a missing or empty log. This is the failure in the previous finding.\n- `main()`'s cron-user and bucket guards.\n\nTwo smaller test-quality points:\n- `test/unit/test_setup_backup.py` has `assert \"@\" not in text.replace(\"@192\", \"\")`. I found no `@192` anywhere under `deploy/`, so the replace appears to be a leftover. It weakens the unfilled-placeholder assertion it sits in. Restore `\"@\" not in text`.\n- `test/unit/test_provision_tick_lib.py` asserts source text. Examples are `'-v with_replication=1 -f - < \"$ROLES_SQL\"' in body` and the `CREATED_DATABASES=(trading_tick)` literal. These check how the script is written, not what it does. They break on harmless reformatting and don't catch a behavioral regression. The `hba_content` render test is the better pattern.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_cutover_227.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Host constants and a log-format contract are repeated across languages",
+      "description": "CLAUDE.md says a value used in comparisons or lookups should be defined once. Several are now spelled in more than one place:\n- `HOST_BACKUP_ROOT = Path(\"/data/backup\")` in `cutover_227_host.py`. It also appears as 17/main's `backup_root` in `deploy/backup-clusters.conf`, and as the `--backup-root` the cutover hands to `setup-backup.sh`.\n- `RCLONE_REMOTE = \"b2\"` in the cutover and `RCLONE_REMOTE=b2` in `setup-backup.sh`.\n- `ARM_FILE = \"RECONCILE-ARMED\"` in the cutover, `setup-backup.sh`, and the `--armed` path in `manta-trading-backup.cluster`.\n- `MT_BACKUP_S3_BUCKET` in `b2_lifecycle.sh` (`BUCKET_KEY`), `setup-backup.sh` and `cutover_227_host.py`.\n- `step_weekly` (line 176) skips on `base/<datetime.now():%Y%m%d>`. That silently depends on `cron_weekly_backup.sh:123` using `date +%Y%m%d`. If the format drifts, the skip never fires. A same-day or later re-run then executes the weekly job again, and once the arm file exists that includes the armed reconcile.\n\nThe two config parsers (`backup_clusters.sh` and `backup_clusters.py`) also duplicate rule logic. The parity test mitigates this and the cross-language split is understandable. Still, add a comment at each duplicated constant naming its twin, or have the cutover read the shared values from one place.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_227_host.py:25-32"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`ensure_dir` defines helpers that leak and rely on dynamic scope",
+      "description": "`ensure_dir` defines `dir_ok`, `dir_make`, `shape_ok` and `shape_fix` inside the function, and they read its `local` variables through bash dynamic scoping. After it returns they remain global functions pointing at unset variables, which would hit `set -u` if anything called them. This works today. `host_dir_ok` was renamed to avoid a clash, which shows the namespace is already shared. Passing `dir`, `owner` and `mode` as arguments, or `unset -f` at the end, would harden it.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh#ensure_dir"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Replication grant and pg_hba entry are scoped and opt-in",
+      "description": "`REPLICATION` is granted to `tick_migrate` only when `-v with_replication=1` is passed, and `provision_tick_cluster.sh` passes it. pg_hba admits `replication` for that one role from the client source address, over scram-sha-256. This mirrors `provision_roles.sql` and is well documented in the file. The role is also the general maintenance role, so it can stream the whole cluster; that is inherent to using `pg_basebackup` over the maintenance URL.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "scripts/provision_tick_roles.sql"
+    },
+    {
+      "severity": "PASS",
+      "title": "Placeholder rendering, cluster-table validation and lifecycle checking are sound",
+      "description": "I checked the following against the actual files:\n- `##` template comments are stripped before rendering.\n- `@CLUSTER@` cannot prefix-collide with `@CLUSTER_ROOT@`.\n- Replacements are quoted, so the bash 5.2 `&` behaviour can't corrupt `2>&1`.\n- Host-level substitutions run after the cluster blocks are inserted, so block placeholders are still filled.\n- The unfilled-placeholder and unescaped-`%` guards run on the final text.\n- The cluster table is parsed before any step in `setup-backup.sh`.\n- `pg_lsclusters` supplies the data directory.\n- `b2_lifecycle.sh` is read-only (the rclone call has no `-o` option), validates `--days`, and passes credentials only in the child's environment.\n- `setup-backup.sh` does not count a missing lifecycle rule as a failure, but does count an unreadable rule set.\n- The arming flow in `step_weekly` matches TD7 in the slice design.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "deploy/lib/render_cron.sh"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unexpected exceptions skip the cutover report the docstring promises",
+      "location": "scripts/cutover_227_tick_backup.py#run_steps",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Gaps in the cutover tests, and one weakened assertion",
+      "location": "test/unit/test_cutover_227.py",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Host constants and a log-format contract are repeated across languages",
+      "location": "scripts/cutover_227_host.py:25-32",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`ensure_dir` defines helpers that leak and rely on dynamic scope",
+      "location": "deploy/setup-backup.sh#ensure_dir",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Replication grant and pg_hba entry are scoped and opt-in",
+      "location": "scripts/provision_tick_roles.sql",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Placeholder rendering, cluster-table validation and lifecycle checking are sound",
+      "location": "deploy/lib/render_cron.sh",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:27:57.961083",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 19,
+  "prompt_tokens": 1040815,
+  "cached_tokens": 883207,
+  "cache_write_tokens": 157594,
+  "completion_tokens": 17630,
+  "reasoning_tokens": null,
+  "duration_seconds": 142.03297383291647,
+  "cost_usd": 0.9011241999999999,
+  "cost_basis": "provider"
+}

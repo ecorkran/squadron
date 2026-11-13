@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Bound parsing of `date | datetime` may turn a midnight datetime into a whole-day bound",
+      "description": "`start` and `end` are typed `date | datetime | None`. Pydantic accepts a datetime string whose time is exactly zero as a `date`. In smart-union mode, ties between lax matches go to the leftmost member, which here is `date`. If so, `end=2026-06-01T00:00:00Z` is parsed as a bare date. `_as_utc` then turns it into `23:59:59.999999`, and the client gets a day of extra data without being told.\n\nI could not run this, so the behaviour is unverified. No test pins it down. The reversed-range tests use midnight-`Z` values, but they pass whichever way the union resolves. The load test's `_z(KALSHI_START)` is a midnight start, which is the same instant either way. Add a unit test that sends `end=2026-06-01T00:00:00Z` and asserts the reader receives exactly that instant. If it fails, order the union `datetime | date` or add an explicit validator.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`TradeRecord.from_row` uses positional indexes, which contradicts the \"mapping is followed, not restated\" design",
+      "description": "`TradeRow.values` is `tuple[Any, ...]`. `TRADE_VALUE_COLUMNS` is derived from `TRADE_COLUMNS`, but `from_row` hard-codes `values[0]` through `values[7]`. Reordering or inserting a column in `TRADE_COLUMNS` would silently put the wrong values into the wrong fields. For example, `yes_price_dollars` and `no_price_dollars` are both Decimals, so nothing would raise.\n\nThe unit tests build `TradeRow` in the same hard-coded order, so they cannot detect this. The integration test only checks the length of `values`. Build the record by zipping `TRADE_VALUE_COLUMNS` with the values and passing them as `**kwargs`, as `CandleRecord` does. Alternatively, add a test that round-trips a real stored row through `fetch_trades` and `TradeRecord.from_row`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:116-128"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_CANDLE_OBJECTS` is a dead abstraction, and the \"added column is served without an edit\" claim is inaccurate",
+      "description": "The model classes in `_CANDLE_OBJECTS` are never used. Only its keys seed `nested`, while `from_row` hard-codes `CandleBidAsk`, `CandleBidAsk` and `CandlePrice`. `flat[\"volume_fp\"]` and `flat[\"open_interest_fp\"]` are also hard-coded.\n\nThe module docstring says a column added to `CANDLE_COLUMNS` \"is served here without an edit\". That is not true:\n- A new field in an existing object has no model field. Pydantic's default `extra=\"ignore\"` drops it silently.\n- A new object raises `KeyError` at request time.\n\n`test_nested_field_set_is_exactly_what_candle_columns_describes` does catch both cases, but only in the test suite. Either use the map's values or reduce it to a key set, and reword the docstring to say the test enforces parity rather than the code.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:1-10, 48-55, 71-90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_window` toggles the `period` predicate on the truthiness of `extra`",
+      "description": "`extra` is described as additional parameters, but a non-empty `extra` also appends the hard-coded clause `period = %(period)s`. A future caller that passes any other extra parameter would get a `period` predicate it never asked for, and the SQL would fail on a missing bind.\n\nMake it an explicit `period: int | None` argument, or let callers pass extra clauses. Related to this, the ceiling comparison `count > max_rows` is written twice in each route handler: once inside `_read` and once in `_admit_rows` (kalshi_timeseries.py:111, 160). If the two ever differ, the guard would read rows and then refuse, or refuse without reading. A single helper would remove that.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:174-191"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The load test patches connections through a private pool attribute",
+      "description": "`_client` sets `cursor_factory` on `pool._pool` (`# noqa: SLF001`) after startup. Any connection the pool creates later, for example after recycling or on growth, will not be recorded. In that case the \"no row fetch\" assertion in `test_over_ceiling_is_refused_without_fetching_rows` could pass vacuously. It does guard against this by also asserting that a `count(*)` statement was seen, which limits the damage, but the mechanism depends on a private attribute and on the pool not replacing connections.\n\n`_RecordingCursor.statements` is also a class-level mutable list shared across tests. A `configure=` callback or `connection_class` on the pool, or a fixture-scoped recorder, would be sturdier.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:150-163"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Duplicated sync-state invariant check",
+      "description": "The `watermark is None or live_floor is None` check and its `RuntimeError` message duplicate `read_trade_status` (trade_status.py:162-166). `effective_tape_floor` was promoted to avoid exactly this kind of divergence, so extracting a shared \"read the trades state row\" helper would finish the job.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:119-128"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Load-test module docstring says \"Four assertions\" but the file has six tests",
+      "description": "The two extra tests are the candle-size recorder and the scoped markets-list check. Updating the docstring would keep it accurate.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:1-10"
+    },
+    {
+      "severity": "PASS",
+      "title": "Window helper extraction and schema helper relocation",
+      "description": "Moving the day-boundary logic into `windows.py` leaves one derivation shared by the bars and Kalshi routes. `bars.py` has no leftover references to the removed `datetime`, `UTC` and `time` imports. `ensure_timescaledb` and `apply_kalshi_track` moved to `test/kalshi_support/schema.py`. The remaining `kalshi_helpers.py` imports are all still used.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/windows.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Connection scoping, count-before-fetch guard and SQL construction",
+      "description": "The pool checkout covers seek, count and fetch in one executor call and is released before serialization. The 422 is raised after the connection returns, and a unit test covers this. SQL is built from `psycopg.sql` composition with bound parameters, and the only `sql.SQL(table)` input is a module-local literal. Values are read from the settings via `get_max_bars` and `get_kalshi_trades_excluded`, not from `os.environ`. The load tier derives its URL from `ephemeral_db` and never reads the production URL.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:98-118"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Bound parsing of `date | datetime` may turn a midnight datetime into a whole-day bound",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`TradeRecord.from_row` uses positional indexes, which contradicts the \"mapping is followed, not restated\" design",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:116-128",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`_CANDLE_OBJECTS` is a dead abstraction, and the \"added column is served without an edit\" claim is inaccurate",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:1-10, 48-55, 71-90",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_window` toggles the `period` predicate on the truthiness of `extra`",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:174-191",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The load test patches connections through a private pool attribute",
+      "location": "test/load/test_188_kalshi_api_nfr.py:150-163",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Duplicated sync-state invariant check",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:119-128",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Load-test module docstring says \"Four assertions\" but the file has six tests",
+      "location": "test/load/test_188_kalshi_api_nfr.py:1-10",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Window helper extraction and schema helper relocation",
+      "location": "src/manta_trading/api_server/routes/windows.py",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Connection scoping, count-before-fetch guard and SQL construction",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:98-118",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:26:36.429324",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 332135,
+  "cached_tokens": 205452,
+  "cache_write_tokens": 126675,
+  "completion_tokens": 9421,
+  "reasoning_tokens": null,
+  "duration_seconds": 73.238842374878,
+  "cost_usd": 0.6262575,
+  "cost_basis": "provider"
+}

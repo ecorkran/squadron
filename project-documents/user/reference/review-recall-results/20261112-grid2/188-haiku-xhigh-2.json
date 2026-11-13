@@ -1,0 +1,351 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Ceiling-sized responses are built and serialized on the event loop",
+      "description": "Both handlers run the database work in an executor, then build the response model and serialize it inline on the loop. `CandlesResponse.build` (line 125) constructs up to 75,000 `CandleRecord`s, and `timeseries_response` (line 126) runs `model_dump(mode=\"json\")` plus an orjson or msgpack encode over all of them. The trades handler does the same at lines 168\u2013174. The cost scales with the row ceiling. The rules say synchronous work inside an `async def` must stay under 1 ms in the worst case, and CPU-bound work must go to an executor. `bars.py:218` has the same shape, but that is a precedent for the pattern, not an exemption from the rule.\n\nThe load tier does not catch this. The trades ceiling test (`test/load/test_188_kalshi_api_nfr.py:221`) times one request end to end. The concurrency test (`:322`) uses market-detail requests. Nothing checks whether a ceiling-sized request starves other I/O. I have not measured how much of the 1.034 s median is loop time.\n\nFix: move build and serialize into the executor job, or have `_read` return the encoded `Response`. Add a load assertion that a small request issued while a ceiling request is in flight keeps its latency bound.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:125"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Trades `tape_complete_through` is documented as the newest trade's time, but the value is the sync watermark",
+      "description": "The field description (lines 188\u2013193) says \"Created time of the newest stored trade.\" The value is not that. `tape_facts` returns `sync_state.watermark_ts` (`serve_timeseries.py:143`). That column is written only by `TradeRepository.advance_watermark(window_edge)` (`trade_repository.py:272\u2013276`), whose docstring says the tape \"is complete through `window_edge`.\" The candles field at the same level says \"not 'the newest stored candle',\" which is correct. The migration comment at `market/schema/migrations/kalshi.py:232` and the `tape_facts` docstring (`serve_timeseries.py:124`) repeat the wrong definition.\n\nOpenAPI is generated from this text, so the public contract describes behavior the server does not have. A client reading \"newest trade\" will misjudge a quiet tape. Correct the description. Then decide whether the migration comment is stale or the code is wrong, and reconcile them.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Trade rows are mapped by position, while the SELECT order comes from a different mapping",
+      "description": "`TradeRecord.from_row` assigns `values[0]` through `values[7]` to named fields. The order those values arrive in comes from `TRADE_VALUE_COLUMNS` (`serve_timeseries.py:40\u201343`), which is derived from `TRADE_COLUMNS` (`trade_repository.py:45\u201355`). If `TRADE_COLUMNS` is reordered, the SELECT changes and `from_row` does not. All the fields share compatible types, so the failure is silent. For example, `yes_price_dollars` could take the `count_fp` value.\n\nThe candle path avoids this by walking `CANDLE_COLUMNS` by name, and the trades path should do the same. No test catches the problem. The unit tests build synthetic positional `TradeRow`s in the assumed order. The integration `TestTradeWindow` in `test/integration/test_kalshi_serving.py` asserts only counts and lengths.\n\nFix: build the record from `dict(zip(TRADE_VALUE_COLUMNS, row.values, strict=True))` and call `cls(**mapping)`. Add an integration assertion that a stored trade's `yes_price_dollars` round-trips through `fetch_trades`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:167"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Candle `from_row` silently drops columns that have no model field, and the docstring says this cannot happen",
+      "description": "The module docstring (lines 8\u20139) says \"a column added there is served here without an edit.\" That holds only for columns whose field already exists on `CandleBidAsk` or `CandlePrice`. For a new nested name, `from_row` writes it into `nested[obj]` (line 91). Then `CandleBidAsk(**nested[\"yes_bid\"])` (lines 94\u201396) discards it, because Pydantic's default is `extra=\"ignore\"`. The response omits the column and raises no error.\n\nThe only guard is `test_nested_field_set_is_exactly_what_candle_columns_describes` in `test/unit/api_server/test_kalshi_models.py`. Fix: set `model_config = ConfigDict(extra=\"forbid\")` on the candle models so a mismatch fails at construction. Correct the docstring to match.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:86"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`tape_filtered` re-spells the membership test, and its docstring says it does not",
+      "description": "The docstring (lines 150\u2013152) says the membership test \"is not re-spelled here\" and that \"a change to one cannot leave the other behind.\" The function then runs the membership test in Python, `(category or \"\") in bound` (line 166). It also reads the parameter through the literal key `\"trades_excluded_categories\"` (line 159). That string is defined in `selection.py` (lines 156 and 170), so it is now duplicated across modules.\n\nThe claim is false. A change to the comparison in `trades_filter_sql`, such as case folding, would not reach `tape_filtered`. The only guard is the five-case `TestTapeFiltered` parametrization. The `isinstance` guard at lines 160\u2013162 exists only to narrow a dict value this function reaches into.\n\nFix: compute the flag in SQL. Compose `trades_filter_sql(excluded).predicate` as a `... AS tape_filtered` column in the `market_context` statement (`_CONTEXT_QUERY`, line 85). Then delete `tape_filtered` and its guards.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The candle ceiling load test asserts no time or resource bound, and its size constant is unused",
+      "description": "`test_candles_at_the_admission_ceiling_records_its_response_size` (lines 241\u2013266) asserts only that the count equals `API_MAX_BARS_PER_REQUEST`. It prints the size and checks no latency. The load-tier rule requires load tests to assert on latency, throughput, or resource bounds. This is the only load test for the candle route, which is a new network path.\n\n`CANDLES_CEILING_RESPONSE_MB = 34.80` (line 120) is defined and never referenced. The \"measured 34.80 MB\" figure guards nothing.\n\nFix: time the request with the existing `_measure` helper and assert a latency bound. Either assert the byte size against `CANDLES_CEILING_RESPONSE_MB` with a stated tolerance, or delete the constant.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:241"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The load tier is not gated by CI, which the rules require for slices touching these paths",
+      "description": "The module-level `skipif` (lines 80\u201388) runs the tier only with `MT_RUN_LOAD_TESTS=1`. The module docstring's Gating section says CI wiring is deferred to slice 907. That slice file exists (`project-documents/user/slices/907-slice.ci-pipeline-and-load-test-gating.md`). The `.github/` directory has no pytest, mypy, or load-test job, so nothing enforces these bounds. The rule says \"CI must gate load tests for slices touching these paths.\"\n\nThe deferral is documented and tracked, so I rate this CONCERN, not FAIL. Land the gate with this slice, or record an explicit exception that names the rule.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:80"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_seed_kalshi_dense` is about 100 lines, and the fixture reseeds for every test",
+      "description": "The function (lines 446\u2013546) covers five tables, plus state rows. Split it per table. `kalshi_dense_db` (line 548) is built on function-scoped `ephemeral_db` (`test/conftest.py:187\u2013188`), so each of the five dense tests reseeds about 176k rows. A module-scoped fixture would cut the run time.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "test/load/conftest.py:446"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Literal counts in the load test duplicate the fixture constants",
+      "description": "The assertion `body[\"count\"] == 450` repeats `KALSHI_MARKET_COUNT` (`test/load/conftest.py:426`). The literal `24_382` at line 313 is a production figure with a comment, which is acceptable, but it should be named once.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:360"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The pool recording only covers connections that exist when it is applied",
+      "description": "`_client` reads the private attribute `pool._pool` (`noqa: SLF001`) and applies the recording cursor only to idle connections that exist at that moment. `min_size=2` (`app.py:84`) means connections created later, under concurrency, would go unrecorded. The over-ceiling test is sequential, so it is sound today. A comment should say so.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:168"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two window helpers share a concept and nearly the same name, with different end semantics",
+      "description": "`gaps.py:59` `_window_end_utc` returns the next midnight, exclusive. `windows.py`'s `window_end_utc` returns the last instant, inclusive. The `windows.py` docstring says two route families depend on the helper and does not mention gaps. Someone who imports the wrong one gets a one-day error at the boundary.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/gaps.py:59"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tape_facts` duplicates `read_trade_status`'s state read and error text",
+      "description": "`tape_facts` repeats the `STATE_QUERY` read, and it copies the `RuntimeError` text verbatim from `trade_status.py:162\u2013166`. Extract one `read_trades_state(conn)` helper and use it from both.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:131"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_window` adds the period predicate based on whether `extra` is non-empty",
+      "description": "Lines 198\u2013199 append `period = %(period)s` whenever `extra` is truthy, not whenever a period is supplied. Passing `extra` without `period` would reference an unbound parameter. Pass the period explicitly.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:198"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Lint and type-check configuration does not cover the new test code",
+      "description": "Mypy runs non-strict on `src/manta_trading` only (lines 69\u201372), so the new test code is not type-checked. That includes `_RecordingCursor` (`test_188:132`) and the `cursor_factory: type | None` annotation (`test_188:149`). The rules call for strict checking that includes tests. This is a pre-existing project choice, so this is a flag only.\n\nSeveral `# noqa` codes name rules that the ruff config does not select, so they suppress nothing: S608 (`serve_timeseries.py:205`), TC003 (both models files), RUF012 (`test_188:132`), and SLF001 (`test_188:168`).",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "pyproject.toml:69"
+    },
+    {
+      "severity": "PASS",
+      "title": "The bars refactor is clean",
+      "description": "After the window helpers moved to `routes/windows.py`, `bars.py` imports only `date`. I found no leftover `datetime`, `time`, or `UTC` references. The reversed-range message in `windows.py` matches the wording the bars route uses.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/bars.py:6"
+    },
+    {
+      "severity": "PASS",
+      "title": "The production-URL guard covers the new load tier",
+      "description": "`test_load_tier_never_references_prod_db_url` globs `test/load/*.py`, so `test_188_kalshi_api_nfr.py` and the new conftest are included. Neither file reads the production URL variable. `kalshi_dense_db` derives its database from `ephemeral_db`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "test/load/test_167_data_status_nfr.py:214"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Ceiling-sized responses are built and serialized on the event loop",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:125",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Trades `tape_complete_through` is documented as the newest trade's time, but the value is the sync watermark",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Trade rows are mapped by position, while the SELECT order comes from a different mapping",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:167",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Candle `from_row` silently drops columns that have no model field, and the docstring says this cannot happen",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:86",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`tape_filtered` re-spells the membership test, and its docstring says it does not",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:147",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The candle ceiling load test asserts no time or resource bound, and its size constant is unused",
+      "location": "test/load/test_188_kalshi_api_nfr.py:241",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The load tier is not gated by CI, which the rules require for slices touching these paths",
+      "location": "test/load/test_188_kalshi_api_nfr.py:80",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_seed_kalshi_dense` is about 100 lines, and the fixture reseeds for every test",
+      "location": "test/load/conftest.py:446",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Literal counts in the load test duplicate the fixture constants",
+      "location": "test/load/test_188_kalshi_api_nfr.py:360",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The pool recording only covers connections that exist when it is applied",
+      "location": "test/load/test_188_kalshi_api_nfr.py:168",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Two window helpers share a concept and nearly the same name, with different end semantics",
+      "location": "src/manta_trading/api_server/routes/gaps.py:59",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`tape_facts` duplicates `read_trade_status`'s state read and error text",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:131",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`_window` adds the period predicate based on whether `extra` is non-empty",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:198",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Lint and type-check configuration does not cover the new test code",
+      "location": "pyproject.toml:69",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The bars refactor is clean",
+      "location": "src/manta_trading/api_server/routes/bars.py:6",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The production-URL guard covers the new load tier",
+      "location": "test/load/test_167_data_status_nfr.py:214",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:07:09.117407",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 36,
+  "prompt_tokens": 2260733,
+  "cached_tokens": 2044776,
+  "cache_write_tokens": 215933,
+  "completion_tokens": 81719,
+  "reasoning_tokens": null,
+  "duration_seconds": 365.7698981252033,
+  "cost_usd": 0.47347304000000007,
+  "cost_basis": "provider"
+}

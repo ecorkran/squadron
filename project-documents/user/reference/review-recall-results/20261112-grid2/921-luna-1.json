@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The sudoers rule does not authorize the installer command",
+      "description": "`MT_INSTALL` is defined on line 9 but omitted from the root command grant on line 13. `cutover_common.install()` invokes the installer with `sudo=True` (lines 132\u2013135), so the cutover cannot install the requested ref under this sudoers configuration. Include the alias in the grant.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:13"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Sudoers wildcards allow more than the named operations described",
+      "description": "The comment says access is limited to named units and exact commands, but `mt-*` and `*` are broad argument wildcards. In sudoers, wildcards can match whitespace and additional arguments, so the operator can potentially invoke systemctl with extra options or pass arbitrary arguments to `mt-run`. Restrict arguments to the specific units and wrapper invocations the cutover needs, or use a narrowly validating root-owned wrapper.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:7-8"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The sudoers rule does not authorize the installer command",
+      "location": "deploy/sudoers.d/manta-ops:13",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Sudoers wildcards allow more than the named operations described",
+      "location": "deploy/sudoers.d/manta-ops:7-8",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:16:07.900621",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 61760,
+  "cached_tokens": 57984,
+  "cache_write_tokens": null,
+  "completion_tokens": 242,
+  "reasoning_tokens": 0,
+  "duration_seconds": 31.71748595801182,
+  "cost_usd": 0.00107844,
+  "cost_basis": "alias_pricing"
+}

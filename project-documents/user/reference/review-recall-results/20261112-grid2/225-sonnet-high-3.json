@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Render branches have no direct tests",
+      "description": "`_product_lines` has several branches: no tier configured, edge never observed, `caught_up` of `None` or holed, and \"contracts: none with ingested records yet\". `age()` is also untested. A grep of `test/` found no unit test importing `tick_status_render`, and none of those strings appear in the new tests. The integration tests (`test_tick_status_cli.py`) only exercise the single \"ingested, tier-less, edge-less\" path. The \"no contracts\" message came from a late bug-fix commit and has no regression test, and `age()` (with its `divmod` arithmetic) has no boundary tests (0 s, 59 s, 1 h, 1 d). Pure string-building functions like these are cheap to parametrize. `print_coverage`'s mismatch lines are covered only through exit-code and \"mismatch\" substring checks.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:51-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Import-time `assert` guards a runtime invariant",
+      "description": "The check that `_BUCKET_ROWS` covers every `TickSessionStatus` is a module-level `assert`. It is stripped under `python -O`, so a new status would then be silently dropped from the report. A failure also surfaces as an import error for the whole CLI. A unit test asserting the same set equality would enforce it without those problems. Alternatively, derive the layout from the enum.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:34-36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`shape_units` is queried twice per product",
+      "description": "`_product_status` calls `_scope`, which runs `shape_units(conn, shape_of(entry))`. It then calls `session_verdicts`, which runs the same query again. It also calls `contract_lines`, which re-joins the same unit/request/ledger set. The unit read is a full-shape scan with no date bound, so each product pays for it twice. Passing the first result into `session_verdicts` would remove the duplicate query and the chance of the two reads seeing different data.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:96-107,150-179"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Loosened connection types at the read boundary",
+      "description": "`_read` takes `Callable[[Any, str], ...]`, and the inner `read(conn: Any, ...)` in `tick_coverage` is also `Any`. The project already defines `Conn = psycopg.AsyncConnection[Any]` in `manifest_reads`. Using it here keeps strict pyright able to check the callbacks. `_read_storage()` exists only to lazily import one class, and it adds indirection. The same lazy import could sit inline in `tick_status` and `tick_coverage`, or `TickDatabaseUnreachable` could be passed directly.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:164-176,213-217"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`run_mapped` storage override is order-dependent",
+      "description": "`TickDatabaseUnreachable` subclasses `TickPreflightError`, so `exit_code_for` still returns exit 1 for it in the writers. The read verbs get exit 4 only because they pass a `storage` tuple to `run_mapped`. Exit-code mapping is now split between `tick_exit.exit_code_for` and a per-call override, which cuts against the \"defined once, in `tick_exit.py`\" statement in the module docstring. Handling the subclass in `exit_code_for` would keep one source of truth. The writers would need a decision on whether unreachable means exit 1 or 4 there too. The behaviour is tested and the override is documented, so this is a design smell and not a bug.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:70-80"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Spread filtering uses O(n\u00b2) list membership",
+      "description": "`[c for c in lines if c not in spreads]` does a dataclass-equality list scan per contract. The counts are small, but filtering with `c.instrument_class != SPREAD_CLASS` is simpler and avoids the issue.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:197-199"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Function and docstring sizes",
+      "description": "`_product_status` is about 50 lines, at the project's soft limit. Several public render and build helpers (`print_status`, `coverage_to_dict`, `print_coverage`, `build_status`, `shape_of`, `jsonable`) have no docstrings. Both are minor.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:150-205"
+    },
+    {
+      "severity": "PASS",
+      "title": "SQL, DB safety, and refactors",
+      "description": "All queries are parameterized. The only f-string interpolations are module constants (`_UNITS`, `COVERAGE_PREDICATE`), not user input. The read verbs use `connect_migrated` with no lock and no destructive statements. The test deletes target throwaway fixture databases and use primary keys instead of `ctid`, as the in-test comments explain. The raw-count window (`BETWEEN` on session open and close) matches the ingest worker's bounds in `ingest_worker.py`. The `utc_midnight` and `days_touched` extraction in `session_days.py` removes duplicate logic, and `ingest_plan.py` now reuses it. The `except Exception` in `run_mapped` is a documented process-boundary handler that re-raises unmapped errors. Integration tests cover exit codes 0, 1, 3 and 4, and JSON parity with `to_dict()`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Render branches have no direct tests",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:51-111",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Import-time `assert` guards a runtime invariant",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:34-36",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`shape_units` is queried twice per product",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:96-107,150-179",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Loosened connection types at the read boundary",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:164-176,213-217",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`run_mapped` storage override is order-dependent",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:70-80",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Spread filtering uses O(n\u00b2) list membership",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:197-199",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Function and docstring sizes",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:150-205",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "SQL, DB safety, and refactors",
+      "location": "src/manta_trading/data/tick/status_reads.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:01:12.074401",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 418912,
+  "cached_tokens": 404876,
+  "cache_write_tokens": 14020,
+  "completion_tokens": 6156,
+  "reasoning_tokens": null,
+  "duration_seconds": 52.902102125110105,
+  "cost_usd": 0.16145800000000002,
+  "cost_basis": "provider"
+}

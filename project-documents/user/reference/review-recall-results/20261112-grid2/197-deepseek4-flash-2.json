@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`BatchReport.load` lets `AttributeError` escape, breaking its \"any problem raises BatchReportLoadError\" contract",
+      "description": "The body does `items = cast(list[dict[str, object]], report[\"items\"])` and then `[BatchItemRecord.from_json(item) for item in items]`, all inside `except (KeyError, TypeError, ValueError)`. The `cast` is a no-op at runtime, so the actual shape of `report[\"items\"]` is never checked. If it is a JSON string (e.g. `\"items\": \"\u2026\"` from a hand-edited or otherwise damaged report), the comprehension yields `str` elements and `BatchItemRecord.from_json` calls `data.get(...)` on a `str`, raising `AttributeError` \u2014 which is not in the caught tuple.\n\nThat escapes `BatchReport.load`, is not caught by `_validate` in `src/squadron/pipeline/item_resume.py` (it catches `BatchReportLoadError` only), and is not caught by `resume_item`'s handlers (`_Stop`, `GitEnvironmentError`, `OSError`). The result is an unhandled traceback from `sq run --resume \u2026 --item \u2026` instead of the documented exit-2 rejection naming the path. A `isinstance(items, list)` guard plus an `AttributeError` in the except tuple would restore the contract the docstring states. The neighbouring `isinstance(data, dict)` check shows the intent was there; it just stops one level short.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py#BatchReport.load"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_step_mutates` never descends into a `fan_out` step's `inner`, so such a pipeline would run without the project lock",
+      "description": "`_step_mutates` recurses only through `config.get(\"steps\")` \u2014 the key `each` and `loop` use. `fan_out` stores its nested step under `inner` as a single-key dict (`src/squadron/pipeline/steps/fan_out.py`, and `resolved_config[\"inner\"]` in `_execute_fan_out_step`), so a `fan_out` whose inner step is one of `_MUTATING_STEP_TYPES` reports `False` from `pipeline_mutates`. The step would then run concurrently inside branches, committing and moving cf's slice, with no lock \u2014 exactly the interleaving D11 exists to prevent. `pipeline_mutates`' docstring (\"any step, nested steps included\") and D11 (\"The executor finds them by walking the definition, nested steps included\") both claim coverage that the code does not provide.\n\nI verified this is currently latent, not live: grepping the built-in pipelines under `src/squadron/data/pipelines` found no `fan_out` step, so no shipped pipeline is affected today. It is reachable from a project or user pipeline, though, since `FanOutStepType.validate` rejects only a nested `fan_out`, not a mutating inner type.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py#_step_mutates"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`TaskEntry`'s `completed`/`total` defaults are unreachable; `files` is read differently in the same comprehension",
+      "description": "`TaskEntry` declares `completed: int = 0` and `total: int = 0`, but the parser reads `int(e[\"completed\"])` and `int(e[\"total\"])` \u2014 required-key access \u2014 while `files` in the same comprehension uses `e.get(\"files\", [])`. A cf output lacking either key now raises a bare `KeyError` that is not wrapped as `ContextForgeError`, and the declared defaults can never apply. Either read all three with `.get` and keep the defaults meaningful, or drop the defaults. The design (`197-slice\u2026md`, Interfaces Required) does list both keys as cf output, so this is about which failure mode a shape change produces, not about today's cf.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/integrations/context_forge.py#list_tasks"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The report is fully re-serialized twice per item, making a batch O(n\u00b2) in report size",
+      "description": "`await _write_each_report(report, runs_dir, final=False)` now runs after every completed item, and `BatchReport.write` calls both `self.render()` and `json.dumps(self.to_json(), indent=2)` over the entire record list each time. For an n-item batch that is 2n full-file writes of content growing linearly in n. This is deliberate per D7 (\"Each finished item's record triggers an atomic rewrite of both files\"), and the durability it buys is real; noting it because the cost is quadratic and the Markdown render is the more expensive of the two \u2014 it could be skipped for the intermediate writes, since only the JSON is loadable by item resume.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py#_execute_each_step"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A failed report write leaves its temp file behind in the runs directory",
+      "description": "`NamedTemporaryFile(..., delete=False)` is used, and the temp path is only consumed by `temp.replace(target)`. If `handle.write` or `temp.replace` raises \u2014 precisely the case the new test patches `Path.replace` to exercise \u2014 the `.\u2026report.json.XXXXXX` file stays in the runs directory with nothing to remove it. It is inert (the name does not end in `.json`, so `StateManager.list_runs`'s `glob(\"*.json\")` and the tests' `glob(\"*.report.json\")` both ignore it), but it accumulates. A `try/except` that unlinks `temp` before re-raising would keep the directory clean.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py#_write_atomic"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The new `--item`/`--decision`/`--instructions` flags are absent from `run()`'s mode-conflict validation",
+      "description": "`check_item_flags` validates only the combinations among the three new flags. It does not reject them alongside `--dry-run`, `--explain`, `--prompt-only`, `--list` or `--status`, and in `run()` the item-resume branch sits *after* all of those. `sq run --resume r1 --item 401 --decision retry --dry-run` therefore enters the `--dry-run` block, where `assert pipeline is not None  # guarded above` fires because a `--resume` invocation need not supply the positional `pipeline` \u2014 an `AssertionError` rather than a usage error. The assert itself and the missing `--dry-run`/`--resume` guard are pre-existing (that block is untouched by this diff), so this is not a regression; it is that the new flags were added without joining the existing conflict checks, which leaves the combination reachable and crashes.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py#check_item_flags"
+    },
+    {
+      "severity": "PASS",
+      "title": "The new paths carry tests for both outcome and observable signal, written alongside the implementation",
+      "description": "The slice's riskiest behavior is covered rather than deferred: `test_item_resume_validation.py` asserts each `ResumeExit` value, that a refused record touches nothing (branch, refs and report bytes snapshotted before and after), and that the lock refusal and a failed `rev-dir` read are rejected rather than halted; `test_each_report_writes.py` asserts the report exists after item 1 *and* the full in-flight/`not_run`/reason/`flagKind` table on a halt; `test_batch_report.py` asserts the previous report survives a failed write and that the failure logs at ERROR; `test_item_resume_git.py` asserts an unrelated branch is refused with every ref unchanged and that a failed restore halts. The design's D12 table maps one-to-one onto named tests. `pyproject.toml` still scopes pyright's `include` to `[\"src\"]`, so the tests are not type-checked \u2014 that is documented there as pre-existing and tracked separately, not something this change introduced.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/test_item_resume_validation.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`BatchReport.load` lets `AttributeError` escape, breaking its \"any problem raises BatchReportLoadError\" contract",
+      "location": "src/squadron/pipeline/batch_report.py#BatchReport.load",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`_step_mutates` never descends into a `fan_out` step's `inner`, so such a pipeline would run without the project lock",
+      "location": "src/squadron/pipeline/run_lock.py#_step_mutates",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`TaskEntry`'s `completed`/`total` defaults are unreachable; `files` is read differently in the same comprehension",
+      "location": "src/squadron/integrations/context_forge.py#list_tasks",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "The report is fully re-serialized twice per item, making a batch O(n\u00b2) in report size",
+      "location": "src/squadron/pipeline/executor.py#_execute_each_step",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "A failed report write leaves its temp file behind in the runs directory",
+      "location": "src/squadron/pipeline/batch_report.py#_write_atomic",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The new `--item`/`--decision`/`--instructions` flags are absent from `run()`'s mode-conflict validation",
+      "location": "src/squadron/cli/commands/run_item.py#check_item_flags",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The new paths carry tests for both outcome and observable signal, written alongside the implementation",
+      "location": "tests/pipeline/test_item_resume_validation.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:10:11.061330",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 41,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 572911,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2483938,
+  "cached_tokens": 2159872,
+  "cache_write_tokens": null,
+  "completion_tokens": 156836,
+  "reasoning_tokens": 152390,
+  "duration_seconds": 1387.3168326669838,
+  "cost_usd": 0.13576792,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,168 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Trade row mapping is positional, unlike the candle mapping",
+      "description": "`CandleRecord.from_row` walks `CANDLE_COLUMNS`, so a column change in the repository is followed automatically. `TradeRecord.from_row` instead reads `values[0]` through `values[7]` by index. The indexes depend on the order of `TRADE_COLUMNS` minus `market_ticker`, as computed in `serve_timeseries.TRADE_VALUE_COLUMNS`. If a column is added or reordered, the fields shift silently, and Pydantic validation may not catch a swap between same-typed fields such as `yes_price_dollars` and `no_price_dollars`. The integration test only checks the value count, not which field gets which value. Build the record from `zip(TRADE_VALUE_COLUMNS, row.values)` as keyword arguments. Otherwise add a test that asserts the name-to-slot mapping.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_window` infers the period predicate from whether `extra` is truthy",
+      "description": "The helper adds `period = %(period)s` whenever `extra` is non-empty. It does not check that `extra` actually contains `period`. A future caller passing any other extra parameter would get a `period` clause with no bound value, which fails at runtime. The coupling is implicit. Make the period an explicit argument, or pass extra predicates as `sql.Composable` along with their params.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#_window"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`tape_filtered` depends on a parameter name inside `trades_filter_sql`",
+      "description": "The function reads `selection.params[\"trades_excluded_categories\"]` and re-implements the `COALESCE(category, '')` semantics in Python. This reuses the parameter set but not the logic, so the claim that the two cannot drift is only partly true. A rename of the key raises `KeyError` at request time. A shape-guard `TypeError` is marked `pragma: no cover`. The parametrized integration test comparing the helper with the SQL predicate does reduce the risk. Consider having `selection` export the excluded-category set or a pure predicate function, so both consumers share it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#tape_filtered"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Load test reaches into private pool state and uses a class-level mutable list",
+      "description": "The recording-cursor setup touches `pool._pool` (suppressed with `# noqa: SLF001`) and sets `cursor_factory` on live connections. `_RecordingCursor.statements` is shared class state. This is fragile across psycopg_pool upgrades, and connections created after setup, such as pool growth, would not be recorded. In assertion 2 that could produce a false pass on \"no fetch\". The current pool size and test shape make it unlikely to matter today. Prefer a pool `configure` callback, or pass the cursor factory through the app's pool construction.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py#_client"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Length and structure",
+      "description": "The load test file is about 360 lines and `test/load/conftest.py` grew by about 150 lines, both over the ~300-line guideline. The seeding function `_seed_kalshi_dense` is also long. Splitting the Kalshi seeding into `kalshi_support` would match how the schema helpers were already moved there.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Window resolution, ceiling guard and connection scoping",
+      "description": "The refusal is raised after the executor call returns, so the pooled connection is released before the 422. Window helpers were extracted into `windows.py` rather than duplicated between the bars and Kalshi routes. The count-before-fetch design is tested at the unit level (no fetch call on refusal) and at the load level. Unit tests cover the 404, 422, empty-window facts, naive datetimes, bare dates and msgpack paths. The `try/except` rules are not violated anywhere in the diff.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Trade row mapping is positional, unlike the candle mapping",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_window` infers the period predicate from whether `extra` is truthy",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#_window",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`tape_filtered` depends on a parameter name inside `trades_filter_sql`",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py#tape_filtered",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Load test reaches into private pool state and uses a class-level mutable list",
+      "location": "test/load/test_188_kalshi_api_nfr.py#_client",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Length and structure",
+      "location": "test/load/test_188_kalshi_api_nfr.py",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Window resolution, ceiling guard and connection scoping",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:29:22.635020",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 179150,
+  "cached_tokens": 125663,
+  "cache_write_tokens": 53483,
+  "completion_tokens": 4972,
+  "reasoning_tokens": null,
+  "duration_seconds": 38.38317074999213,
+  "cost_usd": 0.2810126,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

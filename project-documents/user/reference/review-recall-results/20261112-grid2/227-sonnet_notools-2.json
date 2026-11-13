@@ -1,0 +1,240 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Shell-command blanket catch and unchecked `shell()` results in cutover steps",
+      "description": "`run_health`, `step_offsite` and `step_metadata` call `shell(...)`, which uses `subprocess.run` without `check`. In `run_health` and `step_offsite` the return code is dropped. A failed health command is only caught indirectly, when the last log line has no FLAGS summary. That line could be stale from an earlier run, so a failed health run could pass on an old log line. Also, `step_offsite` ignores the push command's exit code and relies only on `rclone check`. Check the exit code, or record the log's mtime or length before the run and compare afterwards.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#step_health_once"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fragile `assert` used as control flow in production script",
+      "description": "`block_commands` has `assert match is not None`, and `run_health` has `assert flags is not None`. Both are stripped under `python -O`, and the first one would surface as an unhelpful AssertionError rather than a `StepFailed`. Raise `StepFailed` explicitly. The `job_lines` regex also anchors on exactly five whitespace-separated fields. That is fine for the current template but misparses `@reboot` style lines.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_helpers.py#block_commands"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stale-weekly skip heuristic can arm an unverified cluster",
+      "description": "The skip condition is \"a base dir named for today exists and the arm file exists\". It does not check that the base backup completed. A partial directory left by an interrupted run, plus an arm file, makes a re-run skip verification. The directory and arm file are also only a same-day check, so the step cannot be re-validated the next day. Consider tying the skip to the weekly log's done line.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py#step_weekly"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Arm-file touch happens before offsite verification and is not reversible by re-run",
+      "description": "The step arms reconciliation, which is destructive pruning, at step 8, before steps 10 to 12 verify health and offsite parity. If a later step fails, the cluster stays armed. The report says to fix and re-run, but the arm file persists and the reconcile guard is then live. Consider arming only after verification passes, or documenting that explicitly.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:step_weekly"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`PUSH_MIN_AGE_S` coupling duplicates a constant owned by another script",
+      "description": "The value 120 mirrors `MIN_AGE` inside `sync_wal_offsite.sh`, and `WEEKLY_DONE` mirrors a log string in `cron_weekly_backup.sh`. Two definitions drift silently. Per the project's \"one value, one place\" rule, read them from the owning script or a shared constants file.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:PUSH_MIN_AGE_S"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lifecycle output parsing and prefixing rely on string matching",
+      "description": "`run_lib` rewrites status lines with a `sed` over the exact words `OK|DRIFT|MISSING|...`. The lifecycle loop re-parses the same lines by prefix, and `setup_not_ok` in Python re-parses them again by regex. The status vocabulary is therefore defined in three places. The `--rehearse` and `MISSING <cluster> lifecycle` conventions are tested, but a new status word would be silently dropped from tallies. Centralize the vocabulary.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "deploy/setup-backup.sh#run_lib"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Python tooling configuration not verifiable; new scripts import via `sys.path` hack with `noqa: E402`",
+      "description": "The script inserts `scripts/` into `sys.path` and silences E402 on every import. It also imports `backup_clusters` and `cutover_common`, which I could not inspect. The rules require strict pyright and the ruff select list (`BLE`, `ASYNC`, `B`, and others) in `pyproject.toml`. I could not confirm that the new files are covered or clean under them. The `_load` helper in the tests repeats the same path hack.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "scripts/cutover_227_tick_backup.py:30-36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests assert script source text rather than behavior",
+      "description": "Several new tests regex-extract shell source and compare literal strings. Examples are `test_parent_directories_755_data_directory_700`, `test_only_trading_tick_is_created` and `test_roles_are_applied_with_replication`. They fail on harmless refactors and do not prove that REPLICATION is granted or that pg_hba admits replication. `test_roles_sql_grants_replication_only_when_asked` only checks the ordering of two substrings. Run the SQL against a throwaway database, or exercise the function with stubs.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/test_provision_tick_lib.py:test_roles_are_applied_with_replication"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No load test for the new cluster loops",
+      "description": "The change touches the backup and network paths, but no `tests/load/` tier was added. That fits one-off host tooling, so I am recording it only as an observation.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Good practices observed",
+      "description": "- The lifecycle checker is read-only by design, and the comment explains why: `rclone backend lifecycle` replaces all rules.\n- The `render_cron.sh` replacements quote the replacement text to avoid bash 5.2 `&` expansion, and this is tested.\n- The cluster table is parsed before any step runs, which is also tested.\n- The cutover stops at the first failed step and still writes its report.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "deploy/lib/b2_lifecycle.sh"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Shell-command blanket catch and unchecked `shell()` results in cutover steps",
+      "location": "scripts/cutover_227_tick_backup.py#step_health_once",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fragile `assert` used as control flow in production script",
+      "location": "scripts/cutover_227_helpers.py#block_commands",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Stale-weekly skip heuristic can arm an unverified cluster",
+      "location": "scripts/cutover_227_tick_backup.py#step_weekly",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Arm-file touch happens before offsite verification and is not reversible by re-run",
+      "location": "scripts/cutover_227_tick_backup.py:step_weekly",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`PUSH_MIN_AGE_S` coupling duplicates a constant owned by another script",
+      "location": "scripts/cutover_227_tick_backup.py:PUSH_MIN_AGE_S",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Lifecycle output parsing and prefixing rely on string matching",
+      "location": "deploy/setup-backup.sh#run_lib",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Python tooling configuration not verifiable; new scripts import via `sys.path` hack with `noqa: E402`",
+      "location": "scripts/cutover_227_tick_backup.py:30-36",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests assert script source text rather than behavior",
+      "location": "test/unit/test_provision_tick_lib.py:test_roles_are_applied_with_replication",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No load test for the new cluster loops",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Good practices observed",
+      "location": "deploy/lib/b2_lifecycle.sh",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-227",
+    "diff": "11168d5b2ae7805e15a63888eb85ca26b1fdc811...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:29:16.349942",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 107767,
+  "diff_chars_injected": 107767,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 75758,
+  "cached_tokens": 75756,
+  "cache_write_tokens": 0,
+  "completion_tokens": 2856,
+  "reasoning_tokens": null,
+  "duration_seconds": 23.185525625012815,
+  "cost_usd": 0.0422386,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

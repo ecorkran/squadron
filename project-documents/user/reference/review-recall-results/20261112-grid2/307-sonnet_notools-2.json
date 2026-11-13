@@ -1,0 +1,204 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Resubmit matching compares timestamps and dates in formats it never normalises",
+      "description": "`resubmit_origins` parses `requested_at` with `datetime.fromisoformat`, and `judge` parses `start` the same way. `made < since` raises an uncaught `TypeError` if one value is timezone-aware and the other is naive. `start` is written as UTC. Whether the CLI's `requested_at` is always aware is not verified. The tests only use aware values. Nothing handles the naive case, so it would crash with a bare `TypeError` instead of a `CutoverError`.\n\nThe match key is `(schema, str(range_start), str(range_end))` on the request-row side and `(schema, start, end)` on the estimate side. It only matches if both sides print dates identically. If it misses, every resubmit is refused as \"no recorded original\". That fails safe, but it blocks the cutover.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_304_checks.py#_check_resubmit"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Session labelling compares ISO strings lexicographically",
+      "description": "`request.start <= day < request.end` compares strings. `ExhaustedRequest.start` and `end` come from `str(row[\"range_start\"])` and `str(row[\"range_end\"])`. `day` comes from `str(session[\"session_date\"])`. This only works if the CLI renders both as plain `YYYY-MM-DD`. If either carries a time component, the boundary day is mis-bucketed and a retry-exhausted session is reported as \"not accounted for\". Parse both sides to `date` once instead.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/purchase_verdicts.py#_label"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test files likely fail the required strict pyright",
+      "description": "The Python rules put tests under strict pyright with zero errors as a merge blocker. This file uses bare `dict` and `list` annotations (`-> dict`, `exhausted: list | None`, `units: list[dict] | None`). `_status(...)` is annotated `-> object` but its result is passed to `check_dataset_edge`, which takes a `CompletedProcess[str]`. I did not run pyright, so these are probable errors rather than confirmed ones.\n\nIn the source, `_parser()` uses `__doc__.split(...)`. `__doc__` is typed `str | None`, so strict pyright will probably flag `reportOptionalMemberAccess`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_purchase_verdicts.py:84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests depend on private helpers of production modules",
+      "description": "`_accounting` calls `accounting_futures._product_payload`. `test_bar_job_dirs_read_the_rows_the_real_cli_renders` calls `tick_debug_cmds._cell`. This does follow the project rule that parser fixtures use the real format. But it ties the tests to private function names, so a rename will break unrelated tests. Expose a public rendering function, or add a contract test on the CLI side.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_cutover_304_first_purchase.py#_accounting"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cutover test module is far past the file-size guideline",
+      "description": "The diff adds roughly 380 lines to this file, which now holds the arg parsing, estimate-only, gate and evidence-item tests. The slice's own source modules were split to stay near 300 lines. The test file went the other way. Split it, for example into `test_cutover_estimate.py` and `test_cutover_evidence_307.py`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "test/unit/scripts/test_cutover_304_first_purchase.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Generalised script keeps slice-304 names",
+      "description": "The script, `cutover_304_checks.py` and `cutover_304_evidence.py` now serve every purchase slice, but they keep the `304` names. The new modules use the `purchase_*` naming instead. The file name, the `prog=` string and the docstring explain the history, but the naming drift will confuse the next reader. Rename when convenient.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "argparse SystemExit is caught at the process boundary",
+      "description": "Catching `SystemExit` to return argparse's code is acceptable. It is a documented top-level handler, and the inline comment justifies it. The new `except` clauses in `purchase_verdicts.py` are narrow, and each re-raises as a `CutoverError` that names its cause. I found no silent fallbacks.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_304_first_purchase.py#main"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hard-coded ranges and ceilings are now single-sourced",
+      "description": "The history wants are one shared `_HISTORY_WANTS` tuple. The ceilings are derived from the estimate, rounded up to `CEILING_STEP_USD`. The coverage reads come from `TICK_UNIVERSE`. This removes the duplicated literals from the earlier version. The tests for each new function cover both the pass case and the stop case.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/universe.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Resubmit matching compares timestamps and dates in formats it never normalises",
+      "location": "scripts/cutover_304_checks.py#_check_resubmit",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Session labelling compares ISO strings lexicographically",
+      "location": "scripts/purchase_verdicts.py#_label",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Test files likely fail the required strict pyright",
+      "location": "test/unit/scripts/test_purchase_verdicts.py:84",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests depend on private helpers of production modules",
+      "location": "test/unit/scripts/test_cutover_304_first_purchase.py#_accounting",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Cutover test module is far past the file-size guideline",
+      "location": "test/unit/scripts/test_cutover_304_first_purchase.py",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Generalised script keeps slice-304 names",
+      "location": "scripts/cutover_304_first_purchase.py",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "argparse SystemExit is caught at the process boundary",
+      "location": "scripts/cutover_304_first_purchase.py#main",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Hard-coded ranges and ceilings are now single-sourced",
+      "location": "src/manta_trading/data/tick/universe.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-307",
+    "diff": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:32:35.175060",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 97780,
+  "diff_chars_injected": 97780,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 194278,
+  "cached_tokens": 133549,
+  "cache_write_tokens": 60725,
+  "completion_tokens": 4645,
+  "reasoning_tokens": null,
+  "duration_seconds": 40.74737266590819,
+  "cost_usd": 0.3079764,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

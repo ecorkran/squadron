@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A failed item resume can mark every remaining item `not_run`",
+      "description": "Description: `_execute_each_step` passes a one-item list to `_finish_each_report` during item resume, but the `ItemRerun` carries the full report. If a `GitEnvironmentError` occurs while rerunning that item, `_finish_each_report` appends `not_run` records for items after position 0 using that one-item list\u2014which is empty\u2014and `_add_record` only replaces the resumed item. This avoids adding new records, but the resumed item is replaced with a generic step-failed record and loses its prior decision context; more importantly, the report write and halt behavior should preserve the loaded batch\u2019s other records. Add a regression test for a mid-item git halt and verify all untouched records remain unchanged.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:1585-1594"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Missing `completed` or `total` fields break task listing",
+      "description": "Description: `list_tasks` now requires both fields with `e[\"completed\"]` and `e[\"total\"]`. Any existing or older Context Forge response without either key raises `KeyError`, breaking task listing for callers including other pipelines. Confirm the CLI\u2019s actual response contract or handle absent fields explicitly with validation and an observable error; current tests only cover responses that include both fields.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/integrations/context_forge.py:180-183"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A failed item resume can mark every remaining item `not_run`",
+      "location": "src/squadron/pipeline/executor.py:1585-1594",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Missing `completed` or `total` fields break task listing",
+      "location": "src/squadron/integrations/context_forge.py:180-183",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:19:13.023233",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 91838,
+  "cached_tokens": 90752,
+  "cache_write_tokens": null,
+  "completion_tokens": 321,
+  "reasoning_tokens": 0,
+  "duration_seconds": 36.06675079208799,
+  "cost_usd": 0.00117662,
+  "cost_basis": "alias_pricing"
+}

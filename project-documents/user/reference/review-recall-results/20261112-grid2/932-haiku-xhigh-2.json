@@ -1,0 +1,279 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Test helpers annotated `-> object` break strict pyright",
+      "description": "`failing_reconnect_patch()` returns `object`, and so do `scripted_session` (conftest.py:196), `typed_config` (conftest.py:218), and the `sdk_*` builders (conftest.py:96-150). Callers then use the results as context managers or read attributes from them: `with failing_reconnect_patch():` at tests/pipeline/actions/test_compact.py:262, tests/pipeline/actions/test_summary.py:1061 and :1086, and tests/pipeline/test_sdk_session.py:829. Also `with failing_reconnect_patch() as fresh_ctor:` and `fresh_ctor.return_value.query` at tests/pipeline/test_executor_each.py:288 and :305. Pyright strict reports the `with` on `object` and the attribute access on `object` as errors. `pyproject.toml` puts `tests` under strict checking, and the project rules make zero pyright errors a merge blocker. The same `object` return type is why the new tests carry many `# type: ignore[attr-defined]` comments. Return the real types (the type `patch()` returns, `SDKExecutionSession`, the SDK message classes) and drop the ignores.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/conftest.py:208"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`set_model` is not gated by the unusable check",
+      "description": "The comment at sdk_session.py:125-126 says that after a failed reconnect \"every later call then raises\". The check is only in `dispatch`, `compact`, and `seed_context`. `set_model` is not gated. `_reconnect` resets `current_model` to `None` (sdk_session.py:427), so `set_model` always reaches `self.client`, which after a failed connect is the unconnected client built at sdk_session.py:426. `_dispatch_via_session` calls `session.set_model(model_id)` before `dispatch()` (src/squadron/pipeline/actions/dispatch.py:353). So the first call after a failed reconnect hits the dead client, and the error the user sees is whatever that call raises, not the \"SDK session unusable\" reason. The batch test `test_items_after_failed_reconnect_are_flagged_unusable` asserts that reason for item 2 and passes only because `ScriptedClient.set_model` is an `AsyncMock` that never fails (tests/pipeline/conftest.py:176). Gate `set_model` the same way and make the fake fail when disconnected. What the SDK raises for an unconnected `set_model` could not be checked here.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:168"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`background_tasks_stopped` counts attempts, not successful stops",
+      "description": "`_stop_background` logs and continues when `stop_task` fails (sdk_session.py:336-341). It then sets `self.background_tasks_stopped = len(ids)` (line 344) and logs every description as \"stopped\" (lines 345-349). A failed stop is therefore reported as stopped in the step metadata (dispatch.py:369) and in the WARNING, even though the agent may still be running. The test `test_stop_task_failure_is_logged_and_next_id_still_stopped` (tests/pipeline/test_sdk_session.py, `TestBackgroundIdleTimeout`) checks the ERROR log and the call order, but not the count. Count only successful stops and name only those in the WARNING, or report failures separately.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:344"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Synchronous config reads run on the event loop in async functions",
+      "description": "`_background_idle_timeout_s` is called from the async `_collect_turns` (sdk_session.py:224) and calls `get_typed_config`, which reads TOML synchronously. The same pattern appears in the async `one_shot_dispatch_with_telemetry` (dispatch.py:142-153) and the async `open_pipeline_session` (sdk_session.py:455-461). `python.md` requires synchronous code in an async function to run in under 1 ms worst case. This can be exceeded: `_config_dir()` (src/squadron/config/manager.py:24-32) can run `shutil.copytree` on first use after a config migration. The steady-state cost is small, but the rule is explicit and these are new call sites. Read the config at a synchronous boundary, or move the read to `asyncio.to_thread`.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:323"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Pipeline settings policy is duplicated, with config keys repeated as literals",
+      "description": "The same policy is computed in two places: `one_shot_dispatch_with_telemetry` (dispatch.py:142-153) and `open_pipeline_session` (sdk_session.py:455-461). Both call `pipeline_setting_sources(include_user=get_typed_config(\"pipeline.user_settings\", ...))` and `get_typed_config(\"pipeline.auto_memory\", ...)`. Each key string appears in both places, and the project rules say lookup values are defined once. Move the policy into one helper, for example in `providers/sdk/settings.py`, that takes the cwd and returns both values, and call it from both paths.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py:142"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sdk_session.py` is 473 lines, and the session class also does turn collection",
+      "description": "The file is 473 lines against the roughly 300-line guideline. `SDKExecutionSession` now covers lifecycle (connect, reconnect, seeding), turn collection (`_collect_turns`, `_read_turn_with_retry`, `_read_turn`), the idle-timeout stop (`_stop_background`), and settings policy. `DispatchTurns` was already split into `sdk_turns.py`, but that module is documented as having \"no client, no I/O\", so the client-bound loop cannot move there without breaking that contract. A sibling module that takes the client as a parameter would keep the session class to lifecycle.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:215"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No load-tier test for the new wait and idle-timeout path",
+      "description": "`python.md` requires at least one `tests/load/` test for code on concurrency or network paths, asserting latency, throughput, or resource bounds, and requires CI to gate it. The background-wait loop with per-message `asyncio.timeout`, the idle stop, and the leftover-turn discard fit that description. `tests/load/` contains `test_grep_timeout.py` and `test_worktree_concurrency.py`, and nothing for this slice. Earlier reviews under `project-documents/user/reviews/` waived load tests when the design stated no NFR, and this slice's design states none, so the PM may decide this is a waiver. Either add a load test or record the waiver.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:215"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dead `base_env` argument in the provider",
+      "description": "`kwargs` never receives an `env` key before this call; the only write is line 88. So `base_env=kwargs.get(\"env\")` is always `None`, and the `# type: ignore[arg-type]` exists only to satisfy the type of that lookup. Remove the argument, or pass it only when a caller supplies one.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/provider.py:86"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`background_idle_timeout_s` accepts zero and negative values",
+      "description": "`get_typed_config` checks only that the value is an int. With `0` or a negative value, `asyncio.timeout(idle_s)` fires immediately, so the first wait after the dispatch's own result stops every tracked agent. The key's description promises \"seconds of silence\". A `> 0` bound at the config layer would make the constraint explicit.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:327"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Settings sources typed as `list[str]`, with the mismatch suppressed",
+      "description": "`SdkSettings.setting_sources` is `list[str]`, and the caller suppresses the mismatch against `ClaudeAgentOptions` with `# pyright: ignore[reportArgumentType]` (src/squadron/pipeline/sdk_session.py:466). If the SDK exposes a `Literal` source type in 0.2.160, the TypedDict should use it so the ignore can go. Not verified, because the SDK source is not available here.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/settings.py:47"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`one_shot_dispatch_with_telemetry` is 115 lines",
+      "description": "The function runs from line 88 to line 202, well over the roughly 50-line guideline. Most of that length predates this diff, but the diff adds the settings block and the telemetry seeding. The settings block (dispatch.py:142-153) is the natural extraction point, and it also resolves the duplication finding above.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py:88"
+    },
+    {
+      "severity": "PASS",
+      "title": "Resume seeding, restore framing, and the artifact-failure text",
+      "description": "Verified by reading. Resume seeding runs once. `_load_resume_seed` runs before the loop, a connected session is rotated immediately, and a lazily connected one receives the seed at connect and then `resume_seed = None` (executor.py:487-516). The restore path passes raw text, and framing happens once in `_seeded_options` (summary.py:154-155, sdk_session.py:91). The artifact-failure error gets the agent's final text appended once, in `DispatchArtifactAction.execute` (dispatch_artifact.py:145-150).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:487"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Test helpers annotated `-> object` break strict pyright",
+      "location": "tests/pipeline/conftest.py:208",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`set_model` is not gated by the unusable check",
+      "location": "src/squadron/pipeline/sdk_session.py:168",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`background_tasks_stopped` counts attempts, not successful stops",
+      "location": "src/squadron/pipeline/sdk_session.py:344",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Synchronous config reads run on the event loop in async functions",
+      "location": "src/squadron/pipeline/sdk_session.py:323",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Pipeline settings policy is duplicated, with config keys repeated as literals",
+      "location": "src/squadron/pipeline/actions/dispatch.py:142",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`sdk_session.py` is 473 lines, and the session class also does turn collection",
+      "location": "src/squadron/pipeline/sdk_session.py:215",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No load-tier test for the new wait and idle-timeout path",
+      "location": "src/squadron/pipeline/sdk_session.py:215",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Dead `base_env` argument in the provider",
+      "location": "src/squadron/providers/sdk/provider.py:86",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`background_idle_timeout_s` accepts zero and negative values",
+      "location": "src/squadron/pipeline/sdk_session.py:327",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Settings sources typed as `list[str]`, with the mismatch suppressed",
+      "location": "src/squadron/providers/sdk/settings.py:47",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`one_shot_dispatch_with_telemetry` is 115 lines",
+      "location": "src/squadron/pipeline/actions/dispatch.py:88",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Resume seeding, restore framing, and the artifact-failure text",
+      "location": "src/squadron/pipeline/executor.py:487",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:15:34.672861",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 37,
+  "prompt_tokens": 3663993,
+  "cached_tokens": 3411303,
+  "cache_write_tokens": 252656,
+  "completion_tokens": 74376,
+  "reasoning_tokens": null,
+  "duration_seconds": 322.03785324981436,
+  "cost_usd": 0.56692053,
+  "cost_basis": "provider"
+}

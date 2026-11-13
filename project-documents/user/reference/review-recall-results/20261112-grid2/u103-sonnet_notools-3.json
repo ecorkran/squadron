@@ -1,0 +1,258 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Docs say \"first error\" but the code keeps the latest",
+      "description": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation\". `setOperationError` replaces the current error unconditionally, so a second failure overwrites the first. The test `keeps the first error rather than being reset by a later success` only covers a later success, not a later failure. Either keep the first error (`current.error ?? failure`) or change the documentation, and add a test for two consecutive failures.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts#runGuarded"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Subscription callbacks are empty, so the teardown-race tests pass vacuously",
+      "description": "Both handlers contain only `if (disposedRef.current) { return }` and do nothing else. The test `makes a subscription callback fired after teardown inert` asserts that `getVisibleRange` and `resize` aren't called, but the handler body can't call them in any case. The test would pass if the `disposedRef` guard were deleted. The empty subscriptions are also dead code, even though the comment says they are there to exercise the disposer lifecycle. Test the disposal ordering and the disposer calls, which the other tests already do, and drop the claim that the inert-callback behavior is verified. Alternatively, wait until a handler does real work.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts (the two `subscribe*` calls)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Visible-range translation is not re-applied when the first series is added",
+      "description": "The effect depends on `[mount.ready, chart, range]` and reads `seriesCountRef.current`, which is a ref and so triggers no re-render. If a range is set while the chart is empty and a series is added afterwards, the range is never applied until `range` changes. The comment says initiative 120 \"activates\" the seam when it adds the first series, but nothing re-runs the effect at that point. The test `applies the range once a series exists` only passes because it calls `setRange` after `addSeries`. Replace the ref with state, or apply the current range from the `addSeries` path, and document whichever you choose.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts (range effect)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "File-wide disabling of `react-hooks/refs`",
+      "description": "The rule is turned off for all of `use-chart-provider.ts` to work around a false positive. The comment explains the reasoning, but a file-wide `off` also hides any real ref misuse added to this file later. Prefer a targeted `eslint-disable-next-line` on the `useMemo` call that builds the facade. The comment's claim that this construction was \"verified with a minimal probe\" can't be checked from the diff.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "eslint.config.js:55-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `e2e` and `development` mode strings are scattered",
+      "description": "The mode names `'e2e'` and `'development'` are repeated in `router.ts` and in the `--mode e2e` flags in `playwright.config.ts`. The comment in `router.ts` explains why the comparison has to be written inline so Vite can fold it into a constant. The project rule is to define a comparison value once. At minimum, add a comment in `playwright.config.ts` and `router.ts` that cross-references each other, and consider a `.env.e2e` or mode constant that both read.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/routes/router.ts#harnessEnabled"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The e2e color check assumes a 6-digit hex token, and the resize test has a silent fallback",
+      "description": "`hexToRgba` parses `--color-surface` as `#rrggbb`. A shorthand hex, an `rgb()` value, or an `oklch()` value (Tailwind 4 commonly emits `oklch`) yields `NaN` and the assertion fails confusingly. Normalize the value through a canvas or element computed style instead. The resize poll returns `before!.width` when the bounding box is null, which is a silent fallback; it should fail explicitly. `axisHasContrast` also samples every 37th pixel, so it is a heuristic that could be flaky. The non-null assertions (`box!`, `before!`) also run against the strict-typing intent of the TypeScript rules.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "e2e/chart-live.spec.ts:99-106, e2e/chart-live.spec.ts:150"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test harness code is duplicated across the five hook suites",
+      "description": "`MEASURED`, `measuredRect()`, the `measure` ref callback, and a near-identical `Host` component are copy-pasted across the lifecycle, resize, errors, facade and translation suites. `render-with-contexts.tsx` was extracted to avoid this duplication, but only the provider wrapper was shared. Move the measured-rect stub and a configurable `Host` into `src/test/support/`. A stale `captured.chart` also isn't reset in the translation `beforeEach`, and imports appear after a `const` in `translation.test.tsx`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.facade.test.tsx"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Process narrative and stale comments in source",
+      "description": "The header says the file \"is built up across tasks 8/10/12/14\". The teardown comment says \"subscriptions join here in task 12\", although they are already wired in. The facade comment block sits above the `series` memo instead of above `chart`. These task references describe the build history, not the code, so replace them with comments about the current behavior.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:1-22"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The indicator effect is an intentional no-op",
+      "description": "The effect only checks `mount.ready` and makes no provider call. It is documented as a placeholder for initiative 120 and is tested not to throw. It is acceptable here, but it is dead code until initiative 120 lands.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts (indicators effect)"
+    },
+    {
+      "severity": "PASS",
+      "title": "Lifecycle, teardown ordering and error funnel",
+      "description": "A single `teardown` is shared by the failure path and the cleanup. It disposes subscriptions first, then disconnects the observer, then destroys the provider. Each disposer is registered in its own `push`, so a throw cannot lose an earlier one. Every catch either logs with `console.error` and surfaces the error as state, or documents why it continues. The facade has no `create` or `destroy`, and its identity is stable. `chart-facade.ts` and `chart-operations.ts` are well factored and keep the hook near the size guideline.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts#teardown"
+    },
+    {
+      "severity": "PASS",
+      "title": "Route and harness gating",
+      "description": "The slice-100 placeholder `WorkspaceRoute` is removed. `ChartRoute` reads theme tokens through CSS variables instead of hex literals, and the container has an explicit height. The harness is gated by a direct `===` comparison on `MODE`, so it can be folded away and tree-shaken out of production builds.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/routes/router.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Docs say \"first error\" but the code keeps the latest",
+      "location": "src/chart/use-chart-provider.ts#runGuarded",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Subscription callbacks are empty, so the teardown-race tests pass vacuously",
+      "location": "src/chart/use-chart-provider.ts (the two `subscribe*` calls)",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Visible-range translation is not re-applied when the first series is added",
+      "location": "src/chart/use-chart-provider.ts (range effect)",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "File-wide disabling of `react-hooks/refs`",
+      "location": "eslint.config.js:55-79",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The `e2e` and `development` mode strings are scattered",
+      "location": "src/routes/router.ts#harnessEnabled",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The e2e color check assumes a 6-digit hex token, and the resize test has a silent fallback",
+      "location": "e2e/chart-live.spec.ts:99-106, e2e/chart-live.spec.ts:150",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Test harness code is duplicated across the five hook suites",
+      "location": "src/test/use-chart-provider.facade.test.tsx",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Process narrative and stale comments in source",
+      "location": "src/chart/use-chart-provider.ts:1-22",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The indicator effect is an intentional no-op",
+      "location": "src/chart/use-chart-provider.ts (indicators effect)",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Lifecycle, teardown ordering and error funnel",
+      "location": "src/chart/use-chart-provider.ts#teardown",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Route and harness gating",
+      "location": "src/routes/router.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:30:01.092141",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 1,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 273227,
+  "cached_tokens": 217226,
+  "cache_write_tokens": 55995,
+  "completion_tokens": 5393,
+  "reasoning_tokens": null,
+  "duration_seconds": 43.700689957942814,
+  "cost_usd": 0.3039172,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

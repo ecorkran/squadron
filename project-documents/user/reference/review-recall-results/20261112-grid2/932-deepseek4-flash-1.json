@@ -1,0 +1,117 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "The D7 flag embeds the agent's raw text without escaping, so an embedded quote can make the diagnostic read as truncated",
+      "description": "`tail_text` collapses whitespace, but `\"` characters inside the response pass through unchanged, so the rendered `agent's final text: \"\u2026\"` message can terminate visually mid-sentence (and the same string is the `each` batch report's flag reason via `_item_failure_reason`, and is logged at WARNING). The information is still present, but a reader cannot tell a genuine cut from a quote inside the agent's words. `src/squadron/pipeline/text_tail.py#tail_text` would be the natural single place to normalize the quoting, since it already owns the truncation marker and the empty-response rendering.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/events/builtin/dispatch_artifact.py:149"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`sq serve`-spawned SDK agents now also run with auto-memory disabled, a surface the slice's D10 policy table does not list",
+      "description": "The design (D10) enumerates reviews/judges, PR review, PR composer, pipeline sessions, one-shot dispatch, summary one-shot and audit, and lists `sq serve` agent spawning as out of scope. But `provider.create_agent` now always calls `sdk_settings_options(config.setting_sources or [], auto_memory=config.auto_memory, ...)`, and `AgentConfig.auto_memory` defaults to `False` (`src/squadron/core/models.py:73`), so a `sq serve` spawn that passes no `setting_sources` (which stays `None`, so the kwarg is still omitted) nevertheless gains `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`. This is consistent with D11's \"every path that doesn't opt in gets memory off\", and the behaviour is safe-by-default \u2014 but it is a user-visible change on a surface the policy table doesn't cover, so it deserves an explicit row (or a deliberate \"yes, that too\" note) rather than falling out of a default.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/provider.py:80-91"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The new test helper returns `object` for a session whose real type is imported two lines above",
+      "description": "`scripted_session` constructs a real `SDKExecutionSession` but is annotated `-> object`, which forces `# type: ignore[attr-defined]` on every use in `tests/pipeline/test_sdk_session.py`. The project deliberately keeps `tests` out of `pyright`'s `include` (pyproject.toml, tracked as issue #50), so this is consistent with current convention and not a blocker; returning the already-imported `SDKExecutionSession` (and `ScriptedClient` as a `ClaudeSDKClient` duck type) would just remove noise from the new tests when that include is eventually widened.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/conftest.py#scripted_session"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The D7 flag embeds the agent's raw text without escaping, so an embedded quote can make the diagnostic read as truncated",
+      "location": "src/squadron/events/builtin/dispatch_artifact.py:149",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`sq serve`-spawned SDK agents now also run with auto-memory disabled, a surface the slice's D10 policy table does not list",
+      "location": "src/squadron/providers/sdk/provider.py:80-91",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "The new test helper returns `object` for a session whose real type is imported two lines above",
+      "location": "tests/pipeline/conftest.py#scripted_session",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:48:20.469488",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 434895,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2879148,
+  "cached_tokens": 2327040,
+  "cache_write_tokens": null,
+  "completion_tokens": 114000,
+  "reasoning_tokens": 110027,
+  "duration_seconds": 640.7231774588581,
+  "cost_usd": 0.14424336,
+  "cost_basis": "alias_pricing"
+}

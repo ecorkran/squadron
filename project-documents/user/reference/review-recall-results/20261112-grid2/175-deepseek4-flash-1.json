@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A failed part in a split review loses the provider's error and the loop keeps paying for later parts",
+      "description": "`_run_part` used to `raise` on `ProviderError`; it now returns `self._exception_result(...)`, whose `ActionResult` carries `outputs={}` and (for a non-judge template) `verdict=None`. `_review` then feeds every part result into `fold_review_parts` (`src/squadron/pipeline/actions/review.py` \u2192 `fold_review_parts(results)`), and for `count > 1` that function calls `_part_input` first, which is `review_input_files(part)` \u2192 `[]` \u2192 `raise TypeError(\"review part must name exactly one input file, got []\")` (`src/squadron/pipeline/actions/review_fold.py`). That `TypeError` propagates out of `_review` into `execute`'s generic `except Exception`, so the operator sees a fold-internal message instead of the provider's failure text \u2014 the exact \"why did the step fail\" evidence #84's failure artifact exists to preserve is still on disk, but the reported error no longer names it.\n\nSecond effect of the same change: the part loop has no early exit, so a provider failure in part 1 of a 3-part breakdown now dispatches parts 2 and 3 anyway, each a paid model call that previously never happened. The existing test (`tests/pipeline/actions/test_review_action_parts.py::TestPartLoop::test_provider_failure_on_part_two_keeps_part_one`) only asserts `result.success is False`, so it passes under both behaviours and does not catch either. Worth a test that a mid-sequence failure preserves the provider message and stops the loop.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:493"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews` hardcodes one of four reviews-directory rules and uses the process cwd, so it silently reports nothing",
+      "description": "`reviews_dir = Path.cwd() / REVIEWS_DIR` implements only rule 2 of the four-rule precedence that `src/squadron/review/reviews_dir.py` documents as fixed and calls \"a decision rather than a constant\": `--reviews-dir`, the project directory, `review.external_reviews_dir`, then `~/.config/squadron/reviews/<host>/<owner>/<repo>/`. A project whose reviews land under the config key or the per-user root gets `No review directory at \u2026` and exit 0 \u2014 a silently empty report presented as a successful one, which is the failure mode that module's docstring says the precedence chain exists to make visible (\"Falling through would silently write somewhere the operator did not ask for\u2026 the review would appear to succeed while landing somewhere nobody looks\"). Every other review entry point also anchors at the git root via `resolve_repo_cwd` (`src/squadron/cli/commands/cwd_resolution.py`), so invoking `sq stats reviews` from a subdirectory reports nothing even for rule 2. Routing through `resolve_reviews_dir` (or at minimum `resolve_repo_cwd`) would keep one source of truth; the tests only cover the cwd-relative project case (`tests/cli/test_stats.py::test_reviews_missing_dir_exits_0_with_message`).",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:58"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Expected provider failure is logged with a traceback, duplicating the WARNING directly above it",
+      "description": "The added `_logger.exception(\"review: unexpected error in step %s\", context.step_name)` sits in the `ProviderError` branch, two lines below the comment describing this as a named provider failure whose artifact is the durable record. `logger.exception` emits a full traceback at ERROR for an expected, named failure \u2014 contradicting the convention stated a few lines up in the same handler and used by `DispatchAction._provider_failure` (\"one ERROR line and no traceback\") \u2014 and it duplicates the `_logger.warning(\"review: provider failed in step %s\u2026\")` immediately preceding it. A single ERROR line naming the step and the artifact path would keep the signal without the noise.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:486"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`record_from_message` accepts a bool as a cost, unlike every other numeric reader in the slice",
+      "description": "`provider_cost=cost if isinstance(cost, float | int) else None` admits `True`/`False` as `1.0`/`0.0`, whereas the sibling readers deliberately exclude bool: `_strict_int` in `src/squadron/providers/sdk/usage.py` (`if isinstance(value, bool) or not isinstance(value, int)`), `_opt_float` in `src/squadron/core/usage.py`, and `_int`/`_float` in `src/squadron/stats/reviews_report.py` all do. The aliases loader makes the same point explicitly (\"bool is an int subclass, so `true` would otherwise read as a budget of 1\"). A malformed provider metadata value should read as unreported here too, consistently with the rest of the module.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py#UsageCapture.record_from_message"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Repeated `get_all_aliases()` re-reads and re-parses models.toml on per-row and per-resolution paths",
+      "description": "`get_all_aliases()` performs two file reads and two TOML parses per call (`load_builtin_aliases` + `load_user_aliases`, `src/squadron/models/aliases.py`). The new report calls it once per review row (`_record` \u2192 `requested if requested in get_all_aliases()`, `src/squadron/stats/reviews_report.py`) and again per row via `cost_cell` \u2192 `_is_subscription`, so rendering a directory of N artifacts costs ~2N parses of a file that cannot change mid-report. `ModelResolver._resolved` adds a fourth call per resolution (`src/squadron/pipeline/resolver.py`, alongside `model_allows_tools`/`model_max_output_tokens`/`model_effort`). One table cached per report (or `functools.cache` on the loader) removes the repeated I/O; none of it is on a per-token hot path, hence NOTE.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats_views.py#cost_cell"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The run-shared `UsageCapture` reaches concurrent fan-out branches with no documented publication argument",
+      "description": "`_execute_fan_out_step` passes the single per-run `usage_capture` into branches that run concurrently under `asyncio.gather` (`src/squadron/pipeline/executor.py`), and the object carries mutable state \u2014 the `_warned` dedupe set and `_effort_gap_logged` (`src/squadron/pipeline/usage_capture.py`). It is safe today only because `_warn_once` and `_effort_gap_logged`'s check-then-set are fully synchronous (no `await` between read and write), so the event loop cannot interleave them. The class docstring explains the per-run lifetime but not this constraint, and the project's concurrency rules ask for the publication mechanism to be documented when shared state crosses boundaries; a one-line comment stating \"mutated only in synchronous sections, never across an await\" would keep a future `await` inside `_warn_once` from becoming a silent duplicate-warning bug.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py#_execute_fan_out_step"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A failed part in a split review loses the provider's error and the loop keeps paying for later parts",
+      "location": "src/squadron/pipeline/actions/review.py:493",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`sq stats reviews` hardcodes one of four reviews-directory rules and uses the process cwd, so it silently reports nothing",
+      "location": "src/squadron/cli/commands/stats.py:58",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Expected provider failure is logged with a traceback, duplicating the WARNING directly above it",
+      "location": "src/squadron/pipeline/actions/review.py:486",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`record_from_message` accepts a bool as a cost, unlike every other numeric reader in the slice",
+      "location": "src/squadron/pipeline/usage_capture.py#UsageCapture.record_from_message",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Repeated `get_all_aliases()` re-reads and re-parses models.toml on per-row and per-resolution paths",
+      "location": "src/squadron/cli/stats_views.py#cost_cell",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The run-shared `UsageCapture` reaches concurrent fan-out branches with no documented publication argument",
+      "location": "src/squadron/pipeline/executor.py#_execute_fan_out_step",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:08:28.648078",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 40,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 275389,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2937167,
+  "cached_tokens": 2546816,
+  "cache_write_tokens": null,
+  "completion_tokens": 75899,
+  "reasoning_tokens": 71522,
+  "duration_seconds": 366.36513216700405,
+  "cost_usd": 0.1087418,
+  "cost_basis": "alias_pricing"
+}

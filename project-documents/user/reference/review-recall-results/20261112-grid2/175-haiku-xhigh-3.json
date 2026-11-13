@@ -1,0 +1,243 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Provider failure in a split review keeps running later parts and surfaces as a TypeError",
+      "description": "`_run_part` used to re-raise `ProviderError`, which aborted the part loop at lines 284\u2013293. It now returns a failed `ActionResult` (line 493), so the loop continues. Each remaining part makes a paid model call after a provider failure such as auth or rate limit. Then `fold_review_parts(results)` runs at line 294. The failed result has `outputs={}` and `verdict=None`, so `_part_input` in `pipeline/actions/review_fold.py:102-106` raises `TypeError: review part must name exactly one input file, got []`. The `execute` catch-all (`review.py:180-182`) reports that `TypeError` as the step error, so the provider error text never reaches `result.error`. Single-part reviews are unaffected, because `fold_review_parts` returns a lone part unchanged.\n\nFix: stop the loop at the first failed part and return that failure directly, so its error text is kept and later parts are not called.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:493"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Split-review test passes for the wrong reason",
+      "description": "`test_provider_failure_on_part_two_keeps_part_one` asserts only `result.success is False`, the saved artifacts and a log line. It never checks `result.error`, so it passes on the `TypeError` above. No test checks that a part-1 provider failure skips the later parts. Add `assert \"model went away\" in result.error` and a `run_review.call_count` check for the part-1 failure case. Both would fail on the current code.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/actions/test_review_action_parts.py:143"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A failed compact drops the spend its summary capture already recorded",
+      "description": "`_execute_sdk_rotate` catches `Exception` and returns a failed result with no `metadata`. Two real cases lose spend. First, `SDKExecutionSession.compact` can raise a `ProviderError` that carries telemetry from `capture_summary`. Second, `_reconnect` (`pipeline/sdk_session.py:499`) can fail after `capture_summary` has already returned its `SessionReply`. In both, the telemetry is dropped. Dispatch (`_provider_failure`) and summary both stamp failed-call usage per D5; compact does not.\n\nFix: when a failure happens after the capture, attach `reply.telemetry` to the exception, and stamp it on the failed result.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py:82"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`effort_for_session` returns `None` but is used as the effort value",
+      "description": "The function is annotated `-> None` and only logs once. Its callers bind the result to `effort_sent` (`pipeline/actions/dispatch.py:572`) or `session_effort` (`pipeline/actions/summary.py:274`), then pass it to `record_from_telemetry`. The name says it returns the effort the session sends, but it returns nothing. The record's `effort` is correct only because the function always returns `None`. Changing it to return an effort would silently alter session records.\n\nFix: split this into a `log_session_effort_gap(resolved)` that returns nothing, and pass `effort_sent=None` at the call sites with a comment.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py:176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A failed review resolves its cost twice, with separate warning sets",
+      "description": "On provider failure, `review/review_client.py:315` resolves `exc.cost_usd` with a fresh `set()`. Then `UsageCapture.record_from_error` (`usage_capture.py:154`) re-resolves it through `_build` with the run's warned set. `RunCost.from_error` reads the first result and the usage record reads the second. The values match today, but the pricing logic lives in two places. For a partially priced alias, the WARNING is logged twice on a failed review. Successful reviews avoid this because `record_from_review` reuses `result.cost_usd`. The fresh `set()` also means each split part warns again.\n\nFix: have `record_from_error` take `exc.cost_usd` and `exc.cost_basis`, as `record_from_review` takes the result's cost.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:487"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews` aborts on malformed artifacts",
+      "description": "`_basis` runs `value in {basis.value for basis in CostBasis}`. `value` is whatever `yaml.safe_load` returned, so `costBasis:` written as a list or mapping raises `TypeError: unhashable type` and the whole report aborts. The module contract says malformed fields become `None` with a warning. Separately, `documents/frontmatter.py:66` calls `path.read_text(encoding=\"utf-8\")` without catching `OSError` or `UnicodeDecodeError`, so one unreadable artifact aborts the report instead of being counted in `skipped`. The tests cover only `costBasis: guess`, a string.\n\nFix: check `isinstance(value, str)` before the membership test. Catch `OSError` and `UnicodeDecodeError` around the read in `reviews_usage_report` so the file is counted as skipped. Add parametrized tests for a list, a mapping and non-UTF-8 content.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py:155"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two functions are well past the length guideline, and this diff grew both",
+      "description": "`_execute_summary` runs from line 187 to line 395, about 210 lines. This diff adds usage capture to both its SDK and one-shot branches. `_dispatch_via_session` (`dispatch.py:515-620`) is about 105 lines and also grew here. CLAUDE.md asks for functions of about 50 lines.\n\nFix: extract each branch's capture-and-stamp step into a helper that returns the text and its metadata.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/summary.py:187"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Reviews-report docstring overstates what is read",
+      "description": "The module says it reads \"only frontmatter ... never the body.\" `read_frontmatter` reads the whole file into memory and parses only the frontmatter block. The accurate claim is that the body is never parsed. Reword it, or switch to a head-only read if the cost matters.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/squadron/stats/reviews_report.py:3"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Compact usage records store the alias name as the model",
+      "description": "`record_from_telemetry(None, ..., model=summary_model)` puts the alias (for example `haiku`) in `model`. Dispatch, summary and review store the resolved model id. In `sq stats run`, compact rows therefore show an alias where the others show a model id. Resolve the alias with `context.resolver` or document the difference.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py:97"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Totals row repeats the usage-cell formatting",
+      "description": "`_total_row` repeats the turns, token and cost formatting from `_usage_cells` (line 182) instead of sharing one formatter. A column change has to be made in two places. Low priority.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats_views.py:205"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Provider failure in a split review keeps running later parts and surfaces as a TypeError",
+      "location": "src/squadron/pipeline/actions/review.py:493",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Split-review test passes for the wrong reason",
+      "location": "tests/pipeline/actions/test_review_action_parts.py:143",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A failed compact drops the spend its summary capture already recorded",
+      "location": "src/squadron/pipeline/actions/compact.py:82",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`effort_for_session` returns `None` but is used as the effort value",
+      "location": "src/squadron/pipeline/usage_capture.py:176",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "A failed review resolves its cost twice, with separate warning sets",
+      "location": "src/squadron/pipeline/actions/review.py:487",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats reviews` aborts on malformed artifacts",
+      "location": "src/squadron/stats/reviews_report.py:155",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Two functions are well past the length guideline, and this diff grew both",
+      "location": "src/squadron/pipeline/actions/summary.py:187",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Reviews-report docstring overstates what is read",
+      "location": "src/squadron/stats/reviews_report.py:3",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Compact usage records store the alias name as the model",
+      "location": "src/squadron/pipeline/actions/compact.py:97",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Totals row repeats the usage-cell formatting",
+      "location": "src/squadron/cli/stats_views.py:205",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:04:33.209057",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 33,
+  "prompt_tokens": 4035437,
+  "cached_tokens": 3771051,
+  "cache_write_tokens": 264352,
+  "completion_tokens": 61021,
+  "reasoning_tokens": null,
+  "duration_seconds": 282.22344020800665,
+  "cost_usd": 0.6154829500000001,
+  "cost_basis": "provider"
+}

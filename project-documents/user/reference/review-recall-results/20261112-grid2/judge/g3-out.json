@@ -1,0 +1,674 @@
+[
+ {
+  "bug": "a122-B2",
+  "run": "a122-haiku-xhigh-2",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "a122-B2",
+  "run": "a122-haiku-xhigh-3",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "a122-B2",
+  "run": "a122-haiku-xhigh-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "a122-B2",
+  "run": "a122-luna-1",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "a122-B2",
+  "run": "a122-sol-1",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-deepseek4-flash-1",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-deepseek4-flash-2",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-deepseek4-flash-3",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-haiku-xhigh-1",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-haiku-xhigh-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-haiku-xhigh-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-haiku-xhigh-2",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-haiku-xhigh-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-haiku-xhigh-2",
+  "verdict": "ADJACENT",
+  "why": "Same area, different or partial defect"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-haiku-xhigh-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-haiku-xhigh-3",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-haiku-xhigh-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-luna-2",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-luna-3",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sol-1",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sol-2",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sol-3",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sol-3",
+  "verdict": "ADJACENT",
+  "why": "Same area, different or partial defect"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet-1",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet-2",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet-3",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet-high-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet-high-1",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet-high-2",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet-high-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet-high-3",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet-high-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet_notools-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet_notools-1",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet_notools-2",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet_notools-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet_notools-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-B1",
+  "run": "u103-sonnet_notools-3",
+  "verdict": "HIT",
+  "why": "Same defect identified with fix direction"
+ },
+ {
+  "bug": "a122-C1",
+  "run": "a122-sonnet-high-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "a122-C2",
+  "run": "a122-deepseek4-flash-1",
+  "verdict": "ADJACENT",
+  "why": "Same area, different or partial defect"
+ },
+ {
+  "bug": "a122-C2",
+  "run": "a122-deepseek4-flash-2",
+  "verdict": "ADJACENT",
+  "why": "Same area, different or partial defect"
+ },
+ {
+  "bug": "a122-C2",
+  "run": "a122-haiku-xhigh-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "a122-C2",
+  "run": "a122-haiku-xhigh-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "a122-C2",
+  "run": "a122-haiku-xhigh-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "a122-C2",
+  "run": "a122-haiku-xhigh-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "a122-C2",
+  "run": "a122-haiku-xhigh-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "a122-C2",
+  "run": "a122-haiku-xhigh-3",
+  "verdict": "ADJACENT",
+  "why": "Same area, different or partial defect"
+ },
+ {
+  "bug": "a122-C2",
+  "run": "a122-haiku-xhigh-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "a122-C2",
+  "run": "a122-luna-1",
+  "verdict": "ADJACENT",
+  "why": "Same area, different or partial defect"
+ },
+ {
+  "bug": "a122-C2",
+  "run": "a122-sol-1",
+  "verdict": "ADJACENT",
+  "why": "Same area, different or partial defect"
+ },
+ {
+  "bug": "a122-C2",
+  "run": "a122-sonnet_notools-2",
+  "verdict": "ADJACENT",
+  "why": "Same area, different or partial defect"
+ },
+ {
+  "bug": "a122-C2",
+  "run": "a122-sonnet_notools-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-deepseek4-flash-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-deepseek4-flash-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-deepseek4-flash-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-deepseek4-flash-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-deepseek4-flash-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-haiku-xhigh-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-haiku-xhigh-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-haiku-xhigh-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-haiku-xhigh-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-haiku-xhigh-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-haiku-xhigh-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-haiku-xhigh-2",
+  "verdict": "ADJACENT",
+  "why": "Same area, different or partial defect"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-haiku-xhigh-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-haiku-xhigh-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-haiku-xhigh-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-haiku-xhigh-3",
+  "verdict": "ADJACENT",
+  "why": "Same area, different or partial defect"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-haiku-xhigh-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-haiku-xhigh-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-luna-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-luna-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-luna-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sol-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sol-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sol-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sol-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-high-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-high-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-high-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-high-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-high-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-high-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-high-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-high-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-high-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-high-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-high-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet-high-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet_notools-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet_notools-1",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet_notools-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet_notools-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet_notools-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet_notools-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet_notools-2",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet_notools-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet_notools-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet_notools-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ },
+ {
+  "bug": "u103-C1",
+  "run": "u103-sonnet_notools-3",
+  "verdict": "NO",
+  "why": "Unrelated to the described bug"
+ }
+]

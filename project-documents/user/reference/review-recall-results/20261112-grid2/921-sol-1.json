@@ -1,0 +1,147 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Journal monitoring starts only after the pass exits",
+      "description": "`run()` uses blocking `subprocess.run()`. Meanwhile, `deploy/mt-run:129` waits until the service finishes. Consequently, `wait_for_unit_or_line()` cannot observe trailing completion or stop backfill while it runs\u2014the original unbounded wait remains. Start the service non-blockingly before polling. Add a regression test that exercises the wrapper\u2019s blocking behavior.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:356-360"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Passwordless root execution targets an operator-controlled checkout",
+      "description": "`MT_INSTALL`, granted on line 13, executes a script from the operator\u2019s checkout as root. An operator able to modify that checkout can replace the script and obtain unrestricted passwordless root execution. Install the privileged entry point in a root-owned location with non-writable parent directories.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:9"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Unit wildcard permits operations on unrelated services",
+      "description": "Sudoers argument wildcards match whitespace, so `systemctl stop mt-minute-pass.service ssh.service` also matches this rule. The grant therefore extends beyond `mt-*` units. Enumerate exact commands or use a root-owned wrapper that validates every unit argument. See the [official sudoers documentation](https://github.com/sudo-project/sudo/blob/main/docs/sudoers.man.in).",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:7"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Truncated days do not influence whether or where seeding runs",
+      "description": "`uncovered_days` is considered only after the existing seed gate. With stored bars, only terminal gaps, and no unknown gaps, that gate either skips seeding or starts at the gap frontier (`717-750`). Truncated days behind that frontier remain excluded despite appearing in the new index. Incorporate those days into the seed decision and bounded repair window; test the terminal-only case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:765-771"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Saved narration omits the acceptance measurements",
+      "description": "Only `say()` output reaches the log. Repair results\u2014including acceptance numbers and FAIL/WAIT details\u2014use `print(output)` in `scripts/cutover_921_minute_sessions.py:102`, while subprocess streams also bypass the file. The advertised \u201cfull narration\u201d therefore loses the evidence needed to diagnose an incomplete cutover. Persist these outputs and test that acceptance details appear in the saved report.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:57-62"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Journal monitoring starts only after the pass exits",
+      "location": "scripts/cutover_common.py:356-360",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Passwordless root execution targets an operator-controlled checkout",
+      "location": "deploy/sudoers.d/manta-ops:9",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Unit wildcard permits operations on unrelated services",
+      "location": "deploy/sudoers.d/manta-ops:7",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Truncated days do not influence whether or where seeding runs",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:765-771",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Saved narration omits the acceptance measurements",
+      "location": "scripts/cutover_common.py:57-62",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:21:03.048357",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 95013,
+  "cached_tokens": 89600,
+  "cache_write_tokens": null,
+  "completion_tokens": 918,
+  "reasoning_tokens": 337,
+  "duration_seconds": 107.78372250008397,
+  "cost_usd": 0.028966000000000002,
+  "cost_basis": "alias_pricing"
+}

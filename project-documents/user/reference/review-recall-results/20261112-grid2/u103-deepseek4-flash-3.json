@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Range-translation comment claims activation \"on the first series\", but the guard cannot observe it",
+      "description": "The comment at lines 337-338 says the visible-range effect's \"dependency array stay[s] wired as the seam initiative 120 activates the moment it adds the first series.\" That is not what the code does. The guard at line 341 reads `seriesCountRef.current`, and the effect's dependency array (line 345) is `[mount.ready, chart, range]`. `seriesCountRef` is mutated only inside the facade callbacks at src/chart/chart-facade.ts:54 (`series.onAdded()`) and :60 (`series.onRemoved()`), which mutate a ref and therefore cause no re-render and no dependency change. Concretely: mount \u2192 `ready` flips true \u2192 effect runs once with count 0 and returns; then `chart.addSeries(...)` bumps the ref but nothing re-runs the effect, so the Context range is *not* applied to a newly added series until `range` itself changes next.\n\nThe test that appears to cover this only passes because it calls `setRange` after `addSeries` \u2014 see src/test/use-chart-provider.translation.test.tsx:140 followed by `act(() => symbolTimeframe().setRange(NEXT_RANGE))`. So the assertion proves the range-change path, not the claim in the comment. Either the comment should describe reality (the seam activates on the next range change after data exists), or the seam should be made observable (e.g. drive the count through state/a ref plus a re-render trigger, or expose an explicit \"data attached\" signal). As written, initiative 120 inherits a seam whose documented trigger does not fire.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:337"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The same DOMRect/MEASURED/Host fixture is copy-pasted across four suites",
+      "description": "`MEASURED = { width: 1024, height: 640 }` plus a `measuredRect()`/inline-rect stub and a near-identical `Host` component are duplicated in four files: src/test/use-chart-provider.errors.test.tsx:30-52, src/test/use-chart-provider.facade.test.tsx:33-60, src/test/use-chart-provider.resize.test.tsx:30-41, and src/test/use-chart-provider.translation.test.tsx:38-71. This contradicts the project's DRY guideline and the convention these very files establish \u2014 `src/test/support/` already exists for shared doubles (`chart-provider-spy.ts`, `render-with-contexts.tsx`), and that helper's own docstring justifies centralizing precisely so suites do not \"re-derive a double each file.\" Drift is already visible: the resize copy has diverged into an inline arrow literal cast while the other three use a named `measuredRect()` function. A shared `measuredContainer` fixture/`Host` in `src/test/support/` would remove the repetition and the drift risk.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.resize.test.tsx:30"
+    },
+    {
+      "severity": "NOTE",
+      "title": "smoke.spec.ts points at the wrong spec for the `/` chart assertions",
+      "description": "The header comment says \"The chart itself is asserted in chart-render.spec.ts; this spec covers the shell around it.\" `e2e/chart-render.spec.ts` navigates to `/__chart-harness` (line 14) and asserts nothing about `/`; the product-route chart assertions live in `e2e/chart-live.spec.ts`. The comment sends a reader to the wrong file when triaging a failure at `/`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "e2e/smoke.spec.ts:10"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Pre-mount/torn-down facade calls are dropped with no signal for void members",
+      "description": "`runGuarded` returns early and unlogged when `providerRef.current === null || disposedRef.current` (lines 110-113). For the read-returning members (`addSeries`, `addPane`, `getVisibleRange`, `subscribe*`) the `undefined` return is a usable signal, and the design sanctions dropping calls rather than letting `assertReady` throw. For the void members (`removeSeries`, `updateSeries`, markers, panes, `setVisibleRange`) a dropped call is indistinguishable from a successful one \u2014 a caller invoking `chart.setVisibleRange(range)` before the mount effect has run has no way to learn the call never happened. A debug-level log on the drop path (the catch path already logs at line 120) would close the observability gap without changing semantics.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:110"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Import block after a statement in the translation suite",
+      "description": "`import { chartSpy, resetChartSpy } ...` and `import { renderWithContexts } ...` sit at lines 22-23, after the `LINE_SERIES` const declaration (lines 15-21). This violates the project React rule's import ordering (external \u2192 internal \u2192 sibling \u2192 styles) and is inconsistent with the other new suites, which keep all imports at the top. Moving the two imports up with the other sibling imports fixes it.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.translation.test.tsx:22"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hook file is 366 lines, over the ~300-line guide",
+      "description": "The file exceeds the project's ~300-line source guide (design doc records 366 and states this overrun is PM-approved, with the type surface and forwarding already extracted into `chart-operations.ts` and `chart-facade.ts`). Noting it for the record rather than as an action item; if it grows further in initiative 120, the subscription/resize wiring is the natural next extraction (the design itself names that as the fallback).",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:1"
+    },
+    {
+      "severity": "PASS",
+      "title": "Lifecycle, error funnel, and facade boundary verified against the provider contract",
+      "description": "Verified by reading the implementation against src/chart/i-chart-provider.ts and src/chart/providers/lightweight-charts-provider.ts: `create`/`destroy` are called only in the mount effect/teardown and are absent from the facade (src/chart/chart-operations.ts:35-53 declares only post-lifecycle members); teardown ordering matches the documented unsubscribe \u2192 disconnect \u2192 destroy \u2192 null-ref sequence (lines 201-224); every post-mount path routes through one `runGuarded` (ResizeObserver callback line 257-266, facade, Context effect line 344); each disposer is pushed individually so a mid-sequence subscribe throw cannot leak the first (lines 286-302); `ready` is committed once after the whole sequence (line 311) and stays false on any failure; branded-id casts in the suites are compile-time only, and an anchored grep for `: any`/`as any`/`<any>`/`any[]` over `src/` returns no matches.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Range-translation comment claims activation \"on the first series\", but the guard cannot observe it",
+      "location": "src/chart/use-chart-provider.ts:337",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The same DOMRect/MEASURED/Host fixture is copy-pasted across four suites",
+      "location": "src/test/use-chart-provider.resize.test.tsx:30",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "smoke.spec.ts points at the wrong spec for the `/` chart assertions",
+      "location": "e2e/smoke.spec.ts:10",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Pre-mount/torn-down facade calls are dropped with no signal for void members",
+      "location": "src/chart/use-chart-provider.ts:110",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Import block after a statement in the translation suite",
+      "location": "src/test/use-chart-provider.translation.test.tsx:22",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Hook file is 366 lines, over the ~300-line guide",
+      "location": "src/chart/use-chart-provider.ts:1",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Lifecycle, error funnel, and facade boundary verified against the provider contract",
+      "location": "src/chart/use-chart-provider.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:47:17.020305",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 599074,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 1171780,
+  "cached_tokens": 1088768,
+  "cache_write_tokens": null,
+  "completion_tokens": 153335,
+  "reasoning_tokens": 146324,
+  "duration_seconds": 585.1945197919849,
+  "cost_usd": 0.09444991999999999,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Idle-timeout config accepts zero, negative and boolean values",
+      "description": "`get_typed_config(..., int)` only checks `isinstance(value, int)`. Because `bool` is a subclass of `int`, a TOML `true` passes for `pipeline.background_idle_timeout_s`. `_coerce_value` also accepts `0` or `-5` without a range check. The value goes straight into `asyncio.timeout(idle_s)` in `src/squadron/pipeline/sdk_session.py#_read_turn`. With `0` or a negative value the first wait after the dispatch's own result times out immediately. `_stop_background` then kills every background agent the moment the dispatch starts waiting. That silently defeats the wait-for-agents behavior this slice adds. The project's \"fail explicitly\" rule suggests rejecting non-positive values at `sq config set` and in the typed read. The bool branch is checked before int, so the guard can be added without disturbing it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/config/manager.py:134-137"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Settings-source resolution is duplicated across two call sites",
+      "description": "`pipeline_setting_sources(include_user=get_typed_config(\"pipeline.user_settings\", bool, cwd=...))` plus the `pipeline.auto_memory` read is written once in `one_shot_dispatch_with_telemetry` and again in `src/squadron/pipeline/sdk_session.py#open_pipeline_session`. The two builders can drift apart. A single `resolve_pipeline_settings(cwd)` helper in `providers/sdk/settings.py` would keep the policy in one place. `test_settings_policy.py` guards against drift today, so this is not blocking.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py:142-153"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Pyright suppression at the SDK options boundary",
+      "description": "`SdkSettings.setting_sources` is `list[str]`, while the SDK expects a list of literals, so the call carries `# pyright: ignore[reportArgumentType]`. Typing the field with the SDK's `SettingSource` literal would remove the suppression. `provider.py` has the same `# type: ignore[arg-type]` on `base_env=kwargs.get(\"env\")`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py (`open_pipeline_session`, `setting_sources=settings[\"setting_sources\"]`)"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Broad catch in `_stop_background` is justified and compliant",
+      "description": "The `except Exception  # noqa: BLE001` carries a comment explaining that the SDK raises a bare `Exception`. It logs with `logger.exception`, continues to the next task id, and is covered by `test_stop_task_failure_is_logged_and_next_id_still_stopped`. The reconnect failure path in `_reconnect` also logs and re-raises, and records `unusable_reason`. Both follow the project's exception-handling rules.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py (`_stop_background`)"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test coverage matches the new behavior",
+      "description": "Tests cover background ledger states, own-result detection, leftover injected turns, stream end with an agent still tracked, idle timeout, and subagent prose exclusion. They also cover the bool config round-trip, the settings policy for every automated SDK path, and reconnect failure at the compact, summary and batch levels. The scripted-client fixtures use real SDK message types, not loose mocks.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/test_sdk_session.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Idle-timeout config accepts zero, negative and boolean values",
+      "location": "src/squadron/config/manager.py:134-137",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Settings-source resolution is duplicated across two call sites",
+      "location": "src/squadron/pipeline/actions/dispatch.py:142-153",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Pyright suppression at the SDK options boundary",
+      "location": "src/squadron/pipeline/sdk_session.py (`open_pipeline_session`, `setting_sources=settings[\"setting_sources\"]`)",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Broad catch in `_stop_background` is justified and compliant",
+      "location": "src/squadron/pipeline/sdk_session.py (`_stop_background`)",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test coverage matches the new behavior",
+      "location": "tests/pipeline/test_sdk_session.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:25:23.431398",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 224660,
+  "cached_tokens": 98560,
+  "cache_write_tokens": 126096,
+  "completion_tokens": 2828,
+  "reasoning_tokens": null,
+  "duration_seconds": 24.645036458037794,
+  "cost_usd": 0.5489946,
+  "cost_basis": "provider"
+}

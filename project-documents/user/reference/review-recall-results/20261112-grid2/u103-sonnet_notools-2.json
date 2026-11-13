@@ -1,0 +1,240 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "\"First error\" contract is not what the code does",
+      "description": "`UseChartProviderResult.error` is documented as \"The first error from any provider operation\". `setOperationError` does `{ ...current, error: failure }`, so the latest failure overwrites the earlier one. The test \"keeps the first error rather than being reset by a later success\" only exercises a fail-then-succeed sequence. It would still pass if two failures replaced each other. Either keep the first error (`current.error ?? failure`) or fix the docs. If you keep the first error, add a fail-fail test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts#setOperationError"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Visible-range translation does not fire when the first series is added",
+      "description": "The effect is gated on `seriesCountRef.current === 0`, but a ref change does not re-run an effect. Its dependencies are `[mount.ready, chart, range]`. If a series is added after the range was set, the stored range is never applied. It is applied only on the next range change. The comment calls this a \"seam initiative 120 activates the moment it adds the first series\", which is not true as written. The test \"applies the range once a series exists\" masks this by calling `setRange` after `addSeries`. Initiative 120 will hit this: either apply the range from `addSeries` in the facade, or track series presence as state.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts (visible-range effect)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Hook file is over the ~300-line guideline, and the lint rule is switched off to cope",
+      "description": "The file is about 366 lines, over the project's ~300-line guide, even after the facade and types were extracted. The `useEffect` mount body is far longer than the ~50-line function guide. `eslint.config.js` also disables `react-hooks/refs` for this file. The suppression is justified in a comment, and its scope is narrow. Even so, the rule is now off exactly where ref-heavy code lives. Consider moving the mount/teardown sequence into a plain `mountChart(container, style, \u2026)` helper. That would shorten the hook and may remove the need for the suppression.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No-op subscription handlers and placeholder effect are dead code",
+      "description": "Both subscription callbacks consist only of `if (disposedRef.current) { return }`, so they do nothing. The indicator effect has an empty body behind a guard. Both are documented as deliberate seams. They still add a live subscription and effect on every mount for no behavior, which goes against the \"resist complexity\" principle. The tests do assert the subscription lifecycle, so the cost is small. Consider adding both when initiative 120 needs them.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts (subscribeCrosshairMove / subscribeVisibleRangeChange callbacks, indicator effect)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Repeated and stacked comment blocks",
+      "description": "Several comments are stacked back to back. The facade comment sits directly above the separate \"Counter callbacks\" comment, and two consecutive block comments sit above the `disposers.push` calls. The header says the file \"is built up across tasks 8/10/12/14\" and refers to \"task 12\"/\"task 14\", which is process history that will confuse later readers. The `teardown` comment says \"subscriptions join here in task 12\" even though they already do. Tidy these into current-state comments.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "e2e color assertion assumes a `#rrggbb` token",
+      "description": "`hexToRgba` slices a hex string and assumes `#rrggbb`. If `--color-surface` is ever declared as `rgb()`, `oklch()` or a 3-digit hex, `parseInt` returns `NaN` and the assertion fails confusingly. Add a check that the token matches `/^#[0-9a-f]{6}$/i`, so the failure names the cause.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "e2e/chart-live.spec.ts#hexToRgba"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Smoke spec's text match is a substring",
+      "description": "`getByText('Chart workspace')` matches by substring. It works today, but it could collide with future copy. Use `{ exact: true }`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "e2e/smoke.spec.ts:21"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Import style differs between files",
+      "description": "`router.ts` imports `./chart-route` and `./routes` without extensions. The newly added `App.tsx` and hook files import with explicit `.ts`/`.tsx`. Pick one convention.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/routes/router.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test file layout and ordering",
+      "description": "An `import` block follows the `LINE_SERIES` constant declaration in the middle of the file. Move the constant below the imports. The tests live in `src/test/` rather than the `tests/` directory the testing rules prescribe. This is probably the existing project layout, so I am noting it rather than flagging it.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.translation.test.tsx"
+    },
+    {
+      "severity": "PASS",
+      "title": "Harness gating and e2e build mode",
+      "description": "The harness route is gated with direct `import.meta.env.MODE ===` comparisons, which Vite can fold statically. The comment explains why a runtime `includes` would not be tree-shaken. Playwright builds and previews in `--mode e2e` to match. Teardown ordering is sound: disposed flag, then unsubscribe, then disconnect, then destroy. Each disposer failure is logged and contained. Errors are funneled through one guarded runner. The facade deliberately omits `create`/`destroy`. The Context providers are mounted above the router.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/routes/router.ts:34-56"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "\"First error\" contract is not what the code does",
+      "location": "src/chart/use-chart-provider.ts#setOperationError",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Visible-range translation does not fire when the first series is added",
+      "location": "src/chart/use-chart-provider.ts (visible-range effect)",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Hook file is over the ~300-line guideline, and the lint rule is switched off to cope",
+      "location": "src/chart/use-chart-provider.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "No-op subscription handlers and placeholder effect are dead code",
+      "location": "src/chart/use-chart-provider.ts (subscribeCrosshairMove / subscribeVisibleRangeChange callbacks, indicator effect)",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Repeated and stacked comment blocks",
+      "location": "src/chart/use-chart-provider.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "e2e color assertion assumes a `#rrggbb` token",
+      "location": "e2e/chart-live.spec.ts#hexToRgba",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Smoke spec's text match is a substring",
+      "location": "e2e/smoke.spec.ts:21",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Import style differs between files",
+      "location": "src/routes/router.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Test file layout and ordering",
+      "location": "src/test/use-chart-provider.translation.test.tsx",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Harness gating and e2e build mode",
+      "location": "src/routes/router.ts:34-56",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:30:16.715578",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 166612,
+  "cached_tokens": 116566,
+  "cache_write_tokens": 50042,
+  "completion_tokens": 7734,
+  "reasoning_tokens": null,
+  "duration_seconds": 61.202364082913846,
+  "cost_usd": 0.2934452,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

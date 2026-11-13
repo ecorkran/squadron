@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`tape_complete_through` is described as the newest stored trade, which the schema comment explicitly says it is not",
+      "description": "The field description reads \"Created time of the newest stored trade\", and `serve_timeseries.tape_facts` repeats it at `src/manta_trading/data/kalshi/serve_timeseries.py:124` (\"The trades tape's floor and its newest stored trade\"). The value actually assigned is `sync_state.watermark_ts` (`serve_timeseries.py:141-144`), whose semantics the migration states twice and emphatically: `src/manta_trading/schema/migrations/kalshi.py` (kalshi_007) \u2014 \"trades: the tape is complete through this instant (end of the last fully walked window) - **NOT the newest stored trade** (slice 265, Decision 1)\". `trade_status.TradeStatus.tape_through` carries the same wording.\n\nThis is not pedantry: the two differ whenever a window is walked with no trades in it, and the difference is exactly what a client uses the field for (deciding whether an empty window is a gap or a quiet market) \u2014 which is the stated purpose of the D5 facts. The docstrings reintroduce the confusion 265 D1 was written to remove. Note the impact is confined to the source: I confirmed these routes declare `response_class=Response` with no response model, so `docs/api/openapi.json` shows `200` with no content schema and none of these `Field` descriptions reach the published artifact.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188-193"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_admit_rows` and `_not_found` are duplicated across the two Kalshi route modules",
+      "description": "`kalshi_catalog.py:81-95` and `kalshi_timeseries.py:66-79` are the same function: same 422 status, same \"the request matches {count:,} rows, over the {max_rows:,} row limit; \u2026\" message, differing only in the trailing remediation phrase (\"narrow the filter\" vs \"narrow start/end\"). `_not_found` is likewise duplicated \u2014 `kalshi_catalog.py:97` already takes a `resource` argument, while `kalshi_timeseries.py:59` hardcodes `\"Market\"`.\n\nThis is the same argument the new `routes/windows.py` docstring makes for extracting the day-boundary convention (\"two derivations of 'the last instant of a day' is exactly how one of them ends up exclusive by accident\"), and AGENTS.md forbids duplicated logic. The two remediation phrases are the only genuine difference, so a single helper parameterized by that phrase (the pattern `_not_found(resource, ticker)` already demonstrates) collapses them without losing the tailored message. The reversed-range 422 text is a third copy: `bars.py:97` and `windows.py:62` render byte-identical strings.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:59-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`TradeRecord.from_row` unpacks positionally, unlike the mapping-driven candle path",
+      "description": "`CandleRecord.from_row` walks `CANDLE_COLUMNS` so that, per the module docstring, \"a column added there is served here without an edit\". `TradeRecord.from_row` instead indexes `values[0]`\u2026`values[7]`, restating `TRADE_VALUE_COLUMNS` order by position. A column inserted anywhere but the end of `trade_repository.TRADE_COLUMNS` shifts every later index and silently assigns the wrong value to the wrong field \u2014 silently because the types line up (`taker_book_side` is `str | None` just like `trade_id`'s `str` after `str()`, and every price column is `Decimal`). The one test that touches the mapping, `test_value_count_matches_the_repository_mapping` in `test/integration/test_kalshi_serving.py`, asserts only `len(r.values) == len(TRADE_COLUMNS) - 1`, which a shift preserves.\n\nThe `strict=True` zip in the candle path would raise on an arity change; the positional path would not. Driving the trade record from the same mapping (or at least zipping `TRADE_VALUE_COLUMNS` against `row.values`) would make the two `from_row` implementations one design instead of two.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:163-175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_window`'s `extra` argument both merges parameters and decides which predicate is emitted",
+      "description": "`extra` is documented as extra *params* (`params: dict[str, Any] = {\"ticker\": ticker, **(extra or {})}`), but at lines 198-199 its mere truthiness appends `period = %(period)s`. The coupling is only correct because the single caller (`_candle_window`) happens to pass exactly `{\"period\": period}`. A future caller passing `extra` for any other reason gets a `period` predicate referencing an unbound parameter and a psycopg error at query time \u2014 a failure far from the line that caused it.\n\nAn explicit `period: int | None = None` parameter, with the clause emitted from that, makes the two roles separate and the constraint visible in the signature. `count_candles`/`fetch_candles` would pass it; `count_trades`/`fetch_trades` would not.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:177-200"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`CANDLES_CEILING_RESPONSE_MB` is defined and never read",
+      "description": "The constant records the D8 open question's measurement, but nothing references it \u2014 `test_candles_at_the_admission_ceiling_records_its_response_size` recomputes `megabytes` from `len(response.content)` and hardcodes \"186 measured 11.58 MB for bars\" in the printed line, while `CANDLES_CEILING_RESPONSE_MB` sits unread. So the test that exists to record the figure cannot notice the figure changing; its own docstring's claim that the measurement is \"recorded here\" is not true of any executable assertion. Either assert the constant against the measurement (which is what makes it a recording rather than a comment) or drop the constant and keep the printed value.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "test/load/test_188_kalshi_api_nfr.py:120"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`CandleRow` says fourteen value columns; `values` holds sixteen",
+      "description": "The docstring reads \"its period end plus the fourteen value columns\", but `CANDLE_VALUE_COLUMNS` is `tuple(name for name, _ in CANDLE_COLUMNS)`, and `CANDLE_COLUMNS` is 4 (`yes_bid`) + 4 (`yes_ask`) + 6 (`price`) + `volume_fp` + `open_interest_fp` = 16. Fourteen is the count of columns that get *re-nested* (the model module's \"the fourteen flat stored columns are re-nested\" is defensible for that reason), but it is not the length of `values`. This slice's own load test says sixteen (\"a candle carries sixteen decimal strings where a bar carries five floats\", `test_188_kalshi_api_nfr.py:334`), and the constant's docstring in `constants.py` says sixteen. Since `from_row` zips this tuple against `CANDLE_COLUMNS` with `strict=True`, the length is load-bearing and the comment should match it.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:72"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`tape_complete_through` is described as the newest stored trade, which the schema comment explicitly says it is not",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188-193",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`_admit_rows` and `_not_found` are duplicated across the two Kalshi route modules",
+      "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:59-79",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`TradeRecord.from_row` unpacks positionally, unlike the mapping-driven candle path",
+      "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:163-175",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`_window`'s `extra` argument both merges parameters and decides which predicate is emitted",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:177-200",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`CANDLES_CEILING_RESPONSE_MB` is defined and never read",
+      "location": "test/load/test_188_kalshi_api_nfr.py:120",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`CandleRow` says fourteen value columns; `values` holds sixteen",
+      "location": "src/manta_trading/data/kalshi/serve_timeseries.py:72",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-188",
+    "diff": "0c6060f80be38524eb02585c44a481a9b6cdf453...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:37:30.292687",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 56,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 468885,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 105103,
+  "diff_chars_injected": 105103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 2013378,
+  "cached_tokens": 1854080,
+  "cache_write_tokens": null,
+  "completion_tokens": 128863,
+  "reasoning_tokens": 123139,
+  "duration_seconds": 617.4090157088358,
+  "cost_usd": 0.0995108,
+  "cost_basis": "alias_pricing"
+}

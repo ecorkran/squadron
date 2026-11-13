@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`resume_item` reports every `OSError` as a report-write failure",
+      "description": "`resume_item` wraps the whole locked body in `except OSError as exc: return ResumeOutcome(ResumeExit.HALTED, f\"cannot write the batch report: {exc}\")`. Only one of the OSErrors that can reach that handler comes from a report write. `_resume_locked` also runs `state_manager.load` (`state.py` `path.read_text`), `load_pipeline` (`open(path)`), `evaluate_each_source` \u2192 `_review_flag` \u2192 `read_frontmatter` (`Path.read_text`), and `run_git` plumbing \u2014 any of which can raise `OSError` (EACCES on a runs dir, a vanished design file, a full disk during a state write). In those cases the operator is told \"cannot write the batch report\", which names a cause that was never established, and `ResumeExit.HALTED` folds a possibly-transient read failure into the same bucket as a mid-item git halt. The design's D12 row (\"Report temp write or rename | OSError | logger.exception, then re-raised \u2026 ERROR with the path\") is narrower than what this handler actually catches. Catch the report-write failure where it is raised (or catch a dedicated error from `BatchReport.write`) and let other OSErrors name their own failure.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py#resume_item"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The per-item report rewrite is outside the guard the halt path uses",
+      "description": "`_finish_each_report` deliberately catches `OSError` on the halt path \"so the halting fault is the one that propagates\", but the new per-item write is not on that path: `await _write_each_report(report, runs_dir, final=False)` runs inside the `try` after `in_flight = None`, so an `OSError` there unwinds into the `finally`, which then calls `_finish_each_report(..., in_flight=None, halt=None, ...)` \u2192 `_write_each_report` again with no handler, re-raising from the `finally` and replacing the original exception. The observable outcome (an `OSError`) is the same class, so nothing is swallowed, but the design's D7 contract (\"written after every item, not only at the end\") is delivered by a write whose failure is not classified the way the halt write is. Consider routing the per-item write through the same catch-and-log policy, or moving it after `in_flight` is cleared only for the terminal item.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py#_execute_each_step"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_write_atomic` leaves its temp file behind and duplicates `state.py`'s helper",
+      "description": "`tempfile.NamedTemporaryFile(..., delete=False)` + `temp.replace(target)` has no cleanup on the failure path: if `handle.write` or `temp.replace` raises, the `.{name}.<random>` file stays in the runs directory, so a repeated ENOSPC or permission failure accumulates dotfiles beside the run state. `StateManager._write_atomic` (`state.py`) already implements the same write-then-rename with a deterministic `.tmp` suffix; two helpers now do the same thing two different ways. The rename is what makes the \"previous report stays intact\" claim true, so this is cosmetic, but a `finally: temp.unlink(missing_ok=True)` and reaching for the existing helper would keep one atomic-write idiom in the codebase.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py#_write_atomic"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`pipeline_mutates` walks only `steps:`, so a `fan_out` inner step is never inspected",
+      "description": "`_step_mutates` recurses through `config[\"steps\"]`, which is the key `loop` and `each` bodies use. `fan_out`'s nested step lives under `inner` (`_execute_fan_out_step` reads `resolved_config[\"inner\"]`), and `dispatch`/`review`/`summary`/`gate` are not in `_MUTATING_STEP_TYPES`, so a mutating step reachable only through `fan_out.inner` would not cause `sq run` to take the project lock. No built-in pipeline nests an implement/phase step under `fan_out`, and `fan_out`'s own validation forbids nesting another `fan_out`, so the practical exposure today is nil \u2014 but the design states the executor \"finds them by walking the definition, nested steps included\", and that claim does not hold for the `inner` key. A one-line addition for the `inner` key would make the walk match the stated rule.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py#_step_mutates"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A `report.json` with a missing `index`/`name` loads as the string `\"None\"`",
+      "description": "`from_json` builds `values` with `data.get(key)`, then coerces with `str(...)`: `index=str(values[\"index\"])` and `name=str(values[\"name\"])`. A truncated or hand-edited report missing those keys yields the literal record `\"None\"` instead of a `BatchReportLoadError`, whereas a missing `outcome` does fail (its `ItemOutcome(str(None))` raises `ValueError`, which `BatchReport.load` converts). The class's own contract is \"It never guesses\", and the rendered Markdown line for such a record reads `- None \u2014 \u2026`. Treating an absent `index`/`name` as malformed (or defaulting to the same `#{position + 1}` form `from_item` uses) would keep the loader's failure story consistent.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py#BatchItemRecord.from_json"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`resume_item` reports every `OSError` as a report-write failure",
+      "location": "src/squadron/pipeline/item_resume.py#resume_item",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The per-item report rewrite is outside the guard the halt path uses",
+      "location": "src/squadron/pipeline/executor.py#_execute_each_step",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`_write_atomic` leaves its temp file behind and duplicates `state.py`'s helper",
+      "location": "src/squadron/pipeline/batch_report.py#_write_atomic",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`pipeline_mutates` walks only `steps:`, so a `fan_out` inner step is never inspected",
+      "location": "src/squadron/pipeline/run_lock.py#_step_mutates",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "A `report.json` with a missing `index`/`name` loads as the string `\"None\"`",
+      "location": "src/squadron/pipeline/batch_report.py#BatchItemRecord.from_json",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:01:02.370055",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 592701,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2568652,
+  "cached_tokens": 2212864,
+  "cache_write_tokens": null,
+  "completion_tokens": 161864,
+  "reasoning_tokens": 157876,
+  "duration_seconds": 823.3852659580298,
+  "cost_usd": 0.14251792,
+  "cost_basis": "alias_pricing"
+}

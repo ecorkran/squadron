@@ -1,0 +1,135 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`RunObserver` keeps one set of per-run state for all projects, and each project's `observe()` wipes the others'",
+      "description": "`RunnerTenant` builds exactly one `RunObserver` for the whole tenant (`src/amoeba/runner/tenant.py`, `self._observer = RunObserver(...)` in `__init__`) and hands it to every project's `ProjectTick`. `ProjectTick.run` calls `self._observer.observe(self._run_entries(), ...)`, and `_run_entries()` returns only `self._project_id`'s unresolved `sq_run` entries. Inside `observe`:\n\n```python\nlive = {entry.id for entry in entries}\nself._last_poll = {k: v for k, v in self._last_poll.items() if k in live}\nself._overdue &= live\nself._faulted = {k: v for k, v in self._faulted.items() if k in live}\n```\n\n`live` is this project's entry ids, so observing project B deletes project A's last-poll times, overdue markers and standing faults, and vice versa. Consequences, all of them in the direction of the documented contract (`docs/process-contract.md`, \"The Runner tenant\", and `ProcessSettings.run_poll_interval_seconds`: *\"the least time between two polls of the same launched run\"*, D10):\n\n1. **The poll interval is never honoured with more than one project.** A's `_last_poll` is gone after B is observed, so `_poll_due` returns `True` on A's next tick and every in-flight run in every project is polled on every tick. The slice design measures one `sq runs wait` at about 1 s wall / 0.7 s CPU (`project-documents/user/slices/122-slice.runner-tenant-and-control-surface.md`, \"Why a poll interval\"); that is exactly the cost this bound exists to prevent, and it also eats the tick deadline that `TickBudget` is meant to protect.\n2. **A standing fault flaps.** `_faulted` is the mechanism that replays a poll fault on the ticks *between* polls \"so a fault that stands does not look recovered (and its escalation close)\". With the replay entry deleted by another project's `observe`, `_confirmed` returns `RunState.RUNNING` instead of `RunState.FAULT`; `raise_expected_faults` no longer raises `run_observation_failed` that tick, so `_close_recovered` closes the escalation, and the next poll reopens it \u2014 a new `messages` row and a new feed change each cycle, and an operator shown a fault as recovered while it persists. `_overdue` has the same shape: the marker set in `_after_launch_poll` is dropped, so the `launch_overdue` fault is skipped on the interval ticks and its escalation is closed mid-overdue.\n\nIf the prune is there to bound memory as entries disappear, it needs to be keyed to entries that are genuinely gone (per-project state, or a prune that does not use this call's entry ids). No test covers this: every observe/tick rig (`tests/runner/tick_support.py`, `tests/runner/observe_support.py`) drives a single project, and `tests/runner/test_tenant.py`'s multi-project rig never asserts on poll counts or escalation churn. A multi-project observation test \u2014 two projects, one in-flight run each, two ticks, asserting one poll per run per interval \u2014 would have caught it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py#observe"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_in_flight_run_ids` indexes `parameters[\"run_id\"]` directly, inside the handler that must not raise",
+      "description": "```python\nreturn [\n    str(entry.parameters[PARAM_RUN_ID])\n    for entry in store.unresolved_journal_entries(project_id)\n    if entry.node_id == node_id and entry.kind is CommandKind.SQ_RUN\n]\n```\n\n`escalate` is called from the one broad `except` in `RunnerTenant._tick_project`, after the original fault has already been logged. A `KeyError` raised here is not caught anywhere: it escapes `_tick_project`, ends the tenant's tick, and takes the process down instead of escalating, which is the opposite of the \"expected faults are answers, not exceptions\" doctrine stated in `faults.py`'s own module docstring. The sibling readers are careful about exactly this value \u2014 `observe._observe_one` and `finish._run_id` both treat an unusable run id as an explicit `ValueError` with a message naming the entry \u2014 so the bare subscript is inconsistent within the same stage. It is reachable when an unresolved `sq_run` entry carries no `run_id` key (pre-slice-120 rows are the documented case); recovery normally resolves or escalates those before tenants tick, so this is narrow, but the failure mode is a crash rather than an answer. Using `.get` plus the same \"unusable run id\" message would make the handler total.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py#_in_flight_run_ids"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"exactly one broad except\" guard is a text scan, not an AST walk",
+      "description": "```python\ncount = sum(\n    path.read_text(encoding=\"utf-8\").count(\"except Exception\")\n    for path in package.glob(\"*.py\")\n)\nassert count == 1\n```\n\nThe count matches a literal substring, so `except (Exception,) as error:`, `except Exception:  # ...`, an added `except BaseException`, or a `try/except` split across lines read differently from what the guard intends \u2014 and a comment or docstring containing the text inflates the count. This project's own mechanical guards walk the parsed AST and say why (`tests/test_writer_guard.py`, `tests/test_store_safety.py`: *\"a call split across lines defeats a per-line search\"*), and `tests/test_import_boundaries.py` \u2014 extended by this same change with rules 10 and 11 \u2014 does the same. The guard is worth keeping; matching on `ast.Try.handlers` would make it mean what it says. It is also the only mechanical check that the fault isolation boundary is singular, so its strength matters.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/runner/test_tenant.py#test_the_runner_package_has_exactly_one_broad_except"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`ProjectTick.wrote`'s trailing string is an expression statement, not a docstring",
+      "description": "```python\nself.wrote = False\n\"\"\"Whether this tick wrote to the store or issued a command.\"\"\"\n```\n\nA string literal after an assignment is not a docstring, so this reads as documentation while being a no-op statement (and is a candidate for ruff's `B018`, since `pyproject.toml` selects `B`; I could not run the linter to confirm which way ruff decides here). The rest of this change documents attributes with `#:` comments above the declaration \u2014 `faults.Fault`, `observed.ObservedRun`, `ProcessSettings` \u2014 so either form would be consistent; this one is neither. `CLOSED_BY: str = \"runner\"` in the same file is likewise the only module constant in `amoeba.runner` declared without `Final`, against `RUNNER_TENANT_NAME: Final`, `SQ_RUN_COMMAND: Final` and the rest.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py#ProjectTick.__init__"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`RunObserver` keeps one set of per-run state for all projects, and each project's `observe()` wipes the others'",
+      "location": "src/amoeba/runner/observe.py#observe",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`_in_flight_run_ids` indexes `parameters[\"run_id\"]` directly, inside the handler that must not raise",
+      "location": "src/amoeba/runner/faults.py#_in_flight_run_ids",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The \"exactly one broad except\" guard is a text scan, not an AST walk",
+      "location": "tests/runner/test_tenant.py#test_the_runner_package_has_exactly_one_broad_except",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`ProjectTick.wrote`'s trailing string is an expression statement, not a docstring",
+      "location": "src/amoeba/runner/tick.py#ProjectTick.__init__",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T23:44:46.156964",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 499745,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 2222872,
+  "cached_tokens": 1969664,
+  "cache_write_tokens": null,
+  "completion_tokens": 134473,
+  "reasoning_tokens": 124945,
+  "duration_seconds": 1053.2594735829625,
+  "cost_usd": 0.11462864,
+  "cost_basis": "alias_pricing"
+}

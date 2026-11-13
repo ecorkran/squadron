@@ -1,0 +1,111 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Preserve observer state across projects",
+      "description": "`RunnerTenant` shares one observer across projects, but these lines discard all state absent from the current project\u2019s entries. Observing project B therefore erases project A\u2019s polling timestamps and standing faults. Reproduced: observing A, empty B, then A at the same clock polls A twice despite its 15-second interval. Partition state by project and add a multi-project regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:108-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Retain unconfirmed-launch faults between polls",
+      "description": "After an unconfirmed launch returns `PollFailure`, ticks before the next poll bypass `_faulted` and return `LAUNCHING` without replaying the fault. Reproduced at seconds 0 and 1: `FAULT` becomes `LAUNCHING` with no new evidence. Consequently, `ProjectTick._close_recovered` closes the escalation prematurely. Replay standing observation faults here, as the confirmed path does.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py:186-187"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Recheck the budget immediately before spawning",
+      "description": "The budget check precedes journaling and log creation, not the subprocess launch. If those operations consume the remaining time\u2014or a stop arrives during them\u2014`Popen` still starts. Reproduced with a journal operation advancing the clock: a deadline of 5 permitted `Popen` at 6 and returned `COMPLETE`. Check the budget at the spawn boundary and explicitly handle an issued entry whose launch is deferred.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py:176-187"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Preserve observer state across projects",
+      "location": "src/amoeba/runner/observe.py:108-111",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Retain unconfirmed-launch faults between polls",
+      "location": "src/amoeba/runner/observe.py:186-187",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Recheck the budget immediately before spawning",
+      "location": "src/amoeba/runner/tick.py:176-187",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:23:09.904435",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 116649,
+  "cached_tokens": 116352,
+  "cache_write_tokens": null,
+  "completion_tokens": 362,
+  "reasoning_tokens": 0,
+  "duration_seconds": 97.6480991251301,
+  "cost_usd": 0.0158492,
+  "cost_basis": "alias_pricing"
+}

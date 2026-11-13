@@ -1,0 +1,22 @@
+[
+{"bug":"921-B1","run":"921-deepseek4-flash-1","verdict":"ADJACENT","why":"No-session chunk stays PARTIAL; different case than empty session"},
+{"bug":"921-B1","run":"921-haiku-xhigh-1","verdict":"HIT","why":"Empty session judged PARTIAL, unpublished included, re-requested until exhausted"},
+{"bug":"921-B1","run":"921-sonnet-high-2","verdict":"ADJACENT","why":"Mainly perf finding; passing note on PARTIAL exhaustion"},
+{"bug":"921-B1","run":"921-sonnet-high-3","verdict":"HIT","why":"Empty session PARTIAL, row kept, refetched burning quota"},
+{"bug":"921-B1","run":"921-sonnet_notools-2","verdict":"HIT","why":"Session without bar yields PARTIAL forever; row kept, attempts climb"},
+{"bug":"921-B1","run":"921-sonnet_notools-3","verdict":"ADJACENT","why":"Chunk with no judgeable session stays PARTIAL; different case"},
+{"bug":"921-B2","run":"921-deepseek4-flash-2","verdict":"NO","why":"About exception handling asymmetry, not trailing floor"},
+{"bug":"921-B2","run":"921-haiku-xhigh-2","verdict":"ADJACENT","why":"Seed forwarding of truncated days on frontier path; different defect"},
+{"bug":"921-B2","run":"921-luna-2","verdict":"HIT","why":"Truncated index built only from trailing floor, misses older sessions"},
+{"bug":"921-B3","run":"921-deepseek4-flash-3","verdict":"HIT","why":"Blocking mt-run means early stop never acts"},
+{"bug":"921-B3","run":"921-haiku-xhigh-1","verdict":"HIT","why":"Blocking mt-run call prevents early stop"},
+{"bug":"921-B3","run":"921-haiku-xhigh-1","verdict":"NO","why":"Duplication between fire_unit functions"},
+{"bug":"921-B3","run":"921-haiku-xhigh-2","verdict":"HIT","why":"mt-run blocks until unit exits; stop never runs"},
+{"bug":"921-B3","run":"921-haiku-xhigh-2","verdict":"NO","why":"Ctrl-C handling, different defect"},
+{"bug":"921-B3","run":"921-haiku-xhigh-3","verdict":"HIT","why":"mt-run blocks; stop branch never acts on live unit"},
+{"bug":"921-B3","run":"921-sol-1","verdict":"HIT","why":"Blocking run prevents polling and early stop"},
+{"bug":"921-B3","run":"921-sol-2","verdict":"HIT","why":"Blocking run prevents polling and early stop"},
+{"bug":"921-B3","run":"921-sol-3","verdict":"HIT","why":"Blocking run prevents polling and early stop"},
+{"bug":"921-B3","run":"921-sonnet-high-2","verdict":"HIT","why":"Blocks until unit ends; early stop never runs"},
+{"bug":"921-B3","run":"921-sonnet_notools-2","verdict":"NO","why":"Log global state, unrelated"}
+]

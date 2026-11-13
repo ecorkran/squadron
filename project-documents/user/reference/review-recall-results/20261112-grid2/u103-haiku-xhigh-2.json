@@ -1,0 +1,423 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Range is not applied when the first series is added",
+      "description": "The translation effect depends on `[mount.ready, chart, range]`. `seriesCountRef` is a ref, so `addSeries` through the facade (chart-facade.ts:49-56) changes no dependency and the effect does not re-run. The comment at lines 333-338 says the effect \"activates the moment it adds the first series.\" That is false. A range set before the first series is never applied until the range changes again. The test \"applies the range once a series exists\" in `src/test/use-chart-provider.translation.test.tsx` adds the series before calling `setRange`, which hides the gap. Fix: make the count observable (state, or a dependency that changes on 0\u21921), and add a test that sets the range first and adds the series second.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:340-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Series count drifts on pane removal, and `Math.max` hides it",
+      "description": "The facade's `removePane` does not touch the series count. The provider's `removePane` (lightweight-charts-provider.ts:153-160) deletes only the pane handle, so series registry entries survive. If lightweight-charts also drops a pane's series when the pane is removed (unverified; node_modules is absent), `seriesCountRef` stays above the real count. The range guard then passes, `setVisibleRange` runs against an empty time scale, and the error surfaces. The `Math.max(0, \u2026)` floor at use-chart-provider.ts:150 would hide a negative drift instead of reporting it. No test covers pane removal affecting the count. Fix: derive the count from provider state, or have pane removal update it, and drop the silent floor.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/chart-facade.ts:78-80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"first error\" contract is violated: the last error wins",
+      "description": "`setOperationError` overwrites `error` on every failure (`{ ...current, error: failure }`). The documented contract at `src/chart/chart-operations.ts:77` says \"The first error from any provider operation.\" The test named \"keeps the first error rather than being reset by a later success\" in `src/test/use-chart-provider.errors.test.tsx` has one failure and one success. It never tests two failures, so it cannot catch the mismatch. Pick one behavior: keep the first error, or change the doc and rename the test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:97-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Pre-ready and missing-ref calls fail silently",
+      "description": "`runGuarded` returns `undefined` when the provider is null, with no log and no state change. A call made before mount therefore returns `undefined`, which is indistinguishable from a provider error (that case does set state). The mount effect also returns silently when `containerRef.current` is null (lines 168-171), and the lifecycle test \"does nothing when the container ref is null\" asserts that silence. CLAUDE.md says \"Never use silent fallback values. Fail explicitly.\" The teardown-race drop is justified in comments at lines 101-106, but that justification covers only post-teardown calls, not pre-mount ones. Fix: log, or surface as `error`, when a call arrives before mount or the ref is missing. Keep the silent drop only for the post-teardown window.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:108-126"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A missing theme token silently falls back to the library default",
+      "description": "`readChartStyle` returns `undefined` for an empty token, so the chart renders with the library's default (white) background and no error. `src/chart/types/styling.ts:12-14` says \"there is no silent theme fallback hiding a missing token,\" which this code contradicts. The e2e test catches an empty `--color-surface` in CI, but a runtime theme regression stays silent. Fix: throw or surface an error when a required token is empty, and make the doc and code agree.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/routes/chart-route.tsx:35-55"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The hook is hard-wired to the concrete provider",
+      "description": "`new LightweightChartsProvider()` runs inside the hook. CLAUDE.md says to program to interfaces, and the testing rules say to use dependency injection. Without a seam, all five hook test files repeat the same `vi.mock('../chart/index.ts', \u2026)` boilerplate, and the spy must replicate the class by hand. Fix: accept an optional factory, `createProvider: () => IChartProvider = () => new LightweightChartsProvider()`, so tests can pass a fake without module mocking.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:173"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The mount effect and the hook are far over the size guide",
+      "description": "The hook file is 366 lines against the ~300-line guide. `useChartProvider` spans about 316 lines. The mount effect (lines 167-324) is about 158 lines, roughly half of them comments, against the ~50-line function guide. The facade was extracted, but the create/resize/observe/subscribe/teardown sequence stayed inline. Fix: move the mount sequence into a helper that returns a disposer, leaving the hook as a thin binding.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:51-366"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two effects do nothing in this slice",
+      "description": "The indicator effect has an early return and no body. It exists only to subscribe to `useIndicators()`, which makes the hook throw outside `IndicatorProvider`. The test \"fires the indicator observer without error\" asserts that nothing happens. The range effect (340-345) is also dead on the product path, since nothing adds a series in this slice. CLAUDE.md says \"Always resist adding complexity.\" If the slice spec requires these seams, keep them and document that in one place. If not, remove the no-op effect and the `useIndicators()` coupling until initiative 120.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:358-363"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The race-guard tests never show the guards are load-bearing",
+      "description": "The \"teardown race\" tests call captured subscription handlers after unmount. In the hook, those handlers contain only `if (disposedRef.current) return`, so the tests pass with or without the guard. `getVisibleRange` is never called and `resize` is called once regardless. `triggerResize` in `src/test/support/chart-provider-spy.ts` refuses to deliver to disconnected observers, so the disposed check on the ResizeObserver path (`runGuarded`) is never reached. In `src/test/use-chart-provider.translation.test.tsx`, \"does not translate after unmount\" adds no series before unmounting, so the `seriesCount === 0` guard alone blocks the call. Fix: invoke the captured observer callback directly after disconnect and assert `resize` is not called; add a series before unmount in the translation test.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.errors.test.tsx"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test helpers are duplicated across four files",
+      "description": "`MEASURED`, `measuredRect`, and the measuring `Host` component are copied into the errors, facade, translation, and resize test files. `state`/`readState` is duplicated in the errors and lifecycle files. CLAUDE.md says \"Do not duplicate logic.\" `src/test/support/render-with-contexts.tsx` already shows the intended pattern, so these helpers belong in the support directory.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/test/use-chart-provider.errors.test.tsx:30-75"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A whole-file lint suppression is broader than the construct it covers",
+      "description": "`react-hooks/refs` is turned off for all of `use-chart-provider.ts`, which also disables it for any future real violation in that file. The comment attributes the false positive to the `useMemo(() => buildChartOperations(runGuarded, series))` call. If that is accurate, an inline `// eslint-disable-next-line react-hooks/refs` with the reason keeps the rule active for the rest of the file. I could not run eslint to confirm the probe the comment describes.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "eslint.config.js:55-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Playwright and smoke-spec comments describe behavior that no longer holds",
+      "description": "The header says specs run against \"the PRODUCTION build ... the same artifact `pnpm build` ships.\" The webServer now builds in `--mode e2e`, which includes the harness route, so that guarantee is false. `e2e/smoke.spec.ts:9-10` says \"The chart itself is asserted in chart-render.spec.ts,\" but `chart-render.spec.ts:14` only navigates to `/__chart-harness`. The live chart at `/` is covered by `chart-live.spec.ts`. Nothing automated checks that the production build excludes `/__chart-harness`; that relies on the manual grep described in `src/routes/router.ts:36-42`. Fix the headers, and consider an automated build-artifact check.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "playwright.config.ts:6-7"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stale task-number comments",
+      "description": "\"subscriptions join here in task 12\" is stale: the subscriptions are already in the mount effect (lines 286-301). Line 10 refers to \"the forwarding facade (task 14),\" which now lives in `chart-facade.ts`. Process references in source comments go stale quickly; replace them with the current location.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:185-186"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A failed create always logs a second, misleading error",
+      "description": "After a failed `create()`, `teardown()` calls `provider.destroy()`, which throws through `assertReady()` (lightweight-charts-provider.ts:67-69, 79-86) because `this.chart` is still null. Every create failure therefore logs \"provider teardown failed\" next to \"provider create failed.\" Skip `destroy` when create never succeeded.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:302-309"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The mount measurement and the resize measurement use different boxes",
+      "description": "The initial size uses `getBoundingClientRect()` (border box). The observer uses `contentRect` (content box, line 265). The section in `chart-route.tsx:92` has a 1px border on each side, so the first size is 2px larger than what the observer reports. The observer corrects it before paint, so the impact is minor, but both values should come from the same box.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:249"
+    },
+    {
+      "severity": "NOTE",
+      "title": "E2E selectors match on user-visible copy",
+      "description": "`getByText('Chart workspace')` and `getByRole('alert', { name: 'Chart error' })` (the latter relies on `aria-label=\"Chart error\"` at `chart-route.tsx:99`) match display text. The same specs use `data-testid` for the container. CLAUDE.md says not to use user-accessible labels as logical structure. Add `data-testid=\"chart-error\"` and use it consistently.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "e2e/smoke.spec.ts:19"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The test double does not implement the interface",
+      "description": "`chartProviderMockFactory()` is typed as `{ LightweightChartsProvider: unknown }`, and `MockChartProvider` does not `implements IChartProvider`. If the interface gains a method, the mock still type-checks, and the gap shows up only at runtime when a test reaches it. Add `implements IChartProvider`. A type-only import from the barrel is erased, so this does not reintroduce the mock.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/test/support/chart-provider-spy.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The crosshair subscription runs a no-op on every mouse move",
+      "description": "The mount effect subscribes to crosshair moves only to exercise the disposer lifecycle. Each move still passes through the provider adapter (lightweight-charts-provider.ts:203-205) into a handler that does nothing. The comment acknowledges that nothing consumes it yet. Consider deferring the subscription until a consumer needs it.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:286-293"
+    },
+    {
+      "severity": "PASS",
+      "title": "Teardown order is correct",
+      "description": "Verified by reading. Disposers run first, then the observer disconnects, then `destroy()`, then the ref is nulled, with `disposedRef` set first. Each disposer runs in its own try, so one failure cannot skip the rest. A StrictMode remount creates a fresh provider. I could not run the tests that exercise this path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/chart/use-chart-provider.ts:192-224"
+    },
+    {
+      "severity": "PASS",
+      "title": "The harness gate folds at build time",
+      "description": "The `import.meta.env.MODE === 'e2e' || \u2026 === 'development'` form is a direct comparison that Vite can fold to a literal, which matches the comment's rationale. The production-bundle claim rests on a manual grep. I could not run the build to confirm it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/routes/router.ts:44-45"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Range is not applied when the first series is added",
+      "location": "src/chart/use-chart-provider.ts:340-345",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Series count drifts on pane removal, and `Math.max` hides it",
+      "location": "src/chart/chart-facade.ts:78-80",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The \"first error\" contract is violated: the last error wins",
+      "location": "src/chart/use-chart-provider.ts:97-99",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Pre-ready and missing-ref calls fail silently",
+      "location": "src/chart/use-chart-provider.ts:108-126",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A missing theme token silently falls back to the library default",
+      "location": "src/routes/chart-route.tsx:35-55",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The hook is hard-wired to the concrete provider",
+      "location": "src/chart/use-chart-provider.ts:173",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The mount effect and the hook are far over the size guide",
+      "location": "src/chart/use-chart-provider.ts:51-366",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Two effects do nothing in this slice",
+      "location": "src/chart/use-chart-provider.ts:358-363",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The race-guard tests never show the guards are load-bearing",
+      "location": "src/test/use-chart-provider.errors.test.tsx",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Test helpers are duplicated across four files",
+      "location": "src/test/use-chart-provider.errors.test.tsx:30-75",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "A whole-file lint suppression is broader than the construct it covers",
+      "location": "eslint.config.js:55-79",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Playwright and smoke-spec comments describe behavior that no longer holds",
+      "location": "playwright.config.ts:6-7",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Stale task-number comments",
+      "location": "src/chart/use-chart-provider.ts:185-186",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "A failed create always logs a second, misleading error",
+      "location": "src/chart/use-chart-provider.ts:302-309",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The mount measurement and the resize measurement use different boxes",
+      "location": "src/chart/use-chart-provider.ts:249",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "E2E selectors match on user-visible copy",
+      "location": "e2e/smoke.spec.ts:19",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "The test double does not implement the interface",
+      "location": "src/test/support/chart-provider-spy.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F018",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "The crosshair subscription runs a no-op on every mouse move",
+      "location": "src/chart/use-chart-provider.ts:286-293",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Teardown order is correct",
+      "location": "src/chart/use-chart-provider.ts:192-224",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The harness gate folds at build time",
+      "location": "src/routes/router.ts:44-45",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-u103",
+    "diff": "a4f9b6cf446929d056689df48082a701467d74e7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:11:59.950119",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 29,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 92528,
+  "diff_chars_injected": 92528,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 20,
+    "in_fences": 0,
+    "in_section": 20,
+    "surviving": 20
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 30,
+  "prompt_tokens": 1262321,
+  "cached_tokens": 1076185,
+  "cache_write_tokens": 186120,
+  "completion_tokens": 64863,
+  "reasoning_tokens": null,
+  "duration_seconds": 289.288474917179,
+  "cost_usd": 0.35718591,
+  "cost_basis": "provider"
+}

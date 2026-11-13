@@ -1,0 +1,222 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`definition` binding in the resume paths of `run()` is unconfirmed",
+      "description": "`run()` now calls `_locked(definition, ...)` in the `--resume` branch and in the implicit-resume branch. In those branches `pipeline` is `None` and the pipeline name comes from `state.pipeline` or `match.pipeline`. The diff doesn't show where `definition` is assigned, so it may be the wrong pipeline, or unbound, when resuming. That would make `pipeline_mutates` decide on the wrong pipeline or raise `NameError`. `test_a_plain_resume_of_a_paused_run_with_the_lock_held_exits_2` mocks the state manager, so it covers the lock but not whether `definition` is correct. Confirm that `definition` is loaded from `state.pipeline` (or `match.pipeline`) before `_locked` is called, and add a test that asserts this.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Atomic report write leaks temp files on failure",
+      "description": "`NamedTemporaryFile(delete=False)` is followed by `temp.replace(target)`. If `handle.write` or `replace` raises `OSError`, the `.name.xxxx` temp file stays in the runs directory. The existing test `test_a_failed_write_keeps_the_previous_report_and_logs_error` exercises exactly this path and never checks for leftovers. Repeated per-item rewrites, which this slice adds, can make the leak accumulate on a full disk. Unlink the temp file in the `except` path, and assert the directory is clean in the test.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py#_write_atomic"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`Any`-typed cf client and a circular import across the CLI boundary",
+      "description": "`resume_item`, `_resume_locked`, `_select_item`, `_open_dependencies` and `_git_precondition` all take `cf_client: Any`, even though `CfClientProtocol` already exists in `branch_ops` and is used for `read_integration_target`. This hides contract errors under strict pyright and breaks the \"program to interfaces\" rule. Type these parameters with the protocol, extended with `list_slices` and `list_tasks` if needed.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py#resume_item"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`run_item.py` imports private functions from `run.py` at call time",
+      "description": "`run.py` imports `run_item`, and `run_item` imports `_apply_param_overrides` and `_run_pipeline_sdk` back from `run.py`. The import sits inside the function and carries `pyright: ignore[reportPrivateUsage]`. This is a dependency cycle. Either pass the runner and param parser in as arguments from `run.py`, or move the shared helpers into a module that both files import.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run_item.py:handle_item_resume"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Blanket `OSError` handler can mislabel unrelated failures",
+      "description": "`except OSError` returns \"cannot write the batch report\" and relies on `batch_report` having already logged the failure. Any `OSError` raised elsewhere under the lock produces that same message and is not logged here. Examples are state loading, the `Path.open` call, or a git or file operation in `restore_target`. Narrow the catch to the report-write call, or log with `_logger.exception` before returning HALTED.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py#resume_item"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lines over the 88-character limit and `# type: ignore` use in strict tests",
+      "description": "Several new lines exceed 88 characters.\n- Source: the `_write_each_report` signature, the `_not_ready_reason` signature in `sources.py`, a long line in `run_lock._step_mutates`, and the `rerun.replace(...)` line in `item_resume._resume_locked`.\n- Tests: many long lines in the new test files.\n- Strict-typing gaps in tests: `test_run_lock_cli.py` and `test_item_resume_validation.py` rely on `# type: ignore[attr-defined]`. Helpers such as `_fresh_p6() -> object` and `body_runner` are untyped, which undermines the strict-pyright-on-tests rule.\n\nRun `ruff format` and type the helpers. For example, return `Result` from `_fresh_p6` and return `BodyRunner` from `body_runner`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py#_write_each_report"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`ItemRerun.replace` and `list_tasks` fail with generic errors on missing data",
+      "description": "`next(...)` without a default in `ItemRerun.replace` raises a bare `StopIteration` if the index is missing from the report. Inside a coroutine, that surfaces as `RuntimeError`. In `ContextForgeClient.list_tasks`, `e[\"completed\"]` and `e[\"total\"]` raise `KeyError` against an older cf that lacks those fields. Failing loudly is correct per project rules, but a message that names the missing item or field would be easier to act on.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py#ItemRerun"
+    },
+    {
+      "severity": "NOTE",
+      "title": "File and function size drift",
+      "description": "`executor.py` is well over the ~300-line guideline and keeps growing. `_execute_each_step` is now long, and two loop entry points repeat the `_loop_accept_decision_result` guard. `item_resume.py` is also slightly over the limit. Consider extracting the each-step report and flag logic into its own module in a follow-up.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Strengths",
+      "description": "- The reserved param keys are defined once in `control_params.py` and enforced at the CLI, in the loader and in `item_params`.\n- The run lock is non-blocking and OS-released, with explicit exit codes.\n- `report.json` has a schema version and explicit load errors.\n- Failure modes are logged and tested: lock held, git-dir failure, unopenable lock file, failed report write, halted git state.\n- No credentials or database access were introduced.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_lock.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`definition` binding in the resume paths of `run()` is unconfirmed",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Atomic report write leaks temp files on failure",
+      "location": "src/squadron/pipeline/batch_report.py#_write_atomic",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`Any`-typed cf client and a circular import across the CLI boundary",
+      "location": "src/squadron/pipeline/item_resume.py#resume_item",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`run_item.py` imports private functions from `run.py` at call time",
+      "location": "src/squadron/cli/commands/run_item.py:handle_item_resume",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Blanket `OSError` handler can mislabel unrelated failures",
+      "location": "src/squadron/pipeline/item_resume.py#resume_item",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Lines over the 88-character limit and `# type: ignore` use in strict tests",
+      "location": "src/squadron/pipeline/executor.py#_write_each_report",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`ItemRerun.replace` and `list_tasks` fail with generic errors on missing data",
+      "location": "src/squadron/pipeline/batch_report.py#ItemRerun",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "File and function size drift",
+      "location": "src/squadron/pipeline/executor.py",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Strengths",
+      "location": "src/squadron/pipeline/run_lock.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:32:52.902247",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 256515,
+  "cached_tokens": 165522,
+  "cache_write_tokens": 90989,
+  "completion_tokens": 8344,
+  "reasoning_tokens": null,
+  "duration_seconds": 58.450056249974295,
+  "cost_usd": 0.4723049,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

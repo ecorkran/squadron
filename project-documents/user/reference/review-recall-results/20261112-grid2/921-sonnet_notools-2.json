@@ -1,0 +1,240 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Sudoers rule grants root-equivalent access despite its \"nothing wider\" claim",
+      "description": "`MT_INSTALL` allows `manta` to run `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh --ref *` as root with no password. That script lives in a directory the `manta` user can write to. Anyone with that account can edit the script and then run it as root, so the rule is full root, not a limited grant.\n\nThe unit globs (`systemctl stop mt-*` and the other three) and `mt-run *` also use sudoers `*`. That wildcard matches spaces and extra arguments, so any option the wrapper or `systemctl` accepts is allowed. The header comment says the rule grants \"exactly the commands those scripts issue\", which is not true of these entries.\n\nFixes:\n- Run the installer from a root-owned path such as `/usr/local/sbin`.\n- Pin the `--ref` argument.\n- Confirm what arguments `mt-run` accepts.\n- Replace the unit globs with explicit unit names.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:8-13"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cagg freshness compares a refresh finish time to a bar write time",
+      "description": "`stale` is `last_refresh < newest_bar_written`, where `last_refresh` is `last_successful_finish`. A refresh that started before the last bar was written but finished after it passes as fresh, even though the cagg never materialized that bar. `last_successful_start` is the safer comparison.\n\nTwo further assumptions are unverified:\n- That `job.hypertable_name = cagg` matches the cagg refresh policy row in `timescaledb_information.jobs`. If it does not, `last_refresh` is always `None`, `--verify` reports `[WAIT]` forever, and the cutover can never pass.\n- That the refresh policy window covers the judged session.\n\nThe tests mock the cursor, so none of this is exercised against a real database.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py#cagg_freshness_for_session"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-session judgement can keep a gap row forever for a symbol with no bars in a session",
+      "description": "The old weekend and holiday tolerance is replaced by \"every session in the chunk must hold a bar\". A halted, newly listed or illiquid symbol can legitimately have no bars for a whole session. Its chunk then returns PARTIAL on every pass, the row is kept, and `attempt_count` climbs. That is the \"re-fetches forever\" behavior the removed comment described. Cap the retries or add a staleness exit. The tests cover only the all-sessions-empty and all-sessions-covered cases.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py#judge_chunk_by_sessions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Extra connection per chunk on the fetch hot path",
+      "description": "`fetch_session_bounds` is called through a fresh `pool.connection()` on every chunk of every symbol, across a universe of thousands of symbols. Reuse the connection already open in `_do_minute_symbol`, or cache the bounds per cycle.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:~905"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplicated timestamp parsing, and a daemon module importing from a repair-script module",
+      "description": "`bar_timestamp` re-implements `_bar_to_row`'s timestamp parsing, as `_latest_bar_dt` did before it was removed. The docstring says it \"mirrors\" `_bar_to_row`, which is exactly the duplication that drifts. Extract one shared parser.\n\nThe production daemon now also imports `build_truncated_day_index` and `RepairScanTimeout` from `data/gaps/repair_921.py`, a one-off repair module. Move those into a neutral gaps module. The `_UTC = UTC` alias is also unnecessary.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:bar_timestamp"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"[WAIT]\" and \"FAIL\" are string-matched across scripts with no shared definition",
+      "description": "The repair script prints `[WAIT]` and the cutover script searches for the literal substring in three places. The project rules say comparison values are defined once. The same applies to `\"FAIL\"`, which was already a pre-existing literal. Define the markers as constants in one shared module and import them into both scripts.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py#_verify_when_fresh"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Import ordering will fail ruff `I`",
+      "description": "The ordering is wrong in several places:\n- `NOTES_DIR, fire_unit_until, start_log` come before `CutoverError`.\n- `cagg_freshness_for_session` comes before `CheckReport` in `repair_921_minute_sessions.py` and in `test_repair_921.py`.\n- The new `minute_sessions` and `repair_921` imports in `minute.py` sit ahead of `minute_coverage`.\n\nI did not check whether ruff is configured with `I` in `pyproject.toml`. If it is, the lint gate fails.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "scripts/cutover_921_minute_sessions.py:45-52"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Narration log uses module-global state and truncates on open",
+      "description": "`_LOG_FILE` is a mutable global. `start_log` overwrites the file, and `say` reopens it on every call. Streamed subprocess output and the bare `print` lines in `wait_for_unit_or_line` and `fire_unit_until` never reach the log. The docstring calls the narration \"the cutover's report\", but the log is incomplete. The timestamped filename makes the truncation low risk.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:41-62"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`fire_unit_until` repeats the tail of `fire_unit`",
+      "description": "The cursor, start-time, `mt-run` and `sudo -v` sequence is duplicated between the two functions. A shared helper would remove it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py#fire_unit_until"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test setup is copy-pasted",
+      "description": "`test_last_bar_before_the_chunk_end_is_still_success` repeats the roughly 40-line mock and patch scaffold from `_run`. Parametrize `_run` over bounds, bars and gap instead.\n\nThe timing changes are covered: firing times, 07:05 judging boundaries, the UTC label fix and the timer files all agree with the constants.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/data/acquisition/daemon/test_minute.py:TestChunkJudgedBySessions"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Sudoers rule grants root-equivalent access despite its \"nothing wider\" claim",
+      "location": "deploy/sudoers.d/manta-ops:8-13",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cagg freshness compares a refresh finish time to a bar write time",
+      "location": "src/manta_trading/data/gaps/repair_921.py#cagg_freshness_for_session",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Per-session judgement can keep a gap row forever for a symbol with no bars in a session",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py#judge_chunk_by_sessions",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Extra connection per chunk on the fetch hot path",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:~905",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Duplicated timestamp parsing, and a daemon module importing from a repair-script module",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py:bar_timestamp",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "\"[WAIT]\" and \"FAIL\" are string-matched across scripts with no shared definition",
+      "location": "scripts/cutover_921_minute_sessions.py#_verify_when_fresh",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Import ordering will fail ruff `I`",
+      "location": "scripts/cutover_921_minute_sessions.py:45-52",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Narration log uses module-global state and truncates on open",
+      "location": "scripts/cutover_common.py:41-62",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`fire_unit_until` repeats the tail of `fire_unit`",
+      "location": "scripts/cutover_common.py#fire_unit_until",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test setup is copy-pasted",
+      "location": "test/unit/data/acquisition/daemon/test_minute.py:TestChunkJudgedBySessions",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:28:38.231825",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 155033,
+  "cached_tokens": 113940,
+  "cache_write_tokens": 41089,
+  "completion_tokens": 5388,
+  "reasoning_tokens": null,
+  "duration_seconds": 43.3633257499896,
+  "cost_usd": 0.23325400000000002,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

@@ -1,0 +1,261 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "NOPASSWD sudo rule runs a script the grantee can edit, so it grants root",
+      "description": "`MT_INSTALL` lets `manta` run `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh --ref *` as root with no password. That path is inside `manta`'s own home directory, so `manta` can rewrite the script and then run the edited copy as root. That is passwordless root, which contradicts the header's \"exactly the commands those scripts issue, nothing wider\".\n\nThe trailing `*` in sudoers also matches any further arguments, not just a ref. The installer should live at a root-owned path such as `/opt` or `/usr/local/sbin`. The cutover script would call it from there instead of resolving it from `__file__` (`scripts/cutover_common.py:134`). The rule would also hard-code the checkout path, so it breaks silently if the repo is cloned anywhere else.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Wildcard command aliases allow much more than the stated commands",
+      "description": "In sudoers, `*` matches spaces and additional arguments. `systemctl stop mt-*` therefore also permits `systemctl stop mt-x sshd.service`, and the same applies to `start` and `restart`. This is not a root shell, but it is wider than \"a named unit\".\n\n`mt-run *` is wider still. For any argument that isn't a pass kind, `deploy/mt-run:197` falls through to `run_production_mt`. That runs the production `mt` CLI as `manta-trading` with every `MT_*` credential from the env file. The alias is effectively \"run any `mt` command with production credentials\".\n\nEnumerate the exact units and the exact `mt-run` verbs the scripts use: `minute`, `data kalshi status --json`, and so on.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:7-8"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Sudoers rule omits a command the cutover issues, and exposes the env file",
+      "description": "`_repair` in `scripts/cutover_921_minute_sessions.py:96-100` runs `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode>`. No alias covers it. It would prompt for a password, with stdout and stderr captured, in the middle of an unattended cutover. The header's \"exactly the commands those scripts issue\" is therefore false.\n\n`MT_READ` grants `cat /etc/manta-trading.env` as root. That file holds all production credentials, including the maintenance DB URL. This works against the project's split-role principle, and the file should not be readable this way.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:5-10"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-session judging can retry quota-limited fetches indefinitely for symbols with no-trade sessions",
+      "description": "`judge_chunk_by_sessions` returns PARTIAL whenever any session whose close is at or before `chunk_end` has no bar in `(open, close]`. That is right for the unpublished-day case. It also fires for sessions where the symbol simply didn't trade: halts, illiquid names, or an IPO session that opens before the first print.\n\nFor a multi-session backfill chunk of up to 120 days, one such session turns the whole chunk PARTIAL. `_advance_minute_gap` then keeps the row and increments `attempt_count`, so the same chunk is refetched until it reaches RETRY_EXHAUSTED. Each attempt spends credits against a limited quota, and the cutover itself gates on credits.\n\nThe old 4-day tolerance did not have this failure for mid-chunk gaps. I found no test for \"bars on sessions before and after an empty session in one chunk\". Add one, and decide explicitly whether only the newest session should be judged for the unpublished case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:891-907"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cagg freshness compares against `last_successful_finish`, which can report a bar as materialized when it isn't",
+      "description": "A refresh that starts before a bar is written and finishes after it makes `last_refresh >= newest_bar_written`. That reads as fresh, but the refresh never saw the bar, so the original \"1 bar\" misread can recur. The comparison should use the job's last start time (`last_run_started_at`), not its finish time.\n\nWhether the policy's `end_offset` also hides recent buckets is not visible in this diff, and I did not check it. The tests only assert SQL substrings against mocks. Nothing exercises the probe against a real TimescaleDB, and I did not confirm that `created_at` exists on `minute_ohlcv`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/data/gaps/repair_921.py:196-221"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Import blocks are out of isort order, so the required ruff `I` rule will fail",
+      "description": "`pyproject.toml` selects `I`, but these import blocks are unsorted:\n- `minute.py`: `...daemon.minute_sessions` is placed after `data.gaps`. `gaps.repair_921` sits before `gaps.minute_coverage`, and the first-party blocks are split by a blank line.\n- `scripts/cutover_921_minute_sessions.py:46-49`: `NOTES_DIR, fire_unit_until, start_log, CutoverError, fire_unit`.\n- `scripts/repair_921_minute_sessions.py:60`: `cagg_freshness_for_session` before `CheckReport`.\n- `test/unit/test_repair_921.py:30-31`: `CaggFreshness, cagg_freshness_for_session, SymbolFindings`.\n\nRun `ruff check --fix` and `ruff format`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:50-68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Production daemon now imports the one-off repair module",
+      "description": "The daemon depends on `data/gaps/repair_921.py` for `build_truncated_day_index` and `RepairScanTimeout`. A slice-numbered repair module becomes a permanent runtime dependency of the acquisition path. The truncated-day index is now shared logic. Move it into a neutral module such as `minute_coverage` or a `truncated_days` module, and have both the daemon and the repair script import from there.\n\nThe daemon also runs this scan on every cycle with a 600s timeout, and a timeout only logs and continues. That is acceptable, but the per-cycle cost is not documented anywhere.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:60-63"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplicated daemon test setup, and a fragile mock of `_logger`",
+      "description": "`test_last_bar_before_the_chunk_end_is_still_success` copy-pastes about 60 lines of pool, conn, lock and patch scaffolding from `_run`. Reuse `_run` with parameters for the bounds, the gap end and the bars. Two tests also assert on the log string `\"not published\"` and on `args[4]`, which pins the message wording and argument positions rather than behaviour.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/unit/data/acquisition/daemon/test_minute.py:2321-2490"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Cutover narration log and bounded firing are sound, with small gaps",
+      "description": "`start_log` and `say` are covered by a test, and the autouse fixture in `test/unit/test_cutover_921.py` blocks real subprocesses. Small points:\n- `say` has no docstring.\n- Opening the file in append mode on every call has no explicit encoding.\n- Streamed output and the `print`-based poll lines are not written to the log, so the log holds only `say` lines, although the file is described as the cutover's report.\n- `_verify_when_fresh` can run the full five 15-minute polls and then return `[WAIT]`. The firing loop in `scripts/cutover_921_minute_sessions.py:264` then starts another firing for no reason.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:41-62"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Firing times moved to 04:05 consistently",
+      "description": "`MINUTE_PASS_FIRING_TIMES_UTC`, `mt-minute-pass.timer`, the health-check docstrings and the tests all agree on 04:05, which is the single source of truth the drift guard relies on. The stale EODHD comment in `mt-kalshi-pass.timer` was also corrected. The UTC formatting fix in `check_minute_session_mass` is correct.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/constants.py:150"
+    },
+    {
+      "severity": "PASS",
+      "title": "Session-judging helper is pure and well covered",
+      "description": "`bar_timestamp`, `sessions_without_bars` and `judge_chunk_by_sessions` are small and pure. Their tests use EODHD's real bar shape (epoch plus ISO string) and cover the open and close boundaries, the spillover bar and the weekend tail. The `except (ValueError, TypeError, OverflowError)` in `bar_timestamp` is narrow and has a justifying comment.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "NOPASSWD sudo rule runs a script the grantee can edit, so it grants root",
+      "location": "deploy/sudoers.d/manta-ops:9",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Wildcard command aliases allow much more than the stated commands",
+      "location": "deploy/sudoers.d/manta-ops:7-8",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Sudoers rule omits a command the cutover issues, and exposes the env file",
+      "location": "deploy/sudoers.d/manta-ops:5-10",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Per-session judging can retry quota-limited fetches indefinitely for symbols with no-trade sessions",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:891-907",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cagg freshness compares against `last_successful_finish`, which can report a bar as materialized when it isn't",
+      "location": "src/manta_trading/data/gaps/repair_921.py:196-221",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Import blocks are out of isort order, so the required ruff `I` rule will fail",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:50-68",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Production daemon now imports the one-off repair module",
+      "location": "src/manta_trading/data/acquisition/daemon/minute.py:60-63",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Duplicated daemon test setup, and a fragile mock of `_logger`",
+      "location": "test/unit/data/acquisition/daemon/test_minute.py:2321-2490",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Cutover narration log and bounded firing are sound, with small gaps",
+      "location": "scripts/cutover_common.py:41-62",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Firing times moved to 04:05 consistently",
+      "location": "src/manta_trading/constants.py:150",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Session-judging helper is pure and well covered",
+      "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:00:54.765219",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 16,
+  "prompt_tokens": 513730,
+  "cached_tokens": 430832,
+  "cache_write_tokens": 82882,
+  "completion_tokens": 10669,
+  "reasoning_tokens": null,
+  "duration_seconds": 90.56761858309619,
+  "cost_usd": 0.4849496,
+  "cost_basis": "provider"
+}

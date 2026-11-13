@@ -1,0 +1,343 @@
+[
+ {
+  "bug": "225-B1",
+  "description": "raw_counts counts tick_trade rows for ALL products over overlapping session windows with no filter to the product's instruments, inflating coverage raw counts when several products are loaded.",
+  "candidates": [
+   {
+    "run": "225-deepseek4-flash-1",
+    "location": "src/manta_trading/data/tick/tick_coverage.py:99-105",
+    "title": "A coverage range at the populated span's edge exits 4 as \"database unreachable\"",
+    "text": "`build_coverage` asks the calendar for `[utc_midnight(start - timedelta(days=1)), utc_midnight(end))` (lines 103-104) so a session that opens the previous evening is included. `TradingCalendar.sessions_between` calls `_require_populated` on **both** bounds (`data/base/trading_calendar.py:310-317`), and `calendar_sessions` (`tick_status_build.py:63-75`) converts `OutOfPopulatedRangeError` into `TickCalendarError`. `exit_code_for` maps `TickCalendarError` to `EXIT_STORAGE` (`cli/commands/tick_exit.py`), so `mt data tick coverage --start <first populated session date>` \u2014 a legitimate request \u2014 prints the calendar's \"outside calendar \u2026 Run 'mt data extend'\" refusal and exits **4**, which `READ_EPILOG` (`tick_store_cmds.py:37-42`) documents as \"the tick or production (calendar) database is unreachable.\" The operator gets a storage-outage diagnosis and a storage exit code for what is an out-of-range input. Either clamp the lookback to the populated span's first open, or map this refusal to exit 1 and say so in the epilog. (The share of this that is genuinely a storage outage \u2014 a dead connection \u2014 already reaches exit 4 through `psycopg.OperationalError`.)"
+   },
+   {
+    "run": "225-deepseek4-flash-2",
+    "location": "src/manta_trading/data/tick/status_reads.py:166-174",
+    "title": "Coverage's raw-count proof cannot see a row that belongs to no session",
+    "text": "`raw_counts` scans `tick_trade` between `min(opens)` and `max(closes)` and then **inner** joins `unnest(...) AS s(session_date, open_ns, close_ns)` on `t.ts_event BETWEEN s.open_ns AND s.close_ns`. A row whose `ts_event` lies in a break between two in-range sessions (CME's daily 21:00\u201322:00 UTC maintenance, a holiday closure) matches no array element, so the join drops it and it never reaches the per-`(instrument, session)` comparison. The scan bound already covers those instants, so the row is read and then discarded. The consequence is one-directional detection: `coverage` reports a `mismatch` when rows are missing (the integration test deletes a row by primary key and gets exit 3), but an out-of-band *insertion* \u2014 a hand-written row, or a defect that mis-stamps `ts_event` \u2014 is invisible, even though `tick_coverage.py`'s docstring says \"a mismatch is evidence of an out-of-band edit or a defect\" and LLD TD10 says \"Raw rows can change after commit only through supersession ... or by hand\". The fix is small: keep the per-session counts as they are and add a companion count of rows in the scanned range that match no session, failing the check when it is non-zero. Note the LLD does prescribe \"a join against the in-scope sessions passed as arrays\", so the join itself is as designed; the gap is that nothing counts what the join excluded."
+   },
+   {
+    "run": "225-deepseek4-flash-3",
+    "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+    "title": "The raw `tick_trade` scan is not shape-filtered, unlike every other read",
+    "text": "`raw_counts` counts *every* row in `tick_trade` inside the session windows with no join to `tick_request`/`tick_archive_unit`, while its four sibling reads all filter through `_SHAPE_WHERE` (`status_reads.py:55-60`) and the module docstring frames them as \"which units and ledger rows are its own\". `build_coverage` then compares that product-agnostic count against `ledger_totals(..., shape_of(entry), ...)`: `_session_row` (`tick_coverage.py:75-89`) builds its instrument set from the *union* of the two dicts, so any foreign row becomes a `(ledger 0, raw N)` pair, marks the session `mismatch`, names a foreign instrument, and exits 3. Supersession deletes replaced rows (`ingest_worker.py:120-135`), so this cannot fire today with the single-product `TICK_UNIVERSE` (`universe.py:38`), but slice 231 adds GC to `FUTURES_PRODUCT_CALENDAR` writing into the same table, and the module docstring's promise that `coverage` is \"a raw-count proof for a date range\" would then be false for ES. `tick_trade.unit_id` is present, so the fix is a join against the shape, as the other reads do."
+   },
+   {
+    "run": "225-deepseek4-flash-3",
+    "location": "src/manta_trading/data/tick/status_reads.py:55",
+    "title": "SQL constants in `status_reads.py` are un-annotated `str`, breaking the package's `LiteralString` idiom",
+    "text": "`_UNITS`, `_LEDGER_UNITS` and `_SHAPE_WHERE` are declared without the `LiteralString` annotation that every other SQL-bearing module in this package uses \u2014 `manifest_reads.py:36,84,90-91,167`, `manifest_repo.py:163,174`, `ingest_select.py:63`, `store_context.py:172` \u2014 including for constants that are themselves interpolated. psycopg3 types `execute`'s first parameter as `Query = LiteralString | SQL | Composed`, and an f-string built from a `str` constant is `str`, so the five `await conn.execute(f\"...\", ...)` calls here (lines 83, 100, 133, 165) are the calls most likely to fail the project's stated bar, \"mypy clean on touched files\" (`pyproject.toml:71-73`). I could not run mypy in this review, so treat the *compile-time* failure as unverified; what is verified is the definite inconsistency with the idiom used one module away for the same job. The same loosening appears at the CLI boundary, where `_read`/`read` take the connection as `Any` (`tick_store_cmds.py:155-170`) although the dedicated `Conn` alias exists and is the declared parameter type of `build_status`/`build_coverage`."
+   },
+   {
+    "run": "225-haiku-xhigh-1",
+    "location": "src/manta_trading/data/tick/status_reads.py:154",
+    "title": "The raw-count proof is not scoped to the product",
+    "text": "`raw_counts` counts every `tick_trade` row in each session window, with no filter on instrument or unit. `_session_row` (`src/manta_trading/data/tick/tick_coverage.py:81-90`) builds its instrument list from every key in `raw`, so any instrument with raw rows but no ledger row for this shape is reported as a mismatch, and the verb exits 3. `tick_trade` is one table for all products. It has no product column (`src/manta_trading/market/schema/migrations/tick.py:222-245`), and the universe comment says slice 231 adds GC. Once a second product is ingested, `mt data tick coverage --product ES` will flag that product's instruments. This is not reachable today because only ES is configured, and the single-product tests cannot show it. `tick_trade.unit_id` is `NOT NULL` (`tick.py:244`), so scoping the scan to the shape's current unit ids would also give an exact per-unit match against the ledger. Add a test that inserts a row for another instrument inside a session window and asserts `check == \"ok\"`."
+   },
+   {
+    "run": "225-haiku-xhigh-1",
+    "location": "src/manta_trading/data/tick/status_reads.py:154",
+    "title": "The raw-count scan has no supporting index, and its plan is unverified",
+    "text": "The `tick_trade` key is `(instrument_id, ts_event, sequence, sequence_ordinal)`, and the migration says \"no index beyond the key\" (`tick.py:215-218`). `raw_counts` joins with a non-equality `ts_event BETWEEN open AND close` against an unnest of sessions. Nothing in the schema supports a `ts_event` range scan, so each session window may read whole chunks. The docstring's \"the one scan\" is therefore unverified. `sql.md` asks for `EXPLAIN ANALYZE` before performance claims. I could not run it here. Run it on a realistic multi-month range and record the result before relying on coverage over long ranges."
+   },
+   {
+    "run": "225-haiku-xhigh-2",
+    "location": "src/manta_trading/data/tick/status_reads.py:166",
+    "title": "`raw_counts` joins on a range predicate; the cost is unmeasured",
+    "text": "`raw_counts` joins `tick_trade` to `unnest(...)` on `t.ts_event BETWEEN s.open_ns AND s.close_ns`. A range predicate cannot drive a hash or merge join, so Postgres will likely run a nested loop that compares each tick row in the range against every session in the array. The cost scales as rows \u00d7 sessions. The `WHERE` bound limits the rows scanned, but not the per-row work. I did not measure this. The project's SQL rules require `EXPLAIN ANALYZE` for tuning, so run it on a realistic multi-month range before relying on `coverage`. A per-session `LATERAL` count over `tick_trade` is one alternative to benchmark."
+   },
+   {
+    "run": "225-haiku-xhigh-3",
+    "location": "src/manta_trading/data/tick/status_reads.py:166",
+    "title": "Raw-count scan is not scoped to the shape's units or instruments",
+    "text": "`raw_counts` counts every `tick_trade` row in each session window for any instrument, with no `unit_id` or instrument filter. The ledger side is scoped to the shape (`_SHAPE_WHERE`, lines 55-59). `_session_row` (`tick_coverage.py:81`) builds the instrument set as the union of ledger and raw keys, so a foreign-instrument row in a session window becomes a `Mismatch` with ledger 0, and the CLI exits 3. Foreign rows are possible: ingest selects every verified tier unit when no `--unit-id` is given (`ingest_select.py:84-92`), and `_not_selectable` does not check shape for named units (`ingest_select.py:95-107`). An adopted job for another product can therefore land in `tick_trade`. The universe has one product today, so this is latent. Once a second product shares the database and the GLBX calendar, `coverage --product ES` will report false mismatches. Confidence is medium: I did not trace `adopt`'s shape acceptance end to end. Fix: restrict the raw scan to the shape's current `unit_id`s (`tick_trade` carries `unit_id`, `migrations/tick.py:244`), which mirrors the ledger definition. Add a test with a foreign-shape unit inside the window."
+   },
+   {
+    "run": "225-haiku-xhigh-3",
+    "location": "src/manta_trading/data/tick/status_reads.py:166",
+    "title": "Raw scan is likely O(trades \u00d7 sessions) and unmeasured",
+    "text": "`raw_counts` joins `tick_trade` to an `unnest` of sessions on `ts_event BETWEEN open AND close`. A range predicate cannot be hashed or merged, so the likely plan is a nested loop that compares each trade row against each session, which is O(rows \u00d7 sessions). For a long range over a dense product, that is expensive. The diff has no EXPLAIN ANALYZE, and `sql.md` asks for one when tuning. I could not measure this, so the finding is unverified. Fix: measure on a realistic range first. If it is confirmed, use a per-session bounded aggregate (chunk exclusion on `ts_event`) or a LATERAL join so each trade row is touched once."
+   },
+   {
+    "run": "225-haiku-xhigh-3",
+    "location": "src/manta_trading/data/tick/status_reads.py:50",
+    "title": "Unannotated SQL fragments may fail strict pyright",
+    "text": "`_UNITS`, `_LEDGER_UNITS` and `_SHAPE_WHERE` are plain module-level strings, so pyright infers `str`. They are interpolated into `conn.execute(f\"...\")` at lines 84-85, 101-103 and 133-138. Every sibling module annotates this kind of fragment as `LiteralString` (`manifest_reads.py:84-91`, `ingest_select.py:63`, `manifest_repo.py:163`), which is what lets pyright check psycopg's `LiteralString` query argument. Strict pyright is a merge blocker in this project. I could not run pyright, and I did not confirm the installed psycopg signature, so treat this as likely rather than confirmed. Fix: annotate the three constants `LiteralString`."
+   },
+   {
+    "run": "225-luna-1",
+    "location": "src/manta_trading/data/tick/status_reads.py:170",
+    "title": "Coverage counts the exclusive session close",
+    "text": "`Session.close_utc` is documented in `session_days.py:20` as the first instant after a session, but this join uses inclusive `BETWEEN` on both ends. A trade exactly at `close_ns` is therefore attributed to the session that has already ended, potentially causing a false ledger/raw mismatch or double-counting at a shared boundary. Use a half-open interval (`t.ts_event >= s.open_ns AND t.ts_event < s.close_ns`) and keep the outer scan bound consistent."
+   },
+   {
+    "run": "225-luna-2",
+    "location": "src/manta_trading/data/tick/status_reads.py:154-172",
+    "title": "Coverage counts raw records from unrelated products",
+    "text": "`raw_counts` scans `tick_trade` for every instrument in the requested time window, but `build_coverage` compares those results against ledger totals filtered to the selected product\u2019s request shape. Since `tick_trade` stores records for all ingested products, records belonging to other products can be reported as mismatches in this product\u2019s coverage. Restrict the raw scan to the selected shape\u2019s instruments (or otherwise scope both sides to the same set)."
+   },
+   {
+    "run": "225-sol-1",
+    "location": "src/manta_trading/data/tick/tick_coverage.py:109-113",
+    "title": "Compare ledger and raw counts within one consistent snapshot",
+    "text": "The CLI supplies an autocommit connection, so these queries see separate snapshots. If ingestion commits between them, coverage compares the old ledger with newly inserted raw rows and reports corruption, exiting 3 despite a valid database. Supersession can produce the same race. Use a read-only repeatable-read transaction encompassing the report reads, and add a concurrent-ingest regression test."
+   },
+   {
+    "run": "225-sol-1",
+    "location": "src/manta_trading/data/tick/status_reads.py:166-172",
+    "title": "Raw counts include unrelated request shapes",
+    "text": "`ledger_totals` filters by dataset, symbols and symbology, but `raw_counts` filters only timestamps. Valid rows belonging to another request shape therefore appear as unexpected records in this product\u2019s coverage. Ingestion supports shapes beyond the configured universe through `planning_product`. Define matching scope for both sides without hiding genuinely unexpected rows, and test multiple shapes sharing a session window."
+   },
+   {
+    "run": "225-sol-1",
+    "location": "src/manta_trading/data/tick/tick_coverage.py:81",
+    "title": "Coverage repeatedly scans all instrument-session keys on the event loop",
+    "text": "Each session expands and scans both complete count dictionaries, making report assembly quadratic in the number of sessions and allocating a temporary tuple each time. This runs synchronously inside `build_coverage`. A local probe with 100,000 keys took approximately 4.4 ms for just one session, exceeding the mandated 1 ms synchronous-work limit. Group counts by session once, offload substantial processing, and add a realistic coverage latency/event-loop load test."
+   },
+   {
+    "run": "225-sol-2",
+    "location": "src/manta_trading/data/tick/tick_coverage.py:109-113",
+    "title": "Coverage compares counts from different database snapshots",
+    "text": "Ledger totals and raw counts are separate queries on the autocommit connection supplied by `_read`. If ingestion commits between them, coverage compares the old ledger against newly committed trades and falsely reports corruption, exiting 3. Ingestion\u2019s transaction does not prevent this reader-side race. Run the report within a read-only, repeatable-read transaction and add a concurrent-ingestion regression test."
+   },
+   {
+    "run": "225-sol-2",
+    "location": "src/manta_trading/data/tick/tick_coverage.py:81",
+    "title": "Coverage repeatedly scans every aggregate on the event loop",
+    "text": "Each `_session_row` expands and scans both complete dictionaries to find one session\u2019s instruments. Across all sessions, this produces quadratic growth and runs synchronously inside `build_coverage`. A local benchmark with 2,520 sessions and 40 instruments took approximately 0.64 seconds for just 100 session rows, exceeding the async synchronous-work limit. Group counts by session once, and offload substantial processing from the event loop.\n\nTests could not run: the available project Python environment lacks `pytest`."
+   },
+   {
+    "run": "225-sol-3",
+    "location": "src/manta_trading/data/tick/tick_coverage.py:109-113",
+    "title": "Coverage compares counts from different database snapshots",
+    "text": "The CLI supplies an autocommit connection, so ledger and raw counts are separate snapshots. If ingestion commits between these reads, coverage compares the old ledger with new raw rows and falsely reports corruption (exit 3). Supersession can cause the same problem. Run the report within a read-only REPEATABLE READ transaction and add a concurrent-ingest regression test."
+   },
+   {
+    "run": "225-sol-3",
+    "location": "src/manta_trading/data/tick/status_reads.py:166-173",
+    "title": "Raw counts are not scoped to the selected request shape",
+    "text": "`ledger_totals` filters by dataset, symbols and symbology, but `raw_counts` counts every instrument in the session windows. Records ingested under another request shape therefore appear as raw-only mismatches for the selected product. Apply equivalent ownership scoping to the raw query while retaining detection of unexpected rows within that scope."
+   },
+   {
+    "run": "225-sol-3",
+    "location": "src/manta_trading/data/tick/tick_coverage.py:81-82",
+    "title": "Coverage repeatedly scans all count keys on the event loop",
+    "text": "Every session reconstructs and scans all ledger/raw keys, making report assembly quadratic in the session count. An isolated execution of this function with 250 sessions and 100 instruments took approximately 244 ms synchronously, violating the project's event-loop discipline. Group counts by session once, and move potentially substantial report assembly off the event loop."
+   },
+   {
+    "run": "225-sonnet-2",
+    "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+    "title": "Raw-count scan is not scoped to the product's shape",
+    "text": "`raw_counts` counts every `tick_trade` row in the session window, grouped by instrument. It has no filter for the product's dataset, symbols or instruments. `ledger_totals` is filtered by `Shape`. `_session_row` in `tick_coverage.py` takes the union of instruments from both maps. Any instrument that belongs to another product therefore shows up with ledger 0 and raw N, and is reported as a mismatch. `build_coverage` would then exit 3 spuriously.\n\n`TICK_UNIVERSE` currently holds only ES (`universe.py:46`), so this does not bite today. It will as soon as a second product is added. Either restrict the raw scan to the product's instruments, or document and test the single-product assumption."
+   },
+   {
+    "run": "225-sonnet-high-1",
+    "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+    "title": "Raw-count scan is not scoped to the product's shape, so coverage will false-flag once a second product exists",
+    "text": "`raw_counts` counts every `tick_trade` row in the session time windows, for all instruments. `ledger_totals` is filtered by the product's shape (dataset, symbols, stype_in, tier units). `build_coverage` runs once per universe entry and compares the two in `_session_row`. Any instrument that belongs to another product, or is not covered by this shape, appears with ledger 0 and raw N. That is reported as a mismatch and exits 3. `TICK_UNIVERSE` currently holds only `ES` (`universe.py:45`), so nothing fails today. Adding a second product would make `coverage` fail for every product with overlapping sessions. Scope the raw scan to the shape's instruments, for example by joining the ledger's instrument ids. Alternatively, assert and document the single-product assumption at the call site."
+   },
+   {
+    "run": "225-sonnet-high-2",
+    "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+    "title": "`raw_counts` is not scoped to the product's shape",
+    "text": "`raw_counts` counts every `tick_trade` row in the session windows, grouped by instrument. The ledger side (`ledger_totals`) is filtered to the product's shape. `build_coverage` runs once per universe entry, so a second product would fail the check in the first product's windows:\n- Its instruments have raw rows but no ledger rows.\n- They show up as mismatches (ledger 0, raw n), which makes `coverage` exit 3 falsely.\n\nIt works today only because `TICK_UNIVERSE` has one entry (`ES`). Restrict the raw scan to the product's instruments, for example by joining on the shape's ledger or definition instrument IDs, or document that coverage supports one product."
+   },
+   {
+    "run": "225-sonnet_notools-1",
+    "location": "src/manta_trading/data/tick/tick_coverage.py:25-52",
+    "title": "Status, condition and check values are bare strings rather than enums",
+    "text": "`CoverageSession.condition`, `.status` and `.check` are `str`. `MISMATCH, OK = \"mismatch\", \"ok\"` are module constants rather than a `StrEnum`. `ProductStatus.buckets` is keyed by `str`, and the renderer indexes it with `s.value`. The Python rules and the project's \"define it once\" rule call for `StrEnum`. The values also feed the `--json` contract that slice 230 will reuse. The tests compare the literals `\"ok\"` and `\"complete\"`, which scatters the comparison values."
+   },
+   {
+    "run": "225-sonnet_notools-3",
+    "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+    "title": "Raw-count scan is not restricted to the product's instruments",
+    "text": "`raw_counts` counts every `tick_trade` row in the session windows, grouped by instrument. The ledger side (`ledger_totals`) is filtered to the product's shape: dataset, symbols, stype and current tier units. `_session_row` takes the union of instrument ids from both maps and compares them. If `tick_trade` ever holds instruments from another product or shape, every one of them shows up as `ledger 0, raw N`. That would produce false `mismatch` results and exit code 3. `tick_coverage` loops over all universe entries, so this applies as soon as the universe has more than one product. The integration tests only exercise ES. I'd either scope the raw scan to the shape's instrument ids (for example via the ledger's instrument set) or add a test with a second product's rows."
+   }
+  ]
+ },
+ {
+  "bug": "175-B1",
+  "description": "ResultMessage.total_cost_usd is the CLI session's RUNNING TOTAL but was recorded as the step's own cost, so later steps in the same session include earlier steps' spend.",
+  "candidates": []
+ },
+ {
+  "bug": "188-B1",
+  "description": "Candle route filtered end_period_ts with inclusive bounds, so a whole-day query start=D&end=D drops the day's last candle (ends D+1 00:00) and gives it to the next day (window boundary should be half-open).",
+  "candidates": [
+   {
+    "run": "188-deepseek4-flash-1",
+    "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradesResponse",
+    "title": "`tape_complete_through` is documented as \"the newest stored trade\" \u2014 the exact phrasing the schema comment was rewritten to remove",
+    "text": "`TradesResponse.tape_complete_through` carries `Field(description=\"Created time of the newest stored trade. Null means the trades phase has never run \u2014 not that the tape is empty today.\")`. That is the inverse of what the field holds. It is populated from `TradesResponse.build(... facts.tape_complete_through ...)`, which `serve_timeseries.tape_facts` fills with `sync_state['trades'].watermark_ts` \u2014 the end of the last fully walked window, which is typically *later* than the newest stored trade because quiet periods produce no rows.\n\nThe project has an explicit, mechanically enforced stance that this phrasing is wrong: `src/manta_trading/market/schema/migrations/kalshi.py` (kalshi_006) rewrites the column comment to \"the tape is complete through this instant (end of the last fully walked window) - NOT the newest stored trade (slice 265, Decision 1)\", and `test/integration/test_kalshi_migrations.py:533` asserts the string `\"created_time of the newest stored trade\"` is **absent** from that comment. Slice design D5 restates the same thing.\n\nThe consequence is not cosmetic: D5 exists so a `count: 0` is unambiguous. A client reading \"newest stored trade\" interprets the field as a *floor on stored rows* rather than a *ceiling on completeness*, and will read a legitimately quiet window as a collection gap \u2014 the precise misreading D5 was written to prevent. Since the value is correct an"
+   },
+   {
+    "run": "188-deepseek4-flash-1",
+    "location": "src/manta_trading/api_server/models/kalshi_timeseries.py#TradeRecord.from_row",
+    "title": "The trades re-nesting is positional and untyped, so a new stored column would be fetched and silently dropped",
+    "text": "`TradeRecord.from_row` reads `values[0]` \u2026 `values[7]` positionally, and `TradeRow.values` is declared `tuple[Any, ...]` (`src/manta_trading/data/kalshi/serve_timeseries.py#TradeRow`). `fetch_trades` selects `TRADE_VALUE_COLUMNS`, derived from `TRADE_COLUMNS`, so adding a column to `TRADE_COLUMNS` widens the fetched tuple without changing the mapping code \u2014 the extra value is read, ignored, and never served, with no error anywhere.\n\nThe candle path deliberately does not have this property (its docstring: \"a column added there is served here without an edit\"), and the unit tests defend it structurally \u2014 `test/unit/api_server/test_kalshi_models.py::TestCandleRecord::test_nested_field_set_is_exactly_what_candle_columns_describes` asserts the served field set equals the set `CANDLE_COLUMNS` describes.\n\nThere is no analogous assertion for trades, and the integration test that looks like one cannot catch it: `test/integration/test_kalshi_serving.py::TestTradeWindow::test_value_count_matches_the_repository_mapping` asserts `len(r.values) == len(TRADE_COLUMNS) - 1`, which auto-adjusts to whatever `TRADE_COLUMNS` becomes, so it passes for 8 values or 9. The `Any` element type is what removes the last line of defence (a typed tuple or a `TRADE_COLUMNS`-driven mapping would make the omission a type error or a test failure)."
+   },
+   {
+    "run": "188-deepseek4-flash-1",
+    "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#_admit_rows",
+    "title": "`_admit_rows` is duplicated verbatim between the two Kalshi route modules",
+    "text": "`_admit_rows` exists in `src/manta_trading/api_server/routes/kalshi_catalog.py#_admit_rows` and is copied into the new `kalshi_timeseries.py` with the same body, the same docstring, the same `count > max_rows` comparison, and the same `HTTP_422_UNPROCESSABLE_CONTENT` code. Only the trailing advice differs (`\"narrow the filter\"` vs `\"narrow start/end\"`), which is a parameter, not a reason to fork the function.\n\nThis is the rule the project states most plainly (\"Do not duplicate logic. Respect DRY\"; \"Never scatter comparison values across code \u2026 define it once\"), and it is the same shape the slice already got right elsewhere \u2014 `serialization.timeseries_response` and `routes/windows.resolve_window` were both extracted precisely because a second consumer appeared. The ceiling comparison now has two definition sites free to drift: a change to the comparison (e.g. `>=`) or to the status code must be made twice, and nothing fails if only one is made."
+   },
+   {
+    "run": "188-deepseek4-flash-2",
+    "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188-193",
+    "title": "`tape_complete_through` is described as the newest stored trade, which the schema comment explicitly says it is not",
+    "text": "The field description reads \"Created time of the newest stored trade\", and `serve_timeseries.tape_facts` repeats it at `src/manta_trading/data/kalshi/serve_timeseries.py:124` (\"The trades tape's floor and its newest stored trade\"). The value actually assigned is `sync_state.watermark_ts` (`serve_timeseries.py:141-144`), whose semantics the migration states twice and emphatically: `src/manta_trading/schema/migrations/kalshi.py` (kalshi_007) \u2014 \"trades: the tape is complete through this instant (end of the last fully walked window) - **NOT the newest stored trade** (slice 265, Decision 1)\". `trade_status.TradeStatus.tape_through` carries the same wording.\n\nThis is not pedantry: the two differ whenever a window is walked with no trades in it, and the difference is exactly what a client uses the field for (deciding whether an empty window is a gap or a quiet market) \u2014 which is the stated purpose of the D5 facts. The docstrings reintroduce the confusion 265 D1 was written to remove. Note the impact is confined to the source: I confirmed these routes declare `response_class=Response` with no response model, so `docs/api/openapi.json` shows `200` with no content schema and none of these `Field` descriptions reach the published artifact."
+   },
+   {
+    "run": "188-deepseek4-flash-2",
+    "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:59-79",
+    "title": "`_admit_rows` and `_not_found` are duplicated across the two Kalshi route modules",
+    "text": "`kalshi_catalog.py:81-95` and `kalshi_timeseries.py:66-79` are the same function: same 422 status, same \"the request matches {count:,} rows, over the {max_rows:,} row limit; \u2026\" message, differing only in the trailing remediation phrase (\"narrow the filter\" vs \"narrow start/end\"). `_not_found` is likewise duplicated \u2014 `kalshi_catalog.py:97` already takes a `resource` argument, while `kalshi_timeseries.py:59` hardcodes `\"Market\"`.\n\nThis is the same argument the new `routes/windows.py` docstring makes for extracting the day-boundary convention (\"two derivations of 'the last instant of a day' is exactly how one of them ends up exclusive by accident\"), and AGENTS.md forbids duplicated logic. The two remediation phrases are the only genuine difference, so a single helper parameterized by that phrase (the pattern `_not_found(resource, ticker)` already demonstrates) collapses them without losing the tailored message. The reversed-range 422 text is a third copy: `bars.py:97` and `windows.py:62` render byte-identical strings."
+   },
+   {
+    "run": "188-deepseek4-flash-2",
+    "location": "src/manta_trading/data/kalshi/serve_timeseries.py:177-200",
+    "title": "`_window`'s `extra` argument both merges parameters and decides which predicate is emitted",
+    "text": "`extra` is documented as extra *params* (`params: dict[str, Any] = {\"ticker\": ticker, **(extra or {})}`), but at lines 198-199 its mere truthiness appends `period = %(period)s`. The coupling is only correct because the single caller (`_candle_window`) happens to pass exactly `{\"period\": period}`. A future caller passing `extra` for any other reason gets a `period` predicate referencing an unbound parameter and a psycopg error at query time \u2014 a failure far from the line that caused it.\n\nAn explicit `period: int | None = None` parameter, with the clause emitted from that, makes the two roles separate and the constraint visible in the signature. `count_candles`/`fetch_candles` would pass it; `count_trades`/`fetch_trades` would not."
+   },
+   {
+    "run": "188-deepseek4-flash-3",
+    "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py#_admit_rows",
+    "title": "`_not_found` and `_admit_rows` are duplicated between the two Kalshi route modules",
+    "text": "Both helpers exist in `routes/kalshi_catalog.py` and again in `routes/kalshi_timeseries.py`, in the same slice. `_admit_rows` is identical except for the trailing advice string (\"narrow the filter\" vs \"narrow start/end\"); `_not_found` is identical except that the timeseries copy hardcodes `\"Market\"` while the catalog copy takes a `resource` parameter. The 422 body and the 404 body are user-facing contracts, and the two copies can now drift independently. `_admit_rows` in particular is the D8 admission guard the slice is about \u2014 one definition in a shared module (or `windows.py`'s neighbour) would keep the ceiling message from ever disagreeing between route families. The same duplication appears in prose: `windows.resolve_window`'s reversed-range message restates `bars._admit_range`'s string rather than sharing it."
+   },
+   {
+    "run": "188-haiku-xhigh-1",
+    "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:194-200",
+    "title": "`tape_filtered` says no trades are stored, but stored trades are still returned",
+    "text": "The description says \"True means no trades are stored for it by policy.\" `fetch_trades` and `count_trades` filter only on ticker and window (`serve_timeseries.py:257-296`). The exclusion applies only at collection time, so trades stored before a category was added to `MT_KALSHI_TRADES_EXCLUDED_CATEGORIES` are still served while the flag reports `true`. Either the description should say the exclusion governs future collection and earlier trades still appear, or the route should filter. Which one is intended is a design call for you."
+   },
+   {
+    "run": "188-haiku-xhigh-2",
+    "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188",
+    "title": "Trades `tape_complete_through` is documented as the newest trade's time, but the value is the sync watermark",
+    "text": "The field description (lines 188\u2013193) says \"Created time of the newest stored trade.\" The value is not that. `tape_facts` returns `sync_state.watermark_ts` (`serve_timeseries.py:143`). That column is written only by `TradeRepository.advance_watermark(window_edge)` (`trade_repository.py:272\u2013276`), whose docstring says the tape \"is complete through `window_edge`.\" The candles field at the same level says \"not 'the newest stored candle',\" which is correct. The migration comment at `market/schema/migrations/kalshi.py:232` and the `tape_facts` docstring (`serve_timeseries.py:124`) repeat the wrong definition.\n\nOpenAPI is generated from this text, so the public contract describes behavior the server does not have. A client reading \"newest trade\" will misjudge a quiet tape. Correct the description. Then decide whether the migration comment is stale or the code is wrong, and reconcile them."
+   },
+   {
+    "run": "188-haiku-xhigh-2",
+    "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:167",
+    "title": "Trade rows are mapped by position, while the SELECT order comes from a different mapping",
+    "text": "`TradeRecord.from_row` assigns `values[0]` through `values[7]` to named fields. The order those values arrive in comes from `TRADE_VALUE_COLUMNS` (`serve_timeseries.py:40\u201343`), which is derived from `TRADE_COLUMNS` (`trade_repository.py:45\u201355`). If `TRADE_COLUMNS` is reordered, the SELECT changes and `from_row` does not. All the fields share compatible types, so the failure is silent. For example, `yes_price_dollars` could take the `count_fp` value.\n\nThe candle path avoids this by walking `CANDLE_COLUMNS` by name, and the trades path should do the same. No test catches the problem. The unit tests build synthetic positional `TradeRow`s in the assumed order. The integration `TestTradeWindow` in `test/integration/test_kalshi_serving.py` asserts only counts and lengths.\n\nFix: build the record from `dict(zip(TRADE_VALUE_COLUMNS, row.values, strict=True))` and call `cls(**mapping)`. Add an integration assertion that a stored trade's `yes_price_dollars` round-trips through `fetch_trades`."
+   },
+   {
+    "run": "188-haiku-xhigh-3",
+    "location": "src/manta_trading/api_server/routes/windows.py:65",
+    "title": "Reversed-range check and day-boundary helpers are duplicated across three route modules",
+    "text": "`windows.py` was created so the day-boundary convention \"lives here.\" The reversed-range check and its 422 message are now spelled twice: `windows.py:65-70` and `bars.py:93-100`. The `resolve_window` docstring even says it reuses \"the bars route's reversed-range message,\" which describes a copy rather than a shared helper.\n\n`gaps.py:54-71` still defines its own `_window_start_utc` and `_window_end_utc`. Its end-of-day convention differs from `windows.py`. `gaps.py` returns next midnight, half-open (line 71). `windows.py` returns `time.max`, closed. Each is correct for its own predicate. But the `windows.py` docstring names exactly this divergence as the failure it exists to prevent.\n\nFix: have `bars._admit_range` call `resolve_window`, or extract a shared reversed-range helper. Either move `gaps` onto `windows.py` with an explicit half-open variant, or document why it keeps its own."
+   },
+   {
+    "run": "188-luna-2",
+    "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:190-191",
+    "title": "Description misstates the trades watermark",
+    "text": "`tape_complete_through` is populated from `sync_state.watermark_ts`, which the trade repository defines as the window edge through which the tape is complete\u2014not the created time of the newest stored trade. Quiet periods can therefore make the watermark later than any stored trade. Describe it as the tape\u2019s completeness watermark; clients relying on the current wording may infer incorrect coverage."
+   },
+   {
+    "run": "188-sol-2",
+    "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+    "title": "Midnight timestamps silently become whole-day bounds",
+    "text": "The `date | datetime` union parses `2026-06-01T00:00:00Z` as a `date`, verified with FastAPI/Pydantic. `resolve_window()` consequently expands this explicit end timestamp to `23:59:59.999999`, returning an extra day of data. Midnight timestamps with offsets also lose their timezone. Both routes are affected. Preserve the distinction between bare dates and timestamps, and add midnight/offset regression tests."
+   },
+   {
+    "run": "188-sol-3",
+    "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:92-93",
+    "title": "Midnight timestamps are silently expanded into whole-day bounds",
+    "text": "The `date | datetime` union parses midnight timestamp strings as dates, losing their time and timezone before `resolve_window()` runs. Reproduced through the actual route: `end=2026-06-01T00:00:00Z` reaches the reader as `2026-06-01T23:59:59.999999Z`. Both endpoints therefore return rows outside explicitly requested windows; offset-midnight timestamps also lose their offset.\n\nDistinguish bare dates from timestamps before coercion. Add route tests covering midnight timestamps, timezone offsets, and bare-date expansion."
+   },
+   {
+    "run": "188-sonnet-1",
+    "location": "src/manta_trading/data/kalshi/serve_timeseries.py:177-200",
+    "title": "`_window` couples the period predicate to a truthy `extra` dict",
+    "text": "`_window` takes a generic `extra: dict[str, Any] | None`. It merges that dict into the bind parameters, and then, if `extra` is truthy, it appends a hard-coded `period = %(period)s` clause. Nothing in the signature says that `extra` must contain a `period` key. A future caller who passes any other extra parameter would get a `period` predicate with no bound value. That fails at execution time with a psycopg missing-parameter error. A caller who passes an empty dict would silently drop the period filter. Make `period: int | None` an explicit keyword argument and add the clause when it is not `None`. That removes the implicit contract and the untyped dict."
+   },
+   {
+    "run": "188-sonnet-1",
+    "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:~115-130",
+    "title": "`TradeRecord.from_row` depends on positional indexing of `TradeRow.values`",
+    "text": "`TradeRow.values` is `tuple[Any, ...]`, and `from_row` reads `values[0]` to `values[7]` by position. The order is implied by `TRADE_VALUE_COLUMNS`, which is derived from `TRADE_COLUMNS` minus `market_ticker`. This contradicts the module's claim that a column added to the repository mapping is served without an edit. Reordering or adding a trade column would shift the fields without a type error. This is weaker than the candle path, which walks `CANDLE_COLUMNS`. Build the record from `zip(TRADE_VALUE_COLUMNS, values)`, or have the reader return named fields. `TradeRow.values` is also typed `Any`, which hides mismatches at the boundary."
+   },
+   {
+    "run": "188-sonnet-2",
+    "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:121-133",
+    "title": "Trade row mapping is positional, contradicting the \"driven by the mapping\" design",
+    "text": "`TradeRecord.from_row` reads `values[0]` through `values[7]` by position. `TRADE_VALUE_COLUMNS` in `serve_timeseries.py` is derived from `TRADE_COLUMNS` (`trade_repository.py:45`) minus `market_ticker`. Reordering or adding a column in `TRADE_COLUMNS` would silently mis-assign fields. For example, `yes_price_dollars` and `no_price_dollars` could swap and still validate as `Decimal`. The candle path walks `CANDLE_COLUMNS` and avoids this, and the module docstring claims the same property. Zip `row.values` with `TRADE_VALUE_COLUMNS` and construct from the resulting dict. `TradeRow.values: tuple[Any, ...]` also gives up type safety at this boundary. The unit test builds rows in the same positional order, so it cannot catch a drift."
+   },
+   {
+    "run": "188-sonnet-2",
+    "location": "src/manta_trading/data/kalshi/serve_timeseries.py:~185-200",
+    "title": "`_window` couples the `period` predicate to the truthiness of `extra`",
+    "text": "`_window` appends `period = %(period)s` whenever `extra` is truthy, and it never checks that `\"period\"` is a key in `extra`. A future caller passing any other extra parameter would emit a `period` clause with no bound parameter, which fails at runtime. A caller passing `{}` would drop the predicate. Make `period: int | None` an explicit argument instead of an implicit dict contract."
+   },
+   {
+    "run": "188-sonnet-3",
+    "location": "src/manta_trading/data/kalshi/serve_timeseries.py:190-212",
+    "title": "`_window` uses `extra` as an implicit switch for the period predicate",
+    "text": "`_window` adds `period = %(period)s` whenever `extra` is truthy. It never checks that `extra` contains `period`. The `column` argument is used as a SQL identifier, and the `\"market_ticker\"` column is hard-coded. A different caller passing `extra` would get an unbound `%(period)s` parameter, or the wrong clause. Make `period: int | None` an explicit parameter and emit the clause when it is not `None`."
+   },
+   {
+    "run": "188-sonnet-high-1",
+    "location": "src/manta_trading/data/kalshi/serve_timeseries.py:174-191",
+    "title": "`_window` toggles the `period` predicate on the truthiness of `extra`",
+    "text": "`extra` is described as additional parameters, but a non-empty `extra` also appends the hard-coded clause `period = %(period)s`. A future caller that passes any other extra parameter would get a `period` predicate it never asked for, and the SQL would fail on a missing bind.\n\nMake it an explicit `period: int | None` argument, or let callers pass extra clauses. Related to this, the ceiling comparison `count > max_rows` is written twice in each route handler: once inside `_read` and once in `_admit_rows` (kalshi_timeseries.py:111, 160). If the two ever differ, the guard would read rows and then refuse, or refuse without reading. A single helper would remove that."
+   },
+   {
+    "run": "188-sonnet-high-2",
+    "location": "src/manta_trading/data/kalshi/serve_timeseries.py:#_window",
+    "title": "`_window` uses the truthiness of `extra` to decide whether to add the `period` predicate",
+    "text": "`_window(column, ticker, start, end, extra)` appends `period = %(period)s` only `if extra:`. The generic `extra` params dict is merged into the parameters, and its non-emptiness is silently the switch for a hardcoded `period` clause. Any other caller passing `extra` would get a `period` predicate and no matching parameter, or the reverse. Make `period` an explicit `int | None` argument (`if period is not None: ...`), or have `_candle_window` append the clause itself."
+   },
+   {
+    "run": "188-sonnet-high-3",
+    "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+    "title": "`date | datetime` query params may silently turn a midnight datetime into a whole-day bound",
+    "text": "`start` and `end` are declared `date | datetime | None`, and `resolve_window` (`routes/windows.py:38-49`) treats a `date` as a whole-day bound. This is the only place in `src` that uses this union. I could not run code in this session, so I haven't confirmed the behaviour. From my reading of pydantic v2's smart-union rules, I expect a string such as `end=2026-06-01T00:00:00Z` to validate as a `date` in lax mode. Pydantic accepts datetimes with zero time as dates, and on a tie the first union member wins. If that is right, `end` would resolve to `23:59:59.999999` instead of midnight, and a midnight `start` with a non-UTC offset would lose its offset.\n\nNo test covers this case. Midnight datetimes in `test_kalshi_timeseries.py:239,265,276` only exercise ordering and reversed ranges, and both outcomes pass those. The load test's `_ceiling_window` uses a midnight `start`, where `date` and `datetime` give the same value. Please add a test with `end=\u2026T00:00:00Z` that asserts the reader receives that exact instant. If it fails, parse the bound explicitly instead of relying on the union."
+   },
+   {
+    "run": "188-sonnet-high-3",
+    "location": "src/manta_trading/data/kalshi/serve_timeseries.py:177-198",
+    "title": "`_window` uses a non-empty `extra` dict as a flag to add the `period` predicate",
+    "text": "`_window` adds `period = %(period)s` only when `extra` is truthy. The same dict supplies the parameter values, so the behaviour depends on a hidden coupling. A future caller passing any other `extra` key would get a `period` predicate with no `period` param, which fails at execution time. A caller passing `{}` for candles would silently drop the period filter. Take an explicit `period: int | None` argument instead, and emit both the clause and the parameter from it."
+   },
+   {
+    "run": "188-sonnet_notools-1",
+    "location": "src/manta_trading/data/kalshi/serve_timeseries.py#_window",
+    "title": "`_window` toggles the period predicate on the truthiness of `extra`",
+    "text": "`_window` appends `period = %(period)s` only `if extra:`. That makes the shared helper's behavior depend on whether an unrelated parameters dict is non-empty. Any future caller that passes `extra` for another purpose would get a `period` predicate it never asked for. That would raise a missing-parameter error or add a wrong filter. Pass the period explicitly, or have the caller add its own clause. The `column` argument and the `period` clause should be decided in the same place."
+   },
+   {
+    "run": "188-sonnet_notools-2",
+    "location": "src/manta_trading/data/kalshi/serve_timeseries.py#_window",
+    "title": "`_window` ties the `period` clause to whether `extra` is truthy",
+    "text": "`period = %(period)s` is added only when `extra` is non-empty, and `extra` is a general-purpose parameter dict. Any later caller that passes other extras would get a `period` clause but no `period` parameter, which is a runtime error. The reverse also holds: a caller that wants a period predicate must pass it through `extra`. Make `period` an explicit optional argument, or let the candle path append its own clause."
+   },
+   {
+    "run": "188-sonnet_notools-3",
+    "location": "src/manta_trading/data/kalshi/serve_timeseries.py#_window",
+    "title": "`_window` infers the period predicate from whether `extra` is truthy",
+    "text": "The helper adds `period = %(period)s` whenever `extra` is non-empty. It does not check that `extra` actually contains `period`. A future caller passing any other extra parameter would get a `period` clause with no bound value, which fails at runtime. The coupling is implicit. Make the period an explicit argument, or pass extra predicates as `sql.Composable` along with their params."
+   }
+  ]
+ },
+ {
+  "bug": "227-B1",
+  "description": "`rclone backend lifecycle ... 2>&1` merges stderr into the JSON; under sudo rclone's 'config file not found' NOTICE breaks the jq parse and fails the cutover step.",
+  "candidates": [
+   {
+    "run": "227-deepseek4-flash-3",
+    "location": "deploy/lib/b2_lifecycle.sh:65",
+    "title": "`b2_lifecycle.sh` merges stderr into the JSON it parses",
+    "text": "`RULES=$(RCLONE_B2_ACCOUNT=... rclone backend lifecycle \":b2:$BUCKET\" 2>&1)` captures stderr into the same variable that is then parsed as JSON. `jq -e 'type == \"array\"'` runs on that merged output, so any rclone warning on stderr (a NOTICE, a deprecation warning, a partial read) makes the JSON invalid and the script reports `UNREADABLE` even though the bucket's rules are readable. The read-only path is a false negative: `--check` would report \"unreadable\" instead of \"missing\". The stderr should be captured separately (e.g. `RULES=$(... 2>err)` with the error text only used for the failure message)."
+   },
+   {
+    "run": "227-haiku-xhigh-3",
+    "location": "deploy/lib/b2_lifecycle.sh:65-70",
+    "title": "`b2_lifecycle.sh` folds rclone's stderr into the JSON it parses",
+    "text": "`RULES=$(... rclone backend lifecycle ... 2>&1)` merges every stderr line into the rule list. Any log line rclone writes on a successful run then makes `jq` fail. That is reported as `MISSING <cluster> lifecycle-read`, which setup-backup tallies as not-OK, so the check fails with the rules readable. This is probably a real risk: setup-backup runs as root under sudo, where rclone may have no config file and would print a \"config file not found\" notice. I could not run rclone here to confirm the exact output. Capture stdout alone, and send stderr to a separate variable that is only shown on failure."
+   }
+  ]
+ }
+]

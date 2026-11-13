@@ -1,0 +1,204 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Escalation closure is not limited to the Runner's own fault kinds",
+      "description": "`_close_recovered` closes every open project escalation whose `fault_kind` is not in this tick's recurring set. It does not check that the kind is one the Runner raises (`FaultKind`). If any other component, such as the inbox or reconciliation in slices 123 and 124, raises a project escalation through `raise_project_escalation`, the Runner will close it on its first complete tick. It will record `closed_by=\"runner\"` even though nothing recovered. Restrict the loop to kinds the Runner owns (`FaultKind` values), or filter on who raised the row. I did not check the store schema to see whether another raiser exists today.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py#ProjectTick._close_recovered"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Project-scoped escalations keep only the first fault of each kind",
+      "description": "The store deduplicates on `(project, kind)`. If two runs go `launch_overdue` or `run_observation_failed` in the same project, only the first fault's `node_id`, `run_id` and `detail` reach the escalation. The second node's failure is invisible to the operator until the first clears. `TickFaults` holds every fault, so the loss happens when the rows are written. Aggregate the details into one payload, for example a list of nodes and run ids, or document that this is intended.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/faults.py#raise_expected_faults"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Forward dependency on a partially initialised package",
+      "description": "`tick.py` does `from amoeba.runner import finish`. `amoeba/runner/__init__.py` imports `factory`, then `tenant`, then `tick`, so this runs while the package is still initialising. It works because `from pkg import submodule` falls back to importing the submodule. It is fragile, and a reordering of the `__init__` imports could break it. `from amoeba.runner.finish import record` is safer.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py:14"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Duplicated runner name and a non-`Final` constant",
+      "description": "`CLOSED_BY: str = \"runner\"` repeats `RUNNER_TENANT_NAME` in `tenant.py`. The project rules say a value is defined once. `CLOSED_BY` is also not declared `Final`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tick.py:52"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Loose typing at some seams",
+      "description": "`validate_settings` reads fields with `getattr(settings, name)` over string names, which pyright strict cannot check. `probe_sq` takes `poll: Callable[..., RunPoll]` and `PopenFactory` is `Callable[..., ChildHandle]`. The test support code adds many `# type: ignore` and `Any` uses, such as `crash_entry.py`'s monkeypatch of `Store.journal_resolve` and `observe_support.py`'s `on_call: Any`. The rules put test code under strict checking, so these should be narrowed over time.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/amoeba/runner/factory.py#validate_settings"
+    },
+    {
+      "severity": "NOTE",
+      "title": "File size above guidance",
+      "description": "`observe.py` is about 326 lines, over the ~300-line guidance. `RunObserver` carries three per-entry dicts and sets (`_last_poll`, `_overdue`, `_faulted`). Splitting the unconfirmed-launch logic into its own module would shrink it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/amoeba/runner/observe.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Process-boundary catch is documented and guarded",
+      "description": "The single `except Exception` has `# noqa: BLE001`. It logs with `logger.exception`, escalates, and re-raises store failures and `UpstreamShapeError` before reaching it. This matches rule (c). `test_the_runner_package_has_exactly_one_broad_except` enforces it by counting source text, which a comment containing the phrase would break. The test is brittle but acceptable.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/amoeba/runner/tenant.py#RunnerTenant._tick_project"
+    },
+    {
+      "severity": "PASS",
+      "title": "Crash-recovery and budget design",
+      "description": "The code journals the command before `Popen`. It blocks the node before resolving the entry, and both writes are idempotent on re-entry. Every subprocess call is gated by `TickBudget.allows_call`. SIGKILL tests cover each crash point. A budget-coverage test fails if a new call site skips the budget check. Tests use throwaway directories and a stub `sq` and `cf`, and none read a production URL variable. The import-boundary rules 10 and 11 are enforced by tests.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/runner/test_crash_recovery.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Escalation closure is not limited to the Runner's own fault kinds",
+      "location": "src/amoeba/runner/tick.py#ProjectTick._close_recovered",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Project-scoped escalations keep only the first fault of each kind",
+      "location": "src/amoeba/runner/faults.py#raise_expected_faults",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Forward dependency on a partially initialised package",
+      "location": "src/amoeba/runner/tick.py:14",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Duplicated runner name and a non-`Final` constant",
+      "location": "src/amoeba/runner/tick.py:52",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Loose typing at some seams",
+      "location": "src/amoeba/runner/factory.py#validate_settings",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "File size above guidance",
+      "location": "src/amoeba/runner/observe.py",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Process-boundary catch is documented and guarded",
+      "location": "src/amoeba/runner/tenant.py#RunnerTenant._tick_project",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Crash-recovery and budget design",
+      "location": "tests/runner/test_crash_recovery.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid2/wt-a122",
+    "diff": "f8097604697cfefb5fb7313d29648a1c6c22b221...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T00:29:48.600100",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": true,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 173979,
+  "diff_chars_injected": 173979,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 257818,
+  "cached_tokens": 54205,
+  "cache_write_tokens": 203609,
+  "completion_tokens": 5166,
+  "reasoning_tokens": null,
+  "duration_seconds": 45.44118095911108,
+  "cost_usd": 0.8801111,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}
