@@ -239,17 +239,16 @@ cache_write = 3.83
 
 [aliases.kimi3]
 profile = "openrouter"
-model = "moonshotai/kimi-k3"
+model = "moonshotai/kimi-k3.1-pro"
 max_output_tokens = 943718
 private = true
 cost_tier = "high"
 notes = "1M context"
 
 [aliases.kimi3.pricing]
-input = 2.60
-output = 13.00
-cache_read = 0.30
-cache_write = 13.00
+input = 2.00
+output = 10.00
+cache_read = 0.20
 
 [aliases.ling-flash]
 profile = "openrouter"
