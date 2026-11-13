@@ -1,0 +1,33 @@
+{
+ "case": "188",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The `date | datetime` query union can coerce midnight timestamps to dates, expanding the requested end bound to the whole day."
+  ],
+  "F2": [
+   "KEEP",
+   "Building and serializing ceiling-sized responses synchronously blocks the event loop and delays unrelated requests."
+  ],
+  "F3": [
+   "DROP",
+   "The slice explicitly assigns CI gating to slice 907, so manual opt-in is an intentional deferral rather than a defect in this change."
+  ]
+ },
+ "wall_seconds": 68.1,
+ "duration_seconds": 68.0742826659698,
+ "cost_usd": 0.0075079,
+ "effort": "high",
+ "tool_calls_made": 17,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=155443, cached=113410, cache_write=None, completion=4341, reasoning=3647)",
+ "raw_output": "F1: KEEP \u2014 The `date | datetime` query union can coerce midnight timestamps to dates, expanding the requested end bound to the whole day.\nF2: KEEP \u2014 Building and serializing ceiling-sized responses synchronously blocks the event loop and delays unrelated requests.\nF3: DROP \u2014 The slice explicitly assigns CI gating to slice 907, so manual opt-in is an intentional deferral rather than a defect in this change.\nF1: KEEP \u2014 The date-first query union can reinterpret a midnight timestamp as a date and expand the end bound to the whole day.\nF2: KEEP \u2014 Model construction and serialization run on the event loop and can block other requests for over a second at the response ceiling.\nF3: DROP \u2014 CI gating is explicitly deferred to slice 907 and its absence does not cause a runtime defect in this change."
+}

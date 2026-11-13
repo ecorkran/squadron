@@ -1,0 +1,48 @@
+{
+ "case": "307",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "mt data tick pass --estimate-only --json` prints `PassResult.to_dict()`, which puts the purchase summary under `phases[].summary`. The script reads `wanted_days`, `requests` and `verdict` at the top level, so both the run and `--estimate` raise KeyError and exit before printing the ceiling command."
+  ],
+  "F2": [
+   "KEEP",
+   "evaluate_spend(estimate_only=True)` always gives `estimate_only` for a non-empty plan, and `judge_estimate` only returns BUY on `\"allowed\"`, so the full run can never buy."
+  ],
+  "F3": [
+   "KEEP",
+   "with `check_ceilings=False`, any non-empty plan returns BUY without reading `reasons`. An archive-space shortfall is hidden and the ceiling command is printed as the fix, though raising a ceiling cannot fix it."
+  ],
+  "F4": [
+   "DROP",
+   "Only statistics coverage carries `volume_checks` and only volume families have `cross_tier` counts, so keying names by product doesn't actually mix them up. The `.get` default is needed for bar coverage documents, which have no such key."
+  ],
+  "F5": [
+   "DROP",
+   "slice` is typed by the operator running the script, so path traversal is hardening against input that won't realistically arrive."
+  ],
+  "F6": [
+   "DROP",
+   "The mypy config scope comes from before this change and isn't a runtime defect in the changed code."
+  ]
+ },
+ "wall_seconds": 59.8,
+ "duration_seconds": 59.817501875106245,
+ "cost_usd": 0.39527330000000005,
+ "effort": "high",
+ "tool_calls_made": 10,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=316478, cached=287930, cache_write=28528, completion=5409, reasoning=None)",
+ "raw_output": "Checking where `nothing_to_buy` comes from in `plan_summary` and the archive-space path, then the evidence code for F4.\nF1: KEEP \u2014 `mt data tick pass --estimate-only --json` prints `PassResult.to_dict()`, which puts the purchase summary under `phases[].summary`. The script reads `wanted_days`, `requests` and `verdict` at the top level, so both the run and `--estimate` raise KeyError and exit before printing the ceiling command.\nF2: KEEP \u2014 `evaluate_spend(estimate_only=True)` always gives `estimate_only` for a non-empty plan, and `judge_estimate` only returns BUY on `\"allowed\"`, so the full run can never buy.\nF3: KEEP \u2014 with `check_ceilings=False`, any non-empty plan returns BUY without reading `reasons`. An archive-space shortfall is hidden and the ceiling command is printed as the fix, though raising a ceiling cannot fix it.\nF4: DROP \u2014 Only statistics coverage carries `volume_checks` and only volume families have `cross_tier` counts, so keying names by product doesn't actually mix them up. The `.get` default is needed for bar coverage documents, which have no such key.\nF5: DROP \u2014 `--slice` is typed by the operator running the script, so path traversal is hardening against input that won't realistically arrive.\nF6: DROP \u2014 The mypy config scope comes from before this change and isn't a runtime defect in the changed code.\nMy previous reply did finish: it gave one KEEP/DROP line for each of the six findings. Here they are again in the structure you asked for. I didn't need to read anything more.\n\n**Verdict: FAIL.** Three findings need fixing before merge (F1, F2, F3) and three can be dropped (F4, F5, F6). Because of F1 and F2, the purchase cutover can't buy anything as written. Both the full run and `--estimate` stop before any spend.\n\n### [FAIL] F1: KEEP. The estimate payload is read at the wrong level\ncategory: correctness\nlocation: scripts/cutover_304_first_purchase.py:152-163\n\n`mt data tick pass --estimate-only --json` prints `PassResult.to_dict()` plus `exit_code` (`tick_pass_render.py:146-148`). That puts the purchase summary under `phases[name == \"purchase\"].summary` (`pass_contract.py:119-131`). `scripts/cutover_234_checks.py:145` already reads it from there. `fetch_estimate` passes the whole payload to `judge_estimate`. That reads `summary[\"wanted_days\"]` at the top level (`cutover_304_checks.py:196`), which raises `KeyError`. `main` turns that into \"unexpected payload\" and exits 1. The full run and `--estimate` both stop there, so the PM never gets the ceiling command. The test fixtures were written by hand in the inner `plan_summary` shape, which is why the tests pass anyway.\n\n### [FAIL] F2: KEEP. A real estimate never reaches BUY\ncategory: correctness\nlocation: scripts/cutover_304_checks.py:242-245\n\n`evaluate_spend(..., estimate_only=True)` always sets `VerdictStatus.ESTIMATE_ONLY` (`spend_guard.py:266-267`). `plan_summary` only writes `nothing_to_buy` when there is no spend at all (`purchase_plan.py:303`). So the estimate the full run fetches never says `\"allowed\"`. Once the ceiling checks pass, `judge_estimate` refuses every non-empty plan at the `!= VERDICT_ALLOWED` check. The decision needs to come from the ceilings and from `reasons`, not from the verdict string.\n\n### [CONCERN] F3: KEEP. `--estimate` reports BUY for refusals a ceiling can't fix\ncategory: error-handling\nlocation: scripts/cutover_304_checks.py:225-226\n\nWith `check_ceilings=False`, `judge_estimate` returns `Estimate.BUY` without looking at `reasons`. `_estimate_only` doesn't print the reasons either. So an archive-space shortfall (`purchase_plan.py:304`, `spend_guard.py:117-124`) is hidden, and the PM is told to run the ceiling command, which can't fix it. The real run would then stop on space. No money is spent, but the estimate mode's answer is wrong.\n\n### [NOTE] F4: DROP. The over-session names are not actually mixed up\ncategory: correctness\nlocation: scripts/cutover_304_evidence.py:232-234\n\nOnly statistics coverage documents have `volume_checks` (`over_sessions` says so in its docstring), and only volume families have `cross_tier` counts. So a product's name list only ever comes from its one statistics read. The `.get(\"volume_checks\") or ()` default is needed because the bar coverage documents don't have that key.\n\n### [NOTE] F5: DROP. `--slice` is typed by the operator\ncategory: security\nlocation: scripts/cutover_304_first_purchase.py:201-204\n\nThe value comes from the operator running the script on their own checkout. Checking for path traversal guards against input that won't realistically arrive.\n\n### [NOTE] F6: DROP. The type checker's scope was set before this change\ncategory: tooling\nlocation: pyproject.toml:72-75\n\n`[tool.mypy] files` wasn't touched by this change, and the gap doesn't cause any wrong behavior in the changed code."
+}

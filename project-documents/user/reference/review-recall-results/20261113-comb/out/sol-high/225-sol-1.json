@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Autocommit reads can straddle an ingest commit and falsely report ledger/raw corruption."
+  ],
+  "F2": [
+   "KEEP",
+   "Raw counts include other accepted request shapes while ledger totals exclude them, producing false mismatches."
+  ],
+  "F3": [
+   "DROP",
+   "The repeated scans are inefficient, but no consequential latency or event-loop failure is demonstrated."
+  ]
+ },
+ "wall_seconds": 93.9,
+ "duration_seconds": 93.92305891704746,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=118315, cached=107776, cache_write=None, completion=247, reasoning=101)",
+ "raw_output": "F1: KEEP \u2014 Autocommit reads can straddle an ingest commit and falsely report ledger/raw corruption.\nF2: KEEP \u2014 Raw counts include other accepted request shapes while ledger totals exclude them, producing false mismatches.\nF3: DROP \u2014 The repeated scans are inefficient, but no consequential latency or event-loop failure is demonstrated.\nF1: KEEP \u2014 Autocommit reads can straddle an ingest commit and falsely report ledger/raw corruption.\nF2: KEEP \u2014 Raw counts include other accepted request shapes while ledger totals exclude them, producing false mismatches.\nF3: DROP \u2014 The repeated scans are inefficient, but no consequential latency or event-loop failure is demonstrated."
+}

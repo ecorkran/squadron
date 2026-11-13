@@ -1,0 +1,58 @@
+{
+ "case": "197",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "ContextForgeError` from `list_slices` and the cf source functions escapes `resume_item` uncaught, so a cf outage exits 1 (read as FLAGGED); the `OSError` branch also mislabels a missing pipeline file and unrelated OSErrors as \"cannot write the batch report\"."
+  ],
+  "F2": [
+   "DROP",
+   "report.json` comes only from squadron's atomic writer, so a non-object item or missing key cannot arrive, and a missing key already fails as an explicit REJECTED."
+  ],
+  "F3": [
+   "KEEP",
+   "_write_atomic` leaves its `delete=False` temp file behind when `write` or `replace` fails, so every failed write, including the disk-full case, leaves a partial file in the runs dir, and the test patches `replace` without checking for it."
+  ],
+  "F4": [
+   "DROP",
+   "the slice design lists `completed` and `total` as cf's list-tasks fields, production always passes them explicitly, and a missing key fails loudly with `KeyError` rather than silently."
+  ],
+  "F5": [
+   "DROP",
+   "the `Any` parameter types are a typing-hygiene gap that causes no wrong behavior today."
+  ],
+  "F6": [
+   "DROP",
+   "the deferred import with pyright suppressions is a structural smell with no behavioral defect."
+  ],
+  "F7": [
+   "DROP",
+   "D11 scopes the lock to batch and item-resume interleaving, and the harm from a concurrent `revise` dispatch to a batch is not shown."
+  ],
+  "F8": [
+   "DROP",
+   "the duplicated path fails as an explicit REJECTED and causes no wrong behavior today; it is a maintainability point."
+  ]
+ },
+ "wall_seconds": 107.0,
+ "duration_seconds": 107.02341441600583,
+ "cost_usd": 0.035165850000000005,
+ "effort": "xhigh",
+ "tool_calls_made": 24,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=657985, cached=572085, cache_write=85880, completion=22158, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `ContextForgeError` from `list_slices` and the cf source functions escapes `resume_item` uncaught, so a cf outage exits 1 (read as FLAGGED); the `OSError` branch also mislabels a missing pipeline file and unrelated OSErrors as \"cannot write the batch report\".\nF2: DROP \u2014 `report.json` comes only from squadron's atomic writer, so a non-object item or missing key cannot arrive, and a missing key already fails as an explicit REJECTED.\nF3: KEEP \u2014 `_write_atomic` leaves its `delete=False` temp file behind when `write` or `replace` fails, so every failed write, including the disk-full case, leaves a partial file in the runs dir, and the test patches `replace` without checking for it.\nF4: DROP \u2014 the slice design lists `completed` and `total` as cf's list-tasks fields, production always passes them explicitly, and a missing key fails loudly with `KeyError` rather than silently.\nF5: DROP \u2014 the `Any` parameter types are a typing-hygiene gap that causes no wrong behavior today.\nF6: DROP \u2014 the deferred import with pyright suppressions is a structural smell with no behavioral defect.\nF7: DROP \u2014 D11 scopes the lock to batch and item-resume interleaving, and the harm from a concurrent `revise` dispatch to a batch is not shown.\nF8: DROP \u2014 the duplicated path fails as an explicit REJECTED and causes no wrong behavior today; it is a maintainability point.\nVerdict: F1 and F3 should be fixed before merge. The other six findings are dropped.\n\nI kept the one-line-per-finding format from the task rather than the heading format, since the task said the review-structure section doesn't apply to me.\n\nF1: KEEP \u2014 `ContextForgeError` from `list_slices` and the cf source functions escapes `resume_item` uncaught, so a cf outage exits 1 (read as FLAGGED), and the `OSError` branch mislabels a missing pipeline file and unrelated OSErrors as \"cannot write the batch report\".\nF2: DROP \u2014 `report.json` comes only from squadron's atomic writer, so a non-object item or missing key cannot arrive, and a missing key already fails as an explicit REJECTED.\nF3: KEEP \u2014 `_write_atomic` leaves its `delete=False` temp file behind when `write` or `replace` fails, so every failed write, including the disk-full case, leaves a partial file in the runs dir, and the test patches `replace` without checking for it.\nF4: DROP \u2014 the slice design lists `completed` and `total` as cf's list-tasks fields, production always passes them explicitly, and a missing key fails loudly with `KeyError` rather than silently.\nF5: DROP \u2014 the `Any` parameter types are a typing-hygiene gap that causes no wrong behavior today.\nF6: DROP \u2014 the deferred import with pyright suppressions is a structural smell with no behavioral defect.\nF7: DROP \u2014 D11 scopes the lock to batch and item-resume interleaving, and the harm from a concurrent `revise` dispatch to a batch is not shown.\nF8: DROP \u2014 the duplicated path fails as an explicit REJECTED and causes no wrong behavior today; it is a maintainability point."
+}

@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "File-reading exceptions escape `run_steps`, skipping the cutover report after host changes have occurred."
+  ],
+  "F2": [
+   "DROP",
+   "The assertion would catch a retained `manta ` prefix; missing `main()` coverage is not a separate runtime defect."
+  ],
+  "F3": [
+   "DROP",
+   "The REPLICATION branch is valid and idempotent; missing database-backed coverage alone does not establish a defect."
+  ]
+ },
+ "wall_seconds": 36.5,
+ "duration_seconds": 36.539935084059834,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=107117, cached=89088, cache_write=None, completion=411, reasoning=240)",
+ "raw_output": "F1: KEEP \u2014 File-reading exceptions escape `run_steps`, skipping the cutover report after host changes have occurred.\nF2: DROP \u2014 The assertion would catch a retained `manta ` prefix; missing `main()` coverage is not a separate runtime defect.\nF3: DROP \u2014 The REPLICATION branch is valid and idempotent; missing database-backed coverage alone does not establish a defect.\nF1: KEEP \u2014 File-reading exceptions escape `run_steps`, skipping the cutover report after host changes have occurred.\nF2: DROP \u2014 The assertion catches a retained `manta ` prefix; missing `main()` coverage is not a separate runtime defect.\nF3: DROP \u2014 The REPLICATION branch is valid and idempotent; missing database-backed coverage alone does not establish a defect."
+}

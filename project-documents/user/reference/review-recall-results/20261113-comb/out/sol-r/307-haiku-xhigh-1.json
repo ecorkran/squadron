@@ -1,0 +1,48 @@
+{
+ "case": "307",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The CLI returns a nested pass payload, so the new estimate mode fails when it reads purchase-summary keys at the top level."
+  ],
+  "F2": [
+   "KEEP",
+   "Real nonempty estimates report `estimate_only`, which the judge rejects even when both ceilings are sufficient."
+  ],
+  "F3": [
+   "KEEP",
+   "Skipping ceiling checks also ignores archive-space failures and incorrectly reports the plan as buyable."
+  ],
+  "F4": [
+   "KEEP",
+   "Product-only grouping mixes tick-tier and bar-family session names, producing incorrect failure evidence."
+  ],
+  "F5": [
+   "DROP",
+   "This operator-supplied local argument crosses no security boundary, so restricting it to digits is input hardening."
+  ],
+  "F6": [
+   "DROP",
+   "Type-checker coverage and annotation strictness do not establish a runtime defect in the changed code."
+  ]
+ },
+ "wall_seconds": 25.7,
+ "duration_seconds": 25.648916417034343,
+ "cost_usd": 0.1371884,
+ "effort": null,
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=227068, cached=171404, cache_write=None, completion=872, reasoning=245)",
+ "raw_output": "F1: KEEP \u2014 The CLI returns a nested pass payload, so the new estimate mode fails when it reads purchase-summary keys at the top level.\nF2: KEEP \u2014 Real nonempty estimates report `estimate_only`, which the judge rejects even when both ceilings are sufficient.\nF3: KEEP \u2014 Skipping ceiling checks also ignores archive-space failures and incorrectly reports the plan as buyable.\nF4: KEEP \u2014 Product-only grouping mixes tick-tier and bar-family session names, producing incorrect failure evidence.\nF5: DROP \u2014 This operator-supplied local argument crosses no security boundary, so restricting it to digits is input hardening.\nF6: DROP \u2014 Type-checker coverage and annotation strictness do not establish a runtime defect in the changed code.\nF1: KEEP \u2014 The new estimate mode reads purchase-summary keys from the nested pass payload and fails before printing the ceiling command.\nF2: KEEP \u2014 Real nonempty estimates report `estimate_only`, which the judge rejects even when both ceilings are sufficient.\nF3: KEEP \u2014 Skipping ceiling checks also ignores archive-space failures and incorrectly reports the plan as buyable.\nF4: KEEP \u2014 Product-only grouping mixes tick-tier and bar-family session names, producing incorrect failure evidence.\nF5: DROP \u2014 Restricting a trusted operator\u2019s local argument to digits is hardening, not a demonstrated security defect.\nF6: DROP \u2014 Type-checker coverage and annotation strictness do not establish a behavioral defect in the changed code."
+}

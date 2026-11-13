@@ -1,0 +1,33 @@
+{
+ "case": "175",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Run stats omit earlier loop rounds because state persists only the final round\u2019s action results."
+  ],
+  "F2": [
+   "KEEP",
+   "The split-review fold copies the first part\u2019s usage without summing the other parts."
+  ],
+  "F3": [
+   "KEEP",
+   "A failed split part lacks the input required by the fold, causing a secondary error that discards its usage and original failure."
+  ]
+ },
+ "wall_seconds": 13.0,
+ "duration_seconds": 13.032904708059505,
+ "cost_usd": 0.048136099999999994,
+ "effort": null,
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=127510, cached=85362, cache_write=None, completion=344, reasoning=14)",
+ "raw_output": "F1: KEEP \u2014 Run stats omit earlier loop rounds because state persists only the final round\u2019s action results.\n\nF2: KEEP \u2014 The split-review fold copies the first part\u2019s usage without summing the other parts.\n\nF3: KEEP \u2014 A failed split part lacks the input required by the fold, causing a secondary error that discards its usage and original failure.\nF1: KEEP \u2014 Run stats omit earlier loop rounds because state persists only the final round\u2019s action results.\n\nF2: KEEP \u2014 The split-review fold copies the first part\u2019s usage without summing the other parts.\n\nF3: KEEP \u2014 A failed split part lacks the input required by the fold, causing a secondary error that discards its usage and original failure."
+}

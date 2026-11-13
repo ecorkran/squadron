@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Tick-tier sessions are omitted from coverage checks, allowing unaccounted gaps to pass the exit rule."
+  ],
+  "F2": [
+   "KEEP",
+   "Over-volume session names are grouped only by product, so failures can misattribute discrepancies to the wrong family."
+  ]
+ },
+ "wall_seconds": 13.1,
+ "duration_seconds": 13.061879500048235,
+ "cost_usd": 0.0483134,
+ "effort": null,
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=148848, cached=108068, cache_write=None, completion=426, reasoning=47)",
+ "raw_output": "F1: KEEP \u2014 Tick-tier sessions are omitted from coverage checks, allowing unaccounted gaps to pass the exit rule.\n\nF2: KEEP \u2014 Over-volume session names are grouped only by product, so failures can misattribute discrepancies to the wrong family.\nF1: KEEP \u2014 Tick-tier sessions are omitted from coverage checks, allowing unaccounted gaps to pass the exit rule.\n\nF2: KEEP \u2014 Over-volume session names are grouped only by product, so failures can attribute discrepancies to the wrong family."
+}

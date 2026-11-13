@@ -1,0 +1,28 @@
+{
+ "case": "u103",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Adding populated data never reruns the range effect, leaving the existing Context range unapplied."
+  ],
+  "F2": [
+   "KEEP",
+   "Empty or cleared series pass the count guard, causing range changes to throw on an empty time scale."
+  ]
+ },
+ "wall_seconds": 47.7,
+ "duration_seconds": 47.67582383309491,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=86458, cached=77824, cache_write=None, completion=130, reasoning=22)",
+ "raw_output": "F1: KEEP \u2014 Adding populated data never reruns the range effect, leaving the existing Context range unapplied.\nF2: KEEP \u2014 Empty or cleared series pass the count guard, causing range changes to throw on an empty time scale.\nF1: KEEP \u2014 Adding populated data does not rerun the range effect, leaving the existing Context range unapplied.\nF2: KEEP \u2014 Empty or cleared series pass the count guard, causing subsequent range changes to throw on an empty time scale."
+}

@@ -1,0 +1,33 @@
+{
+ "case": "175",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "round_completed` records nothing and `_append_step` serializes only the final round's `action_results`, so earlier loop rounds' usage never reaches the state file the report reads."
+  ],
+  "F2": [
+   "KEEP",
+   "fold_review_parts` copies only `parts[0].metadata` and never sums `USAGE_KEY`, so the combined action keeps part 1's usage record and drops the other parts' spend."
+  ],
+  "F3": [
+   "KEEP",
+   "a failed part has `outputs={}`, so `fold_review_parts` raises `TypeError`, which `execute()`'s catch-all turns into a generic failure that discards the captured usage."
+  ]
+ },
+ "wall_seconds": 42.4,
+ "duration_seconds": 42.36978779104538,
+ "cost_usd": 0.02231289,
+ "effort": "xhigh",
+ "tool_calls_made": 12,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=377866, cached=307529, cache_write=70323, completion=8362, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `round_completed` records nothing and `_append_step` serializes only the final round's `action_results`, so earlier loop rounds' usage never reaches the state file the report reads.\nF2: KEEP \u2014 `fold_review_parts` copies only `parts[0].metadata` and never sums `USAGE_KEY`, so the combined action keeps part 1's usage record and drops the other parts' spend.\nF3: KEEP \u2014 a failed part has `outputs={}`, so `fold_review_parts` raises `TypeError`, which `execute()`'s catch-all turns into a generic failure that discards the captured usage.\nF1: KEEP \u2014 `round_completed` records nothing and `_append_step` serializes only the final round's `action_results`, so earlier loop rounds' usage never reaches the state file the report reads.\nF2: KEEP \u2014 `fold_review_parts` copies only `parts[0].metadata` and never sums `USAGE_KEY`, so the combined action keeps part 1's usage record and drops the other parts' spend.\nF3: KEEP \u2014 a failed part has `outputs={}`, so `fold_review_parts` raises `TypeError`, which `execute()`'s catch-all turns into a generic failure that discards the captured usage."
+}

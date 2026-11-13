@@ -1,0 +1,63 @@
+{
+ "case": "188",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The ceiling-sized `CandlesResponse.build`/`TradesResponse.build` and the JSON/msgpack serialization run on the event loop after the executor returns, so other requests stall for about a second; the project's async rules forbid this."
+  ],
+  "F2": [
+   "KEEP",
+   "The published field description says \"newest stored trade\", but `tape_facts` returns the trades `sync_state` watermark, so clients reading the API docs will misjudge how fresh the data is."
+  ],
+  "F3": [
+   "DROP",
+   "This only matters when trades were stored before their category was excluded, and the reviewer admits it is a design call rather than a clear defect."
+  ],
+  "F4": [
+   "DROP",
+   "Only the docstring is inaccurate; the behaviour matches the SQL, and an integration test already checks the two agree."
+  ],
+  "F5": [
+   "DROP",
+   "Only the docstring overstates things; the current mapping is correct, and the reviewer notes an existing test fails if a column is added."
+  ],
+  "F6": [
+   "DROP",
+   "The positions match `TRADE_COLUMNS` today, so this guards against a hypothetical future reordering rather than an actual bug."
+  ],
+  "F7": [
+   "DROP",
+   "gaps.py` was not touched by this change, and its duplication is cleanup, not a defect."
+  ],
+  "F8": [
+   "DROP",
+   "These are gaps in test strength and a docstring count, not wrong behaviour in the code being merged."
+  ],
+  "F9": [
+   "DROP",
+   "File and function size guidance is style, and `conftest.py` was already over the limit before this change."
+  ]
+ },
+ "wall_seconds": 29.7,
+ "duration_seconds": 29.715608541155234,
+ "cost_usd": 0.194515,
+ "effort": "high",
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=76001, cached=59849, cache_write=16142, completion=2625, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The ceiling-sized `CandlesResponse.build`/`TradesResponse.build` and the JSON/msgpack serialization run on the event loop after the executor returns, so other requests stall for about a second; the project's async rules forbid this.\nF2: KEEP \u2014 The published field description says \"newest stored trade\", but `tape_facts` returns the trades `sync_state` watermark, so clients reading the API docs will misjudge how fresh the data is.\nF3: DROP \u2014 This only matters when trades were stored before their category was excluded, and the reviewer admits it is a design call rather than a clear defect.\nF4: DROP \u2014 Only the docstring is inaccurate; the behaviour matches the SQL, and an integration test already checks the two agree.\nF5: DROP \u2014 Only the docstring overstates things; the current mapping is correct, and the reviewer notes an existing test fails if a column is added.\nF6: DROP \u2014 The positions match `TRADE_COLUMNS` today, so this guards against a hypothetical future reordering rather than an actual bug.\nF7: DROP \u2014 `gaps.py` was not touched by this change, and its duplication is cleanup, not a defect.\nF8: DROP \u2014 These are gaps in test strength and a docstring count, not wrong behaviour in the code being merged.\nF9: DROP \u2014 File and function size guidance is style, and `conftest.py` was already over the limit before this change.\nF1: KEEP \u2014 The ceiling-sized `CandlesResponse.build`/`TradesResponse.build` and the JSON/msgpack serialization run on the event loop after the executor returns, so other requests stall for about a second; the project's async rules forbid this.\nF2: KEEP \u2014 The published field description says \"newest stored trade\", but `tape_facts` returns the trades `sync_state` watermark, so clients reading the API docs will misjudge how fresh the data is.\nF3: DROP \u2014 This only matters when trades were stored before their category was excluded, and the reviewer admits it is a design call rather than a clear defect.\nF4: DROP \u2014 Only the docstring is inaccurate; the behaviour matches the SQL, and an integration test already checks the two agree.\nF5: DROP \u2014 Only the docstring overstates things; the current mapping is correct, and the reviewer notes an existing test fails if a column is added.\nF6: DROP \u2014 The positions match `TRADE_COLUMNS` today, so this guards against a hypothetical future reordering rather than an actual bug.\nF7: DROP \u2014 `gaps.py` was not touched by this change, and its duplication is cleanup, not a defect.\nF8: DROP \u2014 These are gaps in test strength and a docstring count, not wrong behaviour in the code being merged.\nF9: DROP \u2014 File and function size guidance is style, and `conftest.py` was already over the limit before this change."
+}

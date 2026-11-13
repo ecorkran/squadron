@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The examples don't hold. `str(Path(...))` is never empty, and `build_argv` already checks `action.params` before journaling. Only an empty pipeline from a planner bug could raise after journaling, and production runs no planners."
+  ],
+  "F2": [
+   "DROP",
+   "The ~300-line file size is a guideline, and this is a style point."
+  ],
+  "F3": [
+   "DROP",
+   "launch_grace_seconds` predates this change, and a negative value would have to come from a user-supplied flag. The string-keyed `getattr` is a style point."
+  ]
+ },
+ "wall_seconds": 17.4,
+ "duration_seconds": 17.425598167115822,
+ "cost_usd": 0.1375999,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=115373, cached=87946, cache_write=27415, completion=1817, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The examples don't hold. `str(Path(...))` is never empty, and `build_argv` already checks `action.params` before journaling. Only an empty pipeline from a planner bug could raise after journaling, and production runs no planners.\nF2: DROP \u2014 The ~300-line file size is a guideline, and this is a style point.\nF3: DROP \u2014 `launch_grace_seconds` predates this change, and a negative value would have to come from a user-supplied flag. The string-keyed `getattr` is a style point.\nF1: DROP \u2014 The cited cases can't occur: `str(Path)` is never empty, and `build_argv` already validates `action.params` before journaling. Only an empty pipeline from a planner bug could raise after journaling, and production runs no planners.\nF2: DROP \u2014 The ~300-line file size is a guideline, and this is a style point.\nF3: DROP \u2014 `launch_grace_seconds` predates this change, and a negative value would have to come from a user-supplied flag. The string-keyed `getattr` is a style point."
+}

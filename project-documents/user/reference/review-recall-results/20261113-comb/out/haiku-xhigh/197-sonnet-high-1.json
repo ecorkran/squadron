@@ -1,0 +1,38 @@
+{
+ "case": "197",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "_validate` calls `load_pipeline` outside the REJECTED mapping, so a removed pipeline is caught by `resume_item`'s `OSError` handler and reported as HALTED with a \"cannot write the batch report\" message, and invalid pipeline YAML escapes as a traceback."
+  ],
+  "F2": [
+   "DROP",
+   "the slice declares cf's `completed` and `total` as required output, so a missing key fails loudly; wrapping the `KeyError` is message polish, and the zero defaults are never used on production paths."
+  ],
+  "F3": [
+   "DROP",
+   "the temp-file leak needs a rare write or rename failure that is already logged and re-raised, and the 0600 mode changes no result the code depends on."
+  ],
+  "F4": [
+   "DROP",
+   "the import cycle resolves at call time and works; it is a layering concern, not a behavior defect."
+  ]
+ },
+ "wall_seconds": 65.3,
+ "duration_seconds": 65.27653183415532,
+ "cost_usd": 0.02274425,
+ "effort": "xhigh",
+ "tool_calls_made": 12,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=316291, cached=252225, cache_write=64054, completion=13083, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `_validate` calls `load_pipeline` outside the REJECTED mapping, so a removed pipeline is caught by `resume_item`'s `OSError` handler and reported as HALTED with a \"cannot write the batch report\" message, and invalid pipeline YAML escapes as a traceback.\nF2: DROP \u2014 the slice declares cf's `completed` and `total` as required output, so a missing key fails loudly; wrapping the `KeyError` is message polish, and the zero defaults are never used on production paths.\nF3: DROP \u2014 the temp-file leak needs a rare write or rename failure that is already logged and re-raised, and the 0600 mode changes no result the code depends on.\nF4: DROP \u2014 the import cycle resolves at call time and works; it is a layering concern, not a behavior defect.\n**Verdict: not ready to merge until F1 is fixed.** F2, F3 and F4 are not merge blockers.\n\n### [FAIL] Item resume lets `load_pipeline` errors escape the REJECTED mapping\ncategory: error-handling\nlocation: src/squadron/pipeline/item_resume.py:186\n\n`_validate` calls `load_pipeline(state.pipeline)` outside its `try`, so a pipeline that was renamed or removed since the run is not mapped to `ResumeExit.REJECTED`. The exception reaches `resume_item`'s `except OSError` (line 133), because `FileNotFoundError` is an `OSError`. The caller then gets HALTED (exit 3) with the message \"cannot write the batch report: Pipeline '\u2026' not found\", which is wrong on both the exit code and the text. Invalid pipeline YAML (`yaml.YAMLError`, pydantic `ValidationError`) is not caught by any handler and escapes as a traceback. The finding's traceback claim is inaccurate for the missing-file case, but the substance holds. Fix: wrap the `load_pipeline` call, map both failure kinds to `_Stop(ResumeExit.REJECTED, \u2026)` naming the pipeline, and log them as the report-load failure is logged.\n\n### [NOTE] `list_tasks` raises a bare `KeyError` when cf omits `completed` or `total`\ncategory: error-handling\nlocation: src/squadron/integrations/context_forge.py:183\n\nThe slice's declared interface (197 design, \"Interfaces Required\") is `cf list tasks {plan} --json` with `completed`, `total` and `files`. A missing key is therefore a loud failure on a declared contract, not a silent one. Wrapping the `KeyError` in `ContextForgeError` with the command name would improve the message for version skew, but this is polish, not a defect. The `completed: int = 0` and `total: int = 0` defaults are never reached by `list_tasks` itself, which always sets both fields. They only apply to hand-built `TaskEntry` values in tests.\n\n### [NOTE] `_write_atomic` leaks its temp file on failure and creates reports with mode 0600\ncategory: error-handling\nlocation: src/squadron/pipeline/batch_report.py:343\n\nIf `handle.write` or `temp.replace` raises, the `.{name}.XXXX` temp file is left behind. The `OSError` is logged and re-raised, so nothing is silent. Leaking requires a rare write or rename failure. The 0600 mode from `NamedTemporaryFile` is more restrictive than the old `write_text` result, and no code path depends on the mode. Cleaning up the temp in the `except` branch would be good hygiene, but it is not a merge blocker.\n\n### [NOTE] `run_item.py` and `run.py` import each other, and `run_item.py` imports private names\ncategory: architecture\nlocation: src/squadron/cli/commands/run_item.py:61\n\n`handle_item_resume` imports `_apply_param_overrides` and `_run_pipeline_sdk` from `run.py` inside the function, with pyright suppressions. The cycle resolves at call time, so behavior is correct. The finding is a layering concern: the fix is to pass the runner and override parser in, or move them to a shared module without underscore names. It is a worthwhile follow-up, not a defect that changes results."
+}

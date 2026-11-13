@@ -1,0 +1,48 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The real failure is still logged first and stored in `error`. The extra \"teardown failed\" log is noise, not wrong behavior."
+  ],
+  "F2": [
+   "KEEP",
+   "setOperationError` overwrites with the latest failure, but `chart-operations.ts:77` and the test name both promise the first error, so consumers get data that contradicts the documented contract."
+  ],
+  "F3": [
+   "KEEP",
+   "readChartStyle` silently drops any empty token (e.g. `--color-grid`) back to library defaults with no error, which breaks the project's explicit no-silent-fallback rule."
+  ],
+  "F4": [
+   "DROP",
+   "This is a complexity and scaffolding preference about deliberate placeholder subscriptions, not a defect."
+  ],
+  "F5": [
+   "DROP",
+   "File length and the scope of the lint suppression are style and maintainability points, not defects."
+  ],
+  "F6": [
+   "KEEP",
+   "seriesCountRef` is a ref, so adding the first series through the public facade never re-runs the range effect. A range set before data is never applied, despite the comment saying the seam activates \"the moment it adds the first series.\""
+  ]
+ },
+ "wall_seconds": 29.0,
+ "duration_seconds": 28.94949599984102,
+ "cost_usd": 0.2188719,
+ "effort": "high",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=105069, cached=86085, cache_write=18972, completion=2456, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The real failure is still logged first and stored in `error`. The extra \"teardown failed\" log is noise, not wrong behavior.\nF2: KEEP \u2014 `setOperationError` overwrites with the latest failure, but `chart-operations.ts:77` and the test name both promise the first error, so consumers get data that contradicts the documented contract.\nF3: KEEP \u2014 `readChartStyle` silently drops any empty token (e.g. `--color-grid`) back to library defaults with no error, which breaks the project's explicit no-silent-fallback rule.\nF4: DROP \u2014 This is a complexity and scaffolding preference about deliberate placeholder subscriptions, not a defect.\nF5: DROP \u2014 File length and the scope of the lint suppression are style and maintainability points, not defects.\nF6: KEEP \u2014 `seriesCountRef` is a ref, so adding the first series through the public facade never re-runs the range effect. A range set before data is never applied, despite the comment saying the seam activates \"the moment it adds the first series.\"\nF1: DROP \u2014 The real create failure is still logged first and stored in `error`; the extra \"teardown failed\" log is noise, not wrong behavior.\nF2: KEEP \u2014 `setOperationError` overwrites with the latest failure, but `chart-operations.ts:77` and the test name promise the first error, so `error` contradicts its documented contract.\nF3: KEEP \u2014 `readChartStyle` turns any empty token (e.g. `--color-grid`) into a silent library-default color with no error, which breaks the project's explicit no-silent-fallback rule.\nF4: DROP \u2014 This is a complexity preference about deliberate placeholder subscriptions, not a defect.\nF5: DROP \u2014 File length and the scope of the lint suppression are style and maintainability points, not defects.\nF6: KEEP \u2014 `seriesCountRef` is a ref, so adding the first series through the public facade never re-runs the range effect, and a range set before data is never applied, despite the comment saying it activates \"the moment it adds the first series.\""
+}

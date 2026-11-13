@@ -1,0 +1,38 @@
+{
+ "case": "175",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The extra `logger.exception` with the wrong \"unexpected\" wording is redundant logging; behavior stays correct, since the step still fails, the artifact is saved and usage is recorded."
+  ],
+  "F2": [
+   "DROP",
+   "get_profile`, `ensure_provider_loaded` and `get_provider` already ran successfully for this same profile inside `run_review_with_profile`, so a fresh raise in the handler is not a realistic path."
+  ],
+  "F3": [
+   "KEEP",
+   "When the compact's summary-capture turn fails, `SDKExecutionSession.dispatch` attaches its telemetry to the error, but `compact.py:82-89` returns no metadata, so the spend is lost, unlike in dispatch, summary and review. The reconnect example is wrong, though: a failure there carries no telemetry."
+  ],
+  "F4": [
+   "DROP",
+   "The fresh `set()` only means an alias pricing warning can repeat per review; costs come out the same, so this is log noise, not wrong data."
+  ]
+ },
+ "wall_seconds": 38.8,
+ "duration_seconds": 38.778592583024874,
+ "cost_usd": 0.37809950000000003,
+ "effort": "medium",
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=201589, cached=165348, cache_write=36225, completion=2712, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The extra `logger.exception` with the wrong \"unexpected\" wording is redundant logging; behavior stays correct, since the step still fails, the artifact is saved and usage is recorded.\nF2: DROP \u2014 `get_profile`, `ensure_provider_loaded` and `get_provider` already ran successfully for this same profile inside `run_review_with_profile`, so a fresh raise in the handler is not a realistic path.\nF3: KEEP \u2014 When the compact's summary-capture turn fails, `SDKExecutionSession.dispatch` attaches its telemetry to the error, but `compact.py:82-89` returns no metadata, so the spend is lost, unlike in dispatch, summary and review. The reconnect example is wrong, though: a failure there carries no telemetry.\nF4: DROP \u2014 The fresh `set()` only means an alias pricing warning can repeat per review; costs come out the same, so this is log noise, not wrong data.\nF1: DROP \u2014 The extra `logger.exception` with the wrong \"unexpected\" wording is redundant logging; behavior stays correct, since the step still fails, the artifact is saved and usage is recorded.\nF2: DROP \u2014 `get_profile`, `ensure_provider_loaded` and `get_provider` already ran successfully for this same profile inside `run_review_with_profile`, so a fresh raise in the handler is not a realistic path.\nF3: KEEP \u2014 When the summary-capture turn fails, `SDKExecutionSession.dispatch` attaches its telemetry to the error, but `compact.py:82-89` stamps none of it (unlike dispatch, summary and review), so the spend is lost; the reconnect example is wrong, since that failure carries no telemetry.\nF4: DROP \u2014 The fresh `set()` only means an alias pricing warning can repeat per review; costs come out the same, so this is log noise, not wrong data."
+}

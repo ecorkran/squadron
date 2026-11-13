@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "All current enum members are covered; the concern only applies to hypothetical future changes."
+  ],
+  "F2": [
+   "DROP",
+   "The per-verb override produces the intended exit codes; centralization is a design preference."
+  ],
+  "F3": [
+   "DROP",
+   "Function length and helper placement are maintainability concerns without a demonstrated behavioral defect."
+  ]
+ },
+ "wall_seconds": 18.8,
+ "duration_seconds": 18.773021958069876,
+ "cost_usd": 0.0381372,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=88187, cached=73472, cache_write=None, completion=136, reasoning=0)",
+ "raw_output": "F1: DROP \u2014 All current enum members are covered; the concern only applies to hypothetical future changes.\nF2: DROP \u2014 The per-verb override produces the intended exit codes; centralization is a design preference.\nF3: DROP \u2014 Function length and helper placement are maintainability concerns without a demonstrated behavioral defect.\nF1: DROP \u2014 All current enum members are covered; the concern only applies to hypothetical future changes.\nF2: DROP \u2014 The per-verb override produces the intended exit codes; centralization is a design preference.\nF3: DROP \u2014 Function length and helper placement are maintainability concerns without a demonstrated behavioral defect."
+}

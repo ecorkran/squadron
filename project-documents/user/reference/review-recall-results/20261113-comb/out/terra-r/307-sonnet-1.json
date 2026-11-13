@@ -1,0 +1,23 @@
+{
+ "case": "307",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sonnet/1/0"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The loose annotations do not change runtime behavior, and the project config uses mypy rather than strict pyright."
+  ]
+ },
+ "wall_seconds": 6.9,
+ "duration_seconds": 6.876478417078033,
+ "cost_usd": 0.018245,
+ "effort": null,
+ "tool_calls_made": 1,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=40000, cached=23900, cache_write=None, completion=190, reasoning=57)",
+ "raw_output": "F1: DROP \u2014 The loose annotations do not change runtime behavior, and the project config uses mypy rather than strict pyright.\nF1: DROP \u2014 The loose annotations do not change runtime behavior, and the project config uses mypy rather than strict pyright."
+}

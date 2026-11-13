@@ -1,0 +1,48 @@
+{
+ "case": "921",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The sudoers rule lets `manta` run a writable checkout script as root and control non-`mt-` units via wildcards."
+  ],
+  "F2": [
+   "DROP",
+   "The markers currently match; the alleged drift is hypothetical."
+  ],
+  "F3": [
+   "KEEP",
+   "The saved narration omits verification output that the runbook requires from the cutover log."
+  ],
+  "F4": [
+   "KEEP",
+   "Refresh finish time and policy offsets can make an unmaterialized session appear fresh."
+  ],
+  "F5": [
+   "DROP",
+   "Import ordering is a style issue, not a behavioral defect."
+  ],
+  "F6": [
+   "DROP",
+   "Duplicated test setup is a maintainability concern, not a demonstrated defect."
+  ]
+ },
+ "wall_seconds": 19.8,
+ "duration_seconds": 19.79718012502417,
+ "cost_usd": 0.09907600000000001,
+ "effort": null,
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=255806, cached=169700, cache_write=None, completion=897, reasoning=301)",
+ "raw_output": "F1: KEEP \u2014 The sudoers rule lets `manta` run a writable checkout script as root and control non-`mt-` units via wildcards.\nF2: DROP \u2014 The markers currently match; the alleged drift is hypothetical.\nF3: KEEP \u2014 The saved narration omits verification output that the runbook requires from the cutover log.\nF4: KEEP \u2014 Refresh finish time and policy offsets can make an unmaterialized session appear fresh.\nF5: DROP \u2014 Import ordering is a style issue, not a behavioral defect.\nF6: DROP \u2014 Duplicated test setup is a maintainability concern, not a demonstrated defect.\nF1: KEEP \u2014 The sudoers rule permits root execution of a writable checkout script and wildcard control of non-`mt-` units.\nF2: DROP \u2014 The markers currently match; the alleged drift is hypothetical.\nF3: KEEP \u2014 The saved narration omits verification output required by the runbook.\nF4: KEEP \u2014 Refresh finish time and policy offsets can make unmaterialized data appear fresh.\nF5: DROP \u2014 Import ordering is a style issue, not a behavioral defect.\nF6: DROP \u2014 Duplicated test setup is a maintainability concern, not a demonstrated defect."
+}

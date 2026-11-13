@@ -1,0 +1,38 @@
+{
+ "case": "a122",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2",
+  "F4": "sol/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The observer is shared across projects, and each `observe` call prunes its poll, overdue and fault state to the current project's entries. Ticking any other project therefore wipes it."
+  ],
+  "F2": [
+   "DROP",
+   "The budget is checked right before journaling, so the overshoot is milliseconds. The journaled entry is still launched, which leaves the store consistent, so this is marginal."
+  ],
+  "F3": [
+   "KEEP",
+   "In the unconfirmed path, `_still_overdue` never replays `_faulted` between polls. A standing poll fault disappears, `_close_recovered` closes the escalation, and the next poll reopens it."
+  ],
+  "F4": [
+   "KEEP",
+   "The exception handler returns `True` unconditionally, even when `escalate` is a no-op because of deduplication. `ResidentProcess._loop` then never idles, so a persistent exception becomes a tight retry loop that logs an error each time."
+  ]
+ },
+ "wall_seconds": 19.9,
+ "duration_seconds": 19.857211041962728,
+ "cost_usd": 0.15964979999999998,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=126727, cached=94676, cache_write=32039, completion=2106, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The observer is shared across projects, and each `observe` call prunes its poll, overdue and fault state to the current project's entries. Ticking any other project therefore wipes it.\nF2: DROP \u2014 The budget is checked right before journaling, so the overshoot is milliseconds. The journaled entry is still launched, which leaves the store consistent, so this is marginal.\nF3: KEEP \u2014 In the unconfirmed path, `_still_overdue` never replays `_faulted` between polls. A standing poll fault disappears, `_close_recovered` closes the escalation, and the next poll reopens it.\nF4: KEEP \u2014 The exception handler returns `True` unconditionally, even when `escalate` is a no-op because of deduplication. `ResidentProcess._loop` then never idles, so a persistent exception becomes a tight retry loop that logs an error each time.\nF1: KEEP \u2014 The observer is shared across projects, and each `observe` call prunes poll, overdue and fault state to the current project's entries. Ticking any other project wipes that state.\nF2: DROP \u2014 The budget is checked right before journaling, so the overshoot is milliseconds. The journaled entry is still launched, which leaves the store consistent, so this is marginal.\nF3: KEEP \u2014 In the unconfirmed path, `_still_overdue` never replays `_faulted` between polls. A standing poll fault disappears and `_close_recovered` closes the escalation early.\nF4: KEEP \u2014 The exception handler returns `True` unconditionally, even when `escalate` is a deduplicated no-op. `ResidentProcess._loop` then never idles, so a persistent exception becomes a tight retry loop that logs an error each time."
+}

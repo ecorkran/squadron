@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "coverage_reads()` only reads history wants, so a not-caught-up tbbo tier never gets its sessions listed, which D6 item 3 requires."
+  ],
+  "F2": [
+   "KEEP",
+   "over_sessions()` drops the family and `named` is keyed only by product, so an over failure lists the other volume family's sessions."
+  ]
+ },
+ "wall_seconds": 54.6,
+ "duration_seconds": 54.54769241716713,
+ "cost_usd": 0.0249816,
+ "effort": "xhigh",
+ "tool_calls_made": 17,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=685302, cached=620830, cache_write=64444, completion=9903, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `coverage_reads()` only reads history wants, so a not-caught-up tbbo tier never gets its sessions listed, which D6 item 3 requires.\nF2: KEEP \u2014 `over_sessions()` drops the family and `named` is keyed only by product, so an over failure lists the other volume family's sessions.\nF1: KEEP \u2014 `coverage_reads()` only reads history wants, so a not-caught-up tbbo tier never gets its sessions listed, which D6 item 3 requires.\nF2: KEEP \u2014 `over_sessions()` drops the family and `named` is keyed only by product, so an over failure lists the other volume family's sessions."
+}

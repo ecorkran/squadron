@@ -1,0 +1,43 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The unused subscriptions add minor overhead, but their no-op handlers do not cause incorrect behavior in the implemented lifecycle."
+  ],
+  "F2": [
+   "DROP",
+   "The finding identifies style and comment cleanup rather than a behavioral defect."
+  ],
+  "F3": [
+   "KEEP",
+   "Adding a series does not trigger this effect, so a stored range is not applied until another dependency changes."
+  ],
+  "F4": [
+   "KEEP",
+   "The implementation replaces the error with later failures, contradicting the documented first-error contract."
+  ],
+  "F5": [
+   "DROP",
+   "The stale comment and fragile text selector are low-value test-maintenance issues, not functional defects."
+  ]
+ },
+ "wall_seconds": 25.5,
+ "duration_seconds": 25.519939833087847,
+ "cost_usd": 0.0028752100000000004,
+ "effort": null,
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=54141, cached=40071, cache_write=None, completion=2135, reasoning=1687)",
+ "raw_output": "F1: DROP \u2014 The unused subscriptions add minor overhead, but their no-op handlers do not cause incorrect behavior in the implemented lifecycle.\nF2: DROP \u2014 The finding identifies style and comment cleanup rather than a behavioral defect.\nF3: KEEP \u2014 Adding a series does not trigger this effect, so a stored range is not applied until another dependency changes.\nF4: KEEP \u2014 The implementation replaces the error with later failures, contradicting the documented first-error contract.\nF5: DROP \u2014 The stale comment and fragile text selector are low-value test-maintenance issues, not functional defects.\nF1: DROP \u2014 The subscriptions are unnecessary, but their callbacks are inert and the lifecycle disposes them; no merge-blocking behavioral defect is shown.\nF2: DROP \u2014 The finding concerns file length and comment cleanup, not defective behavior.\nF3: KEEP \u2014 Adding a series only updates a ref, so an existing range is not applied until another effect dependency changes.\nF4: KEEP \u2014 Later operation failures overwrite the error despite the documented contract that it preserves the first error.\nF5: DROP \u2014 The stale comment and text assertion are low-value test-maintenance issues, not functional defects."
+}

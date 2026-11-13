@@ -1,0 +1,28 @@
+{
+ "case": "227",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "run_health` ignores the `shell(...)` exit code and reads the last line of a log the installed cron job also appends to, so a failed health run can pass on an old `archive=0 stale=0` line; separately, `IndexError`/`FileNotFoundError`/`StopIteration` escape `run_steps`, so no report gets written."
+  ],
+  "F2": [
+   "DROP",
+   "the hard-coded `127.0.0.1` can only cause a loud, cutover-blocking mismatch if the table ever changes, and the other duplicated constants are DRY/style concerns with no current wrong behavior."
+  ]
+ },
+ "wall_seconds": 19.2,
+ "duration_seconds": 19.15745108295232,
+ "cost_usd": 0.2438819,
+ "effort": "medium",
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=104943, cached=80045, cache_write=24886, completion=1397, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `run_health` ignores the `shell(...)` exit code and reads the last line of a log the installed cron job also appends to, so a failed health run can pass on an old `archive=0 stale=0` line; separately, `IndexError`/`FileNotFoundError`/`StopIteration` escape `run_steps`, so no report gets written.\nF2: DROP \u2014 the hard-coded `127.0.0.1` can only cause a loud, cutover-blocking mismatch if the table ever changes, and the other duplicated constants are DRY/style concerns with no current wrong behavior.\nF1: KEEP \u2014 `run_health` ignores the `shell(...)` exit code and reads the last line of a log the installed cron job also appends to, so a failed health run can pass on an old `archive=0 stale=0` line; separately, `IndexError`/`FileNotFoundError`/`StopIteration` escape `run_steps`, so no report gets written.\nF2: DROP \u2014 the hard-coded `127.0.0.1` can only cause a loud, cutover-blocking mismatch if the table ever changes, and the other duplicated constants are DRY/style concerns with no current wrong behavior."
+}

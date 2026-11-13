@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "coverage_reads()` skips the `tbbo` tier ranges, which D6 item 3 requires, so incomplete `tbbo` sessions are never listed or checked against the exit rule."
+  ],
+  "F2": [
+   "KEEP",
+   "over_sessions()` drops `family` and `named` is keyed by product, so an `ohlcv-1m` over failure lists `tbbo` sessions and the reverse."
+  ]
+ },
+ "wall_seconds": 41.6,
+ "duration_seconds": 41.57199583412148,
+ "cost_usd": 0.2151751,
+ "effort": "high",
+ "tool_calls_made": 11,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=279951, cached=242509, cache_write=37422, completion=4022, reasoning=None)",
+ "raw_output": "Checking the slice's D6 text to see whether the not-caught-up listing was meant to cover `tbbo`.\nF1: KEEP \u2014 `coverage_reads()` skips the `tbbo` tier ranges, which D6 item 3 requires, so incomplete `tbbo` sessions are never listed or checked against the exit rule.\nF2: KEEP \u2014 `over_sessions()` drops `family` and `named` is keyed by product, so an `ohlcv-1m` over failure lists `tbbo` sessions and the reverse.\nF1: KEEP \u2014 `coverage_reads()` skips the `tbbo` tier ranges, which D6 item 3 requires, so incomplete `tbbo` sessions are never listed or checked against the exit rule.\nF2: KEEP \u2014 `over_sessions()` drops `family` and `named` is keyed by product only, so an `ohlcv-1m` over failure lists `tbbo` sessions and the reverse."
+}

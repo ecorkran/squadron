@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The production confirm path in `observe.py:276` works correctly; an unused tracker method is a cleanup and test-coverage point, not a defect."
+  ],
+  "F2": [
+   "DROP",
+   "The slice design (lines 297 and 429) says every open project escalation whose kind did not recur is closed on a complete tick, so the code does what was specified."
+  ],
+  "F3": [
+   "DROP",
+   "Each run-id check fails explicitly and correctly, so this is a DRY refactor with no wrong behavior."
+  ]
+ },
+ "wall_seconds": 26.5,
+ "duration_seconds": 26.530691833002493,
+ "cost_usd": 0.26250450000000003,
+ "effort": "medium",
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=129366, cached=104583, cache_write=24769, completion=2116, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The production confirm path in `observe.py:276` works correctly; an unused tracker method is a cleanup and test-coverage point, not a defect.\nF2: DROP \u2014 The slice design (lines 297 and 429) says every open project escalation whose kind did not recur is closed on a complete tick, so the code does what was specified.\nF3: DROP \u2014 Each run-id check fails explicitly and correctly, so this is a DRY refactor with no wrong behavior.\nI had already read everything these decisions depend on, so nothing more to check. Here are the same three decisions in the structure you asked for. None of the findings needs fixing before merge.\n\n**Verdict: PASS**\n\n### [NOTE] F1: `LaunchTracker.confirm` has no caller under `src/`\ncategory: maintainability\nlocation: src/amoeba/runner/launch.py:257\n\nF1: DROP \u2014 The claim is true: nothing under `src/` calls `confirm()`, and `RunObserver._confirm` (`src/amoeba/runner/observe.py:276`) sets `tracked.confirmed = True` itself. But the path production actually uses is correct and also clears `_overdue`, so this is cleanup and test realism, not a defect.\n\n### [NOTE] F2: `_close_recovered` closes an `unexpected_fault` escalation after one clean tick\ncategory: error-handling\nlocation: src/amoeba/runner/tick.py:194\n\nF2: DROP \u2014 The slice design says to close every open project escalation whose kind did not recur on a complete tick, and it names `unexpected_fault` as a project-scoped kind. See `122-slice.runner-tenant-and-control-surface.md` lines 164\u2013165, 294, 297 and 429. The code does what was specified.\n\n### [NOTE] F3: Run-id validation is repeated in three places\ncategory: maintainability\nlocation: src/amoeba/runner/finish.py:141\n\nF3: DROP \u2014 Each copy of the check raises an explicit error on a bad run id (`finish._run_id` raises `ValueError`). Combining them is a DRY refactor, and there is no wrong behavior to fix."
+}

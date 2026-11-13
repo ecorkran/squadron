@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Unhandled step exceptions can abort the cutover without writing its promised report."
+  ],
+  "F2": [
+   "DROP",
+   "The weak assertions are test-coverage issues; F1 identifies the underlying defect."
+  ],
+  "F3": [
+   "DROP",
+   "The finding identifies missing test coverage, not a demonstrated defect in the SQL branch."
+  ]
+ },
+ "wall_seconds": 8.6,
+ "duration_seconds": 8.60205416684039,
+ "cost_usd": 0.02735355,
+ "effort": null,
+ "tool_calls_made": 1,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=56063, cached=31831, cache_write=None, completion=306, reasoning=86)",
+ "raw_output": "F1: KEEP \u2014 Unhandled step exceptions can abort the cutover without writing its promised report.\nF2: DROP \u2014 The weak assertions are test-coverage issues; F1 identifies the underlying defect.\nF3: DROP \u2014 The finding identifies missing test coverage, not a demonstrated defect in the SQL branch.\nF1: KEEP \u2014 Unhandled step exceptions can abort the cutover without writing its promised report.\nF2: DROP \u2014 The weak assertions are test-coverage issues; F1 identifies the underlying defect.\nF3: DROP \u2014 The finding identifies missing test coverage, not a demonstrated defect in the SQL branch."
+}

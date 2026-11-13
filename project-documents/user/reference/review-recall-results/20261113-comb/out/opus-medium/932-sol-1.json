@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "If a background agent finishes before the dispatch's own result, the ledger is empty when that result arrives, so `_collect_turns` returns at lines 252-253 without reading the follow-up turn the agent's notification triggers; that text is later thrown away as a \"leftover\" by the next dispatch."
+  ],
+  "F2": [
+   "KEEP",
+   "Once the turn is waiting on background agents, `_read_turn` keeps applying `idle_s` to every message, including the foreground follow-up turn after the ledger empties; that breaks the \"foreground turns get no timer (#165)\" rule and can return partial text as success."
+  ]
+ },
+ "wall_seconds": 28.4,
+ "duration_seconds": 28.376630291808397,
+ "cost_usd": 0.26342610000000005,
+ "effort": "medium",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=155529, cached=131474, cache_write=24039, completion=2197, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 If a background agent finishes before the dispatch's own result, the ledger is empty when that result arrives, so `_collect_turns` returns at lines 252-253 without reading the follow-up turn the agent's notification triggers; that text is later thrown away as a \"leftover\" by the next dispatch.\n\nF2: KEEP \u2014 Once the turn is waiting on background agents, `_read_turn` keeps applying `idle_s` to every message, including the foreground follow-up turn after the ledger empties; that breaks the \"foreground turns get no timer (#165)\" rule and can return partial text as success.\nF1: KEEP \u2014 If a background agent finishes before the dispatch's own result, the ledger is already empty when that result arrives, so lines 252-253 return without reading the follow-up turn the agent's notification triggers, and the next dispatch throws that text away as a leftover.\nF2: KEEP \u2014 While the turn waits on background agents, `_read_turn` applies `idle_s` to every message, including the foreground follow-up turn after the ledger empties; this breaks the \"foreground turns get no timer (#165)\" rule and can return partial text as success."
+}

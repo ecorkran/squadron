@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A rerun compares the installed cron arguments against their stripped form and fails the production-cron check."
+  ],
+  "F2": [
+   "KEEP",
+   "A failed health command can leave an earlier clean summary as the last log line and incorrectly pass the health gates."
+  ],
+  "F3": [
+   "KEEP",
+   "An `OSError` in a step escapes `run_steps`, preventing `main()` from writing the promised failure report."
+  ]
+ },
+ "wall_seconds": 27.6,
+ "duration_seconds": 27.58324291720055,
+ "cost_usd": 0.00461833,
+ "effort": "high",
+ "tool_calls_made": 9,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=104510, cached=73763, cache_write=None, completion=1612, reasoning=1184)",
+ "raw_output": "F1: KEEP \u2014 A rerun compares the installed cron arguments against their stripped form and fails the production-cron check.\nF2: KEEP \u2014 A failed health command can leave an earlier clean summary as the last log line and incorrectly pass the health gates.\nF3: KEEP \u2014 An `OSError` in a step escapes `run_steps`, preventing `main()` from writing the promised failure report.\nF1: KEEP \u2014 A rerun compares the installed cron arguments against their stripped form and fails the production-cron check.\nF2: KEEP \u2014 A failed health command can leave an earlier clean summary as the last log line and incorrectly pass the health gates.\nF3: KEEP \u2014 An `OSError` in a step escapes `run_steps`, preventing `main()` from writing the promised failure report."
+}

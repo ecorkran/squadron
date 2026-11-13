@@ -1,0 +1,43 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The no-op subscriptions are an intentional lifecycle probe, and nothing in them produces wrong behavior; the complaint is about scope and complexity."
+  ],
+  "F2": [
+   "DROP",
+   "Line count, function length, stale task-number comments, and the lint suppression are style and maintainability points, not defects."
+  ],
+  "F3": [
+   "KEEP",
+   "The range effect is keyed on `[mount.ready, chart, range]`, so a series added after a range change never triggers it, and the comment's claim that the seam activates on the first series is false; the test only covers series-then-range order."
+  ],
+  "F4": [
+   "KEEP",
+   "The documented \"first error\" contract conflicts with `setOperationError` overwriting on every failure, so a consumer can lose the root-cause error, and the test named \"keeps the first error\" never checks a second failure."
+  ],
+  "F5": [
+   "DROP",
+   "chart-render.spec.ts` exists, so the smoke comment is only a stale cross-reference; the `getByText` point is minor test fragility."
+  ]
+ },
+ "wall_seconds": 59.1,
+ "duration_seconds": 59.11913879192434,
+ "cost_usd": 0.01778221,
+ "effort": "xhigh",
+ "tool_calls_made": 11,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=195387, cached=148141, cache_write=47236, completion=12482, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The no-op subscriptions are an intentional lifecycle probe, and nothing in them produces wrong behavior; the complaint is about scope and complexity.\nF2: DROP \u2014 Line count, function length, stale task-number comments, and the lint suppression are style and maintainability points, not defects.\nF3: KEEP \u2014 The range effect is keyed on `[mount.ready, chart, range]`, so a series added after a range change never triggers it, and the comment's claim that the seam activates on the first series is false; the test only covers series-then-range order.\nF4: KEEP \u2014 The documented \"first error\" contract conflicts with `setOperationError` overwriting on every failure, so a consumer can lose the root-cause error, and the test named \"keeps the first error\" never checks a second failure.\nF5: DROP \u2014 `chart-render.spec.ts` exists, so the smoke comment is only a stale cross-reference; the `getByText` point is minor test fragility.\n**Verdict: FAIL.** Fix F3 and F4 before merge. F1, F2, and F5 are dropped.\n\n### [FAIL] F3: Range translation does not re-run when the first series is added\ncategory: correctness\nlocation: src/chart/use-chart-provider.ts:340-345\n\nDisposition: KEEP. The effect reads `seriesCountRef.current` but depends only on `[mount.ready, chart, range]`. If a range is set while the chart is empty, the call is correctly withheld. Adding a series later does not re-run the effect, so the current range is not applied until the range changes again. The comment at lines 336-338 says the seam activates \"the moment it adds the first series,\" which is false. The test \"applies the range once a series exists\" adds the series before setting the range, so it misses this order. No in-app path calls `addSeries` today (only the harness route and tests do), so the impact lands with initiative 120. Fix: make the series count reactive (state, or a version counter held in state), include it in the dependencies, and add a test for range-set-then-series-added.\n\n### [FAIL] F4: `error` is documented as the first error but is overwritten by each failure\ncategory: correctness\nlocation: src/chart/use-chart-provider.ts:97-99; src/chart/chart-operations.ts:77-78\n\nDisposition: KEEP. `UseChartProviderResult.error` is documented as \"The first error from any provider operation,\" but `setOperationError` replaces the stored error on every failure. A later failure can hide the root cause, and consumers get behavior the contract does not promise. The test \"keeps the first error rather than being reset by a later success\" only checks that a later success does not clear the error. It never triggers a second failure. Fix: store the first error (`current.error ?? failure`) and add a test with two failing operations. That matches both the doc and the test name. The alternative is to change the doc to \"most recent error\" and rename the test.\n\n### [NOTE] F1: No-op subscriptions added to the mount sequence\ncategory: design\nlocation: src/chart/use-chart-provider.ts:286-301\n\nDisposition: DROP. The two subscriptions are an intentional lifecycle probe, and the code says so. Their callbacks do nothing, but they do not produce wrong behavior. Removing them is a scope decision, not a defect fix. The author can choose to cut them, but it is not a merge blocker.\n\n### [NOTE] F2: File length, long mount effect, and stale task comments\ncategory: maintainability\nlocation: src/chart/use-chart-provider.ts:1-366\n\nDisposition: DROP. The file is about 366 lines, the mount effect is about 150 lines, and the comments reference finished task numbers. These are style and documentation issues with no behavioral effect. Remove the stale task references when the file is next touched.\n\n### [NOTE] F5: Stale cross-reference and text-based assertion in the smoke spec\ncategory: documentation\nlocation: e2e/smoke.spec.ts:8-10\n\nDisposition: DROP. The comment points the chart assertion at `chart-render.spec.ts`, which covers the `/__chart-harness` route. The live `/` chart is covered by `e2e/chart-live.spec.ts`, so the comment is stale. The `getByText('Chart workspace')` substring match is minor test fragility, not a wrong result. Update the comment when the file is next touched."
+}

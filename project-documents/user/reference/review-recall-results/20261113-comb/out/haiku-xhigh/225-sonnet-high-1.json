@@ -1,0 +1,38 @@
+{
+ "case": "225",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "raw_counts` counts every `tick_trade` row in the session windows regardless of shape, and `_session_row` compares that against the shape-scoped ledger, so a second universe entry in the same dataset would produce false mismatches and exit 3."
+  ],
+  "F2": [
+   "KEEP",
+   "with `end` unset and no edge observed, `wanted` is `None` but `caught_up` still receives `wanted=True`, so an empty or all-complete verdict list prints \"caught up: yes\" for a range nothing established."
+  ],
+  "F3": [
+   "DROP",
+   "the duplicate `shape_units` read is an extra query per product with no wrong-data outcome; the two-snapshot concern only makes a point-in-time status report slightly stale."
+  ],
+  "F4": [
+   "DROP",
+   "the assert checks a static enum-to-tuple invariant that runs on every normal import and test, and the only loss under `python -O` is a dev-time check."
+  ]
+ },
+ "wall_seconds": 50.2,
+ "duration_seconds": 50.165880125015974,
+ "cost_usd": 0.015655660000000002,
+ "effort": "xhigh",
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=177612, cached=135686, cache_write=41916, completion=9988, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `raw_counts` counts every `tick_trade` row in the session windows regardless of shape, and `_session_row` compares that against the shape-scoped ledger, so a second universe entry in the same dataset would produce false mismatches and exit 3.\nF2: KEEP \u2014 with `end` unset and no edge observed, `wanted` is `None` but `caught_up` still receives `wanted=True`, so an empty or all-complete verdict list prints \"caught up: yes\" for a range nothing established.\nF3: DROP \u2014 the duplicate `shape_units` read is an extra query per product with no wrong-data outcome; the two-snapshot concern only makes a point-in-time status report slightly stale.\nF4: DROP \u2014 the assert checks a static enum-to-tuple invariant that runs on every normal import and test, and the only loss under `python -O` is a dev-time check.\nF1: KEEP \u2014 `raw_counts` counts every `tick_trade` row in the session windows regardless of shape, and `_session_row` compares that against the shape-scoped ledger, so a second universe entry in the same dataset would produce false mismatches and exit 3.\nF2: KEEP \u2014 with `end` unset and no edge observed, `wanted` is `None` but `caught_up` still receives `wanted=True`, so an empty or all-complete verdict list prints \"caught up: yes\" for a range nothing established.\nF3: DROP \u2014 the duplicate `shape_units` read is an extra query per product with no wrong-data outcome; the two-snapshot concern only makes a point-in-time status report slightly stale.\nF4: DROP \u2014 the assert checks a static enum-to-tuple invariant that runs on every normal import and test, and the only loss under `python -O` is a dev-time check."
+}

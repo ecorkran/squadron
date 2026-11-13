@@ -1,0 +1,38 @@
+{
+ "case": "175",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Duplicate logging is cosmetic, and the lookups already succeeded before the provider call; error masking is speculative."
+  ],
+  "F2": [
+   "DROP",
+   "The slice explicitly documents the addressed-findings judge as excluded from usage capture."
+  ],
+  "F3": [
+   "DROP",
+   "Repeated resolution can duplicate warnings but applies identical pricing logic without changing totals."
+  ],
+  "F4": [
+   "DROP",
+   "Duplicating the tier literal is a maintainability issue, not a behavioral defect."
+  ]
+ },
+ "wall_seconds": 40.8,
+ "duration_seconds": 40.82598804193549,
+ "cost_usd": 0.0323284,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=108548, cached=98304, cache_write=None, completion=201, reasoning=18)",
+ "raw_output": "F1: DROP \u2014 Duplicate logging is cosmetic, and the lookups already succeeded before the provider call; error masking is speculative.\nF2: DROP \u2014 The slice explicitly documents the addressed-findings judge as excluded from usage capture.\nF3: DROP \u2014 Repeated resolution can duplicate warnings but applies identical pricing logic without changing totals.\nF4: DROP \u2014 Duplicating the tier literal is a maintainability issue, not a behavioral defect.\nF1: DROP \u2014 Duplicate logging is cosmetic, and no reachable failure of the already-successful provider lookups is demonstrated.\nF2: DROP \u2014 The slice explicitly documents the addressed-findings judge as excluded from usage capture.\nF3: DROP \u2014 Repeated cost resolution duplicates warnings but uses identical pricing logic without changing totals.\nF4: DROP \u2014 The duplicated tier literal is a maintainability concern, not a behavioral defect."
+}

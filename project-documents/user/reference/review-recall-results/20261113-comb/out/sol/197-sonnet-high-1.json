@@ -1,0 +1,38 @@
+{
+ "case": "197",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Invalid pipeline YAML escapes validation, while a missing pipeline incorrectly returns HALTED instead of REJECTED."
+  ],
+  "F2": [
+   "DROP",
+   "This improves diagnostics for incompatible cf output but does not fix a demonstrated supported-input failure."
+  ],
+  "F3": [
+   "DROP",
+   "Orphan cleanup is low-impact hardening, and no required access is shown to break under 0600 permissions."
+  ],
+  "F4": [
+   "DROP",
+   "The deferred import avoids initialization failure; private imports and layering alone are not behavioral defects."
+  ]
+ },
+ "wall_seconds": 37.9,
+ "duration_seconds": 37.863484292058274,
+ "cost_usd": 0.033921599999999996,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=97261, cached=86016, cache_write=None, completion=283, reasoning=79)",
+ "raw_output": "F1: KEEP \u2014 Invalid pipeline YAML escapes validation, while a missing pipeline incorrectly returns HALTED instead of REJECTED.\nF2: DROP \u2014 This improves diagnostics for incompatible cf output but does not fix a demonstrated supported-input failure.\nF3: DROP \u2014 Orphan cleanup is low-impact hardening, and no required access is shown to break under 0600 permissions.\nF4: DROP \u2014 The deferred import avoids initialization failure; private imports and layering alone are not behavioral defects.\nF1: KEEP \u2014 Invalid pipeline YAML escapes validation, while a missing pipeline incorrectly returns HALTED instead of REJECTED.\nF2: DROP \u2014 Better diagnostics for incompatible cf output do not fix a demonstrated supported-input defect.\nF3: DROP \u2014 Temp-file cleanup is low-impact hardening, and no required access is shown to break under 0600 permissions.\nF4: DROP \u2014 The deferred import avoids initialization failure; private imports and layering alone are not behavioral defects."
+}

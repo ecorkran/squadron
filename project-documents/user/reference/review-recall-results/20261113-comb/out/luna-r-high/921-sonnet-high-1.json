@@ -1,0 +1,48 @@
+{
+ "case": "921",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The sudoers rule lets `manta` execute a checkout-controlled installer as root and use overly broad privileged commands."
+  ],
+  "F2": [
+   "KEEP",
+   "Parsing printed markers instead of a shared verdict lets a wording change make the cutover silently accept a WAIT result."
+  ],
+  "F3": [
+   "DROP",
+   "The misplaced log creation can leave a stray file when preflight refuses, but does not compromise the cutover."
+  ],
+  "F4": [
+   "KEEP",
+   "A bar inserted during a refresh can predate its finish time yet be absent from that refresh, producing a falsely fresh verdict."
+  ],
+  "F5": [
+   "DROP",
+   "Import ordering is a style issue and does not cause incorrect behavior."
+  ],
+  "F6": [
+   "DROP",
+   "Duplicated test setup is a maintenance concern, not a defect in runtime behavior."
+  ]
+ },
+ "wall_seconds": 69.7,
+ "duration_seconds": 69.67785300011747,
+ "cost_usd": 0.011448980000000001,
+ "effort": "high",
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=218912, cached=144708, cache_write=None, completion=5163, reasoning=4607)",
+ "raw_output": "F1: KEEP \u2014 The sudoers rule lets `manta` execute a checkout-controlled installer as root and use overly broad privileged commands.\nF2: KEEP \u2014 Parsing printed markers instead of a shared verdict lets a wording change make the cutover silently accept a WAIT result.\nF3: DROP \u2014 The misplaced log creation can leave a stray file when preflight refuses, but does not compromise the cutover.\nF4: KEEP \u2014 A bar inserted during a refresh can predate its finish time yet be absent from that refresh, producing a falsely fresh verdict.\nF5: DROP \u2014 Import ordering is a style issue and does not cause incorrect behavior.\nF6: DROP \u2014 Duplicated test setup is a maintenance concern, not a defect in runtime behavior.\nF1: KEEP \u2014 The rule lets `manta` execute a checkout-controlled installer as root and use overly broad privileged commands.\nF2: KEEP \u2014 Parsing printed markers instead of a shared verdict can make the cutover silently accept a WAIT result if the output wording changes.\nF3: DROP \u2014 Creating a stray log before preflight refuses is untidy but does not cause incorrect cutover behavior.\nF4: KEEP \u2014 A bar inserted during a refresh can predate its finish time yet be absent from that refresh, causing a falsely fresh verdict.\nF5: DROP \u2014 Import ordering is a style issue and does not cause incorrect behavior.\nF6: DROP \u2014 Duplicated test setup is a maintenance concern, not a defect in runtime behavior."
+}

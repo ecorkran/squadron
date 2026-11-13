@@ -1,0 +1,48 @@
+{
+ "case": "307",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The production JSON nests the purchase summary under `phases`, so judging it raises `KeyError` and stops before the estimate command is printed."
+  ],
+  "F2": [
+   "KEEP",
+   "A non-empty estimate reports `estimate_only`, but the full-run judge accepts only `allowed`, so it refuses every non-empty plan."
+  ],
+  "F3": [
+   "KEEP",
+   "With ceiling checks disabled, the judge returns BUY before checking refusal reasons, including an archive-space shortfall."
+  ],
+  "F4": [
+   "KEEP",
+   "The evidence aggregates over-session names by product rather than family, so a family failure can report sessions from another family."
+  ],
+  "F5": [
+   "KEEP",
+   "A nonnumeric slice value can include path separators and cause state or log files to be written outside the notes directory."
+  ],
+  "F6": [
+   "DROP",
+   "Missing type-check coverage is a tooling concern, not a demonstrated defect in runtime behavior."
+  ]
+ },
+ "wall_seconds": 85.1,
+ "duration_seconds": 85.07690045819618,
+ "cost_usd": 0.01137997,
+ "effort": "high",
+ "tool_calls_made": 25,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=250733, cached=189587, cache_write=None, completion=6739, reasoning=5657)",
+ "raw_output": "F1: KEEP \u2014 The production JSON nests the purchase summary under `phases`, so judging it raises `KeyError` and stops before the estimate command is printed.\nF2: KEEP \u2014 A non-empty estimate reports `estimate_only`, but the full-run judge accepts only `allowed`, so it refuses every non-empty plan.\nF3: KEEP \u2014 With ceiling checks disabled, the judge returns BUY before checking refusal reasons, including an archive-space shortfall.\nF4: KEEP \u2014 The evidence aggregates over-session names by product rather than family, so a family failure can report sessions from another family.\nF5: KEEP \u2014 A nonnumeric slice value can include path separators and cause state or log files to be written outside the notes directory.\nF6: DROP \u2014 Missing type-check coverage is a tooling concern, not a demonstrated defect in runtime behavior.\nF1: KEEP \u2014 The production JSON nests the purchase summary under `phases`, so judging it raises `KeyError` and stops before the estimate command is printed.\nF2: KEEP \u2014 A non-empty estimate reports `estimate_only`, but the full-run judge accepts only `allowed`, so it refuses every non-empty plan.\nF3: KEEP \u2014 With ceiling checks disabled, the judge returns BUY before checking refusal reasons, including an archive-space shortfall.\nF4: KEEP \u2014 Over-session names are aggregated by product rather than family, so a family failure can report sessions from another family.\nF5: KEEP \u2014 A slice value containing path separators can cause state or log files to be written outside the notes directory.\nF6: DROP \u2014 Missing type-check coverage is a tooling concern, not a demonstrated defect in runtime behavior."
+}

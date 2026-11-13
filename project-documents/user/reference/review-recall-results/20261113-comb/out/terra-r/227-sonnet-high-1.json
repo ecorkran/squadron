@@ -1,0 +1,28 @@
+{
+ "case": "227",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Unhandled read errors can prevent the report, and health checks can accept stale log entries."
+  ],
+  "F2": [
+   "DROP",
+   "The current value matches the table; the proposed drift is hypothetical and the other constants are maintainability concerns."
+  ]
+ },
+ "wall_seconds": 12.4,
+ "duration_seconds": 12.367929457919672,
+ "cost_usd": 0.03372045,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=78219, cached=49109, cache_write=None, completion=431, reasoning=173)",
+ "raw_output": "F1: KEEP \u2014 Unhandled read errors can prevent the report, and health checks can accept stale log entries.\n\nF2: DROP \u2014 The current value matches the table; the proposed drift is hypothetical and the other constants are maintainability concerns.\nF1: KEEP \u2014 Unhandled read errors can prevent the report, and health checks can accept stale log entries.\n\nF2: DROP \u2014 The current value matches the table; the proposed drift is hypothetical and the other constants are maintainability concerns."
+}

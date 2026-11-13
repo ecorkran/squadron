@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Autocommit reads can straddle an ingest commit, falsely reporting a ledger/raw mismatch and exiting 3."
+  ],
+  "F2": [
+   "KEEP",
+   "Raw counts lack the ledger\u2019s request-shape scope, so unrelated valid rows can falsely fail coverage."
+  ],
+  "F3": [
+   "DROP",
+   "The quadratic assembly is inefficient, but the cited probe demonstrates no meaningful operational impact in this CLI path."
+  ]
+ },
+ "wall_seconds": 42.4,
+ "duration_seconds": 42.402889791177586,
+ "cost_usd": 0.016693200000000002,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=104150, cached=102272, cache_write=None, completion=271, reasoning=110)",
+ "raw_output": "F1: KEEP \u2014 Autocommit reads can straddle an ingest commit, falsely reporting a ledger/raw mismatch and exiting 3.\nF2: KEEP \u2014 Raw counts lack the ledger\u2019s request-shape scope, so unrelated valid rows can falsely fail coverage.\nF3: DROP \u2014 The quadratic assembly is inefficient, but the cited probe demonstrates no meaningful operational impact in this CLI path.\nF1: KEEP \u2014 Autocommit reads can straddle an ingest commit, falsely reporting corruption and exiting 3.\nF2: KEEP \u2014 Raw counts omit the ledger\u2019s request-shape filters, allowing unrelated valid rows to falsely fail coverage.\nF3: DROP \u2014 The quadratic assembly is inefficient, but the probe establishes no meaningful operational impact in this CLI."
+}

@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Checkout is a Path, parameters are string-typed, and separator rejection already occurs before journaling."
+  ],
+  "F2": [
+   "DROP",
+   "File size and cohesion concerns do not identify a behavioral defect."
+  ],
+  "F3": [
+   "KEEP",
+   "Negative launch grace is accepted from the CLI and causes premature overdue classification."
+  ]
+ },
+ "wall_seconds": 40.9,
+ "duration_seconds": 40.91324883303605,
+ "cost_usd": 0.022316799999999998,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=108406, cached=103808, cache_write=None, completion=274, reasoning=141)",
+ "raw_output": "F1: DROP \u2014 Checkout is a Path, parameters are string-typed, and separator rejection already occurs before journaling.\nF2: DROP \u2014 File size and cohesion concerns do not identify a behavioral defect.\nF3: KEEP \u2014 Negative launch grace is accepted from the CLI and causes premature overdue classification.\nF1: DROP \u2014 Checkout is a Path, parameters are string-typed, and separator rejection occurs before journaling.\nF2: DROP \u2014 File size and cohesion concerns do not identify a behavioral defect.\nF3: KEEP \u2014 Negative launch grace is accepted from the CLI and causes premature overdue classification."
+}

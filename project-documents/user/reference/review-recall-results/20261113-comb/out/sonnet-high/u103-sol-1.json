@@ -1,0 +1,28 @@
+{
+ "case": "u103",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The range effect reads `seriesCountRef`, which neither triggers a render nor is a dependency. A series added through the public facade after mount therefore leaves the Context range unapplied until `range` changes. No production code calls it yet, but the facade is the hook's public API."
+  ],
+  "F2": [
+   "DROP",
+   "This only matters for a speculative `data: []` or cleared-data case that no caller exercises in this slice. The count guard is an intentional approximation, and the change's real gap is the trigger problem in F1."
+  ]
+ },
+ "wall_seconds": 17.5,
+ "duration_seconds": 17.483939666999504,
+ "cost_usd": 0.10786930000000002,
+ "effort": "high",
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=86106, cached=65178, cache_write=20916, completion=1706, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The range effect reads `seriesCountRef`, which neither triggers a render nor is a dependency. A series added through the public facade after mount therefore leaves the Context range unapplied until `range` changes. No production code calls it yet, but the facade is the hook's public API.\nF2: DROP \u2014 This only matters for a speculative `data: []` or cleared-data case that no caller exercises in this slice. The count guard is an intentional approximation, and the change's real gap is the trigger problem in F1.\nF1: KEEP \u2014 The range effect reads `seriesCountRef`, which neither triggers a render nor is a dependency. A series added through the public facade after mount therefore leaves the Context range unapplied until `range` changes. No production code calls it yet, but the facade is the hook's public API.\nF2: DROP \u2014 This only matters for a speculative `data: []` or cleared-data case that no caller exercises in this slice. The count guard is an intentional approximation, and the change's real gap is the trigger problem in F1."
+}

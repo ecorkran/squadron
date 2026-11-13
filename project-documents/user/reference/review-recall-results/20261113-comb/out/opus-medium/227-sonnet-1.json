@@ -1,0 +1,43 @@
+{
+ "case": "227",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "run_health` ignores the health command's exit status and reads whatever line is last in the log, so if the job fails, step 10 can pass on the (0,0) line step 7 left there."
+  ],
+  "F2": [
+   "KEEP",
+   "step_production` reads `splitlines()[-1]` on a log it never checks exists or has lines; `FileNotFoundError` or `IndexError` gets past `run_steps`, so the run crashes before the cutover report is written, unlike the guarded reads in `run_health` and `step_weekly`."
+  ],
+  "F3": [
+   "DROP",
+   "both asserts can never fire: `require` already raises `StepFailed` when `flags` is None, and `block_lines` only returns lines that match `_JOB_LINE`, so stripping them with `-O` changes nothing."
+  ],
+  "F4": [
+   "DROP",
+   "the `root` check matches the template's host jobs today; it is a fragility and style point, not a defect."
+  ],
+  "F5": [
+   "DROP",
+   "this is about test style (asserting on source text) and does not point to a defect in shipped code."
+  ]
+ },
+ "wall_seconds": 25.9,
+ "duration_seconds": 25.866093874908984,
+ "cost_usd": 0.2478669,
+ "effort": "medium",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=91375, cached=67627, cache_write=23736, completion=2172, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `run_health` ignores the health command's exit status and reads whatever line is last in the log, so if the job fails, step 10 can pass on the (0,0) line step 7 left there.\nF2: KEEP \u2014 `step_production` reads `splitlines()[-1]` on a log it never checks exists or has lines; `FileNotFoundError` or `IndexError` gets past `run_steps`, so the run crashes before the cutover report is written, unlike the guarded reads in `run_health` and `step_weekly`.\nF3: DROP \u2014 both asserts can never fire: `require` already raises `StepFailed` when `flags` is None, and `block_lines` only returns lines that match `_JOB_LINE`, so stripping them with `-O` changes nothing.\nF4: DROP \u2014 the `root` check matches the template's host jobs today; it is a fragility and style point, not a defect.\nF5: DROP \u2014 this is about test style (asserting on source text) and does not point to a defect in shipped code.\nF1: KEEP \u2014 `run_health` ignores the health job's exit status and checks only the log's last line, so if the job fails, step 10 can pass on the archive=0 stale=0 line step 7 wrote.\nF2: KEEP \u2014 `step_production` takes the last line of the production log without checking it exists or is non-empty, and the resulting `FileNotFoundError`/`IndexError` gets past `run_steps`, so the run crashes before the cutover report is written.\nF3: DROP \u2014 neither assert can ever fire: `require` already raises `StepFailed` when `flags` is None, and `block_lines` returns only lines that match `_JOB_LINE`, so stripping them with `-O` changes nothing.\nF4: DROP \u2014 the `root` user check matches the template's host jobs today, so this is a fragility or style point rather than a defect.\nF5: DROP \u2014 this is about test style, not a defect in the code the change ships."
+}

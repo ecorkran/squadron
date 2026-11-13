@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The duplication causes no behavioral defect and is only a refactoring concern."
+  ],
+  "F2": [
+   "DROP",
+   "The project configures non-strict mypy, not strict pyright, and these annotations cause no runtime defect."
+  ]
+ },
+ "wall_seconds": 23.2,
+ "duration_seconds": 23.206464166985825,
+ "cost_usd": 0.0115928,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=83217, cached=82048, cache_write=None, completion=105, reasoning=0)",
+ "raw_output": "F1: DROP \u2014 The duplication causes no behavioral defect and is only a refactoring concern.\nF2: DROP \u2014 The project configures non-strict mypy, not strict pyright, and these annotations cause no runtime defect.\nF1: DROP \u2014 The duplicated validation causes no behavioral defect; extracting it is optional refactoring.\nF2: DROP \u2014 The project uses non-strict mypy rather than strict pyright, so the claimed merge-blocking errors do not apply."
+}

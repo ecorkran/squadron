@@ -1,0 +1,38 @@
+{
+ "case": "197",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A removed or invalid pipeline raises out of `resume_item` instead of returning a clean rejected outcome."
+  ],
+  "F2": [
+   "KEEP",
+   "Missing task counts in `cf` output cause a bare `KeyError` that crashes `list_tasks` consumers."
+  ],
+  "F3": [
+   "KEEP",
+   "Failed writes or replacements can leave orphaned temporary report files."
+  ],
+  "F4": [
+   "DROP",
+   "The reverse import is deferred until after module loading, and the private-name dependency is a layering concern rather than a runtime defect."
+  ]
+ },
+ "wall_seconds": 75.1,
+ "duration_seconds": 75.07731266692281,
+ "cost_usd": 0.01059322,
+ "effort": "high",
+ "tool_calls_made": 10,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=216717, cached=152522, cache_write=None, completion=5297, reasoning=4727)",
+ "raw_output": "F1: KEEP \u2014 A removed or invalid pipeline raises out of `resume_item` instead of returning a clean rejected outcome.\nF2: KEEP \u2014 Missing task counts in `cf` output cause a bare `KeyError` that crashes `list_tasks` consumers.\nF3: KEEP \u2014 Failed writes or replacements can leave orphaned temporary report files.\nF4: DROP \u2014 The reverse import is deferred until after module loading, and the private-name dependency is a layering concern rather than a runtime defect.\nF1: KEEP \u2014 A removed or invalid pipeline raises out of `resume_item` instead of returning a clean rejected outcome.\nF2: KEEP \u2014 Missing task counts in `cf` output cause a bare `KeyError` that crashes `list_tasks` consumers.\nF3: KEEP \u2014 Failed writes or replacements can leave orphaned temporary report files.\nF4: DROP \u2014 The deferred import avoids a runtime import cycle, and the private-name dependency is a layering concern rather than a behavior defect."
+}

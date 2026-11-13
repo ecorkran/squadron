@@ -1,0 +1,48 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The original create failure is still logged and committed as `error` state, so the real provider's `destroy()` throwing only adds an extra caught log line."
+  ],
+  "F2": [
+   "KEEP",
+   "setOperationError` overwrites with each new failure, so the hook breaks its documented \"first error\" contract (`chart-operations.ts:77`), and the test named for that behavior never checks a second failure."
+  ],
+  "F3": [
+   "KEEP",
+   "readChartStyle` silently leaves individual fields undefined when a token is missing, so a missing or renamed token quietly falls back to library colors, which breaks the project's explicit no-silent-fallback rule."
+  ],
+  "F4": [
+   "DROP",
+   "The no-op subscriptions and placeholder effect are deliberate, documented scaffolding; this is a complexity/style objection, not a defect."
+  ],
+  "F5": [
+   "DROP",
+   "File length and lint-suppression scope are style and maintainability points, not wrong behavior."
+  ],
+  "F6": [
+   "DROP",
+   "Nothing in this change adds series (the route never uses `chart`), so the range effect is a documented seam with no reachable bug yet."
+  ]
+ },
+ "wall_seconds": 25.3,
+ "duration_seconds": 25.341324209002778,
+ "cost_usd": 0.27075099999999996,
+ "effort": "medium",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=105023, cached=78798, cache_write=26213, completion=2226, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The original create failure is still logged and committed as `error` state, so the real provider's `destroy()` throwing only adds an extra caught log line.\nF2: KEEP \u2014 `setOperationError` overwrites with each new failure, so the hook breaks its documented \"first error\" contract (`chart-operations.ts:77`), and the test named for that behavior never checks a second failure.\nF3: KEEP \u2014 `readChartStyle` silently leaves individual fields undefined when a token is missing, so a missing or renamed token quietly falls back to library colors, which breaks the project's explicit no-silent-fallback rule.\nF4: DROP \u2014 The no-op subscriptions and placeholder effect are deliberate, documented scaffolding; this is a complexity/style objection, not a defect.\nF5: DROP \u2014 File length and lint-suppression scope are style and maintainability points, not wrong behavior.\nF6: DROP \u2014 Nothing in this change adds series (the route never uses `chart`), so the range effect is a documented seam with no reachable bug yet.\nF1: DROP \u2014 The original create failure is still logged and stored as `error` state, so the real provider's `destroy()` throwing only adds an extra caught log line.\nF2: KEEP \u2014 `setOperationError` replaces the stored error on every failure, so the hook breaks its documented \"first error\" contract (`chart-operations.ts:77`), and the test named for that never checks a second failure.\nF3: KEEP \u2014 `readChartStyle` silently leaves fields undefined when a token is missing, so a missing or renamed token quietly falls back to library colors, which breaks the project's no-silent-fallback rule.\nF4: DROP \u2014 The no-op subscriptions and placeholder effect are deliberate, documented scaffolding, so this is a complexity objection rather than a defect.\nF5: DROP \u2014 File length and the scope of the lint suppression are style and maintainability points, not wrong behavior.\nF6: DROP \u2014 Nothing in this change adds series (the route never uses `chart`), so the range effect is a documented seam with no reachable bug yet."
+}

@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Both confirmation paths work; duplication is a refactoring concern, not a behavioral defect."
+  ],
+  "F2": [
+   "DROP",
+   "Closing unexpected-fault escalations after a complete clean tick matches the explicit design contract."
+  ],
+  "F3": [
+   "DROP",
+   "Duplicate validation causes no demonstrated failure; production observation and launch already reject empty run IDs."
+  ]
+ },
+ "wall_seconds": 34.9,
+ "duration_seconds": 34.942755667027086,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=113092, cached=101120, cache_write=None, completion=165, reasoning=21)",
+ "raw_output": "F1: DROP \u2014 Both confirmation paths work; duplication is a refactoring concern, not a behavioral defect.\nF2: DROP \u2014 Closing unexpected-fault escalations after a complete clean tick matches the explicit design contract.\nF3: DROP \u2014 Duplicate validation causes no demonstrated failure; production observation and launch already reject empty run IDs.\nF1: DROP \u2014 Confirmation works in production; the duplicate method is a refactoring concern, not a defect.\nF2: DROP \u2014 Closing escalations after a complete clean tick follows the explicit design contract, including unexpected faults.\nF3: DROP \u2014 Duplicate validation causes no demonstrated failure; production launch and observation already reject empty run IDs."
+}

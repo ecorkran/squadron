@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "confirm()` is unused in production but does the same thing as `_confirm`'s `tracked.confirmed = True`, so it's dead code, not wrong behaviour."
+  ],
+  "F2": [
+   "DROP",
+   "slice 122 D8 says to close every project escalation whose kind did not recur on a complete tick, so closing `unexpected_fault` is intended, and a bug that fails every tick never reaches `_close_recovered` because a faulted tick closes nothing."
+  ],
+  "F3": [
+   "DROP",
+   "duplication only: `observe` rejects an empty run id before `finish` sees the entry, so the slightly different rules cause no wrong behaviour."
+  ]
+ },
+ "wall_seconds": 30.0,
+ "duration_seconds": 29.946465709013864,
+ "cost_usd": 0.24579979999999998,
+ "effort": "high",
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=229610, cached=210257, cache_write=19335, completion=2396, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 `confirm()` is unused in production but does the same thing as `_confirm`'s `tracked.confirmed = True`, so it's dead code, not wrong behaviour.\nF2: DROP \u2014 slice 122 D8 says to close every project escalation whose kind did not recur on a complete tick, so closing `unexpected_fault` is intended, and a bug that fails every tick never reaches `_close_recovered` because a faulted tick closes nothing.\nF3: DROP \u2014 duplication only: `observe` rejects an empty run id before `finish` sees the entry, so the slightly different rules cause no wrong behaviour.\nF1: DROP \u2014 `confirm()` is unused in production but does the same thing as `_confirm`'s `tracked.confirmed = True`, so it's dead code, not wrong behaviour.\nF2: DROP \u2014 slice 122 D8 says to close every project escalation whose kind did not recur on a complete tick, so closing `unexpected_fault` is intended, and a bug that fails every tick never reaches `_close_recovered` because a faulted tick closes nothing.\nF3: DROP \u2014 duplication only: `observe` rejects an empty run id before `finish` sees the entry, so the slightly different rules cause no wrong behaviour."
+}

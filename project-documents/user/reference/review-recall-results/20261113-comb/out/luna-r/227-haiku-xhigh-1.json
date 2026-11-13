@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Unexpected exceptions escape `run_steps`, so `main()` skips writing the promised cutover report."
+  ],
+  "F2": [
+   "DROP",
+   "These are test-quality gaps, not defects causing wrong behavior in the changed code."
+  ],
+  "F3": [
+   "DROP",
+   "The finding identifies missing test coverage but shows no defect in the replication branch."
+  ]
+ },
+ "wall_seconds": 18.6,
+ "duration_seconds": 18.634105041157454,
+ "cost_usd": 0.0030497500000000004,
+ "effort": null,
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=53274, cached=30435, cache_write=None, completion=923, reasoning=616)",
+ "raw_output": "F1: KEEP \u2014 Unexpected exceptions escape `run_steps`, so `main()` skips writing the promised cutover report.\nF2: DROP \u2014 These are test-quality gaps, not defects causing wrong behavior in the changed code.\nF3: DROP \u2014 The finding identifies missing test coverage but shows no defect in the replication branch.\nF1: KEEP \u2014 Unexpected exceptions escape `run_steps`, so `main()` skips writing the promised cutover report.\nF2: DROP \u2014 These test-quality gaps do not demonstrate a defect causing incorrect behavior in the changed code.\nF3: DROP \u2014 The finding identifies missing test coverage but shows no defect in the replication branch."
+}

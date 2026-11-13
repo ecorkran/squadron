@@ -1,0 +1,33 @@
+{
+ "case": "188",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Date-first parsing converts midnight timestamps to dates, expanding end bounds and discarding offsets."
+  ],
+  "F2": [
+   "KEEP",
+   "Both async handlers build and serialize up to 75,000 records synchronously, blocking unrelated requests."
+  ],
+  "F3": [
+   "DROP",
+   "CI gating is explicitly deferred to slice 907, and its absence is not a runtime defect introduced here."
+  ]
+ },
+ "wall_seconds": 40.3,
+ "duration_seconds": 40.24676404194906,
+ "cost_usd": 0.0111012,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=79303, cached=78592, cache_write=None, completion=182, reasoning=26)",
+ "raw_output": "F1: KEEP \u2014 Date-first parsing converts midnight timestamps to dates, expanding end bounds and discarding offsets.\nF2: KEEP \u2014 Both async handlers build and serialize up to 75,000 records synchronously, blocking unrelated requests.\nF3: DROP \u2014 CI gating is explicitly deferred to slice 907, and its absence is not a runtime defect introduced here.\nF1: KEEP \u2014 Date-first parsing converts midnight timestamps to dates, expanding end bounds and discarding offsets.\nF2: KEEP \u2014 Both async handlers build and serialize up to 75,000 records synchronously, blocking unrelated requests.\nF3: DROP \u2014 CI gating is explicitly deferred to slice 907, and its absence is not a runtime defect introduced here."
+}

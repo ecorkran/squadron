@@ -1,0 +1,43 @@
+{
+ "case": "227",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Step 7 runs the same health command first, so an argument error would fail there. Only a rare pre-log crash could leave a stale line."
+  ],
+  "F2": [
+   "DROP",
+   "The production health log has been written by cron every 30 minutes. A missing log would still crash loudly, only after every other step has passed."
+  ],
+  "F3": [
+   "DROP",
+   "The asserts are only type-narrowing for conditions that `require` or the regex already guarantee, so they don't change real behaviour."
+  ],
+  "F4": [
+   "DROP",
+   "root` is hardcoded in the host-block template, and the `# host:` marker is a comment, not a user-facing label, so this is a style point."
+  ],
+  "F5": [
+   "DROP",
+   "Testing shell source text is brittle but the tests do check real constraints, so this is a style and test-quality point, not a defect."
+  ]
+ },
+ "wall_seconds": 32.3,
+ "duration_seconds": 32.27902975003235,
+ "cost_usd": 0.17520059999999998,
+ "effort": "high",
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=183208, cached=151006, cache_write=32186, completion=3039, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 Step 7 runs the same health command first, so an argument error would fail there. Only a rare pre-log crash could leave a stale line.\nF2: DROP \u2014 The production health log has been written by cron every 30 minutes. A missing log would still crash loudly, only after every other step has passed.\nF3: DROP \u2014 The asserts are only type-narrowing for conditions that `require` or the regex already guarantee, so they don't change real behaviour.\nF4: DROP \u2014 `root` is hardcoded in the host-block template, and the `# host:` marker is a comment, not a user-facing label, so this is a style point.\nF5: DROP \u2014 Testing shell source text is brittle but the tests do check real constraints, so this is a style and test-quality point, not a defect.\nF1: DROP \u2014 Step 7 runs the same health command first, so an argument error would fail there. A stale-line pass would need a rare crash before the script logs.\nF2: DROP \u2014 The production health log has been written by cron every 30 minutes. A missing log would still fail loudly, only after every other step has passed.\nF3: DROP \u2014 The asserts only narrow types for conditions that `require` or the regex already guarantee, so they don't change real behaviour.\nF4: DROP \u2014 `root` is hardcoded in the host-block template, and the `# host:` marker is a comment, not a user-facing label, so this is a style point.\nF5: DROP \u2014 Testing shell source text is brittle, but the tests check real constraints. This is a test-quality point, not a defect."
+}

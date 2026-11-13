@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "An empty pipeline passes `build_argv` but fails validation after journaling, leaving an unresolved entry that can later be misclassified as vanished."
+  ],
+  "F2": [
+   "DROP",
+   "File length and cohesion are maintainability concerns, not defects requiring action before merge."
+  ],
+  "F3": [
+   "KEEP",
+   "A negative `launch_grace_seconds` is accepted and can trigger an overdue-launch fault immediately instead of honoring the configured grace period."
+  ]
+ },
+ "wall_seconds": 74.3,
+ "duration_seconds": 74.30163162504323,
+ "cost_usd": 0.00443046,
+ "effort": "high",
+ "tool_calls_made": 9,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=87545, cached=70806, cache_write=None, completion=4097, reasoning=3645)",
+ "raw_output": "F1: KEEP \u2014 An empty pipeline passes `build_argv` but fails validation after journaling, leaving an unresolved entry that can later be misclassified as vanished.\nF2: DROP \u2014 File length and cohesion are maintainability concerns, not defects requiring action before merge.\nF3: KEEP \u2014 A negative `launch_grace_seconds` is accepted and can trigger an overdue-launch fault immediately instead of honoring the configured grace period.\nF1: KEEP \u2014 An empty pipeline passes pre-journal validation but fails in `launch` after journaling, leaving an unresolved entry that can later be misclassified as vanished.\nF2: DROP \u2014 File size and cohesion are maintainability concerns, not defects requiring action before merge.\nF3: KEEP \u2014 A negative `launch_grace_seconds` is accepted and can trigger an overdue-launch fault immediately instead of honoring the grace period."
+}

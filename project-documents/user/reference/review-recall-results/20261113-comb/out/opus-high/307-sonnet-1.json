@@ -1,0 +1,23 @@
+{
+ "case": "307",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sonnet/1/0"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "These are typing-style points with no effect on runtime behaviour. The project uses mypy rather than strict pyright, and `pyproject.toml:72-75` only type-checks `src/manta_trading`, so neither the test file nor the scripts are under the strict rule the finding cites."
+  ]
+ },
+ "wall_seconds": 16.4,
+ "duration_seconds": 16.420709874946624,
+ "cost_usd": 0.0922101,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=90365, cached=84338, cache_write=6015, completion=1312, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 These are typing-style points with no effect on runtime behaviour. The project uses mypy rather than strict pyright, and `pyproject.toml:72-75` only type-checks `src/manta_trading`, so neither the test file nor the scripts are under the strict rule the finding cites.\nF1: DROP \u2014 These are typing-style points with no effect on runtime behaviour, and the strict rule they cite doesn't cover this code: the project uses mypy (`pyproject.toml:68-75`), which only checks `src/manta_trading`, not tests or scripts."
+}

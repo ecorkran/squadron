@@ -1,0 +1,48 @@
+{
+ "case": "307",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The new estimate mode consumes the nested CLI payload as a flat summary and fails before printing ceilings."
+  ],
+  "F2": [
+   "DROP",
+   "The incorrect allowed-only verdict check predates this change and remains unchanged."
+  ],
+  "F3": [
+   "KEEP",
+   "The new ceiling bypass also ignores archive-space failures and incorrectly reports the plan as buyable."
+  ],
+  "F4": [
+   "KEEP",
+   "Product-wide aggregation mixes volume families\u2019 session names, producing incorrect failure evidence."
+  ],
+  "F5": [
+   "DROP",
+   "This requires malformed input from the trusted operator, not an exploitable external input path."
+  ],
+  "F6": [
+   "DROP",
+   "Type-checker coverage and annotation gaps do not establish a runtime defect."
+  ]
+ },
+ "wall_seconds": 67.1,
+ "duration_seconds": 67.1424823331181,
+ "cost_usd": 0.0357644,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=119742, cached=109184, cache_write=None, completion=373, reasoning=110)",
+ "raw_output": "F1: KEEP \u2014 The new estimate mode consumes the nested CLI payload as a flat summary and fails before printing ceilings.\nF2: DROP \u2014 The incorrect allowed-only verdict check predates this change and remains unchanged.\nF3: KEEP \u2014 The new ceiling bypass also ignores archive-space failures and incorrectly reports the plan as buyable.\nF4: KEEP \u2014 Product-wide aggregation mixes volume families\u2019 session names, producing incorrect failure evidence.\nF5: DROP \u2014 This requires malformed input from the trusted operator, not an exploitable external input path.\nF6: DROP \u2014 Type-checker coverage and annotation gaps do not establish a runtime defect.\nF1: KEEP \u2014 The new estimate mode treats the nested CLI payload as a flat summary and crashes before printing ceilings.\nF2: DROP \u2014 The incorrect allowed-only verdict check predates this change and remains unchanged.\nF3: KEEP \u2014 The new ceiling bypass ignores archive-space failures and incorrectly reports the plan as buyable.\nF4: KEEP \u2014 Product-wide aggregation mixes volume families\u2019 session names, producing incorrect failure evidence.\nF5: DROP \u2014 Malformed paths require trusted operator input; no external security boundary is crossed.\nF6: DROP \u2014 Type-checker coverage and annotation gaps do not demonstrate a runtime defect."
+}

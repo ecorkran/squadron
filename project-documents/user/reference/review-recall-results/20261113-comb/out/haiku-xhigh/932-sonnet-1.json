@@ -1,0 +1,43 @@
+{
+ "case": "932",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Tests are excluded from strict pyright by a documented project decision (pyproject.toml `include = [\"src\"]`, tracked in issue #50), so the `object` return types are test-typing hygiene with no bug behind them."
+  ],
+  "F2": [
+   "DROP",
+   "The idle timeout fires deterministically: the 0.05s deadline is always scheduled before the 0.15s sleep, so load cannot make the test flaky."
+  ],
+  "F3": [
+   "DROP",
+   "The `setting_sources` mismatch is a type-only suppression with no runtime defect; the list is passed through correctly."
+  ],
+  "F4": [
+   "DROP",
+   "The pipeline CLI always passes `os.getcwd()` (run.py:781-794), so the one-shot and session config reads agree today; the divergence needs a caller that passes a different cwd, and none exists."
+  ],
+  "F5": [
+   "DROP",
+   "This is a stale docstring cross-reference and a layering preference, with no wrong behavior."
+  ]
+ },
+ "wall_seconds": 64.4,
+ "duration_seconds": 64.41272441693582,
+ "cost_usd": 0.02394139,
+ "effort": "xhigh",
+ "tool_calls_made": 22,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=516793, cached=457319, cache_write=59454, completion=12863, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 Tests are excluded from strict pyright by a documented project decision (pyproject.toml `include = [\"src\"]`, tracked in issue #50), so the `object` return types are test-typing hygiene with no bug behind them.\nF2: DROP \u2014 The idle timeout fires deterministically: the 0.05s deadline is always scheduled before the 0.15s sleep, so load cannot make the test flaky.\nF3: DROP \u2014 The `setting_sources` mismatch is a type-only suppression with no runtime defect; the list is passed through correctly.\nF4: DROP \u2014 The pipeline CLI always passes `os.getcwd()` (run.py:781-794), so the one-shot and session config reads agree today; the divergence needs a caller that passes a different cwd, and none exists.\nF5: DROP \u2014 This is a stale docstring cross-reference and a layering preference, with no wrong behavior.\nF1: DROP \u2014 Tests are excluded from strict pyright by a documented project decision (pyproject.toml `include = [\"src\"]`, tracked in issue #50), so the `object` return types are test-typing hygiene with no bug behind them.\nF2: DROP \u2014 The idle timeout fires deterministically: the 0.05s deadline is always scheduled before the 0.15s sleep, so load cannot make the test flaky.\nF3: DROP \u2014 The `setting_sources` mismatch is a type-only suppression with no runtime defect; the list is passed through correctly.\nF4: DROP \u2014 The pipeline CLI always passes `os.getcwd()` (run.py:781-794), so the one-shot and session config reads agree today; the divergence needs a caller that passes a different cwd, and none exists.\nF5: DROP \u2014 This is a stale docstring cross-reference and a layering preference, with no wrong behavior."
+}

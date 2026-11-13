@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "connect_migrated` uses an autocommit connection, so the ledger and raw reads take separate snapshots, and an ingest commit between them yields a false mismatch and exit 3."
+  ],
+  "F2": [
+   "KEEP",
+   "raw_counts` counts every `tick_trade` row in the window, while `ledger_totals` is scoped to the shape, so other-shape trades show up as false mismatches."
+  ],
+  "F3": [
+   "DROP",
+   "the quadratic cost is real, but it only slows a one-shot read on long ranges; the output is correct and nothing else runs on the loop."
+  ]
+ },
+ "wall_seconds": 101.7,
+ "duration_seconds": 101.69114362518303,
+ "cost_usd": 0.02896423,
+ "effort": "xhigh",
+ "tool_calls_made": 17,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=534688, cached=467253, cache_write=67411, completion=20067, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `connect_migrated` uses an autocommit connection, so the ledger and raw reads take separate snapshots, and an ingest commit between them yields a false mismatch and exit 3.\nF2: KEEP \u2014 `raw_counts` counts every `tick_trade` row in the window, while `ledger_totals` is scoped to the shape, so other-shape trades show up as false mismatches.\nF3: DROP \u2014 the quadratic cost is real, but it only slows a one-shot read on long ranges; the output is correct and nothing else runs on the loop.\nF1: KEEP \u2014 `connect_migrated` uses an autocommit connection, so the ledger and raw reads take separate snapshots, and an ingest commit between them yields a false mismatch and exit 3.\nF2: KEEP \u2014 `raw_counts` counts every `tick_trade` row in the window, while `ledger_totals` is scoped to the shape, so other-shape trades show up as false mismatches.\nF3: DROP \u2014 the quadratic cost is real, but it only slows a one-shot read on long ranges; the output is correct and nothing else runs on the loop."
+}

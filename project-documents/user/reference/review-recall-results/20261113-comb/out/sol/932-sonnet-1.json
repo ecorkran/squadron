@@ -1,0 +1,43 @@
+{
+ "case": "932",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Broad helper annotations are typing debt, not a demonstrated behavioral defect."
+  ],
+  "F2": [
+   "DROP",
+   "The sleeps exercise timeout behavior without demonstrating an actual timing race or flaky failure."
+  ],
+  "F3": [
+   "DROP",
+   "The suppression bridges compatible runtime values and does not cause incorrect behavior."
+  ],
+  "F4": [
+   "KEEP",
+   "A supplied cwd selects another project's settings while the SDK runs in the process directory, applying the wrong policy."
+  ],
+  "F5": [
+   "DROP",
+   "The docstring reference and helper placement are documentation and organization concerns, not functional defects."
+  ]
+ },
+ "wall_seconds": 37.6,
+ "duration_seconds": 37.58312304201536,
+ "cost_usd": 0.033469200000000005,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=100438, cached=89472, cache_write=None, completion=259, reasoning=44)",
+ "raw_output": "F1: DROP \u2014 Broad helper annotations are typing debt, not a demonstrated behavioral defect.\nF2: DROP \u2014 The sleeps exercise timeout behavior without demonstrating an actual timing race or flaky failure.\nF3: DROP \u2014 The suppression bridges compatible runtime values and does not cause incorrect behavior.\nF4: KEEP \u2014 A supplied cwd selects another project's settings while the SDK runs in the process directory, applying the wrong policy.\nF5: DROP \u2014 The docstring reference and helper placement are documentation and organization concerns, not functional defects.\nF1: DROP \u2014 Broad helper annotations are typing debt, not a demonstrated behavioral defect.\nF2: DROP \u2014 The sleeps exercise timeout behavior without demonstrating a timing race or flaky failure.\nF3: DROP \u2014 The suppression bridges compatible runtime values without causing incorrect behavior.\nF4: KEEP \u2014 A supplied cwd selects another project's settings while the SDK runs in the process directory, applying the wrong policy.\nF5: DROP \u2014 The docstring reference and helper placement are documentation and organization concerns, not functional defects."
+}

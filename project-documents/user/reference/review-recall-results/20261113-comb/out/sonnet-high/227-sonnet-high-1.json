@@ -1,0 +1,28 @@
+{
+ "case": "227",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The crash paths (empty or missing log, absent `17/main`, empty cron file) need states that don't occur on the host. The health script always appends its log line before exiting, so the stale-line pass is a very narrow edge case."
+  ],
+  "F2": [
+   "DROP",
+   "This is a DRY and style point about a one-shot cutover script. A drifted `127.0.0.1` would make the guard fail loudly rather than corrupt anything."
+  ]
+ },
+ "wall_seconds": 22.4,
+ "duration_seconds": 22.433703417191282,
+ "cost_usd": 0.14697380000000002,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=145541, cached=116869, cache_write=28658, completion=1983, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The crash paths (empty or missing log, absent `17/main`, empty cron file) need states that don't occur on the host. The health script always appends its log line before exiting, so the stale-line pass is a very narrow edge case.\nF2: DROP \u2014 This is a DRY and style point about a one-shot cutover script. A drifted `127.0.0.1` would make the guard fail loudly rather than corrupt anything.\nF1: DROP \u2014 The crash paths (empty or missing log, absent `17/main`, empty cron file) need states that don't occur on the host. `backup_health_cron.sh` appends its log line before any failure path that matters, so the stale-line pass would need a failed append, which is a very narrow edge case.\nF2: DROP \u2014 This is a DRY and style point about a one-shot cutover script. If the `127.0.0.1` literal drifted from the table, the TD3 guard would fail loudly and block the cutover. It would not corrupt data or pass silently."
+}

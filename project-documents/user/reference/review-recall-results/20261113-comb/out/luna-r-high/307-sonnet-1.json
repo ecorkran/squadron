@@ -1,0 +1,23 @@
+{
+ "case": "307",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sonnet/1/0"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The project uses mypy rather than strict pyright, and these typing issues do not establish a behavioral defect."
+  ]
+ },
+ "wall_seconds": 33.9,
+ "duration_seconds": 33.85018983413465,
+ "cost_usd": 0.00523258,
+ "effort": "high",
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=95066, cached=58678, cache_write=None, completion=2014, reasoning=1738)",
+ "raw_output": "F1: DROP \u2014 The project uses mypy rather than strict pyright, and these typing issues do not establish a behavioral defect.\nF1: DROP \u2014 The project uses mypy rather than strict pyright, and these typing issues do not establish a behavioral defect."
+}

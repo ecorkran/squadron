@@ -1,0 +1,33 @@
+{
+ "case": "175",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "_append_step` saves only `step_result.action_results`, never `prior_rounds`, so the new report's run totals leave out the spend from earlier loop rounds."
+  ],
+  "F2": [
+   "KEEP",
+   "_metadata()` in `review_fold.py` copies the first part's metadata, usage included, and sums only tool calls, so the per-part usage stamped at `review.py:506` is lost for every part after the first."
+  ],
+  "F3": [
+   "KEEP",
+   "For a split review, the new failed-part result has empty `outputs`, so `_part_input` raises `TypeError`; the generic handler then replaces the provider error and its captured usage, and the remaining parts still run and spend."
+  ]
+ },
+ "wall_seconds": 39.6,
+ "duration_seconds": 39.56246691616252,
+ "cost_usd": 0.25631280000000006,
+ "effort": "high",
+ "tool_calls_made": 9,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=256590, cached=237626, cache_write=18944, completion=2809, reasoning=None)",
+ "raw_output": "Checking how loop rounds get persisted to run state, which decides F1.\nF1: KEEP \u2014 `_append_step` saves only `step_result.action_results`, never `prior_rounds`, so the new report's run totals leave out the spend from earlier loop rounds.\nF2: KEEP \u2014 `_metadata()` in `review_fold.py` copies the first part's metadata, usage included, and sums only tool calls, so the per-part usage stamped at `review.py:506` is lost for every part after the first.\nF3: KEEP \u2014 For a split review, the new failed-part result has empty `outputs`, so `_part_input` raises `TypeError`; the generic handler then replaces the provider error and its captured usage, and the remaining parts still run and spend.\nF1: KEEP \u2014 `_append_step` saves only `step_result.action_results`, never `prior_rounds`, so the new report's run totals leave out the spend from earlier loop rounds.\nF2: KEEP \u2014 `_metadata()` in `review_fold.py` copies the first part's metadata, usage included, and sums only tool calls, so the per-part usage stamped at `review.py:506` is lost for every part after the first.\nF3: KEEP \u2014 For a split review, the new failed-part result has empty `outputs`, so `_part_input` raises `TypeError`; the generic handler then replaces the provider error and its captured usage, and the remaining parts still run and spend."
+}

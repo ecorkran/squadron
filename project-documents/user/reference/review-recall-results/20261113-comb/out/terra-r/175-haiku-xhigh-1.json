@@ -1,0 +1,58 @@
+{
+ "case": "175",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Folding retains only the first part\u2019s usage, understating split-review totals."
+  ],
+  "F2": [
+   "KEEP",
+   "Compact discards available telemetry on dispatch and reconnect failures."
+  ],
+  "F3": [
+   "KEEP",
+   "Compact omits the alias, causing subscription costs to be mislabeled."
+  ],
+  "F4": [
+   "DROP",
+   "The judge and prompt-only compact paths are unchanged and excluded from this change\u2019s capture scope."
+  ],
+  "F5": [
+   "DROP",
+   "The keys currently agree; the finding describes hypothetical future drift."
+  ],
+  "F6": [
+   "DROP",
+   "This requests additional tests without identifying a current parsing defect."
+  ],
+  "F7": [
+   "DROP",
+   "The duplicated plumbing does not demonstrate incorrect behavior."
+  ],
+  "F8": [
+   "DROP",
+   "Function and file length alone do not establish a functional defect."
+  ]
+ },
+ "wall_seconds": 18.5,
+ "duration_seconds": 18.482368709053844,
+ "cost_usd": 0.09235725,
+ "effort": null,
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=231991, cached=152125, cache_write=None, completion=977, reasoning=215)",
+ "raw_output": "F1: KEEP \u2014 Folding retains only the first part\u2019s usage, understating split-review totals.\nF2: KEEP \u2014 Compact discards available telemetry on dispatch and reconnect failures.\nF3: KEEP \u2014 Compact omits the alias, causing subscription costs to be mislabeled.\nF4: DROP \u2014 The judge and prompt-only compact paths are unchanged and excluded from this change\u2019s capture scope.\nF5: DROP \u2014 The keys currently agree; the finding describes hypothetical future drift.\nF6: DROP \u2014 This requests additional tests without identifying a current parsing defect.\nF7: DROP \u2014 The duplicated plumbing does not demonstrate incorrect behavior.\nF8: DROP \u2014 Function and file length alone do not establish a functional defect.\nF1: KEEP \u2014 Folding retains only the first part\u2019s usage, understating split-review totals.\nF2: KEEP \u2014 Compact discards available telemetry on dispatch and reconnect failures.\nF3: KEEP \u2014 Compact omits the alias, causing subscription costs to be mislabeled.\nF4: DROP \u2014 The judge and prompt-only compact paths are unchanged and excluded from this change\u2019s capture scope.\nF5: DROP \u2014 The keys currently agree; the finding describes hypothetical future drift.\nF6: DROP \u2014 This requests additional tests without identifying a current parsing defect.\nF7: DROP \u2014 The duplicated plumbing does not demonstrate incorrect behavior.\nF8: DROP \u2014 Function and file length alone do not establish a functional defect."
+}

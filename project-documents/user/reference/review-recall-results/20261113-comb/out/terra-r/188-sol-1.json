@@ -1,0 +1,33 @@
+{
+ "case": "188",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Midnight timestamps can be parsed as dates, producing incorrect query bounds."
+  ],
+  "F2": [
+   "KEEP",
+   "Large responses are built and serialized on the event loop, delaying unrelated requests."
+  ],
+  "F3": [
+   "DROP",
+   "CI gating was explicitly deferred and its absence is not a defect in the changed runtime code."
+  ]
+ },
+ "wall_seconds": 11.5,
+ "duration_seconds": 11.44587858300656,
+ "cost_usd": 0.038028299999999994,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=99259, cached=66506, cache_write=None, completion=390, reasoning=81)",
+ "raw_output": "F1: KEEP \u2014 Midnight timestamps can be parsed as dates, producing incorrect query bounds.\nF2: KEEP \u2014 Large responses are built and serialized on the event loop, delaying unrelated requests.\nF3: DROP \u2014 CI gating was explicitly deferred and its absence is not a defect in the changed runtime code.\nF1: KEEP \u2014 Midnight timestamps can be parsed as dates, producing incorrect query bounds.\nF2: KEEP \u2014 Large responses are built and serialized on the event loop, delaying unrelated requests.\nF3: DROP \u2014 CI gating was explicitly deferred and its absence is not a defect in the changed runtime code."
+}

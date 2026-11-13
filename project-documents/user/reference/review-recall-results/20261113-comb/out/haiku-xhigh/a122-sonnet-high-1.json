@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "confirm()` and `_confirm` differ only in `_overdue` bookkeeping, which is never read once an entry is confirmed, so behavior is identical."
+  ],
+  "F2": [
+   "DROP",
+   "closing `unexpected_fault` after a clean tick is the specified D8 closure rule, and the failure is still logged at ERROR with the escalation row written, so it is not silent."
+  ],
+  "F3": [
+   "DROP",
+   "the three run-id checks guard entries only the Runner mints, so the divergent rules have no reachable effect; this is a DRY nit."
+  ]
+ },
+ "wall_seconds": 59.1,
+ "duration_seconds": 59.09644045797177,
+ "cost_usd": 0.025114000000000004,
+ "effort": "xhigh",
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=401419, cached=327120, cache_write=74285, completion=11851, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 `confirm()` and `_confirm` differ only in `_overdue` bookkeeping, which is never read once an entry is confirmed, so behavior is identical.\nF2: DROP \u2014 closing `unexpected_fault` after a clean tick is the specified D8 closure rule, and the failure is still logged at ERROR with the escalation row written, so it is not silent.\nF3: DROP \u2014 the three run-id checks guard entries only the Runner mints, so the divergent rules have no reachable effect; this is a DRY nit.\n### [NOTE] F1: `LaunchTracker.confirm` is test-only and duplicates `_confirm`\ncategory: design\nlocation: src/amoeba/runner/launch.py:257\n\nDecision: DROP. `confirm()` has no caller under `src/`. Production confirms through `RunObserver._confirm`, which does the same thing plus `_overdue.discard`. `_overdue` is read only in `_still_overdue`, which runs only for unconfirmed entries, and a confirmed entry never becomes unconfirmed, so the difference has no observable effect. Removing the dead method is a reasonable cleanup, not a merge item.\n\n### [NOTE] F2: `_close_recovered` closes `unexpected_fault` after one clean tick\ncategory: error-handling\nlocation: src/amoeba/runner/tick.py:194\n\nDecision: DROP. The closure rule is the specified D8 behavior in the 122 slice: every open project-scoped escalation whose kind did not recur in a complete tick is closed. The acceptance criterion says the first complete tick without the fault closes it. `tenant.py:145-146` logs every unexpected exception at ERROR with `logger.exception` and writes the escalation row, so the failure is not silent. The concern is real as a design question: a transient bug leaves little durable signal. Addressing it means changing D8 and the closure rule, which is a Project Manager decision, not a fix in this change.\n\n### [NOTE] F3: Run-id checks duplicated in finish, observe and launch\ncategory: duplication\nlocation: src/amoeba/runner/finish.py:139\n\nDecision: DROP. The three checks are close but not identical. Observe rejects empty strings, finish accepts them, and launch's `_text_parameter` rejects empty and non-string values. Nothing reachable makes them diverge today: every `sq_run` entry is minted by `mint_run_id`, and every entry that reaches `finish` came through observe or was just launched. The DRY point is valid cleanup, not a defect.\n\n## Verdict: PASS\n\nNo finding is a merge blocker. Of the three findings, 0 are KEEP and 3 are DROP. The one open item is F2's design question about durable visibility for unexpected faults. It needs a Project Manager decision and does not block this change."
+}

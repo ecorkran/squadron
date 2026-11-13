@@ -1,0 +1,48 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The extra `destroy()` throw on a failed create only adds a misleading log line. The original failure is already captured and shown through `error`."
+  ],
+  "F2": [
+   "DROP",
+   "Overwriting with the latest error is an acceptable choice, so this is only a docs and test-name mismatch."
+  ],
+  "F3": [
+   "DROP",
+   "The fallback to library defaults is deliberate and documented. Throwing on an empty token would break jsdom tests where the stylesheet isn't applied."
+  ],
+  "F4": [
+   "DROP",
+   "The no-op subscriptions and placeholder effect are intentional scaffolding, which makes this a design preference and not a defect."
+  ],
+  "F5": [
+   "DROP",
+   "File length and lint-suppression scope are style concerns with no wrong behavior."
+  ],
+  "F6": [
+   "DROP",
+   "The gap is real, but no code in this slice adds a series, so it can't happen yet. The comments already describe the effect as a seam for initiative 120."
+  ]
+ },
+ "wall_seconds": 23.2,
+ "duration_seconds": 23.19789566611871,
+ "cost_usd": 0.1233024,
+ "effort": "high",
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=69851, cached=45855, cache_write=23986, completion=2206, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The extra `destroy()` throw on a failed create only adds a misleading log line. The original failure is already captured and shown through `error`.\nF2: DROP \u2014 Overwriting with the latest error is an acceptable choice, so this is only a docs and test-name mismatch.\nF3: DROP \u2014 The fallback to library defaults is deliberate and documented. Throwing on an empty token would break jsdom tests where the stylesheet isn't applied.\nF4: DROP \u2014 The no-op subscriptions and placeholder effect are intentional scaffolding, which makes this a design preference and not a defect.\nF5: DROP \u2014 File length and lint-suppression scope are style concerns with no wrong behavior.\nF6: DROP \u2014 The gap is real, but no code in this slice adds a series, so it can't happen yet. The comments already describe the effect as a seam for initiative 120.\nF1: DROP \u2014 The extra `destroy()` throw on a failed create only adds a misleading log line. The original failure is already captured and shown through `error`.\nF2: DROP \u2014 Overwriting with the latest error is an acceptable choice, so this is only a docs and test-name mismatch.\nF3: DROP \u2014 The fallback to library defaults is deliberate and documented. Throwing on an empty token would break jsdom tests where the stylesheet isn't applied.\nF4: DROP \u2014 The no-op subscriptions and placeholder effect are intentional scaffolding, which makes this a design preference and not a defect.\nF5: DROP \u2014 File length and lint-suppression scope are style concerns with no wrong behavior.\nF6: DROP \u2014 The gap is real, but no code in this slice adds a series, so it can't happen yet. The comments already describe the effect as a seam for initiative 120."
+}

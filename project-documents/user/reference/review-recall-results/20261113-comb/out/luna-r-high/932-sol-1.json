@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A notification can clear the ledger before the parent result, causing dispatch to return before consuming the queued continuation."
+  ],
+  "F2": [
+   "KEEP",
+   "The background idle timeout can expire during a parent continuation after the notification clears the last tracked task, returning partial text as success."
+  ]
+ },
+ "wall_seconds": 19.1,
+ "duration_seconds": 19.05491358297877,
+ "cost_usd": 0.00295747,
+ "effort": "high",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=58997, cached=38097, cache_write=None, completion=973, reasoning=738)",
+ "raw_output": "F1: KEEP \u2014 A notification can clear the ledger before the parent result, causing dispatch to return before consuming the queued continuation.\nF2: KEEP \u2014 The background idle timeout can expire during a parent continuation after the notification clears the last tracked task, returning partial text as success.\nF1: KEEP \u2014 A notification can clear the ledger before the original result, causing dispatch to return without reading the queued continuation.\nF2: KEEP \u2014 The background timeout can expire during a parent continuation after the last tracked task finishes, returning partial text as success."
+}

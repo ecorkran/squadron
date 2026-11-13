@@ -1,0 +1,33 @@
+{
+ "case": "188",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Date-first union parsing converts midnight timestamps into dates, expanding end bounds and discarding offsets."
+  ],
+  "F2": [
+   "KEEP",
+   "Both async handlers synchronously build and serialize up to 75,000 records, blocking unrelated requests."
+  ],
+  "F3": [
+   "DROP",
+   "Missing CI gating is a deferred infrastructure task, not a runtime defect introduced by this change."
+  ]
+ },
+ "wall_seconds": 51.6,
+ "duration_seconds": 51.62601491692476,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=82273, cached=68224, cache_write=None, completion=170, reasoning=19)",
+ "raw_output": "F1: KEEP \u2014 Date-first union parsing converts midnight timestamps into dates, expanding end bounds and discarding offsets.\nF2: KEEP \u2014 Both async handlers synchronously build and serialize up to 75,000 records, blocking unrelated requests.\nF3: DROP \u2014 Missing CI gating is a deferred infrastructure task, not a runtime defect introduced by this change.\nF1: KEEP \u2014 Date-first union parsing converts midnight timestamps into dates, expanding end bounds and discarding offsets.\nF2: KEEP \u2014 Both async handlers synchronously build and serialize up to 75,000 records, blocking unrelated requests.\nF3: DROP \u2014 Missing CI gating is deferred infrastructure work, not a behavioral defect introduced by this change."
+}

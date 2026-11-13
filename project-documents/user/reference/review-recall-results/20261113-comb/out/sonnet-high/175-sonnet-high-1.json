@@ -1,0 +1,38 @@
+{
+ "case": "175",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The extra \"unexpected\" log line is cosmetic. The provider lookups in the handler were already done successfully by `run_review_with_profile`, so they won't realistically raise."
+  ],
+  "F2": [
+   "DROP",
+   "The slice doc lists the addressed-findings judge as an explicit exclusion, and `judge.py` was not changed."
+  ],
+  "F3": [
+   "DROP",
+   "The only effect is repeated pricing warnings in loops and a duplicated cost computation on failed reviews. Neither produces wrong data."
+  ],
+  "F4": [
+   "DROP",
+   "The other `\"subscription\"` literals are pre-existing dict keys, and the new constant is defined once in the changed file. This is a style-level point."
+  ]
+ },
+ "wall_seconds": 27.0,
+ "duration_seconds": 27.003797166980803,
+ "cost_usd": 0.17615849999999997,
+ "effort": "high",
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=194763, cached=161856, cache_write=32891, completion=2721, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The extra \"unexpected\" log line is cosmetic. The provider lookups in the handler were already done successfully by `run_review_with_profile`, so they won't realistically raise.\nF2: DROP \u2014 The slice doc lists the addressed-findings judge as an explicit exclusion, and `judge.py` was not changed.\nF3: DROP \u2014 The only effect is repeated pricing warnings in loops and a duplicated cost computation on failed reviews. Neither produces wrong data.\nF4: DROP \u2014 The other `\"subscription\"` literals are pre-existing dict keys, and the new constant is defined once in the changed file. This is a style-level point.\nF1: DROP \u2014 The extra \"unexpected\" log line is cosmetic, and the profile and provider lookups in the handler already succeeded inside `run_review_with_profile`, so they won't realistically raise.\nF2: DROP \u2014 The slice doc lists the addressed-findings judge as an explicit exclusion, and `judge.py` was not changed.\nF3: DROP \u2014 The only effects are repeated pricing warnings in loops and a duplicated cost computation on failed reviews, and neither produces wrong data.\nF4: DROP \u2014 The other `\"subscription\"` literals are pre-existing dict keys, and the new constant is defined once in the changed file, so this is a style-level point."
+}

@@ -1,0 +1,38 @@
+{
+ "case": "921",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The operator can modify the checkout\u2019s install script and invoke it as root, granting effective unrestricted root access."
+  ],
+  "F2": [
+   "DROP",
+   "The import-order violations are style/lint issues, not defects that cause incorrect runtime behavior."
+  ],
+  "F3": [
+   "DROP",
+   "The earlier connection is released before the fetch loop, so the bounds query does not hold a nested pool checkout."
+  ],
+  "F4": [
+   "KEEP",
+   "A failed verify command can print no `FAIL` or `[WAIT]` marker and be mistaken for a successful cutover."
+  ]
+ },
+ "wall_seconds": 26.5,
+ "duration_seconds": 26.4487089170143,
+ "cost_usd": 0.006950710000000001,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=114723, cached=60201, cache_write=None, completion=1793, reasoning=1462)",
+ "raw_output": "F1: KEEP \u2014 The operator can modify the checkout\u2019s install script and invoke it as root, granting effective unrestricted root access.\nF2: DROP \u2014 The import-order violations are style/lint issues, not defects that cause incorrect runtime behavior.\nF3: DROP \u2014 The earlier connection is released before the fetch loop, so the bounds query does not hold a nested pool checkout.\nF4: KEEP \u2014 A failed verify command can print no `FAIL` or `[WAIT]` marker and be mistaken for a successful cutover.\nF1: KEEP \u2014 The operator can edit the checkout\u2019s install script and run it as root, granting effective unrestricted root access.\nF2: DROP \u2014 Import ordering is a style issue and does not cause incorrect runtime behavior.\nF3: DROP \u2014 The connection used to select the gap is released before the bounds query checks out another connection.\nF4: KEEP \u2014 A failed verify command with no `FAIL` or `[WAIT]` output can be mistaken for a successful cutover."
+}

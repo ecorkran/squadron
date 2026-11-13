@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "checkout` is a `Path`, and `str(Path(\"\"))` is `\".\"`, so it is never empty. `params` is typed `Mapping[str, str]` and `build_argv` already checks it before the entry is journaled, so the claimed failure inputs cannot reach `launch()`."
+  ],
+  "F2": [
+   "DROP",
+   "The file length and how concerns are split is a style point with no effect on behavior."
+  ],
+  "F3": [
+   "DROP",
+   "launch_grace_seconds` is an existing setting that the existing supervisor observer also uses without validation, so it is not a new bound. The string-keyed `getattr` is a typing-style point, not a defect."
+  ]
+ },
+ "wall_seconds": 26.8,
+ "duration_seconds": 26.775091541931033,
+ "cost_usd": 0.1994819,
+ "effort": "high",
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=154077, cached=138473, cache_write=15590, completion=2303, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 `checkout` is a `Path`, and `str(Path(\"\"))` is `\".\"`, so it is never empty. `params` is typed `Mapping[str, str]` and `build_argv` already checks it before the entry is journaled, so the claimed failure inputs cannot reach `launch()`.\nF2: DROP \u2014 The file length and how concerns are split is a style point with no effect on behavior.\nF3: DROP \u2014 `launch_grace_seconds` is an existing setting that the existing supervisor observer also uses without validation, so it is not a new bound. The string-keyed `getattr` is a typing-style point, not a defect.\nF1: DROP \u2014 `checkout` is a `Path` and `str(Path(\"\"))` is `\".\"`, so it is never empty; `params` is typed `Mapping[str, str]` and `build_argv` checks it before journaling, so the claimed failure inputs cannot reach `launch()`.\nF2: DROP \u2014 File length and how `observe.py` splits its concerns are style points with no effect on behavior.\nF3: DROP \u2014 `launch_grace_seconds` is an existing setting that the existing supervisor observer also uses without validation, so it is not a new bound, and the string-keyed `getattr` is a typing-style point, not a defect."
+}

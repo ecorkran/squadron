@@ -1,0 +1,38 @@
+{
+ "case": "197",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2",
+  "F4": "sol/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "undesigned_slices` omits slices after design creation, so unresolved items cannot be selected for retry or acceptance."
+  ],
+  "F2": [
+   "KEEP",
+   "_git_precondition` can commit leftovers and switch branches before any worktree-registration check."
+  ],
+  "F3": [
+   "DROP",
+   "Blocking calls are present, but no meaningful event-loop responsiveness defect is established for this CLI flow."
+  ],
+  "F4": [
+   "KEEP",
+   "A `null` item raises uncaught `AttributeError`, bypassing the documented malformed-report error handling."
+  ]
+ },
+ "wall_seconds": 40.8,
+ "duration_seconds": 40.78542354120873,
+ "cost_usd": 0.00827178,
+ "effort": null,
+ "tool_calls_made": 24,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=218865, cached=166008, cache_write=None, completion=2652, reasoning=1693)",
+ "raw_output": "F1: KEEP \u2014 `undesigned_slices` omits slices after design creation, so unresolved items cannot be selected for retry or acceptance.\nF2: KEEP \u2014 `_git_precondition` can commit leftovers and switch branches before any worktree-registration check.\nF3: DROP \u2014 Blocking calls are present, but no meaningful event-loop responsiveness defect is established for this CLI flow.\nF4: KEEP \u2014 A `null` item raises uncaught `AttributeError`, bypassing the documented malformed-report error handling.\nF1: KEEP \u2014 `undesigned_slices` excludes slices after design creation, preventing unresolved design items from being resumed.\nF2: KEEP \u2014 `_git_precondition` may commit leftovers and switch branches before checking whether the worktree is registered.\nF3: DROP \u2014 Blocking calls exist, but the CLI flow does not establish a meaningful event-loop responsiveness defect.\nF4: KEEP \u2014 A `null` item raises uncaught `AttributeError`, bypassing the documented malformed-report error handling."
+}

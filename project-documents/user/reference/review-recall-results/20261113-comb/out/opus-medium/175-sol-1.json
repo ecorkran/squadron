@@ -1,0 +1,33 @@
+{
+ "case": "175",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The executor persists a step only once, through `observer.step_completed`, and `_append_step` (`state.py:508`) serializes only `action_results`, never `prior_rounds`, so the new `sq stats run` totals leave out the spend of every earlier loop round."
+  ],
+  "F2": [
+   "KEEP",
+   "review_fold._metadata` copies `parts[0].metadata`, which holds the usage record now stamped on each part, and sums only tool calls, so a split review's combined record shows just the first part's spend."
+  ],
+  "F3": [
+   "KEEP",
+   "A failed part now comes back as a result with empty outputs and no verdict, so later parts still run and get paid for, then `_part_input` raises `TypeError` in `fold_review_parts`; the generic handler replaces the real provider error with a misleading one and drops the captured usage."
+  ]
+ },
+ "wall_seconds": 55.4,
+ "duration_seconds": 55.43727595801465,
+ "cost_usd": 0.4293426000000001,
+ "effort": "medium",
+ "tool_calls_made": 12,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=384422, cached=348980, cache_write=35416, completion=3753, reasoning=None)",
+ "raw_output": "Now find split-review handling and fold_review_parts.\nI'm checking whether loop iterations get persisted one by one, which decides F1. Then I'll output the verdicts.\nF1: KEEP \u2014 The executor persists a step only once, through `observer.step_completed`, and `_append_step` (`state.py:508`) serializes only `action_results`, never `prior_rounds`, so the new `sq stats run` totals leave out the spend of every earlier loop round.\nF2: KEEP \u2014 `review_fold._metadata` copies `parts[0].metadata`, which holds the usage record now stamped on each part, and sums only tool calls, so a split review's combined record shows just the first part's spend.\nF3: KEEP \u2014 A failed part now comes back as a result with empty outputs and no verdict, so later parts still run and get paid for, then `_part_input` raises `TypeError` in `fold_review_parts`; the generic handler replaces the real provider error with a misleading one and drops the captured usage.\nF1: KEEP \u2014 The executor persists a step only once, through `observer.step_completed`, and `_append_step` (`state.py:508`) serializes only `action_results`, never `prior_rounds`, so the new `sq stats run` totals leave out the spend of every earlier loop round.\nF2: KEEP \u2014 `review_fold._metadata` copies `parts[0].metadata`, which holds the usage record now stamped on each part, and sums only tool calls, so a split review's combined record shows just the first part's spend.\nF3: KEEP \u2014 A failed part now comes back as a result with empty outputs and no verdict, so later parts still run and get paid for, then `_part_input` raises `TypeError` in `fold_review_parts`; the generic handler replaces the real provider error with a misleading one and drops the captured usage."
+}

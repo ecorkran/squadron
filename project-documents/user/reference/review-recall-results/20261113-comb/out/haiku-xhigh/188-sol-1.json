@@ -1,0 +1,33 @@
+{
+ "case": "188",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Pydantic's lax `date` branch accepts zero-time datetime strings, so `end=...T00:00:00Z` becomes a whole-day bound and the offset is dropped."
+  ],
+  "F2": [
+   "KEEP",
+   "CandlesResponse.build` and `timeseries_response` run `model_dump` and 75k model constructions synchronously inside the async handler, blocking the event loop."
+  ],
+  "F3": [
+   "DROP",
+   "The CI gap is a documented deferral to slice 907, and the change touches no CI config, so it is not a code defect."
+  ]
+ },
+ "wall_seconds": 31.8,
+ "duration_seconds": 31.80754179111682,
+ "cost_usd": 0.01349588,
+ "effort": "xhigh",
+ "tool_calls_made": 11,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=252537, cached=214358, cache_write=38165, completion=6231, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 Pydantic's lax `date` branch accepts zero-time datetime strings, so `end=...T00:00:00Z` becomes a whole-day bound and the offset is dropped.\nF2: KEEP \u2014 `CandlesResponse.build` and `timeseries_response` run `model_dump` and 75k model constructions synchronously inside the async handler, blocking the event loop.\nF3: DROP \u2014 The CI gap is a documented deferral to slice 907, and the change touches no CI config, so it is not a code defect.\nF1: KEEP \u2014 Pydantic's lax `date` branch accepts zero-time datetime strings, so `end=...T00:00:00Z` becomes a whole-day bound and the offset is dropped.\nF2: KEEP \u2014 `CandlesResponse.build` and `timeseries_response` run `model_dump` and 75k model constructions synchronously inside the async handler, blocking the event loop.\nF3: DROP \u2014 The CI gap is a documented deferral to slice 907, and the change touches no CI config, so it is not a code defect."
+}

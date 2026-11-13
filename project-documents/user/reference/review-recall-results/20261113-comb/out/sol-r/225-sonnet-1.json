@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "All current enum members are covered; disabling the assertion creates no present defect."
+  ],
+  "F2": [
+   "DROP",
+   "The per-verb override implements the intended exit codes; the finding concerns organization, not incorrect behavior."
+  ],
+  "F3": [
+   "DROP",
+   "Function length and helper placement are maintainability preferences without a demonstrated behavioral defect."
+  ]
+ },
+ "wall_seconds": 10.2,
+ "duration_seconds": 10.206782959168777,
+ "cost_usd": 0.0313518,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=45166, cached=32458, cache_write=None, completion=269, reasoning=10)",
+ "raw_output": "F1: DROP \u2014 All current enum members are covered; disabling the assertion creates no present defect.\nF2: DROP \u2014 The per-verb override implements the intended exit codes; the finding concerns organization, not incorrect behavior.\nF3: DROP \u2014 Function length and helper placement are maintainability preferences without a demonstrated behavioral defect.\nF1: DROP \u2014 All current enum members are covered; disabling the assertion creates no present defect.\nF2: DROP \u2014 The per-verb override implements the intended exit codes; the finding concerns organization, not incorrect behavior.\nF3: DROP \u2014 Function length and helper placement are maintainability preferences without a demonstrated behavioral defect."
+}

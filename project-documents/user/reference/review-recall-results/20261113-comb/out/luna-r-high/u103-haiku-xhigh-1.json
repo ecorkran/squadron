@@ -1,0 +1,68 @@
+{
+ "case": "u103",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8",
+  "F10": "haiku-xhigh/1/9"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Adding a series updates only a ref, so the range effect does not run until another dependency changes."
+  ],
+  "F2": [
+   "KEEP",
+   "The facade is available before readiness, and calls then return without warning or a distinguishable failure."
+  ],
+  "F3": [
+   "DROP",
+   "The route loads the theme stylesheet before rendering, so the alleged missing-token fallback is not shown to affect this app."
+  ],
+  "F4": [
+   "DROP",
+   "The size and function-length concerns are structural, and the teardown closure runs only after its captured variables are initialized."
+  ],
+  "F5": [
+   "DROP",
+   "The suppression covers a possible future issue, but the current ref access occurs only when the stored callbacks are invoked."
+  ],
+  "F6": [
+   "DROP",
+   "The empty indicator effect is an intentional placeholder and does not cause incorrect behavior."
+  ],
+  "F7": [
+   "DROP",
+   "The test is ineffective, but the inert handlers currently perform no provider work that could leak past teardown."
+  ],
+  "F8": [
+   "DROP",
+   "The duplicated test helpers are a low-value maintainability concern, not a behavioral defect."
+  ],
+  "F9": [
+   "DROP",
+   "The spy could drift after a future interface change, but no current behavior or contract check is shown to be wrong."
+  ],
+  "F10": [
+   "DROP",
+   "The measurement mismatch is corrected by the observer and is described as transient, with no meaningful user-visible defect established."
+  ]
+ },
+ "wall_seconds": 114.7,
+ "duration_seconds": 114.73856170801446,
+ "cost_usd": 0.008486150000000001,
+ "effort": "high",
+ "tool_calls_made": 25,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=146497, cached=113795, cache_write=None, completion=8156, reasoning=7055)",
+ "raw_output": "F1: KEEP \u2014 Adding a series updates only a ref, so the range effect does not run until another dependency changes.\nF2: KEEP \u2014 The facade is available before readiness, and calls then return without warning or a distinguishable failure.\nF3: DROP \u2014 The route loads the theme stylesheet before rendering, so the alleged missing-token fallback is not shown to affect this app.\nF4: DROP \u2014 The size and function-length concerns are structural, and the teardown closure runs only after its captured variables are initialized.\nF5: DROP \u2014 The suppression covers a possible future issue, but the current ref access occurs only when the stored callbacks are invoked.\nF6: DROP \u2014 The empty indicator effect is an intentional placeholder and does not cause incorrect behavior.\nF7: DROP \u2014 The test is ineffective, but the inert handlers currently perform no provider work that could leak past teardown.\nF8: DROP \u2014 The duplicated test helpers are a low-value maintainability concern, not a behavioral defect.\nF9: DROP \u2014 The spy could drift after a future interface change, but no current behavior or contract check is shown to be wrong.\nF10: DROP \u2014 The measurement mismatch is corrected by the observer and is described as transient, with no meaningful user-visible defect established.\nF1: KEEP \u2014 Adding a series changes only a ref, so the range effect does not run until another dependency changes.\nF2: KEEP \u2014 Calls before readiness are silently dropped, leaving callers unable to distinguish not-ready from failure.\nF3: DROP \u2014 The app imports the theme stylesheet before rendering, so missing runtime tokens are not shown to affect this route.\nF4: DROP \u2014 The concerns are structural, and teardown runs only after its captured variables are initialized.\nF5: DROP \u2014 The suppression hides possible future issues, but no incorrect ref access is shown in the current code.\nF6: DROP \u2014 The empty indicator effect is an intentional placeholder and causes no incorrect behavior.\nF7: DROP \u2014 The guards have no observable work to suppress, so the ineffective test does not establish a current behavioral defect.\nF8: DROP \u2014 The duplicated test helpers are a maintainability concern, not a defect requiring a pre-merge fix.\nF9: DROP \u2014 The spy could drift after a future interface change, but no current behavior or contract check is shown to be wrong.\nF10: DROP \u2014 The observer corrects the initial measurement mismatch, and no meaningful user-visible defect is established."
+}

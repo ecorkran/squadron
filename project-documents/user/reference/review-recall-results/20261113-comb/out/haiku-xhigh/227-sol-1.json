@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "production_changes` strips the new arguments only from the new side, so a rerun after cron installation reports a false diff at step 4 and blocks recovery."
+  ],
+  "F2": [
+   "KEEP",
+   "run_health` ignores the health command's exit status and reads the last log line without checking it is fresh, and cron keeps appending clean lines, so a broken run can pass the gate on old evidence."
+  ],
+  "F3": [
+   "KEEP",
+   "run_steps` catches only `StepFailed` and `CalledProcessError`, so an `OSError` skips the report the module docstring promises, and realistic triggers exist (e.g. `check=False` runs of a missing `rclone`)."
+  ]
+ },
+ "wall_seconds": 70.7,
+ "duration_seconds": 70.71179429092444,
+ "cost_usd": 0.025559460000000003,
+ "effort": "xhigh",
+ "tool_calls_made": 12,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=384005, cached=312716, cache_write=71275, completion=14640, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `production_changes` strips the new arguments only from the new side, so a rerun after cron installation reports a false diff at step 4 and blocks recovery.\nF2: KEEP \u2014 `run_health` ignores the health command's exit status and reads the last log line without checking it is fresh, and cron keeps appending clean lines, so a broken run can pass the gate on old evidence.\nF3: KEEP \u2014 `run_steps` catches only `StepFailed` and `CalledProcessError`, so an `OSError` skips the report the module docstring promises, and realistic triggers exist (e.g. `check=False` runs of a missing `rclone`).\nThe earlier reads were enough; I did not run the tests, so these verdicts rest on reading the code.\n\n### [FAIL] Cron comparison blocks rerunning the cutover after cron installation\ncategory: logic\nlocation: scripts/cutover_227_helpers.py:84-99\n\n`production_changes` strips the new arguments only from the new file. After step 4 installs the cron file, a rerun reads that already-updated file as `old`. Its 17/main lines still carry `--url-key MT_TIMESCALE_MAINTENANCE_URL`, which the stripped new side no longer has, so step 4 reports a change and fails. The docstring's recovery path (\"fix the cause, re-run the whole script\") therefore fails for any later-step failure. The existing test only covers pre-227 to post-227, so the gap is untested. Fix: normalize both sides the same way, and add a rerun regression test.\n\n### [FAIL] Health gate can pass on a stale log line\ncategory: error-handling\nlocation: scripts/cutover_227_tick_backup.py:157-165\n\n`run_health` calls `shell()`, which does not check the exit status, and discards the result. It then reads the last line of `backup-health.log` without checking that this invocation wrote it. Cron appends to that same log every 30 minutes, so if the step's own run dies before writing, a clean line from cron satisfies the gate. Fix: require the log to gain a new line during this call (compare the line count or timestamp before and after), and treat a non-zero exit with no fresh line as a failure.\n\n### [FAIL] Host I/O errors skip the failure report\ncategory: error-handling\nlocation: scripts/cutover_227_tick_backup.py:269-316\n\n`run_steps` catches only `StepFailed` and `CalledProcessError`, so an `OSError` escapes and `main()` never writes the report. The module docstring (lines 4-6) promises the report is written on any failure. Realistic triggers exist: `arm.touch()` at line 188 can raise `PermissionError`, `step_offsite` runs `rclone` with `check=False` so a missing binary raises `FileNotFoundError`, and `step_production` reads `backup-health.log` at line 224 with no existence check. Fix: catch `OSError` in `run_steps` alongside the existing pair, and write the report even when an exception escapes.\n\nVerdict: FAIL. All three findings are real defects in the new cutover script and should be fixed before merge."
+}

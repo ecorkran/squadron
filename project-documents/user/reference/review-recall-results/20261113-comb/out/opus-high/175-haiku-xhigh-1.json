@@ -1,0 +1,58 @@
+{
+ "case": "175",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "_metadata` copies only `parts[0].metadata`, so the `USAGE_KEY` that `_run_part` writes for parts 2..N is lost whenever a review splits, and split-review spend never reaches run state."
+  ],
+  "F2": [
+   "KEEP",
+   "the compact failure branch returns no metadata and never reads `exc.telemetry`, though `dispatch()` attaches it; slice D5 and success criterion 2 require failed SDK-session compacts to record what they spent."
+  ],
+  "F3": [
+   "KEEP",
+   "compact passes `resolved=None`, so `alias` is None and a subscription alias's provider cost shows as `prov` instead of `api-rate equiv.`; that breaks D3's rule that the label is read from the alias."
+  ],
+  "F4": [
+   "DROP",
+   "the slice puts the addressed-findings judge out of scope and covers compact only on the SDK-session path, so neither gap is a defect against this change."
+  ],
+  "F5": [
+   "DROP",
+   "duplicated key literals are a DRY/maintainability point; the writer and reader agree today, so nothing behaves wrongly now."
+  ],
+  "F6": [
+   "DROP",
+   "the hand-written fixtures use the same key names and `key: value` layout as `RunCost.frontmatter_lines`, so this is a test-hardening suggestion, not a defect."
+  ],
+  "F7": [
+   "DROP",
+   "duplicated fold and one-shot plumbing is a refactoring suggestion with no wrong behavior."
+  ],
+  "F8": [
+   "DROP",
+   "function and file length is a style guideline, not a correctness defect."
+  ]
+ },
+ "wall_seconds": 58.2,
+ "duration_seconds": 58.16583341686055,
+ "cost_usd": 0.5055733,
+ "effort": "high",
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=409593, cached=367577, cache_write=41992, completion=4742, reasoning=None)",
+ "raw_output": "Checked F1 and F2 against the code; both hold up. Now looking at the cost labeling in `stats_views.py` for F3.\nF1: KEEP \u2014 `_metadata` copies only `parts[0].metadata`, so the `USAGE_KEY` that `_run_part` writes for parts 2..N is lost whenever a review splits, and split-review spend never reaches run state.\nF2: KEEP \u2014 the compact failure branch returns no metadata and never reads `exc.telemetry`, though `dispatch()` attaches it; slice D5 and success criterion 2 require failed SDK-session compacts to record what they spent.\nF3: KEEP \u2014 compact passes `resolved=None`, so `alias` is None and a subscription alias's provider cost shows as `prov` instead of `api-rate equiv.`; that breaks D3's rule that the label is read from the alias.\nF4: DROP \u2014 the slice puts the addressed-findings judge out of scope and covers compact only on the SDK-session path, so neither gap is a defect against this change.\nF5: DROP \u2014 duplicated key literals are a DRY/maintainability point; the writer and reader agree today, so nothing behaves wrongly now.\nF6: DROP \u2014 the hand-written fixtures use the same key names and `key: value` layout as `RunCost.frontmatter_lines`, so this is a test-hardening suggestion, not a defect.\nF7: DROP \u2014 duplicated fold and one-shot plumbing is a refactoring suggestion with no wrong behavior.\nF8: DROP \u2014 function and file length is a style guideline, not a correctness defect.\nF1: KEEP \u2014 `_metadata` copies only `parts[0].metadata`, so the `USAGE_KEY` that `_run_part` writes for parts 2..N is lost whenever a review splits, and split-review spend never reaches run state.\nF2: KEEP \u2014 the compact failure branch returns no metadata and never reads `exc.telemetry`, though `dispatch()` attaches it; slice D5 and success criterion 2 require failed SDK-session compacts to record what they spent.\nF3: KEEP \u2014 compact passes `resolved=None`, so `alias` is None and a subscription alias's provider cost shows as `prov` instead of `api-rate equiv.`; that breaks D3's rule that the label is read from the alias.\nF4: DROP \u2014 the slice puts the addressed-findings judge out of scope and covers compact only on the SDK-session path, so neither gap is a defect against this change.\nF5: DROP \u2014 duplicated key literals are a DRY/maintainability point; the writer and reader agree today, so nothing behaves wrongly now.\nF6: DROP \u2014 the hand-written fixtures use the same key names and `key: value` layout as `RunCost.frontmatter_lines`, so this is a test-hardening suggestion, not a defect.\nF7: DROP \u2014 duplicated fold and one-shot plumbing is a refactoring suggestion with no wrong behavior.\nF8: DROP \u2014 function and file length is a style guideline, not a correctness defect."
+}

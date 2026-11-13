@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The duplicated end-date loop is a DRY/maintainability point, not wrong behavior, and the two loops differ (`latest_want_end` does not skip DEFINITION wants)."
+  ],
+  "F2": [
+   "DROP",
+   "The project type-checks with mypy (`pyproject.toml:68-75`, `files = [\"src/manta_trading\"]`), not strict pyright over tests, and default mypy does not flag bare generics."
+  ]
+ },
+ "wall_seconds": 23.0,
+ "duration_seconds": 23.02315870905295,
+ "cost_usd": 0.010317480000000002,
+ "effort": "xhigh",
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=152312, cached=123068, cache_write=29234, completion=4472, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The duplicated end-date loop is a DRY/maintainability point, not wrong behavior, and the two loops differ (`latest_want_end` does not skip DEFINITION wants).\nF2: DROP \u2014 The project type-checks with mypy (`pyproject.toml:68-75`, `files = [\"src/manta_trading\"]`), not strict pyright over tests, and default mypy does not flag bare generics.\nF1: DROP \u2014 The duplicated end-date loop is a DRY/maintainability point, not wrong behavior, and the two loops differ (`latest_want_end` does not skip DEFINITION wants).\nF2: DROP \u2014 The project type-checks with mypy (`pyproject.toml:68-75`, `files = [\"src/manta_trading\"]`), not strict pyright over tests, and default mypy does not flag bare generics."
+}

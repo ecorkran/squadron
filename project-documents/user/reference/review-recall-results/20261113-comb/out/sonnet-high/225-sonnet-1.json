@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The assert is a static enum-coverage check for developers. No runtime input can trip it, and stripping it under `-O` only matters after a future enum change."
+  ],
+  "F2": [
+   "DROP",
+   "The finding says the mapping works. Its complaint is a design preference about where exit-code policy lives, and it describes no incorrect behavior."
+  ],
+  "F3": [
+   "DROP",
+   "This is only about function and file length and module organization. It points to no defect."
+  ]
+ },
+ "wall_seconds": 12.4,
+ "duration_seconds": 12.383846707874909,
+ "cost_usd": 0.08860029999999999,
+ "effort": "high",
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=63578, cached=45094, cache_write=18474, completion=924, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The assert is a static enum-coverage check for developers. No runtime input can trip it, and stripping it under `-O` only matters after a future enum change.\nF2: DROP \u2014 The finding says the mapping works. Its complaint is a design preference about where exit-code policy lives, and it describes no incorrect behavior.\nF3: DROP \u2014 This is only about function and file length and module organization. It points to no defect.\nF1: DROP \u2014 The assert is a static enum-coverage check for developers. No runtime input can trip it, and stripping it under `-O` only matters after a future enum change.\nF2: DROP \u2014 The finding says the mapping works. Its complaint is a design preference about where exit-code policy lives, and it describes no incorrect behavior.\nF3: DROP \u2014 This is only about function and file length and module organization. It points to no defect."
+}

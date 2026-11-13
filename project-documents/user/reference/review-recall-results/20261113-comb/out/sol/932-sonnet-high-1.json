@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The duplicated configuration wiring is a maintainability concern, not a demonstrated behavioral defect."
+  ],
+  "F2": [
+   "DROP",
+   "Weak annotations and broad exception assertions do not demonstrate incorrect runtime behavior or a broken test."
+  ]
+ },
+ "wall_seconds": 20.2,
+ "duration_seconds": 20.19830512511544,
+ "cost_usd": 0.028628,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=84875, cached=74880, cache_write=None, completion=115, reasoning=18)",
+ "raw_output": "F1: DROP \u2014 The duplicated configuration wiring is a maintainability concern, not a demonstrated behavioral defect.\nF2: DROP \u2014 Weak annotations and broad exception assertions do not demonstrate incorrect runtime behavior or a broken test.\nF1: DROP \u2014 Duplicated settings wiring is a maintainability concern, not a demonstrated behavioral defect.\nF2: DROP \u2014 Weak test annotations and broad exception assertions do not establish a runtime defect or broken test."
+}

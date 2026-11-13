@@ -1,0 +1,43 @@
+{
+ "case": "227",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Failed health commands can reuse an old FLAGS line and falsely pass verification."
+  ],
+  "F2": [
+   "KEEP",
+   "Missing or empty production logs raise uncaught exceptions, preventing the promised report."
+  ],
+  "F3": [
+   "DROP",
+   "Both assertions follow guards that already guarantee non-None values, even under optimization."
+  ],
+  "F4": [
+   "DROP",
+   "The current template fixes host jobs to root; the claimed break requires a hypothetical template change."
+  ],
+  "F5": [
+   "DROP",
+   "Brittle source-based tests are a test-quality concern, not a demonstrated behavioral defect."
+  ]
+ },
+ "wall_seconds": 39.3,
+ "duration_seconds": 39.31654933397658,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=122966, cached=110336, cache_write=None, completion=237, reasoning=22)",
+ "raw_output": "F1: KEEP \u2014 Failed health commands can reuse an old FLAGS line and falsely pass verification.\nF2: KEEP \u2014 Missing or empty production logs raise uncaught exceptions, preventing the promised report.\nF3: DROP \u2014 Both assertions follow guards that already guarantee non-None values, even under optimization.\nF4: DROP \u2014 The current template fixes host jobs to root; the claimed break requires a hypothetical template change.\nF5: DROP \u2014 Brittle source-based tests are a test-quality concern, not a demonstrated behavioral defect.\nF1: KEEP \u2014 Failed health commands can reuse stale FLAGS output and falsely pass verification.\nF2: KEEP \u2014 Missing or empty production logs raise uncaught exceptions and prevent report generation.\nF3: DROP \u2014 Existing guards guarantee non-None values even when optimization removes assertions.\nF4: DROP \u2014 The current template fixes host jobs to root; no supported configuration demonstrates the claimed failure.\nF5: DROP \u2014 Source-based test brittleness is not a demonstrated behavioral defect requiring a pre-merge fix."
+}

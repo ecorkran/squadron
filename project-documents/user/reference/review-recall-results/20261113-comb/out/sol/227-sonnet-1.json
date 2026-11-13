@@ -1,0 +1,43 @@
+{
+ "case": "227",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A failed health invocation can leave an old clean log line that incorrectly passes verification."
+  ],
+  "F2": [
+   "KEEP",
+   "A missing or empty production health log raises an uncaught exception and prevents report generation."
+  ],
+  "F3": [
+   "DROP",
+   "Both assertions express invariants already enforced by filtering or require(), so optimization changes no behavior."
+  ],
+  "F4": [
+   "DROP",
+   "The current template fixes host jobs to root; changing that user is hypothetical, not a demonstrated defect."
+  ],
+  "F5": [
+   "DROP",
+   "Brittle source-text assertions are a test-maintainability concern, not a demonstrated behavioral defect."
+  ]
+ },
+ "wall_seconds": 34.6,
+ "duration_seconds": 34.56733425008133,
+ "cost_usd": 0.0334492,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=100548, cached=89472, cache_write=None, completion=235, reasoning=0)",
+ "raw_output": "F1: KEEP \u2014 A failed health invocation can leave an old clean log line that incorrectly passes verification.\nF2: KEEP \u2014 A missing or empty production health log raises an uncaught exception and prevents report generation.\nF3: DROP \u2014 Both assertions express invariants already enforced by filtering or require(), so optimization changes no behavior.\nF4: DROP \u2014 The current template fixes host jobs to root; changing that user is hypothetical, not a demonstrated defect.\nF5: DROP \u2014 Brittle source-text assertions are a test-maintainability concern, not a demonstrated behavioral defect.\nF1: KEEP \u2014 A failed health invocation can leave an old clean log line that incorrectly passes verification.\nF2: KEEP \u2014 A missing or empty production health log raises an uncaught exception and prevents report generation.\nF3: DROP \u2014 Both assertions express invariants already enforced by filtering or require(), so optimization changes no behavior.\nF4: DROP \u2014 The template fixes host jobs to root; a hypothetical user change does not demonstrate a current defect.\nF5: DROP \u2014 Brittle source-text assertions are a maintainability concern, not a demonstrated behavioral defect."
+}

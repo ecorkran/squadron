@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The duplicated validation causes no incorrect behavior; extracting it is a refactoring preference."
+  ],
+  "F2": [
+   "DROP",
+   "The project configures mypy, not strict pyright, and these annotations cause no runtime defect."
+  ]
+ },
+ "wall_seconds": 7.9,
+ "duration_seconds": 7.8738445420749485,
+ "cost_usd": 0.0327787,
+ "effort": null,
+ "tool_calls_made": 1,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=36672, cached=22287, cache_write=None, completion=178, reasoning=23)",
+ "raw_output": "F1: DROP \u2014 The duplicated validation causes no incorrect behavior; extracting it is a refactoring preference.\nF2: DROP \u2014 The project configures mypy, not strict pyright, and these annotations cause no runtime defect.\nF1: DROP \u2014 The duplicated validation causes no incorrect behavior; extracting it is a refactoring preference.\nF2: DROP \u2014 The project explicitly uses mypy rather than strict pyright, so the claimed merge-blocking errors do not apply."
+}

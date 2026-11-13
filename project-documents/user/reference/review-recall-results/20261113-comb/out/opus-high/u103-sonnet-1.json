@@ -1,0 +1,43 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The empty subscription handlers are a deliberate, documented way to exercise the disposer lifecycle. They don't cause wrong behavior, so this is a design preference, not a defect."
+  ],
+  "F2": [
+   "DROP",
+   "File length, stale task-number comments and stacked comment blocks are style issues with no effect on behavior."
+  ],
+  "F3": [
+   "KEEP",
+   "The range effect checks the non-reactive `seriesCountRef` and does not re-run on `[mount.ready, chart, range]` when a series is added, so a range set before the first `addSeries` is never applied. The test only covers adding the series first and then changing the range, so the seam doesn't work as documented."
+  ],
+  "F4": [
+   "DROP",
+   "The doc says \"first error\" but the code keeps the latest one; that's a doc and test-name mismatch, and no current consumer depends on which error is kept."
+  ],
+  "F5": [
+   "DROP",
+   "A stale file reference in a comment and a redundant text assertion in an e2e spec are low value and don't affect behavior."
+  ]
+ },
+ "wall_seconds": 26.6,
+ "duration_seconds": 26.618059207918122,
+ "cost_usd": 0.2233187,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=130586, cached=110798, cache_write=19772, completion=2110, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The empty subscription handlers are a deliberate, documented way to exercise the disposer lifecycle. They don't cause wrong behavior, so this is a design preference, not a defect.\n\nF2: DROP \u2014 File length, stale task-number comments and stacked comment blocks are style issues with no effect on behavior.\n\nF3: KEEP \u2014 The range effect checks the non-reactive `seriesCountRef` and does not re-run on `[mount.ready, chart, range]` when a series is added, so a range set before the first `addSeries` is never applied. The test only covers adding the series first and then changing the range, so the seam doesn't work as documented.\n\nF4: DROP \u2014 The doc says \"first error\" but the code keeps the latest one; that's a doc and test-name mismatch, and no current consumer depends on which error is kept.\n\nF5: DROP \u2014 A stale file reference in a comment and a redundant text assertion in an e2e spec are low value and don't affect behavior.\nF1: DROP \u2014 The empty subscription handlers deliberately exercise the disposer lifecycle and cause no wrong behavior, so this is a design preference.\nF2: DROP \u2014 File length, stale task-number comments and stacked comment blocks are style issues with no behavioral effect.\nF3: KEEP \u2014 The range effect is gated on the non-reactive `seriesCountRef` and doesn't re-run when a series is added, so a range set before the first `addSeries` is never applied.\nF4: DROP \u2014 \"First error\" versus latest-error is a doc and test-name mismatch that no current consumer depends on.\nF5: DROP \u2014 A stale file reference in a comment and a redundant text assertion in an e2e spec are low value and don't affect behavior."
+}

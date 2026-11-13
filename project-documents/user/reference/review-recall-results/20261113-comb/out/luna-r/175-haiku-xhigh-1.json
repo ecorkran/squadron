@@ -1,0 +1,58 @@
+{
+ "case": "175",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Folding split reviews retains only the first part\u2019s usage, losing spend from the remaining parts."
+  ],
+  "F2": [
+   "KEEP",
+   "Compact failures omit captured telemetry, including when reconnect fails after a successful capture."
+  ],
+  "F3": [
+   "KEEP",
+   "Compact records lack the resolved alias, so subscription provider costs are mislabeled and the model is recorded incorrectly."
+  ],
+  "F4": [
+   "KEEP",
+   "The judge and prompt-only compact paths make paid calls without recording their usage."
+  ],
+  "F5": [
+   "DROP",
+   "Duplicated frontmatter key names create future drift risk, but do not establish a defect that should block this merge."
+  ],
+  "F6": [
+   "DROP",
+   "Hand-written fixtures leave a coverage gap but do not show that the current parser mishandles production output."
+  ],
+  "F7": [
+   "DROP",
+   "The cited duplication is a refactoring opportunity, not a behavior defect."
+  ],
+  "F8": [
+   "DROP",
+   "The cited length guideline is a maintainability preference, not a defect requiring a pre-merge fix."
+  ]
+ },
+ "wall_seconds": 24.6,
+ "duration_seconds": 24.544069250114262,
+ "cost_usd": 0.007670530000000001,
+ "effort": null,
+ "tool_calls_made": 21,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=158274, cached=101643, cache_write=None, completion=1982, reasoning=1069)",
+ "raw_output": "F1: KEEP \u2014 Folding split reviews retains only the first part\u2019s usage, losing spend from the remaining parts.\nF2: KEEP \u2014 Compact failures omit captured telemetry, including when reconnect fails after a successful capture.\nF3: KEEP \u2014 Compact records lack the resolved alias, so subscription provider costs are mislabeled and the model is recorded incorrectly.\nF4: KEEP \u2014 The judge and prompt-only compact paths make paid calls without recording their usage.\nF5: DROP \u2014 Duplicated frontmatter key names create future drift risk, but do not establish a defect that should block this merge.\nF6: DROP \u2014 Hand-written fixtures leave a coverage gap but do not show that the current parser mishandles production output.\nF7: DROP \u2014 The cited duplication is a refactoring opportunity, not a behavior defect.\nF8: DROP \u2014 The cited length guideline is a maintainability preference, not a defect requiring a pre-merge fix.\nF1: KEEP \u2014 Folding split reviews retains only the first part\u2019s usage, losing spend from the remaining parts.\nF2: KEEP \u2014 Compact failures omit captured telemetry, including when reconnect fails after a successful capture.\nF3: KEEP \u2014 Compact records lack the resolved alias, so subscription costs are mislabeled and the model is recorded incorrectly.\nF4: KEEP \u2014 The judge and prompt-only compact paths make paid calls without recording their usage.\nF5: DROP \u2014 Duplicated frontmatter key names create a potential future drift risk, not a current defect.\nF6: DROP \u2014 Hand-written fixtures leave a coverage gap but do not show that the parser mishandles production output.\nF7: DROP \u2014 The cited duplication is a refactoring opportunity, not a behavior defect.\nF8: DROP \u2014 The cited length guideline is a maintainability preference, not a defect requiring a pre-merge fix."
+}

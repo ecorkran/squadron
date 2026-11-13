@@ -1,0 +1,43 @@
+{
+ "case": "197",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Failed writes leave temporary files that can consume disk space indefinitely."
+  ],
+  "F2": [
+   "DROP",
+   "The local import works; the concern is structural rather than behavioral."
+  ],
+  "F3": [
+   "DROP",
+   "The CLI runs a single task, so no meaningful blocking impact is shown."
+  ],
+  "F4": [
+   "DROP",
+   "The default supports an existing source that flags items without a kind."
+  ],
+  "F5": [
+   "DROP",
+   "Validation and item selection ensure the record index exists on these paths."
+  ]
+ },
+ "wall_seconds": 19.1,
+ "duration_seconds": 19.134358667070046,
+ "cost_usd": 0.037831199999999995,
+ "effort": null,
+ "tool_calls_made": 1,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=71224, cached=39524, cache_write=None, completion=831, reasoning=571)",
+ "raw_output": "F1: KEEP \u2014 Failed writes leave temporary files that can consume disk space indefinitely.\nF2: DROP \u2014 The local import works; the concern is structural rather than behavioral.\nF3: DROP \u2014 The CLI runs a single task, so no meaningful blocking impact is shown.\nF4: DROP \u2014 The default supports an existing source that flags items without a kind.\nF5: DROP \u2014 Validation and item selection ensure the record index exists on these paths.\nF1: KEEP \u2014 Failed writes leave temporary files that can consume disk space.\nF2: DROP \u2014 The local import works; the concern is structural rather than behavioral.\nF3: DROP \u2014 No meaningful blocking impact is shown for the single-task CLI.\nF4: DROP \u2014 The default supports an existing source that flags items without a kind.\nF5: DROP \u2014 Validation and item selection ensure the record index exists on these paths."
+}

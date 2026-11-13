@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The duplication is real, but both sites read the same keys and work correctly today, so this is a maintainability refactor, not a defect."
+  ],
+  "F2": [
+   "DROP",
+   "Loose fake annotations, type-ignore comments and a broad `pytest.raises` are test-typing hygiene; nothing here causes wrong behavior."
+  ]
+ },
+ "wall_seconds": 14.5,
+ "duration_seconds": 14.45620754105039,
+ "cost_usd": 0.08544680000000002,
+ "effort": "high",
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=66917, cached=60651, cache_write=6256, completion=1110, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The duplication is real, but both sites read the same keys and work correctly today, so this is a maintainability refactor, not a defect.\nF2: DROP \u2014 Loose fake annotations, type-ignore comments and a broad `pytest.raises` are test-typing hygiene; nothing here causes wrong behavior.\nF1: DROP \u2014 The duplicated policy wiring is real, but both sites read the same keys and work correctly today, so this is a maintainability refactor rather than a defect.\nF2: DROP \u2014 The loose `-> object` annotations, the type-ignore comments and the broad `pytest.raises` are test-typing hygiene that cause no wrong behavior."
+}

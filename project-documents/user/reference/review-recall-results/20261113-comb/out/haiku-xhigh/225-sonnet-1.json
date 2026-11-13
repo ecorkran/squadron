@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The assert holds today and runs at import in every normal test and CLI run, so a future enum edit would be caught there; the `-O` silent-omission path needs both that edit and an optimized run."
+  ],
+  "F2": [
+   "DROP",
+   "The per-verb storage tuple maps `TickDatabaseUnreachable` to exit 4 correctly; the finding is about where exit policy lives, not wrong behavior."
+  ],
+  "F3": [
+   "DROP",
+   "Function length and the `jsonable` placement are structure and style points, and the finding itself says it is not blocking."
+  ]
+ },
+ "wall_seconds": 40.0,
+ "duration_seconds": 39.97138416697271,
+ "cost_usd": 0.01502771,
+ "effort": "xhigh",
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=187183, cached=143641, cache_write=43532, completion=7922, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The assert holds today and runs at import in every normal test and CLI run, so a future enum edit would be caught there; the `-O` silent-omission path needs both that edit and an optimized run.\nF2: DROP \u2014 The per-verb storage tuple maps `TickDatabaseUnreachable` to exit 4 correctly; the finding is about where exit policy lives, not wrong behavior.\nF3: DROP \u2014 Function length and the `jsonable` placement are structure and style points, and the finding itself says it is not blocking.\nF1: DROP \u2014 The assert holds today and runs at import in every normal test and CLI run, so a future enum edit would be caught there; the `-O` silent-omission path needs both that edit and an optimized run.\nF2: DROP \u2014 The per-verb storage tuple maps `TickDatabaseUnreachable` to exit 4 correctly; the finding is about where exit policy lives, not wrong behavior.\nF3: DROP \u2014 Function length and the `jsonable` placement are structure and style points, and the finding itself says it is not blocking."
+}

@@ -1,0 +1,28 @@
+{
+ "case": "227",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Failed or stale health-log reads can abort the cutover without a report or let a failed health check pass using an old clean line."
+  ],
+  "F2": [
+   "KEEP",
+   "The hard-coded replication host makes the table-driven production-line check fail when that configured value changes."
+  ]
+ },
+ "wall_seconds": 39.3,
+ "duration_seconds": 39.315722124883905,
+ "cost_usd": 0.0041899699999999995,
+ "effort": null,
+ "tool_calls_made": 12,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=87489, cached=64077, cache_write=None, completion=2416, reasoning=1923)",
+ "raw_output": "F1: KEEP \u2014 Failed or stale health-log reads can abort the cutover without a report or let a failed health check pass using an old clean line.\nF2: KEEP \u2014 The hard-coded replication host makes the table-driven production-line check fail when that configured value changes.\nF1: KEEP \u2014 Health-log read errors can prevent the report from being written, and ignored command failures can let a stale clean log line pass.\nF2: KEEP \u2014 The hard-coded replication host can make the production-line guard falsely reject a config-driven host change."
+}

@@ -1,0 +1,48 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The teardown exception is caught and logged without replacing or hiding the original mount error."
+  ],
+  "F2": [
+   "DROP",
+   "Reporting the latest failure is valid behavior; the discrepancy is limited to documentation and test wording."
+  ],
+  "F3": [
+   "DROP",
+   "All referenced tokens exist in the stylesheet imported before rendering, so the claimed failure requires a hypothetical configuration change."
+  ],
+  "F4": [
+   "DROP",
+   "These subscriptions and placeholder effects are intentional, documented scaffolding rather than a demonstrated behavioral defect."
+  ],
+  "F5": [
+   "DROP",
+   "File length and suppression scope are maintainability concerns, with no actual ref misuse demonstrated."
+  ],
+  "F6": [
+   "KEEP",
+   "Adding the first series updates only a ref, so the existing Context range remains unapplied until the range changes again."
+  ]
+ },
+ "wall_seconds": 29.0,
+ "duration_seconds": 29.026498917024583,
+ "cost_usd": 0.0744147,
+ "effort": null,
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=129833, cached=101827, cache_write=None, completion=822, reasoning=349)",
+ "raw_output": "F1: DROP \u2014 The teardown exception is caught and logged without replacing or hiding the original mount error.\nF2: DROP \u2014 Reporting the latest failure is valid behavior; the discrepancy is limited to documentation and test wording.\nF3: DROP \u2014 All referenced tokens exist in the stylesheet imported before rendering, so the claimed failure requires a hypothetical configuration change.\nF4: DROP \u2014 These subscriptions and placeholder effects are intentional, documented scaffolding rather than a demonstrated behavioral defect.\nF5: DROP \u2014 File length and suppression scope are maintainability concerns, with no actual ref misuse demonstrated.\nF6: KEEP \u2014 Adding the first series updates only a ref, so the existing Context range remains unapplied until the range changes again.\nF1: DROP \u2014 The teardown exception is caught and logged without replacing the original mount error.\nF2: DROP \u2014 Reporting the latest failure is valid behavior; only the documentation and test wording disagree.\nF3: DROP \u2014 All referenced tokens exist and the stylesheet loads before rendering, so no current failure is demonstrated.\nF4: DROP \u2014 The no-op subscriptions and effects are intentional scaffolding explicitly documented in the slice design.\nF5: DROP \u2014 File length and lint-suppression scope are maintainability concerns without a demonstrated runtime defect.\nF6: KEEP \u2014 Adding the first series updates only a ref, leaving the existing Context range unapplied until the range changes."
+}

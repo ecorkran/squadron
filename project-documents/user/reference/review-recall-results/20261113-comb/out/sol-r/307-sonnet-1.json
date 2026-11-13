@@ -1,0 +1,23 @@
+{
+ "case": "307",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sonnet/1/0"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "These annotation issues do not demonstrate a runtime defect, and the claimed strict-pyright failures are unverified."
+  ]
+ },
+ "wall_seconds": 6.1,
+ "duration_seconds": 6.105696584098041,
+ "cost_usd": 0.030537500000000002,
+ "effort": null,
+ "tool_calls_made": 1,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=34950, cached=21375, cache_write=None, completion=125, reasoning=16)",
+ "raw_output": "F1: DROP \u2014 These annotation issues do not demonstrate a runtime defect, and the claimed strict-pyright failures are unverified.\nF1: DROP \u2014 The loose annotations do not establish a behavioral defect, and the claimed strict-pyright failures remain unverified."
+}

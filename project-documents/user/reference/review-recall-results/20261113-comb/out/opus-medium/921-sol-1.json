@@ -1,0 +1,43 @@
+{
+ "case": "921",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2",
+  "F4": "sol/1/3",
+  "F5": "sol/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "mt-run` waits at `deploy/mt-run:129` until the unit stops, so the blocking `run()` at `scripts/cutover_common.py:356` returns only after the pass ends. That means `wait_for_unit_or_line` never polls while the unit is running and never stops the backfill, so the unbounded wait is still there."
+  ],
+  "F2": [
+   "KEEP",
+   "MT_INSTALL` gives passwordless root to a script inside `/home/manta/...`, which the `manta` account can edit. That account can therefore get unrestricted passwordless root, which breaks the file's stated \"nothing wider\" promise."
+  ],
+  "F3": [
+   "KEEP",
+   "In sudoers, `*` in command arguments also matches spaces, so `systemctl stop mt-* \u2026` allows extra unit arguments. The rule therefore lets the account stop, start or restart any service, not just `mt-*` ones."
+  ],
+  "F4": [
+   "KEEP",
+   "When all gap rows are terminal, seeding starts at `MAX(gap_end)` or is skipped entirely. A truncated day inside the trailing window that falls before a later terminal gap row (e.g. a provider hole the next day) is never re-seeded, so the new `uncovered_days` fix has no effect for that day."
+  ],
+  "F5": [
+   "DROP",
+   "The repair script's output is printed to the terminal but not written to the log file. This is a completeness gap in the operator report, not a defect that causes wrong behavior."
+  ]
+ },
+ "wall_seconds": 54.7,
+ "duration_seconds": 54.7189060410019,
+ "cost_usd": 0.3915107,
+ "effort": "medium",
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=220449, cached=185840, cache_write=34591, completion=3841, reasoning=None)",
+ "raw_output": "I've checked all five findings against the code. Here are the results:\n\nF1: KEEP \u2014 `mt-run` waits at `deploy/mt-run:129` until the unit stops, so the blocking `run()` at `scripts/cutover_common.py:356` returns only after the pass ends. That means `wait_for_unit_or_line` never polls while the unit is running and never stops the backfill, so the unbounded wait is still there.\nF2: KEEP \u2014 `MT_INSTALL` gives passwordless root to a script inside `/home/manta/...`, which the `manta` account can edit. That account can therefore get unrestricted passwordless root, which breaks the file's stated \"nothing wider\" promise.\nF3: KEEP \u2014 In sudoers, `*` in command arguments also matches spaces, so `systemctl stop mt-* \u2026` allows extra unit arguments. The rule therefore lets the account stop, start or restart any service, not just `mt-*` ones.\nF4: KEEP \u2014 When all gap rows are terminal, seeding starts at `MAX(gap_end)` or is skipped entirely. A truncated day inside the trailing window that falls before a later terminal gap row (e.g. a provider hole the next day) is never re-seeded, so the new `uncovered_days` fix has no effect for that day.\nF5: DROP \u2014 The repair script's output is printed to the terminal but not written to the log file. This is a completeness gap in the operator report, not a defect that causes wrong behavior.\nF1: KEEP \u2014 `mt-run` blocks until the unit stops (`deploy/mt-run:129`), so `wait_for_unit_or_line` never runs while the unit is active, and the unbounded wait is still there.\nF2: KEEP \u2014 `MT_INSTALL` grants passwordless root to a script inside the `manta` account's own writable checkout, which amounts to unrestricted passwordless root.\nF3: KEEP \u2014 Sudoers `*` in arguments also matches spaces, so the `mt-*` rules let the account stop, start or restart any unit, not just `mt-*` ones.\nF4: KEEP \u2014 When all gaps are terminal, seeding starts at `MAX(gap_end)` or is skipped, so a truncated day in the trailing window before a later terminal gap row is never re-seeded.\nF5: DROP \u2014 The repair output reaches the terminal but not the log file; that is a completeness gap in the operator report, not wrong behavior."
+}

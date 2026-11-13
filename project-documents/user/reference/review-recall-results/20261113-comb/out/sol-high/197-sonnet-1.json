@@ -1,0 +1,43 @@
+{
+ "case": "197",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Orphaned temporary files are cleanup debt; write failures are explicit and preserve the existing target."
+  ],
+  "F2": [
+   "DROP",
+   "The deferred import avoids initialization errors; extracting shared helpers is a structural refactor."
+  ],
+  "F3": [
+   "DROP",
+   "Blocking preflight I/O violates conventions but no affected concurrent work or functional failure is demonstrated."
+  ],
+  "F4": [
+   "DROP",
+   "NOT_READY correctly classifies legacy source flags, including the built-in tasks source."
+  ],
+  "F5": [
+   "DROP",
+   "Resume validation guarantees the index exists, and subsequent processing does not remove it."
+  ]
+ },
+ "wall_seconds": 46.5,
+ "duration_seconds": 46.48870999994688,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=110717, cached=99200, cache_write=None, completion=379, reasoning=154)",
+ "raw_output": "F1: DROP \u2014 Orphaned temporary files are cleanup debt; write failures are explicit and preserve the existing target.\nF2: DROP \u2014 The deferred import avoids initialization errors; extracting shared helpers is a structural refactor.\nF3: DROP \u2014 Blocking preflight I/O violates conventions but no affected concurrent work or functional failure is demonstrated.\nF4: DROP \u2014 NOT_READY correctly classifies legacy source flags, including the built-in tasks source.\nF5: DROP \u2014 Resume validation guarantees the index exists, and subsequent processing does not remove it.\nF1: DROP \u2014 Orphaned temporary files are cleanup debt, not a demonstrated merge-blocking functional defect.\nF2: DROP \u2014 The deferred import works safely; extracting shared helpers is a structural refactor.\nF3: DROP \u2014 Blocking preflight I/O violates conventions but no resulting functional failure is demonstrated.\nF4: DROP \u2014 NOT_READY correctly classifies legacy source flags, including the built-in tasks source.\nF5: DROP \u2014 Resume validation guarantees the index exists, and subsequent processing does not remove it."
+}

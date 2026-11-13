@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "run_steps` catches only `StepFailed` and `CalledProcessError`, so an `IndexError`, `ValueError`, or `StopIteration` from a step skips the report that the docstring promises."
+  ],
+  "F2": [
+   "KEEP",
+   "c.split(\"/\")[0]` is always `\"\"` for the absolute command paths, so the assertion cannot fail, and the \"report still written\" test never calls `main()` or checks a file."
+  ],
+  "F3": [
+   "DROP",
+   "the REPLICATION branch reads correctly and fails loudly under `ON_ERROR_STOP`; this is a coverage gap with no demonstrated defect."
+  ]
+ },
+ "wall_seconds": 55.2,
+ "duration_seconds": 55.14509779191576,
+ "cost_usd": 0.02256166,
+ "effort": "xhigh",
+ "tool_calls_made": 9,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=230397, cached=159416, cache_write=70973, completion=11934, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `run_steps` catches only `StepFailed` and `CalledProcessError`, so an `IndexError`, `ValueError`, or `StopIteration` from a step skips the report that the docstring promises.\nF2: KEEP \u2014 `c.split(\"/\")[0]` is always `\"\"` for the absolute command paths, so the assertion cannot fail, and the \"report still written\" test never calls `main()` or checks a file.\nF3: DROP \u2014 the REPLICATION branch reads correctly and fails loudly under `ON_ERROR_STOP`; this is a coverage gap with no demonstrated defect.\nF1: KEEP \u2014 `run_steps` catches only `StepFailed` and `CalledProcessError`, so an `IndexError`, `ValueError`, or `StopIteration` from a step skips the report that the docstring promises.\nF2: KEEP \u2014 `c.split(\"/\")[0]` is always `\"\"` for the absolute command paths, so the assertion cannot fail, and the \"report still written\" test never calls `main()` or checks a file.\nF3: DROP \u2014 the REPLICATION branch reads correctly and fails loudly under `ON_ERROR_STOP`; this is a coverage gap with no demonstrated defect."
+}

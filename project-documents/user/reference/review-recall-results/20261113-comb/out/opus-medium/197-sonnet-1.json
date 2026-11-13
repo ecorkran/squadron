@@ -1,0 +1,43 @@
+{
+ "case": "197",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The temp-file leak is real but only cosmetic: the write still fails loudly (logged, then re-raised), so it causes no wrong behavior or silent failure."
+  ],
+  "F2": [
+   "DROP",
+   "This is a layering and style point; the function-local import works and causes no runtime defect."
+  ],
+  "F3": [
+   "DROP",
+   "By the reviewer's own account the impact is low: the CLI runs a single task under `asyncio.run`, so no other work is starved and behavior is not wrong."
+  ],
+  "F4": [
+   "DROP",
+   "The only code that sets `flag_reason` is `sources.py:238-239`, which always sets `flag_kind` too, so the default only matters for a hypothetical custom source that does not exist."
+  ],
+  "F5": [
+   "DROP",
+   "_check_record` (`item_resume.py:209-211`) already rejects a request whose index has no record before `replace` or `_reconcile` runs, so the bare `StopIteration` cannot happen."
+  ]
+ },
+ "wall_seconds": 28.7,
+ "duration_seconds": 28.65047404100187,
+ "cost_usd": 0.24271469999999998,
+ "effort": "medium",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=118472, cached=96796, cache_write=21664, completion=2448, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The temp-file leak is real but only cosmetic: the write still fails loudly (logged, then re-raised), so it causes no wrong behavior or silent failure.\nF2: DROP \u2014 This is a layering and style point; the function-local import works and causes no runtime defect.\nF3: DROP \u2014 By the reviewer's own account the impact is low: the CLI runs a single task under `asyncio.run`, so no other work is starved and behavior is not wrong.\nF4: DROP \u2014 The only code that sets `flag_reason` is `sources.py:238-239`, which always sets `flag_kind` too, so the default only matters for a hypothetical custom source that does not exist.\nF5: DROP \u2014 `_check_record` (`item_resume.py:209-211`) already rejects a request whose index has no record before `replace` or `_reconcile` runs, so the bare `StopIteration` cannot happen.\n## Verdict: PASS\n\nAll five findings are dropped. None describes a defect that would cause wrong behavior, a crash, wrong data, a hang, a security hole or a silent failure. Each finding's decision is below.\n\n### [NOTE] F1: DROP. The atomic report write leaves temp files behind when it fails\ncategory: error-handling\nlocation: src/squadron/pipeline/batch_report.py:343\n\nThe leak is real. If the write or rename raises `OSError`, a hidden `.{name}.XXXX` file stays in the runs directory. But the failure is logged at ERROR and re-raised, so nothing fails silently and the old report survives. The leftover file is only clutter, so this doesn't need fixing before merge.\n\n### [NOTE] F2: DROP. `run_item` imports private helpers from `run.py` inside a function to avoid a circular import\ncategory: design\nlocation: src/squadron/cli/commands/run_item.py\n\nThis is a layering and style point. The import inside the function works, and nothing goes wrong at runtime.\n\n### [NOTE] F3: DROP. Blocking git, cf and file I/O inside async `resume_item`\ncategory: performance\nlocation: src/squadron/pipeline/item_resume.py\n\nThe reviewer agrees the CLI runs a single task under `asyncio.run`. Nothing else competes for the event loop, so the blocking calls cause no wrong behavior.\n\n### [NOTE] F4: DROP. `_pre_flag` falls back to `not_ready` when a source sets no flag kind\ncategory: error-handling\nlocation: src/squadron/pipeline/executor.py:1617\n\nThe only code that sets `flag_reason` is `sources.py:238-239`, and it always sets `flag_kind` at the same time. The fallback only matters for a custom source that sets a reason without a kind, and no such source exists.\n\n### [NOTE] F5: DROP. `ItemRerun.replace` and `_reconcile` raise a bare `StopIteration` when the index is missing\ncategory: error-handling\nlocation: src/squadron/pipeline/batch_report.py:378\n\n`_check_record` (`item_resume.py:209-211`) already rejects a request whose index has no record in the report. That check runs before `replace` or `_reconcile` is reached, so the bare `StopIteration` can't happen."
+}

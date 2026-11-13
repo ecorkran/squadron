@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "checkout` is a `Path`, and `str(Path(\"\"))` gives `\".\"`, so it can't be empty; `params` is typed `Mapping[str, str]`, and `build_argv` already runs on it before journaling, so the post-journal `ValueError` paths need inputs that cannot arrive (and production has no planners yet)."
+  ],
+  "F2": [
+   "DROP",
+   "the file is about 26 lines over a \"where practical\" size guideline, and splitting it is structure and style with no defect."
+  ],
+  "F3": [
+   "DROP",
+   "launch_grace_seconds` is an existing setting, not a new bound from this change; the `getattr` lookup is a typing-style point, and all three named fields exist, so nothing goes wrong at runtime."
+  ]
+ },
+ "wall_seconds": 26.0,
+ "duration_seconds": 26.033198124961928,
+ "cost_usd": 0.2997429,
+ "effort": "medium",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=153406, cached=124113, cache_write=29279, completion=1977, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 `checkout` is a `Path`, and `str(Path(\"\"))` gives `\".\"`, so it can't be empty; `params` is typed `Mapping[str, str]`, and `build_argv` already runs on it before journaling, so the post-journal `ValueError` paths need inputs that cannot arrive (and production has no planners yet).\nF2: DROP \u2014 the file is about 26 lines over a \"where practical\" size guideline, and splitting it is structure and style with no defect.\nF3: DROP \u2014 `launch_grace_seconds` is an existing setting, not a new bound from this change; the `getattr` lookup is a typing-style point, and all three named fields exist, so nothing goes wrong at runtime.\nF1: DROP \u2014 `checkout` is a `Path`, and `str(Path(\"\"))` gives `\".\"`, so it can't be empty; `params` is typed `Mapping[str, str]`, and `build_argv` already runs on it before journaling, so the post-journal `ValueError` paths need inputs that cannot arrive (and production has no planners yet).\nF2: DROP \u2014 the file is about 26 lines over a \"where practical\" size guideline, and splitting it is structure and style with no defect.\nF3: DROP \u2014 `launch_grace_seconds` is an existing setting, not a new bound from this change; the `getattr` lookup is a typing-style point, and all three named fields exist, so nothing goes wrong at runtime."
+}

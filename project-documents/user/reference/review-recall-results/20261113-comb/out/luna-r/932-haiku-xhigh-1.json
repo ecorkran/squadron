@@ -1,0 +1,43 @@
+{
+ "case": "932",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Production templates are created through the loader, which resolves `None` before review execution."
+  ],
+  "F2": [
+   "KEEP",
+   "Boolean and nonpositive timeout values can be accepted and cause background agents to be stopped immediately or after one second."
+  ],
+  "F3": [
+   "KEEP",
+   "These async paths synchronously load and parse config files on the event loop without a sub-millisecond guarantee."
+  ],
+  "F4": [
+   "DROP",
+   "This identifies a missing test rather than a demonstrated defect in the working background-wait path."
+  ],
+  "F5": [
+   "DROP",
+   "The file-length guideline is a style preference, not a functional defect."
+  ]
+ },
+ "wall_seconds": 33.6,
+ "duration_seconds": 33.61271420796402,
+ "cost_usd": 0.007284839999999999,
+ "effort": null,
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=180413, cached=132444, cache_write=None, completion=2327, reasoning=1808)",
+ "raw_output": "F1: DROP \u2014 Production templates are created through the loader, which resolves `None` before review execution.\nF2: KEEP \u2014 Boolean and nonpositive timeout values can be accepted and cause background agents to be stopped immediately or after one second.\nF3: KEEP \u2014 These async paths synchronously load and parse config files on the event loop without a sub-millisecond guarantee.\nF4: DROP \u2014 This identifies a missing test rather than a demonstrated defect in the working background-wait path.\nF5: DROP \u2014 The file-length guideline is a style preference, not a functional defect.\nF1: DROP \u2014 Production templates are loaded through the YAML loader, which resolves `None` before review execution.\nF2: KEEP \u2014 Boolean and nonpositive timeout values can be accepted and cause background agents to be stopped prematurely.\nF3: KEEP \u2014 These async paths synchronously load and parse config files on the event loop, risking stalls in other I/O.\nF4: DROP \u2014 This identifies a missing test rather than a demonstrated defect in the background-wait path.\nF5: DROP \u2014 The file-length guideline is a style preference, not a functional defect."
+}

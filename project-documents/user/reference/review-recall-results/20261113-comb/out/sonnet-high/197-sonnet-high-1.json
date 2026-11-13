@@ -1,0 +1,38 @@
+{
+ "case": "197",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "_validate` calls `load_pipeline` unguarded, so a renamed or removed pipeline raises `FileNotFoundError` out of `resume_item`, which says it never raises for an expected refusal. `run.py` guards the same call."
+  ],
+  "F2": [
+   "DROP",
+   "a missing `completed` or `total` key fails explicitly, which is the project policy. The cf-version message is polish."
+  ],
+  "F3": [
+   "DROP",
+   "the failure is logged and re-raised. A leaked temp file on a rare write error and 0600 report files are minor for a local tool."
+  ],
+  "F4": [
+   "DROP",
+   "the circular import is a design smell that works, with a comment explaining it. It causes no wrong behavior."
+  ]
+ },
+ "wall_seconds": 23.4,
+ "duration_seconds": 23.442485249834135,
+ "cost_usd": 0.1443325,
+ "effort": "high",
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=112799, cached=85105, cache_write=27682, completion=2420, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `_validate` calls `load_pipeline` unguarded, so a renamed or removed pipeline raises `FileNotFoundError` out of `resume_item`, which says it never raises for an expected refusal. `run.py` guards the same call.\nF2: DROP \u2014 a missing `completed` or `total` key fails explicitly, which is the project policy. The cf-version message is polish.\nF3: DROP \u2014 the failure is logged and re-raised. A leaked temp file on a rare write error and 0600 report files are minor for a local tool.\nF4: DROP \u2014 the circular import is a design smell that works, with a comment explaining it. It causes no wrong behavior.\nF1: KEEP \u2014 `_validate` calls `load_pipeline` with no guard, so a renamed or removed pipeline raises `FileNotFoundError` out of `resume_item`, which documents that it never raises for an expected refusal, while `run.py` guards the same call.\nF2: DROP \u2014 a missing `completed` or `total` key fails explicitly with `KeyError`, which matches the project's fail-explicitly policy, and a nicer message naming the cf command is polish.\nF3: DROP \u2014 the write failure is logged and re-raised, so the leaked temp file on a rare write error and the 0600 mode on reports are minor for a local tool.\nF4: DROP \u2014 the function-local import cycle and the private-name imports are a design smell, but they work, carry an explanatory comment, and cause no wrong behavior."
+}

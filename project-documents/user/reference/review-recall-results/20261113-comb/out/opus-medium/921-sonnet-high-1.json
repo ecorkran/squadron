@@ -1,0 +1,48 @@
+{
+ "case": "921",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The new sudoers rule claims to be limited, but it runs a script the `manta` account can edit as root, and the `mt-*` wildcard can also match extra unit names after a space, so the account effectively has full root."
+  ],
+  "F2": [
+   "DROP",
+   "This is a DRY/style point: the `[WAIT]` and `FAIL` substring checks work correctly today."
+  ],
+  "F3": [
+   "DROP",
+   "Opening the log before preflight in the wrong directory only leaves a stray notes directory before the run refuses; it does not produce a wrong result."
+  ],
+  "F4": [
+   "KEEP",
+   "stale` compares the refresh job's finish time with `created_at`, so a bar written while the refresh is running counts as fresh; `--verify` then reads the old cagg and reports FAIL when it should report WAIT."
+  ],
+  "F5": [
+   "DROP",
+   "Import ordering is a lint issue with no effect on behavior."
+  ],
+  "F6": [
+   "DROP",
+   "Duplicated test setup and over-mocked tests are maintainability concerns, not defects."
+  ]
+ },
+ "wall_seconds": 40.2,
+ "duration_seconds": 40.21104716695845,
+ "cost_usd": 0.2525654,
+ "effort": "medium",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=91159, cached=67984, cache_write=23163, completion=2644, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The new sudoers rule claims to be limited, but it runs a script the `manta` account can edit as root, and the `mt-*` wildcard can also match extra unit names after a space, so the account effectively has full root.\nF2: DROP \u2014 This is a DRY/style point: the `[WAIT]` and `FAIL` substring checks work correctly today.\nF3: DROP \u2014 Opening the log before preflight in the wrong directory only leaves a stray notes directory before the run refuses; it does not produce a wrong result.\nF4: KEEP \u2014 `stale` compares the refresh job's finish time with `created_at`, so a bar written while the refresh is running counts as fresh; `--verify` then reads the old cagg and reports FAIL when it should report WAIT.\nF5: DROP \u2014 Import ordering is a lint issue with no effect on behavior.\nF6: DROP \u2014 Duplicated test setup and over-mocked tests are maintainability concerns, not defects.\nF1: KEEP \u2014 The new sudoers rule claims to be limited, but it runs a script the `manta` account can edit as root, and the `mt-*` wildcard can also match extra unit names after a space, so the account effectively has full root.\nF2: DROP \u2014 This is a DRY/style point: the `[WAIT]` and `FAIL` substring checks work correctly today.\nF3: DROP \u2014 Opening the log before preflight in the wrong directory only leaves a stray notes directory before the run refuses; it does not produce a wrong result.\nF4: KEEP \u2014 `stale` compares the refresh job's finish time with `created_at`, so a bar written while the refresh is running counts as fresh; `--verify` then reads the old cagg and reports FAIL when it should report WAIT.\nF5: DROP \u2014 Import ordering is a lint issue with no effect on behavior.\nF6: DROP \u2014 Duplicated test setup and over-mocked tests are maintainability concerns, not defects."
+}

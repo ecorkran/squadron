@@ -1,0 +1,58 @@
+{
+ "case": "197",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "CF failures escape with the wrong exit code, and missing pipelines are misreported as report-write failures."
+  ],
+  "F2": [
+   "KEEP",
+   "Malformed report items can escape the loader\u2019s error type or silently corrupt required fields."
+  ],
+  "F3": [
+   "DROP",
+   "Failed writes leave temporary files, but no consequential behavior beyond the already-reported write failure is established."
+  ],
+  "F4": [
+   "DROP",
+   "The production constructor supplies counts, and a valid CF response lacking them is unverified."
+  ],
+  "F5": [
+   "DROP",
+   "The `Any` annotations are a typing concern without a demonstrated runtime defect."
+  ],
+  "F6": [
+   "DROP",
+   "The deferred import avoids an import-time cycle, and no resulting malfunction is shown."
+  ],
+  "F7": [
+   "KEEP",
+   "An unlocked revise dispatch can modify the checkout concurrently with a locked batch."
+  ],
+  "F8": [
+   "DROP",
+   "The duplicated path convention is a maintainability concern, not a current behavior defect."
+  ]
+ },
+ "wall_seconds": 34.0,
+ "duration_seconds": 33.98915608320385,
+ "cost_usd": 0.07851,
+ "effort": null,
+ "tool_calls_made": 11,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=170911, cached=106580, cache_write=None, completion=1770, reasoning=790)",
+ "raw_output": "F1: KEEP \u2014 CF failures escape with the wrong exit code, and missing pipelines are misreported as report-write failures.\nF2: KEEP \u2014 Malformed report items can escape the loader\u2019s error type or silently corrupt required fields.\nF3: DROP \u2014 Failed writes leave temporary files, but no consequential behavior beyond the already-reported write failure is established.\nF4: DROP \u2014 The production constructor supplies counts, and a valid CF response lacking them is unverified.\nF5: DROP \u2014 The `Any` annotations are a typing concern without a demonstrated runtime defect.\nF6: DROP \u2014 The deferred import avoids an import-time cycle, and no resulting malfunction is shown.\nF7: KEEP \u2014 An unlocked revise dispatch can modify the checkout concurrently with a locked batch.\nF8: DROP \u2014 The duplicated path convention is a maintainability concern, not a current behavior defect.\nF1: KEEP \u2014 CF failures escape with the wrong exit code, and missing pipelines are misreported as report-write failures.\nF2: KEEP \u2014 Malformed report items can escape the loader\u2019s error type or silently corrupt required fields.\nF3: DROP \u2014 Failed writes leave temporary files, but no consequential behavior beyond the reported write failure is established.\nF4: DROP \u2014 The production constructor supplies counts, and a valid CF response lacking them is unverified.\nF5: DROP \u2014 The `Any` annotations are a typing concern without a demonstrated runtime defect.\nF6: DROP \u2014 The deferred import avoids an import-time cycle, and no resulting malfunction is shown.\nF7: KEEP \u2014 An unlocked revise dispatch can modify the checkout concurrently with a locked batch.\nF8: DROP \u2014 The duplicated path convention is a maintainability concern, not a current behavior defect."
+}

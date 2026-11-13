@@ -1,0 +1,58 @@
+{
+ "case": "197",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Context Forge failures and missing pipeline files can escape item resume as uncaught exceptions instead of typed outcomes."
+  ],
+  "F2": [
+   "KEEP",
+   "Malformed report entries can raise uncaught errors or be accepted with missing required fields."
+  ],
+  "F3": [
+   "KEEP",
+   "Failed writes or renames can leave temporary report files behind."
+  ],
+  "F4": [
+   "KEEP",
+   "Missing task-count fields raise uncaught `KeyError` instead of a typed Context Forge error."
+  ],
+  "F5": [
+   "DROP",
+   "Using `Any` weakens static checking but does not itself cause incorrect runtime behavior."
+  ],
+  "F6": [
+   "DROP",
+   "The import is deferred until the handler runs, so the circular dependency does not cause an import-time failure."
+  ],
+  "F7": [
+   "KEEP",
+   "Dispatch can modify checkout files, but its omission lets such runs overlap with batch operations without the lock."
+  ],
+  "F8": [
+   "DROP",
+   "The duplicated path construction is a maintenance risk, not a current behavior defect."
+  ]
+ },
+ "wall_seconds": 91.7,
+ "duration_seconds": 91.63676391611807,
+ "cost_usd": 0.01235704,
+ "effort": null,
+ "tool_calls_made": 20,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=405429, cached=341304, cache_write=None, completion=5063, reasoning=3993)",
+ "raw_output": "F1: KEEP \u2014 Context Forge failures and missing pipeline files can escape item resume as uncaught exceptions instead of typed outcomes.\nF2: KEEP \u2014 Malformed report entries can raise uncaught errors or be accepted with missing required fields.\nF3: KEEP \u2014 Failed writes or renames can leave temporary report files behind.\nF4: KEEP \u2014 Missing task-count fields raise uncaught `KeyError` instead of a typed Context Forge error.\nF5: DROP \u2014 Using `Any` weakens static checking but does not itself cause incorrect runtime behavior.\nF6: DROP \u2014 The import is deferred until the handler runs, so the circular dependency does not cause an import-time failure.\nF7: KEEP \u2014 Dispatch can modify checkout files, but its omission lets such runs overlap with batch operations without the lock.\nF8: DROP \u2014 The duplicated path construction is a maintenance risk, not a current behavior defect.\nF1: KEEP \u2014 Context Forge failures and missing pipeline files can escape as uncaught exceptions instead of typed item-resume outcomes.\nF2: KEEP \u2014 Malformed report entries can raise uncaught errors or be accepted with missing required fields.\nF3: KEEP \u2014 Failed writes or renames can leave temporary report files behind.\nF4: KEEP \u2014 Missing task-count fields raise an uncaught `KeyError` rather than a typed Context Forge error.\nF5: DROP \u2014 Using `Any` weakens static checking but does not itself cause incorrect runtime behavior.\nF6: DROP \u2014 The deferred import avoids an import-time circular dependency, and the proposed refactor is structural.\nF7: KEEP \u2014 Dispatch can modify checkout files, but its omission lets such runs overlap with batch operations without the lock.\nF8: DROP \u2014 Duplicating the path construction is a maintenance risk, not a current behavior defect."
+}

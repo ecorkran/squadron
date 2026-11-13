@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The import-time `assert` fires under the normal non-`-O` runs that tests use, so a missing bucket would already fail loudly; switching to `raise` is only hardening."
+  ],
+  "F2": [
+   "DROP",
+   "By the reviewer's own account the mapping works correctly; this is a design and style preference with no wrong behavior."
+  ],
+  "F3": [
+   "DROP",
+   "Function length and module organization are style concerns, and the reviewer says themselves it isn't blocking."
+  ]
+ },
+ "wall_seconds": 16.8,
+ "duration_seconds": 16.830857458990067,
+ "cost_usd": 0.170226,
+ "effort": "medium",
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=62668, cached=44793, cache_write=17865, completion=869, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The import-time `assert` fires under the normal non-`-O` runs that tests use, so a missing bucket would already fail loudly; switching to `raise` is only hardening.\nF2: DROP \u2014 By the reviewer's own account the mapping works correctly; this is a design and style preference with no wrong behavior.\nF3: DROP \u2014 Function length and module organization are style concerns, and the reviewer says themselves it isn't blocking.\nF1: DROP \u2014 The import-time `assert` fires under the normal non-`-O` runs that tests use, so a missing bucket would already fail loudly; switching to `raise` is only hardening.\nF2: DROP \u2014 By the reviewer's own account the mapping works correctly; this is a design and style preference with no wrong behavior.\nF3: DROP \u2014 Function length and module organization are style concerns, and the reviewer says themselves it isn't blocking."
+}

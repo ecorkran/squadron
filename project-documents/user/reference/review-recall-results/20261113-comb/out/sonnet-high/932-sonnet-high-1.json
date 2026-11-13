@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The duplication is real, but both sites read the same keys and apply the same policy today, so nothing behaves wrongly. The `\".\"` versus `Path.cwd()` cwd difference changes no config result, so this is a refactor preference."
+  ],
+  "F2": [
+   "DROP",
+   "The `-> object` annotations and the `# type: ignore` comments are real, but they are type-hygiene in tests and don't make any test wrong. The `pytest.raises(Exception)` point is a minor nit."
+  ]
+ },
+ "wall_seconds": 15.8,
+ "duration_seconds": 15.771752499975264,
+ "cost_usd": 0.12645530000000002,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=79757, cached=53997, cache_write=25750, completion=1694, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The duplication is real, but both sites read the same keys and apply the same policy today, so nothing behaves wrongly. The `\".\"` versus `Path.cwd()` cwd difference changes no config result, so this is a refactor preference.\nF2: DROP \u2014 The `-> object` annotations and the `# type: ignore` comments are real, but they are type-hygiene in tests and don't make any test wrong. The `pytest.raises(Exception)` point is a minor nit.\nF1: DROP \u2014 The duplication is real, but both sites read the same keys and apply the same policy today, so nothing behaves wrongly. The `\".\"` versus `Path.cwd()` difference changes no config result.\nF2: DROP \u2014 The `-> object` annotations and the `# type: ignore` comments are real, but they are type hygiene in tests and don't make any test wrong. The broad `pytest.raises(Exception)` is a minor nit."
+}

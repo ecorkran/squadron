@@ -1,0 +1,43 @@
+{
+ "case": "932",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "load_template` is the only production constructor of `ReviewTemplate` and always resolves `setting_sources` to a list, so `None` cannot reach `review_client`; the fixtures are hardening against an input that cannot arrive."
+  ],
+  "F2": [
+   "KEEP",
+   "get_typed_config`'s int branch accepts `bool`, and `cf config set` writes `0` or negative values with no range check, which makes background agents stop immediately."
+  ],
+  "F3": [
+   "DROP",
+   "the event-loop blocking is real in principle, but it comes from small local TOML reads with no observable wrong behavior, so it is a performance point with no real effect."
+  ],
+  "F4": [
+   "DROP",
+   "a missing load test for a path whose behavior unit tests already exercise; the code itself has no defect."
+  ],
+  "F5": [
+   "DROP",
+   "file length is a style point, not a defect."
+  ]
+ },
+ "wall_seconds": 49.0,
+ "duration_seconds": 48.9472395000048,
+ "cost_usd": 0.01973208,
+ "effort": "xhigh",
+ "tool_calls_made": 11,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=304792, cached=249238, cache_write=55542, completion=10024, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 `load_template` is the only production constructor of `ReviewTemplate` and always resolves `setting_sources` to a list, so `None` cannot reach `review_client`; the fixtures are hardening against an input that cannot arrive.\nF2: KEEP \u2014 `get_typed_config`'s int branch accepts `bool`, and `cf config set` writes `0` or negative values with no range check, which makes background agents stop immediately.\nF3: DROP \u2014 the event-loop blocking is real in principle, but it comes from small local TOML reads with no observable wrong behavior, so it is a performance point with no real effect.\nF4: DROP \u2014 a missing load test for a path whose behavior unit tests already exercise; the code itself has no defect.\nF5: DROP \u2014 file length is a style point, not a defect.\n### [FAIL] F2: `pipeline.background_idle_timeout_s` accepts `true`, `0`, and negative values\ncategory: validation\nlocation: src/squadron/config/manager.py:134-137\n\nDecision: KEEP. The int branch of `get_typed_config` accepts `bool`, because `bool` subclasses `int`. `cf config set` also writes `0` or negative values with no range check, so a zero or negative timeout stops every background agent at once. Fix: reject `bool` in the int branch, require a positive value, and add tests for `true`, `0`, and `-1`.\n\n### [NOTE] F1: About twenty test fixtures pass `setting_sources=None` into a field the slice makes non-optional\ncategory: type-safety\nlocation: src/squadron/review/templates/__init__.py:36\n\nDecision: DROP. `load_template` is the only production constructor of `ReviewTemplate`, and `_resolve_setting_sources` always returns a list, so `None` cannot reach `review_client.py:220-224`. The fixtures harden against an input that cannot arrive in production.\n\n### [NOTE] F3: Synchronous config reads run on the event loop inside async functions\ncategory: performance\nlocation: src/squadron/pipeline/actions/dispatch.py:147\n\nDecision: DROP. The reads do break the project's under-1 ms rule for async code. But they are small local TOML reads with no observable wrong behavior, so the finding is a performance point with no real effect.\n\n### [NOTE] F4: No load test covers the new background-wait path\ncategory: testing\nlocation: src/squadron/pipeline/sdk_session.py:215-260\n\nDecision: DROP. The project rule asks for a load test on concurrency paths, so this is a real gap against that rule. It is a missing test for a path whose behavior the unit tests already exercise, not a defect in the code.\n\n### [NOTE] F5: `sdk_session.py` is 472 lines\ncategory: maintainability\nlocation: src/squadron/pipeline/sdk_session.py:1\n\nDecision: DROP. The file exceeds the ~300-line guideline, but this is a style point, not a defect. The wait machinery is a reasonable future extraction.\n\nVerdict: Not ready to merge as-is. One finding, F2, must be fixed before merge. F1, F3, F4, and F5 need no action for this change."
+}

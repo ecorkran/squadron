@@ -1,0 +1,43 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The no-op subscriptions are a deliberate, documented choice in this slice to test the disposer lifecycle. They don't cause wrong behavior."
+  ],
+  "F2": [
+   "DROP",
+   "File length, stale task-reference comments and the eslint scope are style and maintainability points, not defects."
+  ],
+  "F3": [
+   "KEEP",
+   "The range effect checks the non-reactive `seriesCountRef` but only re-runs on `[mount.ready, chart, range]`, so adding a series through `chart` never applies the stored range. The seam the comment promises for initiative 120 silently doesn't work."
+  ],
+  "F4": [
+   "KEEP",
+   "The `UseChartProviderResult.error` contract says it holds the first error, but `setOperationError` overwrites it with each new failure. The test never checks a second failure, so callers get different behavior from what's documented."
+  ],
+  "F5": [
+   "DROP",
+   "A stale file reference in a comment is documentation only. Checking visible copy in an e2e test is testing the UI, not using a label as logical structure."
+  ]
+ },
+ "wall_seconds": 28.6,
+ "duration_seconds": 28.610957332886755,
+ "cost_usd": 0.2283046,
+ "effort": "medium",
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=87907, cached=67255, cache_write=20640, completion=2449, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The no-op subscriptions are a deliberate, documented choice in this slice to test the disposer lifecycle. They don't cause wrong behavior.\nF2: DROP \u2014 File length, stale task-reference comments and the eslint scope are style and maintainability points, not defects.\nF3: KEEP \u2014 The range effect checks the non-reactive `seriesCountRef` but only re-runs on `[mount.ready, chart, range]`, so adding a series through `chart` never applies the stored range. The seam the comment promises for initiative 120 silently doesn't work.\nF4: KEEP \u2014 The `UseChartProviderResult.error` contract says it holds the first error, but `setOperationError` overwrites it with each new failure. The test never checks a second failure, so callers get different behavior from what's documented.\nF5: DROP \u2014 A stale file reference in a comment is documentation only. Checking visible copy in an e2e test is testing the UI, not using a label as logical structure.\nThe verdict is that two of the five findings should be fixed before merging (F3 and F4) and the other three can be dropped.\n\n### [CONCERN] F3: KEEP \u2014 the stored range is never applied when a series is added\ncategory: correctness\nlocation: src/chart/use-chart-provider.ts:340-345\n\nThe range effect only acts when `seriesCountRef.current` is above zero, but it only re-runs when `mount.ready`, `chart` or `range` change. A ref changing doesn't cause a re-render. So when a consumer adds a series through `chart`, the effect doesn't run again, and the stored range waits for the next range change. The comment says this effect is what initiative 120 will rely on \"the moment it adds the first series\", but as written it won't run at that moment.\n\n### [CONCERN] F4: KEEP \u2014 `error` is documented as the first error but holds the latest one\ncategory: error-handling\nlocation: src/chart/use-chart-provider.ts:97-99\n\n`UseChartProviderResult.error` is documented as \"The first error from any provider operation\" (src/chart/chart-operations.ts:77). `setOperationError` replaces it with every new failure (`{ ...current, error: failure }`). The test \"keeps the first error rather than being reset by a later success\" (src/test/use-chart-provider.errors.test.tsx:234) only checks that a later success doesn't clear the error. It never checks what happens after a second failure. Either keep the first error and add a test for it, or change the doc comment to match the behavior.\n\n### [NOTE] F1: DROP \u2014 the empty subscription callbacks are a deliberate choice\ncategory: design\nlocation: src/chart/use-chart-provider.ts:286-301\n\nThe comment at lines 276-278 says the subscriptions exist to test unsubscribing under React before any UI uses them. They don't cause wrong behavior, and a throw from subscribe is handled the same way as a create failure.\n\n### [NOTE] F2: DROP \u2014 file length and leftover task comments are style only\ncategory: maintainability\nlocation: src/chart/use-chart-provider.ts:1-366\n\nGoing over the ~300-line guideline, the outdated task-number comments and the file-wide eslint exception are worth tidying, but none of them is a defect.\n\n### [NOTE] F5: DROP \u2014 the wrong spec name in a comment is documentation only\ncategory: documentation\nlocation: e2e/smoke.spec.ts:9-10\n\nThe comment points to the wrong spec file, which doesn't affect behavior. Checking visible text in an e2e test is testing what the user sees, not using a label to drive program logic."
+}

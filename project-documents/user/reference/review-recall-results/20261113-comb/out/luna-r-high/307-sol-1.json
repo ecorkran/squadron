@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The cutover checks coverage only for history wants, so incomplete configured `tbbo` sessions can escape the exit rule."
+  ],
+  "F2": [
+   "KEEP",
+   "Over-session names are grouped only by product, so a family\u2019s failure can list discrepancies from another family."
+  ]
+ },
+ "wall_seconds": 45.2,
+ "duration_seconds": 45.22254620818421,
+ "cost_usd": 0.00469274,
+ "effort": "high",
+ "tool_calls_made": 10,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=102362, cached=71694, cache_write=None, completion=1818, reasoning=1329)",
+ "raw_output": "F1: KEEP \u2014 The cutover checks coverage only for history wants, so incomplete configured `tbbo` sessions can escape the exit rule.\nF2: KEEP \u2014 Over-session names are grouped only by product, so a family\u2019s failure can list discrepancies from another family.\nF1: KEEP \u2014 Coverage checks only history wants, so incomplete configured `tbbo` sessions can escape the exit rule.\nF2: KEEP \u2014 Over-session names are grouped only by product, so one family\u2019s failure can list discrepancies from another family."
+}

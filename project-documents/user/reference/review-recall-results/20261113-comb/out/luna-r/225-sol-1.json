@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Autocommit lets ingestion or supersession commit between the ledger and raw-count reads, producing a false mismatch."
+  ],
+  "F2": [
+   "KEEP",
+   "Raw counts include rows from other request shapes, so valid data can be reported as mismatched for this product."
+  ],
+  "F3": [
+   "KEEP",
+   "Each session rescans both complete count dictionaries, making coverage assembly quadratic and blocking the event loop."
+  ]
+ },
+ "wall_seconds": 40.7,
+ "duration_seconds": 40.7013585830573,
+ "cost_usd": 0.0070608500000000005,
+ "effort": null,
+ "tool_calls_made": 18,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=165385, cached=119985, cache_write=None, completion=2642, reasoning=1812)",
+ "raw_output": "F1: KEEP \u2014 Autocommit lets ingestion or supersession commit between the ledger and raw-count reads, producing a false mismatch.\nF2: KEEP \u2014 Raw counts include rows from other request shapes, so valid data can be reported as mismatched for this product.\nF3: KEEP \u2014 Each session rescans both complete count dictionaries, making coverage assembly quadratic and blocking the event loop.\nF1: KEEP \u2014 Separate autocommit reads can observe different snapshots and report a false mismatch during ingestion or supersession.\nF2: KEEP \u2014 Raw counts include rows from other request shapes, so valid rows can appear as mismatches against this shape\u2019s ledger.\nF3: KEEP \u2014 Each session rescans both full count dictionaries, making coverage assembly quadratic and blocking the event loop."
+}

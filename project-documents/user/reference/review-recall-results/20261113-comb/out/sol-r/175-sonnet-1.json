@@ -1,0 +1,38 @@
+{
+ "case": "175",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The misleading traceback is log noise, not a behavioral defect."
+  ],
+  "F2": [
+   "DROP",
+   "The same profile and provider were already resolved successfully before the provider call; masking requires an unsubstantiated configuration change."
+  ],
+  "F3": [
+   "KEEP",
+   "Compact discards telemetry carried by a failed capture dispatch, losing known token usage and cost."
+  ],
+  "F4": [
+   "DROP",
+   "Fresh warning sets cause duplicate pricing warnings, but the cited paths still calculate costs correctly."
+  ]
+ },
+ "wall_seconds": 14.1,
+ "duration_seconds": 14.088773292023689,
+ "cost_usd": 0.075459,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=95833, cached=63330, cache_write=None, completion=412, reasoning=102)",
+ "raw_output": "F1: DROP \u2014 The misleading traceback is log noise, not a behavioral defect.\nF2: DROP \u2014 The same profile and provider were already resolved successfully before the provider call; masking requires an unsubstantiated configuration change.\nF3: KEEP \u2014 Compact discards telemetry carried by a failed capture dispatch, losing known token usage and cost.\nF4: DROP \u2014 Fresh warning sets cause duplicate pricing warnings, but the cited paths still calculate costs correctly.\nF1: DROP \u2014 The misleading traceback is log noise, not a behavioral defect.\nF2: DROP \u2014 Profile and provider lookup already succeeded before the call; no ordinary failure path makes the repeated lookup fail.\nF3: KEEP \u2014 Compact discards telemetry carried by a failed capture dispatch, losing known token usage and cost.\nF4: DROP \u2014 Fresh warning sets produce duplicate warnings, but the cited paths still calculate costs correctly."
+}

@@ -1,0 +1,28 @@
+{
+ "case": "227",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Uncaught log-read errors bypass report writing, and failed health commands can pass using an old log summary."
+  ],
+  "F2": [
+   "DROP",
+   "The constants match the current configuration; duplication and hypothetical future drift do not establish a current behavioral defect."
+  ]
+ },
+ "wall_seconds": 11.1,
+ "duration_seconds": 11.065831667045131,
+ "cost_usd": 0.0434441,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=58325, cached=39961, cache_write=None, completion=272, reasoning=53)",
+ "raw_output": "F1: KEEP \u2014 Uncaught log-read errors bypass report writing, and failed health commands can pass using an old log summary.\nF2: DROP \u2014 The constants match the current configuration; duplication and hypothetical future drift do not establish a current behavioral defect.\nF1: KEEP \u2014 Uncaught log-read errors bypass report writing, and failed health commands can pass using an old log summary.\nF2: DROP \u2014 The constants match the current configuration; duplication and hypothetical future drift do not establish a current behavioral defect."
+}

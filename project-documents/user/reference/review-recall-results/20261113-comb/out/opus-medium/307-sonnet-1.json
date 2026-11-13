@@ -1,0 +1,23 @@
+{
+ "case": "307",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet/1/0"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The project checks types with mypy, and mypy only covers `src/manta_trading`; there is no strict pyright for tests or scripts. These are annotation-style points in test and script code that don't change behaviour."
+  ]
+ },
+ "wall_seconds": 13.5,
+ "duration_seconds": 13.444126708200201,
+ "cost_usd": 0.1862321,
+ "effort": "medium",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=89096, cached=69858, cache_write=19226, completion=879, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The project checks types with mypy, and mypy only covers `src/manta_trading`; there is no strict pyright for tests or scripts. These are annotation-style points in test and script code that don't change behaviour.\nF1: DROP \u2014 The project checks types with mypy, and only on `src/manta_trading`; tests and scripts have no strict pyright, so these loose annotations break no rule and change no behaviour."
+}

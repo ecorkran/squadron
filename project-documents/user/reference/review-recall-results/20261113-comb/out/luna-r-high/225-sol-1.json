@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Autocommit gives the ledger and raw-count queries separate snapshots, so concurrent ingestion can produce a false mismatch."
+  ],
+  "F2": [
+   "KEEP",
+   "Raw counts include rows from other request shapes, which can appear as mismatches against this product\u2019s shape-filtered ledger."
+  ],
+  "F3": [
+   "KEEP",
+   "_session_row` rescans and reallocates both full count dictionaries per session, blocking the event loop beyond the stated synchronous-work limit."
+  ]
+ },
+ "wall_seconds": 99.8,
+ "duration_seconds": 99.82599183381535,
+ "cost_usd": 0.01583478,
+ "effort": "high",
+ "tool_calls_made": 25,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=445284, cached=360718, cache_write=None, completion=7542, reasoning=6502)",
+ "raw_output": "F1: KEEP \u2014 Autocommit gives the ledger and raw-count queries separate snapshots, so concurrent ingestion can produce a false mismatch.\nF2: KEEP \u2014 Raw counts include rows from other request shapes, which can appear as mismatches against this product\u2019s shape-filtered ledger.\nF3: KEEP \u2014 `_session_row` rescans and reallocates both full count dictionaries per session, blocking the event loop beyond the stated synchronous-work limit.\nF1: KEEP \u2014 Autocommit gives the ledger and raw-count queries separate snapshots, so concurrent ingestion can produce a false mismatch.\nF2: KEEP \u2014 Raw counts include rows from other request shapes, which can appear as mismatches against this product\u2019s shape-filtered ledger.\nF3: KEEP \u2014 `_session_row` rescans both full count dictionaries per session, blocking the event loop beyond the stated synchronous-work limit."
+}

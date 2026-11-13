@@ -1,0 +1,68 @@
+{
+ "case": "u103",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8",
+  "F10": "haiku-xhigh/1/9"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "seriesCountRef` is a ref, so adding a series does not re-run the range effect (deps `[mount.ready, chart, range]`), and the Context range is silently skipped until `range` changes, contrary to the stated seam."
+  ],
+  "F2": [
+   "DROP",
+   "no caller in this slice calls the facade before ready, and the comment documents the drop-unless-live behavior on purpose, so this is a design preference for a later slice."
+  ],
+  "F3": [
+   "DROP",
+   "the fallback is deliberate and documented for environments without the stylesheet, `theme.test.ts` checks the tokens are defined, and the e2e pixel check covers runtime rendering, so this is hardening."
+  ],
+  "F4": [
+   "DROP",
+   "file and function length and declaration order are style points; teardown cannot run before `observer`/`disposers` are initialized, so there is no live defect."
+  ],
+  "F5": [
+   "DROP",
+   "narrowing a lint suppression is code hygiene, not a defect that causes wrong behavior."
+  ],
+  "F6": [
+   "DROP",
+   "the placeholder effect has no wrong behavior; whether to keep it is a complexity and style judgment."
+  ],
+  "F7": [
+   "DROP",
+   "this is about test strength and redundant guards; the production code behaves correctly."
+  ],
+  "F8": [
+   "DROP",
+   "test-helper duplication is a DRY/style issue with no effect on behavior."
+  ],
+  "F9": [
+   "DROP",
+   "stronger typing on the test spy is test-side hardening, not a defect in shipped code."
+  ],
+  "F10": [
+   "DROP",
+   "at most a 2px difference before the first observer callback, which the observer corrects, probably before anything is painted, so there is no real impact."
+  ]
+ },
+ "wall_seconds": 21.5,
+ "duration_seconds": 21.51193525013514,
+ "cost_usd": 0.22742189999999998,
+ "effort": "medium",
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=68106, cached=45734, cache_write=22362, completion=1926, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `seriesCountRef` is a ref, so adding a series does not re-run the range effect (deps `[mount.ready, chart, range]`), and the Context range is silently skipped until `range` changes, contrary to the stated seam.\nF2: DROP \u2014 no caller in this slice calls the facade before ready, and the comment documents the drop-unless-live behavior on purpose, so this is a design preference for a later slice.\nF3: DROP \u2014 the fallback is deliberate and documented for environments without the stylesheet, `theme.test.ts` checks the tokens are defined, and the e2e pixel check covers runtime rendering, so this is hardening.\nF4: DROP \u2014 file and function length and declaration order are style points; teardown cannot run before `observer`/`disposers` are initialized, so there is no live defect.\nF5: DROP \u2014 narrowing a lint suppression is code hygiene, not a defect that causes wrong behavior.\nF6: DROP \u2014 the placeholder effect has no wrong behavior; whether to keep it is a complexity and style judgment.\nF7: DROP \u2014 this is about test strength and redundant guards; the production code behaves correctly.\nF8: DROP \u2014 test-helper duplication is a DRY/style issue with no effect on behavior.\nF9: DROP \u2014 stronger typing on the test spy is test-side hardening, not a defect in shipped code.\nF10: DROP \u2014 at most a 2px difference before the first observer callback, which the observer corrects, probably before anything is painted, so there is no real impact.\nF1: KEEP \u2014 `seriesCountRef` is a ref, so adding a series does not re-run the range effect (deps `[mount.ready, chart, range]`), and the Context range is silently skipped until `range` changes, contrary to the stated seam.\nF2: DROP \u2014 no caller in this slice calls the facade before ready, and the comment documents the drop-unless-live behavior on purpose, so this is a design preference for a later slice.\nF3: DROP \u2014 the fallback is deliberate and documented for environments without the stylesheet, `theme.test.ts` checks the tokens are defined, and the e2e pixel check covers runtime rendering, so this is hardening.\nF4: DROP \u2014 file and function length and declaration order are style points; teardown cannot run before `observer`/`disposers` are initialized, so there is no live defect.\nF5: DROP \u2014 narrowing a lint suppression is code hygiene, not a defect that causes wrong behavior.\nF6: DROP \u2014 the placeholder effect has no wrong behavior; whether to keep it is a complexity and style judgment.\nF7: DROP \u2014 this is about test strength and redundant guards; the production code behaves correctly.\nF8: DROP \u2014 test-helper duplication is a DRY/style issue with no effect on behavior.\nF9: DROP \u2014 stronger typing on the test spy is test-side hardening, not a defect in shipped code.\nF10: DROP \u2014 at most a 2px difference before the first observer callback, which the observer corrects, probably before anything is painted, so there is no real impact."
+}

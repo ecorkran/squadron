@@ -1,0 +1,38 @@
+{
+ "case": "225",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "raw_counts` counts every instrument's `tick_trade` rows, but `ledger_totals` only counts the product's own shape. Slice 231 adds GC as a second product, and the design says a second product needs no product-specific changes, so `coverage` would report false mismatches for both products."
+  ],
+  "F2": [
+   "KEEP",
+   "With a tier set, an edge never observed and no `end`, `wanted` is `None`, yet `caught_up` is called with `wanted=True` and returns \"yes\" from only the held sessions, a silent false verdict."
+  ],
+  "F3": [
+   "DROP",
+   "Running the same manifest query twice per product is a small performance/style point with no effect on correctness."
+  ],
+  "F4": [
+   "DROP",
+   "The import-time `assert` is a style/hardening point; the project does not run under `-O`, and the check still catches a missing bucket in development."
+  ]
+ },
+ "wall_seconds": 36.3,
+ "duration_seconds": 36.26585699990392,
+ "cost_usd": 0.20167380000000001,
+ "effort": "high",
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=137911, cached=122456, cache_write=15441, completion=2633, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `raw_counts` counts every instrument's `tick_trade` rows, but `ledger_totals` only counts the product's own shape. Slice 231 adds GC as a second product, and the design says a second product needs no product-specific changes, so `coverage` would report false mismatches for both products.\nF2: KEEP \u2014 With a tier set, an edge never observed and no `end`, `wanted` is `None`, yet `caught_up` is called with `wanted=True` and returns \"yes\" from only the held sessions, a silent false verdict.\nF3: DROP \u2014 Running the same manifest query twice per product is a small performance/style point with no effect on correctness.\nF4: DROP \u2014 The import-time `assert` is a style/hardening point; the project does not run under `-O`, and the check still catches a missing bucket in development.\nF1: KEEP \u2014 `raw_counts` counts every instrument's `tick_trade` rows, but `ledger_totals` only counts the product's own shape. Slice 231 adds GC as a second product, and the design says a second product needs no product-specific changes, so `coverage` would report false mismatches for both products.\nF2: KEEP \u2014 With a tier set, an edge never observed and no `end`, `wanted` is `None`, yet `caught_up` is called with `wanted=True` and returns \"yes\" from only the held sessions, a silent false verdict.\nF3: DROP \u2014 Running the same manifest query twice per product is a small performance/style point with no effect on correctness.\nF4: DROP \u2014 The import-time `assert` is a style/hardening point; the project does not run under `-O`, and the check still catches a missing bucket in development."
+}

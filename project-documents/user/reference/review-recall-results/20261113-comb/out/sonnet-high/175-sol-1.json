@@ -1,0 +1,33 @@
+{
+ "case": "175",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "prior_rounds` is never persisted, so the report's totals (read only from `action_results`) leave out spend from earlier loop rounds."
+  ],
+  "F2": [
+   "KEEP",
+   "fold_review_parts()` copies only the first part's metadata, so a split review records one part's usage instead of the sum."
+  ],
+  "F3": [
+   "KEEP",
+   "a failed part now returns with empty outputs, the split loop carries on, and `fold_review_parts()` then raises `TypeError`, which the outer handler turns into a result with no usage record."
+  ]
+ },
+ "wall_seconds": 31.6,
+ "duration_seconds": 31.61051583313383,
+ "cost_usd": 0.1922017,
+ "effort": "high",
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=238061, cached=203851, cache_write=34192, completion=3402, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `prior_rounds` is never persisted, so the report's totals (read only from `action_results`) leave out spend from earlier loop rounds.\nF2: KEEP \u2014 `fold_review_parts()` copies only the first part's metadata, so a split review records one part's usage instead of the sum.\nF3: KEEP \u2014 a failed part now returns with empty outputs, the split loop carries on, and `fold_review_parts()` then raises `TypeError`, which the outer handler turns into a result with no usage record.\nF1: KEEP \u2014 `prior_rounds` is not serialized, so `action_results` alone omits earlier loop rounds and the run totals come out low.\nF2: KEEP \u2014 `fold_review_parts()` takes only the first part's metadata, so a split review's persisted usage covers one part, not all of them.\nF3: KEEP \u2014 a failed part returns empty outputs, the split loop continues, and `fold_review_parts()` then raises `TypeError`, which the outer handler converts into a result with no usage record."
+}

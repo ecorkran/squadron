@@ -1,0 +1,38 @@
+{
+ "case": "188",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Both existing callers satisfy the implicit contract, so the failure requires a hypothetical future misuse."
+  ],
+  "F2": [
+   "DROP",
+   "The duplicated checks correctly prevent fetching and reject oversized requests; refactoring is not a merge-blocking fix."
+  ],
+  "F3": [
+   "DROP",
+   "Count and fetch share one connection, so the recorded-count assertion prevents the claimed false pass."
+  ],
+  "F4": [
+   "DROP",
+   "The positional fields match the current repository mapping; hypothetical future column changes do not establish a defect."
+  ]
+ },
+ "wall_seconds": 14.9,
+ "duration_seconds": 14.920455749845132,
+ "cost_usd": 0.0556476,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=71428, cached=47936, cache_write=None, completion=387, reasoning=58)",
+ "raw_output": "F1: DROP \u2014 Both existing callers satisfy the implicit contract, so the failure requires a hypothetical future misuse.\nF2: DROP \u2014 The duplicated checks correctly prevent fetching and reject oversized requests; refactoring is not a merge-blocking fix.\nF3: DROP \u2014 Count and fetch share one connection, so the recorded-count assertion prevents the claimed false pass.\nF4: DROP \u2014 The positional fields match the current repository mapping; hypothetical future column changes do not establish a defect.\nF1: DROP \u2014 Existing callers always supply either the period mapping or no extras, so no current path fails.\nF2: DROP \u2014 Both checks work correctly; consolidating them is a maintainability improvement rather than a defect fix.\nF3: DROP \u2014 Count and fetch use the same connection, so an unrecorded connection would fail the required count assertion.\nF4: DROP \u2014 The positional fields match the current repository mapping, and the automatic-mapping claim concerns candles, not trades."
+}

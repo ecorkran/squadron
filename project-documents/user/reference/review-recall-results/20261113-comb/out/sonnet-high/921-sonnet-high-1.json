@@ -1,0 +1,48 @@
+{
+ "case": "921",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The sudoers rule is wider than its header claims. A sudoers `*` matches spaces, so `systemctl stop mt-*` also matches extra arguments. `MT_INSTALL` also runs a script from a checkout that `manta` can write, as root."
+  ],
+  "F2": [
+   "DROP",
+   "This is a style and DRY concern. The `[WAIT]` and `FAIL` matching works today, and the producer's wording is not at risk of changing."
+  ],
+  "F3": [
+   "DROP",
+   "Running from the wrong directory only leaves a stray log file before the script refuses. That is cosmetic."
+  ],
+  "F4": [
+   "DROP",
+   "The race window is small, and the finding itself admits it is unverified. It would not change the acceptance verdict in practice."
+  ],
+  "F5": [
+   "DROP",
+   "This is an import-ordering lint nit with no behavioral effect."
+  ],
+  "F6": [
+   "DROP",
+   "This is test-structure and duplication feedback, not a defect."
+  ]
+ },
+ "wall_seconds": 27.4,
+ "duration_seconds": 27.430574625032023,
+ "cost_usd": 0.1238072,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=85585, cached=63196, cache_write=22377, completion=2724, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The sudoers rule is wider than its header claims. A sudoers `*` matches spaces, so `systemctl stop mt-*` also matches extra arguments. `MT_INSTALL` also runs a script from a checkout that `manta` can write, as root.\nF2: DROP \u2014 This is a style and DRY concern. The `[WAIT]` and `FAIL` matching works today, and the producer's wording is not at risk of changing.\nF3: DROP \u2014 Running from the wrong directory only leaves a stray log file before the script refuses. That is cosmetic.\nF4: DROP \u2014 The race window is small, and the finding itself admits it is unverified. It would not change the acceptance verdict in practice.\nF5: DROP \u2014 This is an import-ordering lint nit with no behavioral effect.\nF6: DROP \u2014 This is test-structure and duplication feedback, not a defect.\nF1: KEEP \u2014 The sudoers rule is wider than its header claims. A sudoers `*` matches spaces, so `systemctl stop mt-*` also matches extra arguments. `MT_INSTALL` also runs a script from a checkout that `manta` can write, as root.\nF2: DROP \u2014 This is a style and DRY concern. The `[WAIT]` and `FAIL` matching works today, and the producer's wording is not at risk of changing.\nF3: DROP \u2014 Running from the wrong directory only leaves a stray log file before the script refuses. That is cosmetic.\nF4: DROP \u2014 The race window is small, and the finding itself admits it is unverified. It would not change the acceptance verdict in practice.\nF5: DROP \u2014 This is an import-ordering lint nit with no behavioral effect.\nF6: DROP \u2014 This is test-structure and duplication feedback, not a defect."
+}

@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The slice's D6 explicitly documents and accepts this race (an agent finishing just before the dispatch's own result leaves the follow-up turn for the next dispatch), so it is a known trade-off, not an unaccepted defect."
+  ],
+  "F2": [
+   "KEEP",
+   "_read_turn` keeps the idle timer armed after a notification clears the last agent, so a slow foreground continuation times out and returns partial text as success, contrary to D5's \"foreground turns get no timer.\""
+  ]
+ },
+ "wall_seconds": 49.1,
+ "duration_seconds": 49.06631820788607,
+ "cost_usd": 0.014951820000000001,
+ "effort": "xhigh",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=166671, cached=127872, cache_write=38789, completion=10198, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The slice's D6 explicitly documents and accepts this race (an agent finishing just before the dispatch's own result leaves the follow-up turn for the next dispatch), so it is a known trade-off, not an unaccepted defect.\nF2: KEEP \u2014 `_read_turn` keeps the idle timer armed after a notification clears the last agent, so a slow foreground continuation times out and returns partial text as success, contrary to D5's \"foreground turns get no timer.\"\nF1: DROP \u2014 The slice's D6 explicitly documents and accepts this race (an agent finishing just before the dispatch's own result leaves the follow-up turn for the next dispatch), so it is a known trade-off, not an unaccepted defect.\nF2: KEEP \u2014 `_read_turn` keeps the idle timer armed after a notification clears the last agent, so a slow foreground continuation times out and returns partial text as success, contrary to D5's \"foreground turns get no timer.\""
+}

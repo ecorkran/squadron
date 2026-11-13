@@ -1,0 +1,28 @@
+{
+ "case": "227",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Uncaught read and parsing errors can abort the cutover without a report, and ignored health-command failures can let stale log data pass."
+  ],
+  "F2": [
+   "KEEP",
+   "A valid table change to `17/main`\u2019s replication host leaves the new cron argument unstripped and falsely blocks cutover."
+  ]
+ },
+ "wall_seconds": 145.3,
+ "duration_seconds": 145.27902116603218,
+ "cost_usd": 0.00981097,
+ "effort": "high",
+ "tool_calls_made": 18,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=216657, cached=180797, cache_write=None, completion=8834, reasoning=8143)",
+ "raw_output": "F1: KEEP \u2014 Uncaught read and parsing errors can abort the cutover without a report, and ignored health-command failures can let stale log data pass.\nF2: KEEP \u2014 A valid table change to `17/main`\u2019s replication host leaves the new cron argument unstripped and falsely blocks cutover.\nF1: KEEP \u2014 Uncaught read and parsing errors can abort the cutover without a report, and ignored health-command failures can let stale log data pass.\nF2: KEEP \u2014 A change to `17/main`\u2019s table-driven replication host leaves the new cron argument unstripped and falsely blocks cutover."
+}

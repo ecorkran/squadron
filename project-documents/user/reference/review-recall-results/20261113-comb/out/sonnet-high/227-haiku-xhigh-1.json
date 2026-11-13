@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The triggers are unlikely (an empty or missing production health log, or empty psql output). A traceback still names the failure, and re-running is the documented recovery."
+  ],
+  "F2": [
+   "DROP",
+   "The assertion at line 101 is vacuous, but line 98 already proves the cron user was stripped. The missing `main()` test only covers a path that works."
+  ],
+  "F3": [
+   "DROP",
+   "This is a test-coverage gap only. The `with_replication` SQL branch reads correctly, and no concrete defect is shown."
+  ]
+ },
+ "wall_seconds": 22.0,
+ "duration_seconds": 22.02369879093021,
+ "cost_usd": 0.14514929999999998,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=113441, cached=85437, cache_write=27992, completion=2360, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The triggers are unlikely (an empty or missing production health log, or empty psql output). A traceback still names the failure, and re-running is the documented recovery.\nF2: DROP \u2014 The assertion at line 101 is vacuous, but line 98 already proves the cron user was stripped. The missing `main()` test only covers a path that works.\nF3: DROP \u2014 This is a test-coverage gap only. The `with_replication` SQL branch reads correctly, and no concrete defect is shown.\nF1: DROP \u2014 The triggers are unlikely (an empty or missing production health log, or empty psql output). A traceback still names the failing step, and re-running the whole script is the documented recovery.\nF2: DROP \u2014 The assertion at line 101 can't fail, but line 98 already shows the cron user was stripped from the command. The missing `main()` test covers a path that works.\nF3: DROP \u2014 This is a test-coverage gap only. The `with_replication` branch of the SQL reads correctly, and no concrete defect is shown."
+}

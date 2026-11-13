@@ -1,0 +1,43 @@
+{
+ "case": "921",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2",
+  "F4": "sol/1/3",
+  "F5": "sol/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "deploy/mt-run:129` polls until the unit exits, and the blocking `run()` at `scripts/cutover_common.py:356` waits for that before any journal check, so the trailing-line stop cannot fire mid-firing."
+  ],
+  "F2": [
+   "KEEP",
+   "MT_INSTALL` grants passwordless root execution of a script in the operator's home checkout, so editing that script gives root."
+  ],
+  "F3": [
+   "KEEP",
+   "sudoers `*` matches whitespace, so `systemctl stop mt-*` also matches `stop mt-x.service ssh.service` and reaches non-mt units."
+  ],
+  "F4": [
+   "KEEP",
+   "uncovered_days` only applies inside the seed branch, which skips or seeds from the frontier in the terminal-only state, so one-bar days behind the frontier are never re-seeded despite the stated fix."
+  ],
+  "F5": [
+   "KEEP",
+   "_repair()` prints verify and acceptance output to the terminal and `say()` writes only to the log, so the saved narration omits the acceptance numbers."
+  ]
+ },
+ "wall_seconds": 113.7,
+ "duration_seconds": 113.70286112488247,
+ "cost_usd": 0.027212919999999998,
+ "effort": "xhigh",
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=370165, cached=310872, cache_write=59277, completion=23242, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `deploy/mt-run:129` polls until the unit exits, and the blocking `run()` at `scripts/cutover_common.py:356` waits for that before any journal check, so the trailing-line stop cannot fire mid-firing.\nF2: KEEP \u2014 `MT_INSTALL` grants passwordless root execution of a script in the operator's home checkout, so editing that script gives root.\nF3: KEEP \u2014 sudoers `*` matches whitespace, so `systemctl stop mt-*` also matches `stop mt-x.service ssh.service` and reaches non-mt units.\nF4: KEEP \u2014 `uncovered_days` only applies inside the seed branch, which skips or seeds from the frontier in the terminal-only state, so one-bar days behind the frontier are never re-seeded despite the stated fix.\nF5: KEEP \u2014 `_repair()` prints verify and acceptance output to the terminal and `say()` writes only to the log, so the saved narration omits the acceptance numbers.\n# Review verdict: FAIL, do not merge\n\nAll five findings hold up against the code. Three are blocking (F1\u2013F3), and two are concerns that should also be fixed before merge (F4\u2013F5).\n\n### [FAIL] F1: Journal monitoring starts only after the pass exits\ncategory: correctness\nlocation: scripts/cutover_common.py:356-360\n\n`fire_unit_until` calls `run([\"mt-run\", ...], stream=True)`, which blocks. `deploy/mt-run:127-129` starts the unit with `--no-block` and then loops `while is_running`, so the wrapper does not return until the unit ends. A minute firing is unbounded because it backfills to quota, so the cutover waits for the whole firing. `wait_for_unit_or_line` never gets to observe the trailing-complete line, and the stop-on-line behavior from #22 never triggers.\n\nFix: start the unit directly with `sudo systemctl start --no-block mt-minute-pass.service` (already permitted by `MT_UNITS`) and then poll. Add a regression test that asserts the start call does not block.\n\n**Decision: KEEP.**\n\n### [FAIL] F2: Passwordless root execution targets an operator-controlled checkout\ncategory: security\nlocation: deploy/sudoers.d/manta-ops:9\n\n`MT_INSTALL` grants `manta` NOPASSWD root execution of `/home/manta/.../deploy/install-production.sh`. That file lives in the operator's own checkout. Anyone running as `manta` can edit it, then run `sudo` on it to execute arbitrary code as root. I did not check the file's ownership on the host; the conclusion depends on the path being writable by `manta`, which the home-directory location strongly implies.\n\nFix: install the privileged script from a root-owned, non-writable location, such as `/usr/local/sbin`, and point the grant there.\n\n**Decision: KEEP.**\n\n### [FAIL] F3: Unit wildcard permits operations on unrelated services\ncategory: security\nlocation: deploy/sudoers.d/manta-ops:7\n\nIn sudoers, `*` in argument position matches any characters, including spaces. `/usr/bin/systemctl stop mt-*` therefore matches `systemctl stop mt-minute-pass.service ssh.service`, so the grant reaches non-`mt-` units, including `ssh.service`. The same applies to `start` and `restart`.\n\nFix: enumerate the exact unit names as separate `Cmnd` entries, or use a root-owned wrapper that validates each argument.\n\n**Decision: KEEP.**\n\n### [CONCERN] F4: Truncated days do not influence whether or where seeding runs\ncategory: correctness\nlocation: src/manta_trading/data/acquisition/daemon/minute.py:765-771\n\n`uncovered_days` only reaches `compute_missing_minute_sessions` inside the `seed_from is not None` branch. In the steady state (bars present, gap rows present, no UNKNOWN rows), the code either skips seeding or seeds only from `_gap_frontier` forward. One-bar days behind the frontier are never re-seeded. `_build_truncated_index` documents that the trailing walk re-fetches these sessions once the scan completes, and the slice (`921-slice...md:544-547`) says the same, so the fix silently does nothing in the state it is most likely to meet.\n\nCaveat for the fix: `update_data_gaps` resets terminal rows inside its window, and #19 exists to stop that from resurrecting provider holes. Any change has to pass the truncated days in a way that does not reopen those holes. Add a test for the terminal-only case.\n\n**Decision: KEEP.**\n\n### [CONCERN] F5: Saved narration omits the acceptance measurements\ncategory: logging\nlocation: scripts/cutover_common.py:57-62\n\n`say()` writes to the log file, but `_repair()` sends its output (including `--verify` results, FAIL and WAIT lines, and acceptance numbers) only to the terminal through `print(output)` at `scripts/cutover_921_minute_sessions.py:102`. Subprocess streams also bypass the file. The script still ends with \"full narration: {log_path}\", but that file lacks the evidence needed to diagnose an incomplete cutover, which is the purpose `start_log` documents.\n\nFix: route `_repair` output and streamed subprocess output through the same log writer, and add a test that the acceptance lines appear in the saved file.\n\n**Decision: KEEP.**\n\n## Limits of this review\n\nI read the cited code and the relevant `mt-run` and unit files. I did not run the test suite or test the sudoers rules on a host. The F2 and F3 conclusions come from the file contents and sudoers matching semantics."
+}

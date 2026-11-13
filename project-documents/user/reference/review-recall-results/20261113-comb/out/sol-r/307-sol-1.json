@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Coverage excludes configured tbbo ranges, allowing unaccounted tick-tier sessions to escape the exit rule."
+  ],
+  "F2": [
+   "KEEP",
+   "Discarding volume-check family identity attributes other families\u2019 discrepancy sessions to each failing family."
+  ]
+ },
+ "wall_seconds": 17.5,
+ "duration_seconds": 17.522529124980792,
+ "cost_usd": 0.0994366,
+ "effort": null,
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=206541, cached=166966, cache_write=None, completion=359, reasoning=0)",
+ "raw_output": "F1: KEEP \u2014 Coverage excludes configured tbbo ranges, allowing unaccounted tick-tier sessions to escape the exit rule.\nF2: KEEP \u2014 Discarding volume-check family identity attributes other families\u2019 discrepancy sessions to each failing family.\nF1: KEEP \u2014 Coverage excludes configured tbbo ranges, allowing unaccounted tick-tier sessions to escape the exit rule.\nF2: KEEP \u2014 Discarding volume-check family identity attributes other families\u2019 discrepancy sessions to each failing family."
+}

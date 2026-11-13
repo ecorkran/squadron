@@ -1,0 +1,68 @@
+{
+ "case": "u103",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8",
+  "F10": "haiku-xhigh/1/9"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The range effect reads `seriesCountRef` but depends only on `[mount.ready, chart, range]`. A series added after mount never re-runs it, so the context range is ignored until the range changes."
+  ],
+  "F2": [
+   "DROP",
+   "The dropped pre-ready call is a documented design choice, and callers only act after `ready`."
+  ],
+  "F3": [
+   "DROP",
+   "The fallback to library defaults is documented, and failing hard would break jsdom tests that have no stylesheet. The e2e pixel assertion covers the real case."
+  ],
+  "F4": [
+   "DROP",
+   "This is a file and function size guideline point, not a behavioral defect."
+  ],
+  "F5": [
+   "DROP",
+   "The file-wide lint suppression is a config-scope preference with no runtime effect."
+  ],
+  "F6": [
+   "DROP",
+   "The placeholder effect is deliberate and harmless, so this is a style point."
+  ],
+  "F7": [
+   "DROP",
+   "A weak test and dead guards are low value and cause no wrong behavior."
+  ],
+  "F8": [
+   "DROP",
+   "Duplicated test helpers are a maintainability point only."
+  ],
+  "F9": [
+   "DROP",
+   "A loosely typed spy is a test-quality point and does not break anything."
+  ],
+  "F10": [
+   "DROP",
+   "The mismatch is a transient 2px difference that the observer corrects on its first event."
+  ]
+ },
+ "wall_seconds": 17.6,
+ "duration_seconds": 17.577899750089273,
+ "cost_usd": 0.1209156,
+ "effort": "high",
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=70806, cached=46945, cache_write=23851, completion=1990, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The range effect reads `seriesCountRef` but depends only on `[mount.ready, chart, range]`. A series added after mount never re-runs it, so the context range is ignored until the range changes.\nF2: DROP \u2014 The dropped pre-ready call is a documented design choice, and callers only act after `ready`.\nF3: DROP \u2014 The fallback to library defaults is documented, and failing hard would break jsdom tests that have no stylesheet. The e2e pixel assertion covers the real case.\nF4: DROP \u2014 This is a file and function size guideline point, not a behavioral defect.\nF5: DROP \u2014 The file-wide lint suppression is a config-scope preference with no runtime effect.\nF6: DROP \u2014 The placeholder effect is deliberate and harmless, so this is a style point.\nF7: DROP \u2014 A weak test and dead guards are low value and cause no wrong behavior.\nF8: DROP \u2014 Duplicated test helpers are a maintainability point only.\nF9: DROP \u2014 A loosely typed spy is a test-quality point and does not break anything.\nF10: DROP \u2014 The mismatch is a transient 2px difference that the observer corrects on its first event.\nF1: KEEP \u2014 The range effect reads `seriesCountRef` but depends only on `[mount.ready, chart, range]`, so a series added after mount never re-runs it. The context range is then ignored until it changes.\nF2: DROP \u2014 Dropping calls made before ready is a documented design choice, and callers only act after `ready`.\nF3: DROP \u2014 The fallback to library defaults is documented, and failing hard would break jsdom tests that have no stylesheet. The e2e pixel assertion covers the real case.\nF4: DROP \u2014 This is a file and function size guideline point, not a behavioral defect.\nF5: DROP \u2014 The file-wide lint suppression is a config-scope preference with no runtime effect.\nF6: DROP \u2014 The placeholder effect is deliberate and harmless, so this is a style point.\nF7: DROP \u2014 A weak test and dead guards are low value and cause no wrong behavior.\nF8: DROP \u2014 Duplicated test helpers are a maintainability point only.\nF9: DROP \u2014 A loosely typed spy is a test-quality point and does not break anything.\nF10: DROP \u2014 The border-box versus content-box mismatch is a transient difference that the observer corrects on its first event."
+}

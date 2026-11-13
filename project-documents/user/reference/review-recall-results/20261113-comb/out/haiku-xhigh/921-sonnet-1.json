@@ -1,0 +1,38 @@
+{
+ "case": "921",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "the `MT_INSTALL` rule runs `install-production.sh` from the operator's own writable checkout as root, so it grants root by proxy, contrary to the header's \"nothing wider.\""
+  ],
+  "F2": [
+   "DROP",
+   "the import ordering is a lint-only style issue with no effect on behavior."
+  ],
+  "F3": [
+   "DROP",
+   "no connection is held during the bounds query (`minute.py:792` returns `conn` before the chunk loop), so there is no nested checkout, and the extra query is negligible."
+  ],
+  "F4": [
+   "KEEP",
+   "the cutover's final verdict depends on substring matches in printed text, so a verify run that crashes or prints no marker reports \"CUTOVER COMPLETE\" (`cutover_921_minute_sessions.py:273`); the test-duplication half is maintainability only."
+  ]
+ },
+ "wall_seconds": 89.2,
+ "duration_seconds": 89.20889479201287,
+ "cost_usd": 0.02702267,
+ "effort": "xhigh",
+ "tool_calls_made": 21,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=450799, cached=384097, cache_write=66684, completion=18300, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 the `MT_INSTALL` rule runs `install-production.sh` from the operator's own writable checkout as root, so it grants root by proxy, contrary to the header's \"nothing wider.\"\nF2: DROP \u2014 the import ordering is a lint-only style issue with no effect on behavior.\nF3: DROP \u2014 no connection is held during the bounds query (`minute.py:792` returns `conn` before the chunk loop), so there is no nested checkout, and the extra query is negligible.\nF4: KEEP \u2014 the cutover's final verdict depends on substring matches in printed text, so a verify run that crashes or prints no marker reports \"CUTOVER COMPLETE\" (`cutover_921_minute_sessions.py:273`); the test-duplication half is maintainability only.\nF1: KEEP \u2014 the `MT_INSTALL` rule runs `install-production.sh` from the operator's writable checkout as root, so it grants root by proxy, contrary to the header's \"nothing wider.\"\nF2: DROP \u2014 the import ordering is a lint-only style issue with no effect on behavior.\nF3: DROP \u2014 no connection is held during the bounds query (`minute.py:792` returns `conn` before the chunk loop), so there is no nested checkout, and the extra query is negligible.\nF4: KEEP \u2014 the cutover's final verdict depends on substring matches in printed text, so a verify run that crashes or prints no marker reports \"CUTOVER COMPLETE\" (`cutover_921_minute_sessions.py:273`); the test-duplication half is maintainability only."
+}

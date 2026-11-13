@@ -1,0 +1,68 @@
+{
+ "case": "u103",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8",
+  "F10": "haiku-xhigh/1/9"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The range effect's dependencies don't change when a series is added, so a range set before the first series is never applied, contrary to the comment."
+  ],
+  "F2": [
+   "KEEP",
+   "Calls made before the mount effect runs are dropped with no log, and the comment only justifies post-teardown drops, so a mutation like `addSeries` can fail silently."
+  ],
+  "F3": [
+   "KEEP",
+   "readChartStyle` silently substitutes the library's default colors when a token is empty, which violates the project's no-silent-fallback rule."
+  ],
+  "F4": [
+   "DROP",
+   "File and function length are style guidance, and the teardown's reads of later-declared variables are safe because they are initialized before any call."
+  ],
+  "F5": [
+   "DROP",
+   "The lint-scoping choice has no wrong behavior, and the finding itself admits its false-positive claim is unverified."
+  ],
+  "F6": [
+   "DROP",
+   "The indicator effect is a documented placeholder for initiative 120 and causes no incorrect behavior."
+  ],
+  "F7": [
+   "DROP",
+   "The test is weak, but the guarded handlers do nothing, so product behavior is correct either way."
+  ],
+  "F8": [
+   "DROP",
+   "Duplicated test helpers are DRY cleanup with no effect on behavior."
+  ],
+  "F9": [
+   "DROP",
+   "The untyped spy is a test-double typing concern; the hook is compiled against the real class and no runtime behavior is wrong."
+  ],
+  "F10": [
+   "DROP",
+   "The 2px border-box vs. content-box difference is corrected by the ResizeObserver's initial callback with no lasting effect."
+  ]
+ },
+ "wall_seconds": 93.4,
+ "duration_seconds": 93.41492083412595,
+ "cost_usd": 0.02797144,
+ "effort": "xhigh",
+ "tool_calls_made": 17,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=308356, cached=234964, cache_write=73380, completion=20238, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The range effect's dependencies don't change when a series is added, so a range set before the first series is never applied, contrary to the comment.\nF2: KEEP \u2014 Calls made before the mount effect runs are dropped with no log, and the comment only justifies post-teardown drops, so a mutation like `addSeries` can fail silently.\nF3: KEEP \u2014 `readChartStyle` silently substitutes the library's default colors when a token is empty, which violates the project's no-silent-fallback rule.\nF4: DROP \u2014 File and function length are style guidance, and the teardown's reads of later-declared variables are safe because they are initialized before any call.\nF5: DROP \u2014 The lint-scoping choice has no wrong behavior, and the finding itself admits its false-positive claim is unverified.\nF6: DROP \u2014 The indicator effect is a documented placeholder for initiative 120 and causes no incorrect behavior.\nF7: DROP \u2014 The test is weak, but the guarded handlers do nothing, so product behavior is correct either way.\nF8: DROP \u2014 Duplicated test helpers are DRY cleanup with no effect on behavior.\nF9: DROP \u2014 The untyped spy is a test-double typing concern; the hook is compiled against the real class and no runtime behavior is wrong.\nF10: DROP \u2014 The 2px border-box vs. content-box difference is corrected by the ResizeObserver's initial callback with no lasting effect.\n**Verdict: FAIL.** F1 must be fixed before merge, and F2 and F3 should be fixed too. This is a static review: I read the cited code but could not run the tests, eslint, or the build in this session.\n\n### [FAIL] F1: Visible range is not applied after a series is added\ncategory: logic\nlocation: src/chart/use-chart-provider.ts:340-345\n\nKEEP. The range effect depends on `[mount.ready, chart, range]`, and adding a series changes none of them. The series count is a ref, so it does not trigger a re-run. A range set before the first series is silently dropped, which contradicts the comment at lines 333-338. Make the count reactive or otherwise re-run the effect on add, and add a test that adds a series first.\n\n### [CONCERN] F2: Operations before ready are silently dropped\ncategory: error-handling\nlocation: src/chart/use-chart-provider.ts:108-113\n\nKEEP. `runGuarded` returns `undefined` with no log when `providerRef.current` is null. That covers calls made before the mount effect runs, since child effects run before the parent's mount effect. The comment justifies only post-teardown drops. Log the pre-ready drop, or return a result that distinguishes \"not ready\" from \"failed,\" and document both cases.\n\n### [CONCERN] F3: Missing theme tokens silently fall back to library defaults\ncategory: error-handling\nlocation: src/routes/chart-route.tsx:35-55\n\nKEEP. `readChartStyle` returns `undefined` when all tokens are empty, and it drops any single empty token. The chart then renders with the library's default colors and no error, which violates the no-silent-fallback rule. The path is reached only when the stylesheet is not applied, but the code accepts that state silently. Fail explicitly when a required token resolves empty.\n\n### [NOTE] F4: Mount effect and hook file exceed size guidance\ncategory: style\nlocation: src/chart/use-chart-provider.ts:167-324\n\nDROP. File and function length are style guidance and cause no incorrect behavior. The teardown's reads of `observer` and `disposers` are safe, because both are initialized before any call to `teardown`.\n\n### [NOTE] F5: File-wide suppression of `react-hooks/refs`\ncategory: style\nlocation: eslint.config.js:75-78\n\nDROP. Lint scoping does not change runtime behavior. The finding itself says its false-positive claim is unverified, and I could not run eslint to check it.\n\n### [NOTE] F6: Indicator effect is a no-op\ncategory: dead-code\nlocation: src/chart/use-chart-provider.ts:358-363\n\nDROP. The effect is a documented placeholder for initiative 120 and causes no incorrect behavior in this slice.\n\n### [NOTE] F7: Teardown-race test cannot fail\ncategory: tests\nlocation: src/test/use-chart-provider.errors.test.tsx:255-271\n\nDROP. The test is weak, but the subscription handlers do nothing, so product behavior is correct whether or not the guards exist. This is a test-quality issue, not a defect in the hook.\n\n### [NOTE] F8: Test host and measurement helpers are duplicated\ncategory: style\nlocation: src/test/use-chart-provider.errors.test.tsx:30-52\n\nDROP. Duplicated test helpers are DRY cleanup and do not affect behavior.\n\n### [NOTE] F9: Spy does not bind to `IChartProvider`\ncategory: tests\nlocation: src/test/support/chart-provider-spy.ts:89-90\n\nDROP. The untyped test double weakens the contract tests but does not affect product behavior. The hook compiles against the real `LightweightChartsProvider` class.\n\n### [NOTE] F10: Initial resize measures a different box than the observer\ncategory: rendering\nlocation: src/chart/use-chart-provider.ts:249-250\n\nDROP. Under border-box sizing, the `border` class makes the initial `getBoundingClientRect` width 2px larger than the observer's `contentRect` width. The ResizeObserver's initial callback corrects this almost immediately, so the effect is transient. I did not run the app to confirm the pixel values."
+}

@@ -1,0 +1,58 @@
+{
+ "case": "175",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "_metadata` in `review_fold.py:85` keeps only part 1's `USAGE_KEY` and sums only tool calls, so usage for parts 2..N is lost from run state."
+  ],
+  "F2": [
+   "KEEP",
+   "the compact failure branch ignores `exc.telemetry`, and a reconnect failure after capture discards the reply's telemetry. The slice criteria require failed actions to record the spend their error carries."
+  ],
+  "F3": [
+   "KEEP",
+   "compact passes `resolved=None`, so the alias is `None`; the SDK aliases are mostly subscription tier, so their provider cost shows as `prov` instead of `api-rate equiv.`."
+  ],
+  "F4": [
+   "DROP",
+   "the slice scope lists only dispatch, summary, SDK-session compact and review, and treats gates as non-LLM, so omitting the judge and prompt-only compact is a scoping choice, not a defect."
+  ],
+  "F5": [
+   "DROP",
+   "the key names match between writer and reader today, so this is only a drift risk."
+  ],
+  "F6": [
+   "DROP",
+   "the hand-written fixtures match the real writer's keys, so the reader works today; a round-trip test would be an improvement, not a fix for a defect."
+  ],
+  "F7": [
+   "DROP",
+   "duplication across the fold and one-shot paths is a refactor suggestion, not wrong behavior."
+  ],
+  "F8": [
+   "DROP",
+   "function and file length is a style guideline, not a functional defect."
+  ]
+ },
+ "wall_seconds": 55.6,
+ "duration_seconds": 55.59875358291902,
+ "cost_usd": 0.32332059999999996,
+ "effort": "high",
+ "tool_calls_made": 25,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=506659, cached=453752, cache_write=52877, completion=6518, reasoning=None)",
+ "raw_output": "I've confirmed F1 against the code and F2 partly. I'm now checking whether `capture_summary` attaches telemetry to errors, then F3 through F8.\nF1: KEEP \u2014 `_metadata` in `review_fold.py:85` keeps only part 1's `USAGE_KEY` and sums only tool calls, so usage for parts 2..N is lost from run state.\nF2: KEEP \u2014 the compact failure branch ignores `exc.telemetry`, and a reconnect failure after capture discards the reply's telemetry. The slice criteria require failed actions to record the spend their error carries.\nF3: KEEP \u2014 compact passes `resolved=None`, so the alias is `None`; the SDK aliases are mostly subscription tier, so their provider cost shows as `prov` instead of `api-rate equiv.`.\nF4: DROP \u2014 the slice scope lists only dispatch, summary, SDK-session compact and review, and treats gates as non-LLM, so omitting the judge and prompt-only compact is a scoping choice, not a defect.\nF5: DROP \u2014 the key names match between writer and reader today, so this is only a drift risk.\nF6: DROP \u2014 the hand-written fixtures match the real writer's keys, so the reader works today; a round-trip test would be an improvement, not a fix for a defect.\nF7: DROP \u2014 duplication across the fold and one-shot paths is a refactor suggestion, not wrong behavior.\nF8: DROP \u2014 function and file length is a style guideline, not a functional defect.\nF1: KEEP \u2014 `_metadata` in `review_fold.py:85` keeps only part 1's `USAGE_KEY` and sums only tool calls, so usage for parts 2..N never reaches run state.\nF2: KEEP \u2014 the compact failure branch ignores `exc.telemetry`, and a reconnect failure after capture discards the reply's telemetry, which breaks the slice criterion that failed actions record their spend.\nF3: KEEP \u2014 compact passes `resolved=None`, so the alias is `None` and a subscription alias's provider cost shows as `prov` instead of `api-rate equiv.`.\nF4: DROP \u2014 the slice scope lists only dispatch, summary, SDK-session compact and review, and treats gates as non-LLM, so omitting the judge and prompt-only compact is a scoping choice.\nF5: DROP \u2014 the key names match between writer and reader today, so this is only a drift risk.\nF6: DROP \u2014 the hand-written fixtures match the real writer's keys and the reader works today, so a round-trip test would be an improvement, not a fix for a defect.\nF7: DROP \u2014 duplicated fold and one-shot plumbing is a refactor suggestion, not wrong behavior.\nF8: DROP \u2014 function and file length is a style guideline, not a functional defect."
+}

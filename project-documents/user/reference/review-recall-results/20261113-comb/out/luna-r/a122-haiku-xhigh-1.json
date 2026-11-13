@@ -1,0 +1,63 @@
+{
+ "case": "a122",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Each project\u2019s `observe()` prunes the shared observer state to its own entries, erasing other projects\u2019 poll times and breaking the poll interval."
+  ],
+  "F2": [
+   "DROP",
+   "A missing load test is not itself a defect in changed behavior."
+  ],
+  "F3": [
+   "KEEP",
+   "An unconfirmed run\u2019s stored poll fault is not replayed between polls, so its escalation can close and reopen."
+  ],
+  "F4": [
+   "KEEP",
+   "Open escalations retain the first payload, which can leave operators with stale details or omit other affected runs."
+  ],
+  "F5": [
+   "DROP",
+   "The exception is reported to the CLI caller, so the missing log traceback does not establish a silent failure."
+  ],
+  "F6": [
+   "DROP",
+   "The per-project catch is an intentional, documented isolation boundary and does not cause incorrect behavior."
+  ],
+  "F7": [
+   "DROP",
+   "Duplicated parameter-key definitions are a maintenance concern, not a demonstrated runtime defect."
+  ],
+  "F8": [
+   "DROP",
+   "The unused confirmation method and direct state update are an encapsulation concern, not a behavior defect."
+  ],
+  "F9": [
+   "DROP",
+   "The outdated docstring is inaccurate but does not cause incorrect behavior."
+  ]
+ },
+ "wall_seconds": 55.1,
+ "duration_seconds": 55.13901345804334,
+ "cost_usd": 0.008585510000000001,
+ "effort": null,
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=203679, cached=151921, cache_write=None, completion=3781, reasoning=3052)",
+ "raw_output": "F1: KEEP \u2014 Each project\u2019s `observe()` prunes the shared observer state to its own entries, erasing other projects\u2019 poll times and breaking the poll interval.\nF2: DROP \u2014 A missing load test is not itself a defect in changed behavior.\nF3: KEEP \u2014 An unconfirmed run\u2019s stored poll fault is not replayed between polls, so its escalation can close and reopen.\nF4: KEEP \u2014 Open escalations retain the first payload, which can leave operators with stale details or omit other affected runs.\nF5: DROP \u2014 The exception is reported to the CLI caller, so the missing log traceback does not establish a silent failure.\nF6: DROP \u2014 The per-project catch is an intentional, documented isolation boundary and does not cause incorrect behavior.\nF7: DROP \u2014 Duplicated parameter-key definitions are a maintenance concern, not a demonstrated runtime defect.\nF8: DROP \u2014 The unused confirmation method and direct state update are an encapsulation concern, not a behavior defect.\nF9: DROP \u2014 The outdated docstring is inaccurate but does not cause incorrect behavior.\nF1: KEEP \u2014 Each project\u2019s `observe()` prunes the shared observer state to its own entries, erasing other projects\u2019 poll times and breaking the poll interval.\nF2: DROP \u2014 A missing load test is not itself a defect in changed behavior.\nF3: KEEP \u2014 An unconfirmed run\u2019s stored poll fault is not replayed between polls, so its escalation can close and reopen.\nF4: KEEP \u2014 Open escalations retain the first payload, which can leave operators with stale details or omit other affected runs.\nF5: KEEP \u2014 The re-raise bypasses the required error log, and the CLI reports `UpstreamShapeError` without a traceback.\nF6: DROP \u2014 The per-project catch is an intentional, documented isolation boundary and does not cause incorrect behavior.\nF7: DROP \u2014 Duplicated parameter-key definitions are a maintenance concern, not a demonstrated runtime defect.\nF8: DROP \u2014 The unused confirmation method and direct state update are an encapsulation concern, not a behavior defect.\nF9: DROP \u2014 The outdated docstring is inaccurate but does not cause incorrect behavior."
+}

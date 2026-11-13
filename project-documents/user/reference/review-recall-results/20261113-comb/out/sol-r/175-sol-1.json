@@ -1,0 +1,33 @@
+{
+ "case": "175",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Only the final loop round is persisted, so the new report silently omits earlier rounds\u2019 usage."
+  ],
+  "F2": [
+   "KEEP",
+   "Folding copies the first part\u2019s usage metadata without summing subsequent parts, underreporting split-review spend."
+  ],
+  "F3": [
+   "KEEP",
+   "Failed parts have empty outputs, causing folding to raise and the outer handler to replace captured usage and the original error."
+  ]
+ },
+ "wall_seconds": 10.7,
+ "duration_seconds": 10.72523883311078,
+ "cost_usd": 0.090013,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=119907, cached=80290, cache_write=None, completion=275, reasoning=0)",
+ "raw_output": "F1: KEEP \u2014 Only the final loop round is persisted, so the new report silently omits earlier rounds\u2019 usage.\nF2: KEEP \u2014 Folding copies the first part\u2019s usage metadata without summing subsequent parts, underreporting split-review spend.\nF3: KEEP \u2014 Failed parts have empty outputs, causing folding to raise and the outer handler to replace captured usage and the original error.\nF1: KEEP \u2014 Only the final loop round is persisted, so the report silently omits earlier rounds\u2019 usage.\nF2: KEEP \u2014 Folding retains only the first part\u2019s usage metadata, underreporting split-review tokens, turns, duration, and cost.\nF3: KEEP \u2014 Failed parts lack input files, causing folding to raise and the outer handler to discard captured usage and the original error."
+}

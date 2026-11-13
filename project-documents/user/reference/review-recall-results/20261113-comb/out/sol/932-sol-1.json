@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A notification before the original result empties the ledger, causing dispatch to return without consuming the pending continuation."
+  ],
+  "F2": [
+   "KEEP",
+   "The timeout remains active after the final task notification, allowing unfinished foreground continuation work to return partial text as success."
+  ]
+ },
+ "wall_seconds": 27.4,
+ "duration_seconds": 27.377113957889378,
+ "cost_usd": 0.0340384,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=93735, cached=81664, cache_write=None, completion=173, reasoning=56)",
+ "raw_output": "F1: KEEP \u2014 A notification before the original result empties the ledger, causing dispatch to return without consuming the pending continuation.\nF2: KEEP \u2014 The timeout remains active after the final task notification, allowing unfinished foreground continuation work to return partial text as success.\nF1: KEEP \u2014 A notification before the original result empties the ledger, causing dispatch to return without consuming the pending continuation.\nF2: KEEP \u2014 The background timeout remains active after task completion, allowing unfinished parent continuations to return partial text as success."
+}

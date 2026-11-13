@@ -1,0 +1,68 @@
+{
+ "case": "u103",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8",
+  "F10": "haiku-xhigh/1/9"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The range effect only re-runs when `mount.ready`, `chart` or `range` changes, and adding a series changes none of them, so a range set before the first series is silently never applied. The test only passes because it calls `addSeries` before `setRange`."
+  ],
+  "F2": [
+   "DROP",
+   "Callers already get a `ready` flag that tells them whether the chart is live, and dropping calls before mount is intended behaviour, not a defect."
+  ],
+  "F3": [
+   "DROP",
+   "The token names in `CHART_TOKENS` match `theme.css`. The fallback only covers environments without the stylesheet, such as jsdom, so production is unaffected today."
+  ],
+  "F4": [
+   "DROP",
+   "File and function length is a style guideline. The teardown declaration-order \"hazard\" cannot trigger, because teardown only runs after `observer` and `disposers` are initialized."
+  ],
+  "F5": [
+   "DROP",
+   "Narrowing the lint suppression to a single line is config tidiness; it doesn't fix any wrong behaviour."
+  ],
+  "F6": [
+   "DROP",
+   "The placeholder indicator effect is harmless extra code with no wrong behaviour; this is a style point."
+  ],
+  "F7": [
+   "DROP",
+   "A weak test and redundant guards are a test-quality issue; runtime behaviour is correct."
+  ],
+  "F8": [
+   "DROP",
+   "Duplicated helpers in test files are a DRY/maintenance point with no behaviour impact."
+  ],
+  "F9": [
+   "DROP",
+   "Typing the test spy against the interface would guard against future signature drift; it doesn't fix a current defect."
+  ],
+  "F10": [
+   "DROP",
+   "The 2px border-box vs content-box mismatch lasts only until the resize observer fires and corrects it, so there is no real impact."
+  ]
+ },
+ "wall_seconds": 36.3,
+ "duration_seconds": 36.33625395898707,
+ "cost_usd": 0.2614959,
+ "effort": "high",
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=141700, cached=120489, cache_write=21195, completion=3351, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The range effect only re-runs when `mount.ready`, `chart` or `range` changes, and adding a series changes none of them, so a range set before the first series is silently never applied. The test only passes because it calls `addSeries` before `setRange`.\nF2: DROP \u2014 Callers already get a `ready` flag that tells them whether the chart is live, and dropping calls before mount is intended behaviour, not a defect.\nF3: DROP \u2014 The token names in `CHART_TOKENS` match `theme.css`. The fallback only covers environments without the stylesheet, such as jsdom, so production is unaffected today.\nF4: DROP \u2014 File and function length is a style guideline. The teardown declaration-order \"hazard\" cannot trigger, because teardown only runs after `observer` and `disposers` are initialized.\nF5: DROP \u2014 Narrowing the lint suppression to a single line is config tidiness; it doesn't fix any wrong behaviour.\nF6: DROP \u2014 The placeholder indicator effect is harmless extra code with no wrong behaviour; this is a style point.\nF7: DROP \u2014 A weak test and redundant guards are a test-quality issue; runtime behaviour is correct.\nF8: DROP \u2014 Duplicated helpers in test files are a DRY/maintenance point with no behaviour impact.\nF9: DROP \u2014 Typing the test spy against the interface would guard against future signature drift; it doesn't fix a current defect.\nF10: DROP \u2014 The 2px border-box vs content-box mismatch lasts only until the resize observer fires and corrects it, so there is no real impact.\nF1: KEEP \u2014 The range effect does not re-run when a series is added, so a range set before the first series is silently never applied; the test passes only because it calls `addSeries` first.\nF2: DROP \u2014 Callers already get a `ready` flag, and dropping calls before mount is intended behaviour, not a silent failure.\nF3: DROP \u2014 The token names in `CHART_TOKENS` match `theme.css`; the fallback only covers environments without the stylesheet, such as jsdom, so production is unaffected.\nF4: DROP \u2014 File and function length is a style guideline, and the declaration-order hazard cannot trigger because teardown only runs after `observer` and `disposers` are initialized.\nF5: DROP \u2014 Narrowing the lint suppression to one line is config tidiness and fixes no wrong behaviour.\nF6: DROP \u2014 The placeholder indicator effect is harmless extra code with no wrong behaviour.\nF7: DROP \u2014 A weak test and redundant guards are a test-quality issue; runtime behaviour is correct.\nF8: DROP \u2014 Duplicated helpers in test files are a DRY point with no effect on behaviour.\nF9: DROP \u2014 Typing the test spy against `IChartProvider` would guard against future drift but fixes no current defect.\nF10: DROP \u2014 The 2px border-box vs content-box mismatch lasts only until the resize observer fires and corrects it."
+}

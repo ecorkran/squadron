@@ -1,0 +1,43 @@
+{
+ "case": "188",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A midnight datetime string can be parsed as a date, expanding an inclusive end bound to the end of the day."
+  ],
+  "F2": [
+   "DROP",
+   "The positional indexes match the current trade column order; the mismatch is hypothetical."
+  ],
+  "F3": [
+   "DROP",
+   "The inaccurate docstring and unused map values do not cause a current behavior defect."
+  ],
+  "F4": [
+   "DROP",
+   "Current callers use `extra` only for the period, and both ceiling checks agree."
+  ],
+  "F5": [
+   "DROP",
+   "The count and fetch use the same connection, so the count assertion prevents a vacuous pass."
+  ]
+ },
+ "wall_seconds": 27.3,
+ "duration_seconds": 27.246558000100777,
+ "cost_usd": 0.03690965,
+ "effort": null,
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=128332, cached=102713, cache_write=None, completion=1231, reasoning=643)",
+ "raw_output": "F1: KEEP \u2014 A midnight datetime string can be parsed as a date, expanding an inclusive end bound to the end of the day.\nF2: DROP \u2014 The positional indexes match the current trade column order; the mismatch is hypothetical.\nF3: DROP \u2014 The inaccurate docstring and unused map values do not cause a current behavior defect.\nF4: DROP \u2014 Current callers use `extra` only for the period, and both ceiling checks agree.\nF5: DROP \u2014 The count and fetch use the same connection, so the count assertion prevents a vacuous pass.\nF1: KEEP \u2014 A midnight datetime string can be parsed as a date, expanding an inclusive end bound to the end of the day.\nF2: DROP \u2014 The positional indexes match the current trade column order; the mismatch is hypothetical.\nF3: DROP \u2014 The inaccurate docstring and unused map values do not cause a current behavior defect.\nF4: DROP \u2014 Current callers use `extra` only for the period, and both ceiling checks agree.\nF5: DROP \u2014 The count and fetch use the same connection, so the count assertion prevents a vacuous pass."
+}

@@ -1,0 +1,43 @@
+{
+ "case": "188",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A midnight datetime query may match the leftmost `date` union arm, expanding an inclusive end bound to the end of that day."
+  ],
+  "F2": [
+   "DROP",
+   "The current query column order matches the positional mapping, so this is a future-change fragility rather than a defect in current behavior."
+  ],
+  "F3": [
+   "DROP",
+   "Current candle columns are served correctly, and the parity test catches unmapped additions; the remaining issue is an inaccurate docstring."
+  ],
+  "F4": [
+   "DROP",
+   "All current callers use `extra` only for the candle period, so the truthiness predicate does not cause wrong behavior."
+  ],
+  "F5": [
+   "DROP",
+   "The test uses the pool\u2019s initialized connections for a short, sequential request, so the cited instrumentation weaknesses do not cause a vacuous assertion in this path."
+  ]
+ },
+ "wall_seconds": 106.2,
+ "duration_seconds": 106.22380633302964,
+ "cost_usd": 0.007132299999999999,
+ "effort": "high",
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=105649, cached=79240, cache_write=None, completion=7398, reasoning=6673)",
+ "raw_output": "F1: KEEP \u2014 A midnight datetime query may match the leftmost `date` union arm, expanding an inclusive end bound to the end of that day.\nF2: DROP \u2014 The current query column order matches the positional mapping, so this is a future-change fragility rather than a defect in current behavior.\nF3: DROP \u2014 Current candle columns are served correctly, and the parity test catches unmapped additions; the remaining issue is an inaccurate docstring.\nF4: DROP \u2014 All current callers use `extra` only for the candle period, so the truthiness predicate does not cause wrong behavior.\nF5: DROP \u2014 The test uses the pool\u2019s initialized connections for a short, sequential request, so the cited instrumentation weaknesses do not cause a vacuous assertion in this path.\nF1: KEEP \u2014 A midnight datetime may parse as `date`, causing `_as_utc` to expand the inclusive end bound to the end of that day.\nF2: KEEP \u2014 Positional decoding can silently assign wrong trade values if the derived SQL column order changes.\nF3: DROP \u2014 Current candle fields are served correctly, and the parity test catches unmapped column changes.\nF4: DROP \u2014 Current callers use `extra` only for the candle period, so the predicate behaves correctly.\nF5: DROP \u2014 The short sequential test instruments the initialized pool connections, and the stated weaknesses do not establish a failure in this test path."
+}

@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The CLI connection is autocommit (`store_context.py:160`), so `ledger_totals` and `raw_counts` read from separate snapshots. The ingest worker commits raw rows and ledger rows together, so a commit landing between the two reads makes coverage report a false mismatch and exit 3."
+  ],
+  "F2": [
+   "KEEP",
+   "raw_counts` filters only by `ts_event` and never by shape or `unit_id`. With several universe products sharing session windows, one product's `tick_trade` rows show up in another's coverage with ledger 0 and get flagged as mismatches."
+  ],
+  "F3": [
+   "DROP",
+   "This is a one-off CLI report and nothing else is waiting on the event loop. At realistic sizes the per-session dictionary scan costs very little, so this is a performance nit with no real effect."
+  ]
+ },
+ "wall_seconds": 43.8,
+ "duration_seconds": 43.80169466603547,
+ "cost_usd": 0.2882898,
+ "effort": "high",
+ "tool_calls_made": 9,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=214561, cached=191941, cache_write=22602, completion=3412, reasoning=None)",
+ "raw_output": "Checked all three findings against the code; here are the decisions.\n\nF1: KEEP \u2014 The CLI connection is autocommit (`store_context.py:160`), so `ledger_totals` and `raw_counts` read from separate snapshots. The ingest worker commits raw rows and ledger rows together, so a commit landing between the two reads makes coverage report a false mismatch and exit 3.\nF2: KEEP \u2014 `raw_counts` filters only by `ts_event` and never by shape or `unit_id`. With several universe products sharing session windows, one product's `tick_trade` rows show up in another's coverage with ledger 0 and get flagged as mismatches.\nF3: DROP \u2014 This is a one-off CLI report and nothing else is waiting on the event loop. At realistic sizes the per-session dictionary scan costs very little, so this is a performance nit with no real effect.\nF1: KEEP \u2014 The CLI uses an autocommit connection, so the ledger and raw reads see different snapshots; an ingest commit between them causes a false mismatch and exit 3.\nF2: KEEP \u2014 `raw_counts` filters only by time, never by shape or `unit_id`, so another product's rows in the same session window show up as false mismatches.\nF3: DROP \u2014 A one-off CLI report with nothing else on the event loop; the per-session scan costs very little at realistic sizes."
+}

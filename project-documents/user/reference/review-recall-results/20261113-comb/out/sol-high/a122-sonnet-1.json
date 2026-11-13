@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "An empty pipeline passes preflight but raises after journaling, leaving an untracked entry later misclassified as vanished."
+  ],
+  "F2": [
+   "DROP",
+   "File length and cohesion concerns do not establish a behavioral defect."
+  ],
+  "F3": [
+   "KEEP",
+   "Negative launch grace is accepted and causes immediate overdue escalations instead of rejecting invalid settings."
+  ]
+ },
+ "wall_seconds": 57.6,
+ "duration_seconds": 57.54916970804334,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=119091, cached=108928, cache_write=None, completion=297, reasoning=151)",
+ "raw_output": "F1: KEEP \u2014 An empty pipeline passes preflight but raises after journaling, leaving an untracked entry later misclassified as vanished.\nF2: DROP \u2014 File length and cohesion concerns do not establish a behavioral defect.\nF3: KEEP \u2014 Negative launch grace is accepted and causes immediate overdue escalations instead of rejecting invalid settings.\nF1: KEEP \u2014 An empty pipeline passes preflight but raises after journaling, leaving an untracked entry later misclassified as vanished.\nF2: DROP \u2014 File length and cohesion concerns do not establish a behavioral defect.\nF3: KEEP \u2014 Negative launch grace is accepted and causes immediate overdue escalations instead of rejecting invalid settings."
+}

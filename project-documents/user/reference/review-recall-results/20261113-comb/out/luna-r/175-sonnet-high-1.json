@@ -1,0 +1,38 @@
+{
+ "case": "175",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The failure-path profile/provider lookups can raise and prevent the original provider error\u2019s usage from being recorded."
+  ],
+  "F2": [
+   "KEEP",
+   "The judge makes an LLM call without recording its usage, so run totals omit its spend."
+  ],
+  "F3": [
+   "KEEP",
+   "Passing a fresh warning set causes repeated pricing warnings instead of deduplicating them across the run."
+  ],
+  "F4": [
+   "DROP",
+   "The duplicated tier literal is a convention violation but does not cause incorrect behavior."
+  ]
+ },
+ "wall_seconds": 47.2,
+ "duration_seconds": 47.21562879206613,
+ "cost_usd": 0.00634214,
+ "effort": null,
+ "tool_calls_made": 17,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=152536, cached=113544, cache_write=None, completion=2615, reasoning=1915)",
+ "raw_output": "F1: KEEP \u2014 The failure-path profile/provider lookups can raise and prevent the original provider error\u2019s usage from being recorded.\nF2: KEEP \u2014 The judge makes an LLM call without recording its usage, so run totals omit its spend.\nF3: KEEP \u2014 Passing a fresh warning set causes repeated pricing warnings instead of deduplicating them across the run.\nF4: DROP \u2014 The duplicated tier literal is a convention violation but does not cause incorrect behavior.\nF1: KEEP \u2014 The failure-path profile/provider lookups can raise and prevent the original provider error\u2019s usage from being recorded.\nF2: KEEP \u2014 The judge makes an LLM call without recording its usage, so run totals omit its spend.\nF3: KEEP \u2014 Passing a fresh warning set causes repeated pricing warnings instead of deduplicating them across the run.\nF4: DROP \u2014 The duplicated tier literal violates a convention but does not cause incorrect behavior."
+}

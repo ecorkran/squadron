@@ -1,0 +1,38 @@
+{
+ "case": "197",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2",
+  "F4": "sol/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "cf.undesigned_slices` drops any slice that has a design file, so a slices-plan item flagged after its design was written can't be re-selected. Retry and accept are then both REJECTED, and accept for a design review can never work."
+  ],
+  "F2": [
+   "KEEP",
+   "_git_precondition` reads the target and can commit and switch branches without calling `_require_registered_worktree`. Neither the run lock nor the CLI checks registration first, so an unregistered worktree acts on the primary checkout's target."
+  ],
+  "F3": [
+   "DROP",
+   "sq run --resume --item` is a one-shot CLI with nothing else on the event loop, so the blocking git and cf calls have no practical effect."
+  ],
+  "F4": [
+   "DROP",
+   "items\": [null]` would raise `AttributeError` from `from_json`, but only a hand-corrupted file can produce it, because squadron writes `report.json` atomically."
+  ]
+ },
+ "wall_seconds": 42.2,
+ "duration_seconds": 42.18982204189524,
+ "cost_usd": 0.2487306,
+ "effort": "high",
+ "tool_calls_made": 12,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=349084, cached=306037, cache_write=43025, completion=4501, reasoning=None)",
+ "raw_output": "Checking whether the run lock or the CLI guards worktree registration before `_git_precondition` runs, which decides F2.\nF1: KEEP \u2014 `cf.undesigned_slices` drops any slice that has a design file, so a slices-plan item flagged after its design was written can't be re-selected. Retry and accept are then both REJECTED, and accept for a design review can never work.\nF2: KEEP \u2014 `_git_precondition` reads the target and can commit and switch branches without calling `_require_registered_worktree`. Neither the run lock nor the CLI checks registration first, so an unregistered worktree acts on the primary checkout's target.\nF3: DROP \u2014 `sq run --resume --item` is a one-shot CLI with nothing else on the event loop, so the blocking git and cf calls have no practical effect.\nF4: DROP \u2014 `\"items\": [null]` would raise `AttributeError` from `from_json`, but only a hand-corrupted file can produce it, because squadron writes `report.json` atomically.\nF1: KEEP \u2014 `cf.undesigned_slices` drops any slice with a design file, so a slices-plan item flagged after its design was written can't be re-selected. Retry and accept are then both REJECTED.\nF2: KEEP \u2014 `_git_precondition` reads the target and can commit and switch branches without calling `_require_registered_worktree`. Neither the run lock nor the CLI checks registration first, so an unregistered worktree acts on the primary checkout's target.\nF3: DROP \u2014 `sq run --resume --item` is a one-shot CLI with nothing else on the event loop, so the blocking git and cf calls have no practical effect.\nF4: DROP \u2014 `\"items\": [null]` would raise `AttributeError` from `from_json`, but only a hand-corrupted file can produce it, because squadron writes `report.json` atomically."
+}

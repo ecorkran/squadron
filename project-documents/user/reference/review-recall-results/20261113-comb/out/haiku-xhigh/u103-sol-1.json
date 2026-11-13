@@ -1,0 +1,28 @@
+{
+ "case": "u103",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Adding a series changes no effect dependency (`mount.ready`, `chart`, `range`), so a range set before the first series is never applied until the range changes again, and the translation test hides this by calling `setRange` after `addSeries`."
+  ],
+  "F2": [
+   "KEEP",
+   "The gate counts series rather than data points, so `addSeries` with `data: []` or `updateSeries` clearing data still reaches `setVisibleRange` on an empty time scale, which the code's own comments say throws and surfaces as a spurious hook error."
+  ]
+ },
+ "wall_seconds": 34.2,
+ "duration_seconds": 34.23553070798516,
+ "cost_usd": 0.011760429999999999,
+ "effort": "xhigh",
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=181622, cached=148983, cache_write=32627, completion=6368, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 Adding a series changes no effect dependency (`mount.ready`, `chart`, `range`), so a range set before the first series is never applied until the range changes again, and the translation test hides this by calling `setRange` after `addSeries`.\nF2: KEEP \u2014 The gate counts series rather than data points, so `addSeries` with `data: []` or `updateSeries` clearing data still reaches `setVisibleRange` on an empty time scale, which the code's own comments say throws and surfaces as a spurious hook error.\nF1: KEEP \u2014 Adding a series changes none of the range effect's dependencies (`mount.ready`, `chart`, `range`), so a range set before the first series is never applied until the range changes again, and the translation test hides this by calling `setRange` after `addSeries`.\nF2: KEEP \u2014 The gate counts series rather than data points, so `addSeries` with `data: []` or `updateSeries` clearing data still reaches `setVisibleRange` on an empty time scale, which the code's own comments say throws and surfaces as a spurious hook error."
+}

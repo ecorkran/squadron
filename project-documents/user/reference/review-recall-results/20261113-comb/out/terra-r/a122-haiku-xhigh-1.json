@@ -1,0 +1,63 @@
+{
+ "case": "a122",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Each project\u2019s observation prunes state belonging to other projects, breaking poll cadence and fairness."
+  ],
+  "F2": [
+   "DROP",
+   "A missing load test alone is not a behavioral defect."
+  ],
+  "F3": [
+   "KEEP",
+   "Unconfirmed launches do not replay poll faults, so their escalations can close and reopen prematurely."
+  ],
+  "F4": [
+   "KEEP",
+   "Deduplication preserves the first payload, hiding other or later faults of the same kind."
+  ],
+  "F5": [
+   "DROP",
+   "The exceptions propagate to the CLI, which reports them; the missing traceback is not a behavioral defect."
+  ],
+  "F6": [
+   "DROP",
+   "The broad catch deliberately logs and isolates project failures rather than silently swallowing them."
+  ],
+  "F7": [
+   "DROP",
+   "The duplicated constants currently agree, making this a maintainability concern rather than a defect."
+  ],
+  "F8": [
+   "DROP",
+   "Directly setting the tracked launch\u2019s confirmation state works; the unused method is a maintainability concern."
+  ],
+  "F9": [
+   "DROP",
+   "The stale docstring does not affect behavior."
+  ]
+ },
+ "wall_seconds": 17.0,
+ "duration_seconds": 16.966819665860385,
+ "cost_usd": 0.04440695000000001,
+ "effort": null,
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=107468, cached=70859, cache_write=None, completion=851, reasoning=185)",
+ "raw_output": "F1: KEEP \u2014 Each project\u2019s observation prunes state belonging to other projects, breaking poll cadence and fairness.\nF2: DROP \u2014 A missing load test alone is not a behavioral defect.\nF3: KEEP \u2014 Unconfirmed launches do not replay poll faults, so their escalations can close and reopen prematurely.\nF4: KEEP \u2014 Deduplication preserves the first payload, hiding other or later faults of the same kind.\nF5: DROP \u2014 The exceptions propagate to the CLI, which reports them; the missing traceback is not a behavioral defect.\nF6: DROP \u2014 The broad catch deliberately logs and isolates project failures rather than silently swallowing them.\nF7: DROP \u2014 The duplicated constants currently agree, making this a maintainability concern rather than a defect.\nF8: DROP \u2014 Directly setting the tracked launch\u2019s confirmation state works; the unused method is a maintainability concern.\nF9: DROP \u2014 The stale docstring does not affect behavior.\nF1: KEEP \u2014 Each project\u2019s observation prunes other projects\u2019 state, breaking poll cadence and fairness.\nF2: DROP \u2014 A missing load test alone is not a behavioral defect.\nF3: KEEP \u2014 Unconfirmed launches do not replay poll faults, so escalations can close and reopen prematurely.\nF4: KEEP \u2014 Deduplication preserves the first payload, hiding other or later faults of the same kind.\nF5: DROP \u2014 The exceptions propagate to the CLI and are reported; the missing traceback is not a behavioral defect.\nF6: DROP \u2014 The broad catch deliberately logs and isolates project failures rather than silently swallowing them.\nF7: DROP \u2014 The duplicated constants currently agree, making this a maintainability concern rather than a defect.\nF8: DROP \u2014 Directly setting confirmation state works; the unused method is a maintainability concern.\nF9: DROP \u2014 The stale docstring does not affect behavior."
+}

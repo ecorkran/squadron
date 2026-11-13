@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "On a rerun, `old` already holds the new args, and only `new` is stripped. Step 4 would then fail on identical cron files, which breaks the documented rerun recovery."
+  ],
+  "F2": [
+   "DROP",
+   "backup_health_cron.sh` appends a FLAGS line even when the check fails, and cron adds one every 30 minutes. A stale clean line is therefore an unlikely, bounded risk."
+  ],
+  "F3": [
+   "DROP",
+   "A host `OSError` would surface as a traceback instead of the report. This is a hardening gap in a one-shot operator script, not wrong behavior or data."
+  ]
+ },
+ "wall_seconds": 27.1,
+ "duration_seconds": 27.09824829106219,
+ "cost_usd": 0.1615903,
+ "effort": "high",
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=146314, cached=116339, cache_write=29961, completion=2922, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 On a rerun, `old` already holds the new args, and only `new` is stripped. Step 4 would then fail on identical cron files, which breaks the documented rerun recovery.\nF2: DROP \u2014 `backup_health_cron.sh` appends a FLAGS line even when the check fails, and cron adds one every 30 minutes. A stale clean line is therefore an unlikely, bounded risk.\nF3: DROP \u2014 A host `OSError` would surface as a traceback instead of the report. This is a hardening gap in a one-shot operator script, not wrong behavior or data.\nF1: KEEP \u2014 On a rerun, `old` already holds the new args, and only `new` is stripped, so step 4 fails on identical cron files and breaks the documented rerun recovery.\nF2: DROP \u2014 `backup_health_cron.sh` appends a FLAGS line even when the check fails, and cron adds one every 30 minutes, so a stale clean line is an unlikely, bounded risk.\nF3: DROP \u2014 A host `OSError` would surface as a traceback instead of the report, which is a hardening gap in a one-shot operator script and not wrong behavior or data."
+}

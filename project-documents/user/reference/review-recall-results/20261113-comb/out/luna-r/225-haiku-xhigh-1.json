@@ -1,0 +1,53 @@
+{
+ "case": "225",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "PoolTimeout` is not caught or mapped, so a calendar pool outage can escape as a traceback."
+  ],
+  "F2": [
+   "KEEP",
+   "When the wanted end is unknown, `caught_up` can still report `True` based only on held sessions."
+  ],
+  "F3": [
+   "KEEP",
+   "Raw counts include other products\u2019 trades in overlapping session windows, causing false coverage mismatches."
+  ],
+  "F4": [
+   "KEEP",
+   "A future observation timestamp produces a nonsensical negative \u201cago\u201d duration."
+  ],
+  "F5": [
+   "KEEP",
+   "A non-increasing range can produce empty coverage that appears to pass when callers bypass the CLI guard."
+  ],
+  "F6": [
+   "DROP",
+   "The performance concern is unverified and does not establish a material defect."
+  ],
+  "F7": [
+   "DROP",
+   "Missing integration coverage alone is not a defect where no incorrect behavior is shown."
+  ]
+ },
+ "wall_seconds": 28.9,
+ "duration_seconds": 28.925959083018824,
+ "cost_usd": 0.00451581,
+ "effort": null,
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=86377, cached=57371, cache_write=None, completion=2083, reasoning=1351)",
+ "raw_output": "F1: KEEP \u2014 `PoolTimeout` is not caught or mapped, so a calendar pool outage can escape as a traceback.\nF2: KEEP \u2014 When the wanted end is unknown, `caught_up` can still report `True` based only on held sessions.\nF3: KEEP \u2014 Raw counts include other products\u2019 trades in overlapping session windows, causing false coverage mismatches.\nF4: KEEP \u2014 A future observation timestamp produces a nonsensical negative \u201cago\u201d duration.\nF5: KEEP \u2014 A non-increasing range can produce empty coverage that appears to pass when callers bypass the CLI guard.\nF6: DROP \u2014 The performance concern is unverified and does not establish a material defect.\nF7: DROP \u2014 Missing integration coverage alone is not a defect where no incorrect behavior is shown.\nF1: KEEP \u2014 `PoolTimeout` is neither caught by `calendar_sessions` nor mapped to an exit code, so a calendar pool outage can escape as a traceback.\nF2: KEEP \u2014 When the wanted end is unknown, `caught_up` can still report `True` based only on held sessions.\nF3: KEEP \u2014 The raw-count query includes other products\u2019 trades in matching session windows, causing false coverage mismatches.\nF4: KEEP \u2014 A future observation timestamp produces a nonsensical negative \u201cago\u201d duration.\nF5: KEEP \u2014 A non-increasing range can produce empty coverage that appears to pass when callers bypass the CLI guard.\nF6: DROP \u2014 The performance concern is unverified and does not establish a material defect.\nF7: DROP \u2014 Missing integration coverage alone is not a defect where no incorrect behavior is shown."
+}

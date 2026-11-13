@@ -1,0 +1,43 @@
+{
+ "case": "227",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The return code is ignored, but `backup_health_cron.sh` writes a log line on every path except argument-validation errors, and those can't happen because the command is read from the rendered cron file."
+  ],
+  "F2": [
+   "DROP",
+   "The production health log always exists on the host, since production's health job has been running all along and step 2 has already confirmed every 17/main item is OK, so the missing/empty case can't occur."
+  ],
+  "F3": [
+   "DROP",
+   "Neither assert can fail: `block_lines` already keeps only lines that match `_JOB_LINE`, and `require` raises before the `flags` assert is reached, so they only help the type checker."
+  ],
+  "F4": [
+   "DROP",
+   "The template hard-codes `root` for host jobs and cluster jobs use the cron user, so the check is correct today; it is a robustness/style point, not a defect."
+  ],
+  "F5": [
+   "DROP",
+   "This is about test style (checking source text instead of behaviour), not a defect in shipped code."
+  ]
+ },
+ "wall_seconds": 44.0,
+ "duration_seconds": 44.031514917034656,
+ "cost_usd": 0.2622439,
+ "effort": "high",
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=179919, cached=160722, cache_write=19181, completion=3782, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The return code is ignored, but `backup_health_cron.sh` writes a log line on every path except argument-validation errors, and those can't happen because the command is read from the rendered cron file.\nF2: DROP \u2014 The production health log always exists on the host, since production's health job has been running all along and step 2 has already confirmed every 17/main item is OK, so the missing/empty case can't occur.\nF3: DROP \u2014 Neither assert can fail: `block_lines` already keeps only lines that match `_JOB_LINE`, and `require` raises before the `flags` assert is reached, so they only help the type checker.\nF4: DROP \u2014 The template hard-codes `root` for host jobs and cluster jobs use the cron user, so the check is correct today; it is a robustness/style point, not a defect.\nF5: DROP \u2014 This is about test style (checking source text instead of behaviour), not a defect in shipped code.\n## Review verdict: PASS (all five findings dropped)\n\nI checked each finding against the code. None describes a defect that needs fixing before merge.\n\n### [PASS] F1: Health step can pass on a stale log line\ncategory: error-handling\nlocation: scripts/cutover_227_tick_backup.py:157\n\nF1: DROP \u2014 `run_health` does ignore the return code of `shell()`. But `backup_health_cron.sh` writes a log line on every path except argument-validation errors (`exit 2`). Those can't happen here because the command comes from the rendered cron file. So in practice the last log line is always from this run.\n\n### [PASS] F2: Unguarded `[-1]` indexing on log files\ncategory: error-handling\nlocation: scripts/cutover_227_tick_backup.py:224\n\nF2: DROP \u2014 Production's health job has been writing `backup-health.log` all along, and step 2 has already confirmed every 17/main item is OK. A missing or empty production log can't occur at step 12.\n\n### [PASS] F3: `assert` used for runtime narrowing in production code\ncategory: error-handling\nlocation: scripts/cutover_227_helpers.py:64\n\nF3: DROP \u2014 Neither assert can fail. `block_lines` already keeps only lines that match `_JOB_LINE`. In `run_health`, `require` raises `StepFailed` before the `flags` assert is reached. Both asserts exist only for the type checker.\n\n### [PASS] F4: Host block identified by the literal user `root`\ncategory: design\nlocation: scripts/cutover_227_helpers.py:80\n\nF4: DROP \u2014 The host template hard-codes `root`, and cluster jobs use `@CRON_USER@`, so the check is correct for the shipped template. The objection is about robustness and style, not wrong behaviour.\n\n### [PASS] F5: Provisioning-script tests assert on source text\ncategory: testing\nlocation: test/unit/test_provision_tick_lib.py\n\nF5: DROP \u2014 This is about test style (checking source text instead of behaviour), not a defect in shipped code."
+}

@@ -141,3 +141,24 @@ Append one dated line per batch: cases, configs, runs per config, recall, link t
   - Almost nothing is false (7 of 560); the noise is MINOR. haiku-xhigh's recall lead comes with about 5.5 minor findings per run.
   - sol leads on both axes: fewest findings, most real ones, and 41 REAL issues in total of which sol alone found 14 (for example 307's estimate pricing the installed release and 227's re-run comparison). Its FAIL verdicts are justified 30 of 50 times, so it still over-rates severity.
   - REAL counts include real defects beyond the 14 known bugs; recall in grid 2 counts only the known bugs.
+- 20261113 comb test: a comb model reads one finished review's CONCERN/FAIL findings plus the code at head and marks each KEEP or DROP. Input: run 1 of haiku-xhigh, sol, sonnet-high and sonnet on all 10 cases (40 reviews, 187 findings, 54 REAL by the precision grades, 14 on known bugs). Harness, prompt and outputs: `review-recall-results/20261113-comb/` (`comb.py`, `comb.yaml`, `out/<comb>/`). "Known bugs kept" is graded by fix commits, not by agents, so it is the bias-free column; the REAL/noise columns use the agent grades, which favor Opus combs.
+
+  | Comb | REAL kept | Noise dropped | Precision after | Known bugs kept | Cost, 40 calls | Median s/call |
+  |---|---|---|---|---|---|---|
+  | opus-high | 91% | 93% | 84% | 14/14 | $10.45 sub | 36 |
+  | luna-r | 100% | 68% | 57% | 14/14 | $0.22 | 35 |
+  | luna-r-high | 100% | 66% | 56% | 14/14 | $0.30 | 52 |
+  | opus-medium | 87% | 91% | 81% | 13/14 | $11.72 sub | 28 |
+  | haiku-xhigh | 96% | 79% | 66% | 12/14 | $1.01 sub | 64 |
+  | terra-r | 94% | 83% | 71% | 11/14 | $1.96 | 17 |
+  | sol-r | 93% | 86% | 74% | 11/14 | $3.01 | 19 |
+  | sol (Codex) | 93% | 90% | 79% | 10/14 | Codex plan | 38 |
+  | sol-high (Codex, 36 calls) | 92% | 87% | 74% | 9/12 | Codex plan | 48 |
+  | sonnet-high | 74% | 94% | 85% | 8/14 | $6.74 sub | 25 |
+
+  Notes:
+  - Only opus-high is both safe (every known bug kept) and clean. luna is safe and nearly free but leaves a third of the noise; candidate design: luna first, opus-high on what survives (not yet tested).
+  - sonnet-high, the usual interactive comb, drops a quarter of the real issues and 6 of 14 known bugs.
+  - The sol family drops known bugs on both Codex and OpenRouter, so it is the model, not the harness. Effort high did not help sol or luna as a comb.
+  - Best pipeline so far: haiku-xhigh review, opus-high comb: 73 findings at 26% REAL become 21 at 86%, all 6 of its known bugs kept.
+  - One run per reviewer; a difference of one or two findings is noise. sol-high is missing 4 calls (Codex credits ran out). `sub` costs are what the SDK reports on a subscription, not charges.

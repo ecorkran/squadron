@@ -1,0 +1,58 @@
+{
+ "case": "175",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Split reviews stamp usage per part, but folding preserves only the first part\u2019s record and undercounts spend."
+  ],
+  "F2": [
+   "KEEP",
+   "Compact failure results omit available error telemetry, and reconnect failures discard already-captured spend."
+  ],
+  "F3": [
+   "KEEP",
+   "Compact records omit the resolved alias, causing subscription costs to be mislabeled and model attribution to be incorrect."
+  ],
+  "F4": [
+   "KEEP",
+   "Judge calls discard their usage, and prompt-only compact returns without collecting result telemetry."
+  ],
+  "F5": [
+   "DROP",
+   "The writer and reader currently agree; centralizing their keys is a maintainability improvement, not a demonstrated defect."
+  ],
+  "F6": [
+   "DROP",
+   "This requests stronger fixture coverage without demonstrating a production parsing failure."
+  ],
+  "F7": [
+   "DROP",
+   "The duplicated plumbing currently works; extracting shared helpers is a refactoring preference."
+  ],
+  "F8": [
+   "DROP",
+   "Function and file length guidelines do not establish a behavioral defect."
+  ]
+ },
+ "wall_seconds": 24.2,
+ "duration_seconds": 24.14334241603501,
+ "cost_usd": 0.1198473,
+ "effort": null,
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=164502, cached=114093, cache_write=None, completion=762, reasoning=140)",
+ "raw_output": "F1: KEEP \u2014 Split reviews stamp usage per part, but folding preserves only the first part\u2019s record and undercounts spend.\nF2: KEEP \u2014 Compact failure results omit available error telemetry, and reconnect failures discard already-captured spend.\nF3: KEEP \u2014 Compact records omit the resolved alias, causing subscription costs to be mislabeled and model attribution to be incorrect.\nF4: KEEP \u2014 Judge calls discard their usage, and prompt-only compact returns without collecting result telemetry.\nF5: DROP \u2014 The writer and reader currently agree; centralizing their keys is a maintainability improvement, not a demonstrated defect.\nF6: DROP \u2014 This requests stronger fixture coverage without demonstrating a production parsing failure.\nF7: DROP \u2014 The duplicated plumbing currently works; extracting shared helpers is a refactoring preference.\nF8: DROP \u2014 Function and file length guidelines do not establish a behavioral defect.\nF1: KEEP \u2014 Split reviews stamp usage per part, but folding preserves only the first part\u2019s record and undercounts spend.\nF2: KEEP \u2014 Compact failure results omit available error telemetry, and reconnect failures discard already-captured spend.\nF3: KEEP \u2014 Compact omits the resolved alias, causing subscription costs to be mislabeled and model attribution to be incorrect.\nF4: KEEP \u2014 Judge calls discard their usage, and prompt-only compact returns without collecting result telemetry.\nF5: DROP \u2014 Writer and reader keys currently agree, so centralizing them is a maintainability improvement rather than a demonstrated defect.\nF6: DROP \u2014 Stronger fixture coverage is requested without demonstrating a production parsing failure.\nF7: DROP \u2014 The duplicated plumbing works; extracting shared helpers is a refactoring preference.\nF8: DROP \u2014 Exceeding function and file length guidelines does not establish a behavioral defect."
+}

@@ -1,0 +1,43 @@
+{
+ "case": "932",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Production templates all use the loader, which resolves None to explicit project settings."
+  ],
+  "F2": [
+   "KEEP",
+   "Invalid timeout values pass validation and can prematurely stop background work instead of reporting configuration errors."
+  ],
+  "F3": [
+   "DROP",
+   "These infrequent config reads show no concrete event-loop starvation or meaningful performance impact."
+  ],
+  "F4": [
+   "DROP",
+   "Missing load coverage alone does not establish a defect in the background-wait implementation."
+  ],
+  "F5": [
+   "DROP",
+   "Module length and suggested extraction are maintainability concerns, not behavioral defects."
+  ]
+ },
+ "wall_seconds": 34.7,
+ "duration_seconds": 34.72225287510082,
+ "cost_usd": 0.0335048,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=101845, cached=91008, cache_write=None, completion=273, reasoning=62)",
+ "raw_output": "F1: DROP \u2014 Production templates all use the loader, which resolves None to explicit project settings.\nF2: KEEP \u2014 Invalid timeout values pass validation and can prematurely stop background work instead of reporting configuration errors.\nF3: DROP \u2014 These infrequent config reads show no concrete event-loop starvation or meaningful performance impact.\nF4: DROP \u2014 Missing load coverage alone does not establish a defect in the background-wait implementation.\nF5: DROP \u2014 Module length and suggested extraction are maintainability concerns, not behavioral defects.\nF1: DROP \u2014 Production templates pass through the loader, which resolves None to explicit project settings.\nF2: KEEP \u2014 Invalid timeout values pass validation and can prematurely stop background work instead of reporting configuration errors.\nF3: DROP \u2014 The synchronous config reads establish no concrete starvation, hang, or meaningful performance defect.\nF4: DROP \u2014 Missing load coverage alone does not establish a behavioral defect.\nF5: DROP \u2014 Module length and suggested extraction are maintainability concerns, not behavioral defects."
+}

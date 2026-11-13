@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Dead production code and a test/production mismatch, but no wrong behavior. `_confirm` does the real work, including overdue bookkeeping."
+  ],
+  "F2": [
+   "DROP",
+   "Slice design D8 says every open project escalation whose kind did not recur is closed after a complete tick, so closing `unexpected_fault` is the documented design."
+  ],
+  "F3": [
+   "DROP",
+   "The three run-id checks are small and near-identical. The observer rejects an empty id before `finish._run_id` can see one, so the difference never causes wrong behavior."
+  ]
+ },
+ "wall_seconds": 25.2,
+ "duration_seconds": 25.152041499968618,
+ "cost_usd": 0.22491519999999998,
+ "effort": "high",
+ "tool_calls_made": 9,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=222729, cached=177848, cache_write=44863, completion=2656, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 Dead production code and a test/production mismatch, but no wrong behavior. `_confirm` does the real work, including overdue bookkeeping.\nF2: DROP \u2014 Slice design D8 says every open project escalation whose kind did not recur is closed after a complete tick, so closing `unexpected_fault` is the documented design.\nF3: DROP \u2014 The three run-id checks are small and near-identical. The observer rejects an empty id before `finish._run_id` can see one, so the difference never causes wrong behavior.\nF1: DROP \u2014 Dead production code and a test/production mismatch, but no wrong behavior. `RunObserver._confirm` does the real confirming, including the overdue bookkeeping.\nF2: DROP \u2014 Slice design D8 says every open project escalation whose kind did not recur is closed after a complete tick, so closing `unexpected_fault` is intended.\nF3: DROP \u2014 The three run-id checks are small and near-identical. The observer rejects an empty id before `finish._run_id` can see one, so the rule difference causes no wrong behavior."
+}

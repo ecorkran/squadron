@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Tier coverage is omitted, allowing incomplete tbbo sessions to bypass the required session-level exit checks."
+  ],
+  "F2": [
+   "KEEP",
+   "Discarding family identity attaches other families\u2019 over-volume discrepancies to per-family failure reports."
+  ]
+ },
+ "wall_seconds": 77.3,
+ "duration_seconds": 77.2653425000608,
+ "cost_usd": 0.0299788,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=112384, cached=103168, cache_write=None, completion=123, reasoning=20)",
+ "raw_output": "F1: KEEP \u2014 Tier coverage is omitted, allowing incomplete tbbo sessions to bypass the required session-level exit checks.\nF2: KEEP \u2014 Discarding family identity attaches other families\u2019 over-volume discrepancies to per-family failure reports.\nF1: KEEP \u2014 Omitting tbbo coverage lets incomplete tier sessions bypass the required session-level exit checks.\nF2: KEEP \u2014 Grouping discrepancies only by product attributes other families\u2019 over-volume sessions to per-family failure reports."
+}

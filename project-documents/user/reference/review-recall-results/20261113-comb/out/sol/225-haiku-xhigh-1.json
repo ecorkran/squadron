@@ -1,0 +1,53 @@
+{
+ "case": "225",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "PoolTimeout subclasses psycopg.OperationalError, so it is already caught and mapped to exit 4."
+  ],
+  "F2": [
+   "KEEP",
+   "A valid tier-configured entry with no known end incorrectly reports caught-up status without a wanted range."
+  ],
+  "F3": [
+   "DROP",
+   "The claimed cross-product failure requires a second product that the current configuration does not support."
+  ],
+  "F4": [
+   "DROP",
+   "This is a cosmetic formatting issue under clock skew, not a merge-blocking defect."
+  ],
+  "F5": [
+   "DROP",
+   "The only current production caller already rejects invalid ranges."
+  ],
+  "F6": [
+   "DROP",
+   "No consequential performance defect is demonstrated, and the hypertable supports time-based chunk pruning."
+  ],
+  "F7": [
+   "DROP",
+   "Missing integration coverage alone does not establish a defect beyond F2."
+  ]
+ },
+ "wall_seconds": 60.8,
+ "duration_seconds": 60.82288350001909,
+ "cost_usd": 0.0188672,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=119822, cached=118272, cache_write=None, completion=394, reasoning=83)",
+ "raw_output": "F1: DROP \u2014 PoolTimeout subclasses psycopg.OperationalError, so it is already caught and mapped to exit 4.\nF2: KEEP \u2014 A valid tier-configured entry with no known end incorrectly reports caught-up status without a wanted range.\nF3: DROP \u2014 The claimed cross-product failure requires a second product that the current configuration does not support.\nF4: DROP \u2014 This is a cosmetic formatting issue under clock skew, not a merge-blocking defect.\nF5: DROP \u2014 The only current production caller already rejects invalid ranges.\nF6: DROP \u2014 No consequential performance defect is demonstrated, and the hypertable supports time-based chunk pruning.\nF7: DROP \u2014 Missing integration coverage alone does not establish a defect beyond F2.\nF1: DROP \u2014 PoolTimeout subclasses psycopg.OperationalError, so it already maps to exit 4.\nF2: KEEP \u2014 A tier-configured entry with no known end can incorrectly report caught up without a wanted range.\nF3: DROP \u2014 The claimed cross-product failure requires a second product that is not currently supported.\nF4: DROP \u2014 Negative-age formatting under clock skew is a cosmetic issue, not a merge blocker.\nF5: DROP \u2014 The only current production caller already rejects invalid ranges.\nF6: DROP \u2014 No material performance defect is demonstrated, and time-based chunk pruning limits the scan.\nF7: DROP \u2014 Missing integration coverage alone is not a defect; the concrete bug is covered by F2."
+}

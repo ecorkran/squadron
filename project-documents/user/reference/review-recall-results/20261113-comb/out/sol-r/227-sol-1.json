@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Reruns compare updated cron lines against stripped lines, causing step 4 to fail even when nothing changed."
+  ],
+  "F2": [
+   "KEEP",
+   "The health gates can accept an old clean summary when the current command fails to append a log entry."
+  ],
+  "F3": [
+   "KEEP",
+   "An OSError during a step escapes run_steps and prevents main from writing the failure report and completed-step evidence."
+  ]
+ },
+ "wall_seconds": 11.4,
+ "duration_seconds": 11.370135790901259,
+ "cost_usd": 0.0435663,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=57169, cached=38743, cache_write=None, completion=284, reasoning=13)",
+ "raw_output": "F1: KEEP \u2014 Reruns compare updated cron lines against stripped lines, causing step 4 to fail even when nothing changed.\nF2: KEEP \u2014 The health gates can accept an old clean summary when the current command fails to append a log entry.\nF3: KEEP \u2014 An OSError during a step escapes run_steps and prevents main from writing the failure report and completed-step evidence.\nF1: KEEP \u2014 Reruns compare updated cron lines against stripped lines, causing step 4 to fail even when nothing changed.\nF2: KEEP \u2014 The health gates can accept an old clean summary when the current command fails to append a log entry.\nF3: KEEP \u2014 An OSError during a step escapes run_steps and prevents main from writing the failure report and completed-step evidence."
+}

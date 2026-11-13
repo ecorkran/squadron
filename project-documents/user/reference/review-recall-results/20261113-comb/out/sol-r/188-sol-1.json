@@ -1,0 +1,33 @@
+{
+ "case": "188",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Date-first union parsing converts midnight timestamps to dates, expanding end bounds and discarding offsets."
+  ],
+  "F2": [
+   "KEEP",
+   "Both async handlers build and serialize up to 75,000 records synchronously, blocking unrelated requests on the event loop."
+  ],
+  "F3": [
+   "DROP",
+   "Missing CI load-test gating is a process gap, not a behavioral defect introduced by this change."
+  ]
+ },
+ "wall_seconds": 13.6,
+ "duration_seconds": 13.616140166996047,
+ "cost_usd": 0.0704864,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=81249, cached=50264, cache_write=None, completion=349, reasoning=53)",
+ "raw_output": "F1: KEEP \u2014 Date-first union parsing converts midnight timestamps to dates, expanding end bounds and discarding offsets.\nF2: KEEP \u2014 Both async handlers build and serialize up to 75,000 records synchronously, blocking unrelated requests on the event loop.\nF3: DROP \u2014 Missing CI load-test gating is a process gap, not a behavioral defect introduced by this change.\nF1: KEEP \u2014 Date-first union parsing converts midnight timestamps to dates, expanding end bounds and discarding offsets.\nF2: KEEP \u2014 Both async handlers build and serialize up to 75,000 records synchronously, blocking unrelated requests on the event loop.\nF3: DROP \u2014 Missing CI load-test gating is a process gap, not a behavioral defect introduced by this change."
+}

@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The `tbbo` tier is outside this slice's scope (D2 excludes any change to it) and this purchase buys nothing for it. Any `tbbo` unit left in flight is already caught by the unfinal-units check, so the gap is only a listing of sessions that were already short before the purchase."
+  ],
+  "F2": [
+   "KEEP",
+   "Each statistics volume check carries its family (`tick_coverage.py:93`) and covers both `tbbo` and `ohlcv-1m`, but `named` is keyed by product only, so each family's `over` failure lists the other family's sessions as well, which corrupts the evidence D6 item 4 requires."
+  ]
+ },
+ "wall_seconds": 36.7,
+ "duration_seconds": 36.67443275009282,
+ "cost_usd": 0.38663010000000003,
+ "effort": "medium",
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=204454, cached=168452, cache_write=35986, completion=3201, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The `tbbo` tier is outside this slice's scope (D2 excludes any change to it) and this purchase buys nothing for it. Any `tbbo` unit left in flight is already caught by the unfinal-units check, so the gap is only a listing of sessions that were already short before the purchase.\nF2: KEEP \u2014 Each statistics volume check carries its family (`tick_coverage.py:93`) and covers both `tbbo` and `ohlcv-1m`, but `named` is keyed by product only, so each family's `over` failure lists the other family's sessions as well, which corrupts the evidence D6 item 4 requires.\nF1: DROP \u2014 The `tbbo` tier is outside this slice's scope and this purchase buys nothing for it. Any `tbbo` unit left in flight is already caught by the unfinal-units check, so the gap is only a listing of sessions that were already short before the purchase.\nF2: KEEP \u2014 Each statistics volume check carries its family (`tick_coverage.py:93`) and covers both `tbbo` and `ohlcv-1m`, but `named` is keyed by product only, so each family's `over` failure lists the other family's sessions as well, which corrupts the evidence D6 item 4 requires."
+}

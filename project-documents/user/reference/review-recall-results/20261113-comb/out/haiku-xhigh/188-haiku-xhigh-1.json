@@ -1,0 +1,63 @@
+{
+ "case": "188",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "get_candlesticks` and `get_trades` build and serialize up to 75,000 records on the event-loop thread (kalshi_timeseries.py:125-126, 168-174), stalling every request."
+  ],
+  "F2": [
+   "KEEP",
+   "the field description says \"newest stored trade,\" but the value is the trades watermark, so clients misjudge freshness on quiet markets."
+  ],
+  "F3": [
+   "DROP",
+   "the flag's value is accurate, the description overreaches for trades stored before exclusion, and the finding itself frames the fix as a design call."
+  ],
+  "F4": [
+   "DROP",
+   "the duplicated membership test and literal key have no current wrong behavior and are guarded by the parity integration test."
+  ],
+  "F5": [
+   "DROP",
+   "test_nested_field_set_is_exactly_what_candle_columns_describes` fails on a new column, so the flaw is only the docstring overclaim."
+  ],
+  "F6": [
+   "KEEP",
+   "the positional mapping has no test guard, so reordering `TRADE_COLUMNS` would silently serve swapped yes/no prices."
+  ],
+  "F7": [
+   "DROP",
+   "gaps.py` and `test_gaps_window_sql.py` are not in the change's file list."
+  ],
+  "F8": [
+   "DROP",
+   "the candle size is documented as recorded-not-asserted, and the missing bounds are on a path that already works."
+  ],
+  "F9": [
+   "DROP",
+   "file and function length against the ~300/~50-line guidance is a style point."
+  ]
+ },
+ "wall_seconds": 103.3,
+ "duration_seconds": 103.26826537493616,
+ "cost_usd": 0.03309991,
+ "effort": "xhigh",
+ "tool_calls_made": 21,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=623181, cached=541221, cache_write=81940, completion=20897, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `get_candlesticks` and `get_trades` build and serialize up to 75,000 records on the event-loop thread (kalshi_timeseries.py:125-126, 168-174), stalling every request.\nF2: KEEP \u2014 the field description says \"newest stored trade,\" but the value is the trades watermark, so clients misjudge freshness on quiet markets.\nF3: DROP \u2014 the flag's value is accurate, the description overreaches for trades stored before exclusion, and the finding itself frames the fix as a design call.\nF4: DROP \u2014 the duplicated membership test and literal key have no current wrong behavior and are guarded by the parity integration test.\nF5: DROP \u2014 `test_nested_field_set_is_exactly_what_candle_columns_describes` fails on a new column, so the flaw is only the docstring overclaim.\nF6: KEEP \u2014 the positional mapping has no test guard, so reordering `TRADE_COLUMNS` would silently serve swapped yes/no prices.\nF7: DROP \u2014 `gaps.py` and `test_gaps_window_sql.py` are not in the change's file list.\nF8: DROP \u2014 the candle size is documented as recorded-not-asserted, and the missing bounds are on a path that already works.\nF9: DROP \u2014 file and function length against the ~300/~50-line guidance is a style point.\nThis task's review-format section does not apply, so there is no verdict block. Here is the per-finding output the task requires:\n\nF1: KEEP \u2014 `get_candlesticks` and `get_trades` build and serialize up to 75,000 records on the event-loop thread (kalshi_timeseries.py:125-126, 168-174), stalling every request.\nF2: KEEP \u2014 the field description says \"newest stored trade,\" but the value is the trades watermark, so clients misjudge freshness on quiet markets.\nF3: DROP \u2014 the flag's value is accurate, the description overreaches for trades stored before exclusion, and the finding itself frames the fix as a design call.\nF4: DROP \u2014 the duplicated membership test and literal key have no current wrong behavior and are guarded by the parity integration test.\nF5: DROP \u2014 `test_nested_field_set_is_exactly_what_candle_columns_describes` fails on a new column, so the flaw is only the docstring overclaim.\nF6: KEEP \u2014 the positional mapping has no test guard, so reordering `TRADE_COLUMNS` would silently serve swapped yes/no prices.\nF7: DROP \u2014 `gaps.py` and `test_gaps_window_sql.py` are not in the change's file list.\nF8: DROP \u2014 the candle size is documented as recorded-not-asserted, and the missing bounds are on a path that already works.\nF9: DROP \u2014 file and function length against the ~300/~50-line guidance is a style point."
+}

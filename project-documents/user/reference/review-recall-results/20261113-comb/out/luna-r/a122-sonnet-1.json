@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Invalid launch fields can raise after journaling, leaving an unresolved entry that is later misclassified as vanished."
+  ],
+  "F2": [
+   "DROP",
+   "Exceeding the approximate file-size guideline and mixing concerns are refactoring suggestions, not defects requiring action before merge."
+  ],
+  "F3": [
+   "KEEP",
+   "A negative launch grace is accepted and makes launches overdue immediately instead of allowing the configured grace period."
+  ]
+ },
+ "wall_seconds": 32.8,
+ "duration_seconds": 32.78063533292152,
+ "cost_usd": 0.0038820900000000004,
+ "effort": null,
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=111888, cached=93769, cache_write=None, completion=2265, reasoning=1711)",
+ "raw_output": "F1: KEEP \u2014 Invalid launch fields can raise after journaling, leaving an unresolved entry that is later misclassified as vanished.\nF2: DROP \u2014 Exceeding the approximate file-size guideline and mixing concerns are refactoring suggestions, not defects requiring action before merge.\nF3: KEEP \u2014 A negative launch grace is accepted and makes launches overdue immediately instead of allowing the configured grace period.\nF1: KEEP \u2014 Invalid launch fields can raise after journaling, leaving an unresolved entry that is later misclassified as vanished.\nF2: DROP \u2014 Exceeding the approximate file-size guideline and mixing concerns are refactoring suggestions, not defects requiring action before merge.\nF3: KEEP \u2014 A negative launch grace is accepted and makes launches overdue immediately instead of allowing the configured grace period."
+}

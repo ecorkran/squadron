@@ -1,0 +1,28 @@
+{
+ "case": "u103",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Adding populated data never reruns range synchronization, leaving the existing Context range unapplied."
+  ],
+  "F2": [
+   "KEEP",
+   "Empty or cleared series still pass the counter guard, allowing invalid visible-range calls on an empty time scale."
+  ]
+ },
+ "wall_seconds": 26.1,
+ "duration_seconds": 26.100967834005132,
+ "cost_usd": 0.0289504,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=81200, cached=70784, cache_write=None, completion=104, reasoning=0)",
+ "raw_output": "F1: KEEP \u2014 Adding populated data never reruns range synchronization, leaving the existing Context range unapplied.\nF2: KEEP \u2014 Empty or cleared series still pass the counter guard, allowing invalid visible-range calls on an empty time scale.\nF1: KEEP \u2014 Adding populated data never reruns range synchronization, leaving the existing Context range unapplied.\nF2: KEEP \u2014 Empty or cleared series still pass the counter guard, allowing invalid visible-range calls on an empty time scale."
+}

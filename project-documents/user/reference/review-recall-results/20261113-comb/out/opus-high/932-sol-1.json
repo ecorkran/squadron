@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "If a task's start and notification both arrive before the original result, the ledger is already empty when that result comes in, so `_collect_turns` returns at line 252 without reading the continuation turn the CLI injects; the dispatch then returns early, before the parent's follow-up work finishes, which defeats the slice's purpose."
+  ],
+  "F2": [
+   "DROP",
+   "The leftover timer only fires after `pipeline.background_idle_timeout_s` (default 1800s) of complete silence during a continuation, which is effectively a stall; bounding it rather than hanging is consistent with the design, so the practical impact is negligible."
+  ]
+ },
+ "wall_seconds": 47.4,
+ "duration_seconds": 47.436930584022775,
+ "cost_usd": 0.2741569,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=224320, cached=204488, cache_write=19814, completion=3693, reasoning=None)",
+ "raw_output": "I've read both cited spots in `sdk_session.py` and `sdk_turns.py`. F1 is a real hole in the new wait logic. F2 only matters when a session goes silent for 30 minutes, which in practice means it has stalled.\n\nF1: KEEP \u2014 If a task's start and notification both arrive before the original result, the ledger is already empty when that result comes in, so `_collect_turns` returns at line 252 without reading the continuation turn the CLI injects; the dispatch then returns early, before the parent's follow-up work finishes, which defeats the slice's purpose.\nF2: DROP \u2014 The leftover timer only fires after `pipeline.background_idle_timeout_s` (default 1800s) of complete silence during a continuation, which is effectively a stall; bounding it rather than hanging is consistent with the design, so the practical impact is negligible.\nF1: KEEP \u2014 If a task starts and finishes before the original result, the ledger is already empty when that result arrives, so `_collect_turns` (sdk_session.py:252) returns early and misses the continuation turn the CLI injects.\nF2: DROP \u2014 The timer that stays on only fires after `pipeline.background_idle_timeout_s` (default 1800s) of total silence during a continuation, which in practice is a stall, so ending the wait there causes little harm."
+}

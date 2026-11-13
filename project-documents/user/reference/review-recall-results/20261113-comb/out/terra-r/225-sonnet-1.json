@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "All current enum members are covered; the risk requires a future enum change."
+  ],
+  "F2": [
+   "DROP",
+   "The current exit-code mapping works; the concern is about code organization."
+  ],
+  "F3": [
+   "DROP",
+   "Function length and helper placement are maintainability concerns, not demonstrated defects."
+  ]
+ },
+ "wall_seconds": 8.2,
+ "duration_seconds": 8.18756291596219,
+ "cost_usd": 0.0158539,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=45159, cached=32458, cache_write=None, completion=306, reasoning=57)",
+ "raw_output": "F1: DROP \u2014 All current enum members are covered; the risk requires a future enum change.\nF2: DROP \u2014 The current exit-code mapping works; the concern is about code organization.\nF3: DROP \u2014 Function length and helper placement are maintainability concerns, not demonstrated defects.\nF1: DROP \u2014 All current enum members are covered; the risk requires a future enum change.\nF2: DROP \u2014 The current exit-code mapping works; the concern is about code organization.\nF3: DROP \u2014 Function length and helper placement are maintainability concerns, not demonstrated defects."
+}

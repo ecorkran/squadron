@@ -1,0 +1,58 @@
+{
+ "case": "197",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "list_slices` and `evaluate_each_source` can raise unwrapped cf errors during item resume and exit 1, which the exit contract defines as FLAGGED; `except OSError` also catches a missing-pipeline `FileNotFoundError` from `load_pipeline` and reports it as \"cannot write the batch report\"."
+  ],
+  "F2": [
+   "DROP",
+   "report.json` is written only by squadron's own `to_json`, so a non-object item or missing keys means hand-corruption; this is hardening against input that won't arrive."
+  ],
+  "F3": [
+   "DROP",
+   "a temp dotfile can be left behind only when a write already failed, and that failure is already logged and re-raised; the leftover name doesn't end in `.json`, so run listing won't pick it up; low value."
+  ],
+  "F4": [
+   "DROP",
+   "the slice design says `cf list tasks --json` provides `completed` and `total`, and the zero defaults are never used in production because `list_tasks` is the only place that builds a `TaskEntry`."
+  ],
+  "F5": [
+   "DROP",
+   "loose `Any` typing is a type-checking and style point, not a runtime defect."
+  ],
+  "F6": [
+   "DROP",
+   "the deferred circular import works; this is a structure preference with no wrong behavior."
+  ],
+  "F7": [
+   "DROP",
+   "the lock's scope (commits and cf moves) follows the design, and the claim about `dispatch` writing files is admittedly untraced speculation."
+  ],
+  "F8": [
+   "DROP",
+   "the path is built twice but both copies match today, and a future mismatch would fail explicitly as REJECTED; DRY nit."
+  ]
+ },
+ "wall_seconds": 54.1,
+ "duration_seconds": 54.14327562507242,
+ "cost_usd": 0.379484,
+ "effort": "high",
+ "tool_calls_made": 12,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=332007, cached=303950, cache_write=28037, completion=4654, reasoning=None)",
+ "raw_output": "I've checked F1\u2013F6 against the code and am now looking at the run-lock classification for F7, then the report path for F8.\nF1: KEEP \u2014 `list_slices` and `evaluate_each_source` can raise unwrapped cf errors during item resume and exit 1, which the exit contract defines as FLAGGED; `except OSError` also catches a missing-pipeline `FileNotFoundError` from `load_pipeline` and reports it as \"cannot write the batch report\".\nF2: DROP \u2014 `report.json` is written only by squadron's own `to_json`, so a non-object item or missing keys means hand-corruption; this is hardening against input that won't arrive.\nF3: DROP \u2014 a temp dotfile can be left behind only when a write already failed, and that failure is already logged and re-raised; the leftover name doesn't end in `.json`, so run listing won't pick it up; low value.\nF4: DROP \u2014 the slice design says `cf list tasks --json` provides `completed` and `total`, and the zero defaults are never used in production because `list_tasks` is the only place that builds a `TaskEntry`.\nF5: DROP \u2014 loose `Any` typing is a type-checking and style point, not a runtime defect.\nF6: DROP \u2014 the deferred circular import works; this is a structure preference with no wrong behavior.\nF7: DROP \u2014 the lock's scope (commits and cf moves) follows the design, and the claim about `dispatch` writing files is admittedly untraced speculation.\nF8: DROP \u2014 the path is built twice but both copies match today, and a future mismatch would fail explicitly as REJECTED; DRY nit.\nF1: KEEP \u2014 `list_slices` and `evaluate_each_source` can raise unwrapped cf errors during item resume and exit 1, which the exit contract defines as FLAGGED; `except OSError` also catches a missing-pipeline `FileNotFoundError` from `load_pipeline` and reports it as \"cannot write the batch report\".\nF2: DROP \u2014 `report.json` is written only by squadron's own `to_json`, so a non-object item or missing keys means hand-corruption; this is hardening against input that won't arrive.\nF3: DROP \u2014 a temp dotfile can be left behind only when a write already failed, and that failure is already logged and re-raised; the leftover name doesn't end in `.json`, so run listing won't pick it up; low value.\nF4: DROP \u2014 the slice design says `cf list tasks --json` provides `completed` and `total`, and the zero defaults are never used in production because `list_tasks` is the only place that builds a `TaskEntry`.\nF5: DROP \u2014 loose `Any` typing is a type-checking and style point, not a runtime defect.\nF6: DROP \u2014 the deferred circular import works; this is a structure preference with no wrong behavior.\nF7: DROP \u2014 the lock's scope (commits and cf moves) follows the design, and the claim about `dispatch` writing files is admittedly untraced speculation.\nF8: DROP \u2014 the path is built twice but both copies match today, and a future mismatch would fail explicitly as REJECTED; DRY nit."
+}

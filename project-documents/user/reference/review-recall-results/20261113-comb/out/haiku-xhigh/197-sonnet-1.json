@@ -1,0 +1,43 @@
+{
+ "case": "197",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "the failed-write path leaves the `delete=False` temp file in the runs dir, and the existing test that patches `Path.replace` never checks for it."
+  ],
+  "F2": [
+   "DROP",
+   "the function-local import and suppressions are a layering and style issue with no wrong behavior."
+  ],
+  "F3": [
+   "DROP",
+   "the blocking calls run inside a single `asyncio.run` task with no other coroutine on the loop to starve, so there is no observable effect today."
+  ],
+  "F4": [
+   "DROP",
+   "the only source that sets `flag_reason` without a kind is `_cf_slices_needing_tasks`, and `NOT_READY` is that source's designed kind (D2), so nothing is misclassified."
+  ],
+  "F5": [
+   "DROP",
+   "_check_record` validates that the record exists and the selected item carries the same index, so the `StopIteration` cannot fire."
+  ]
+ },
+ "wall_seconds": 55.2,
+ "duration_seconds": 55.15795266604982,
+ "cost_usd": 0.025327040000000002,
+ "effort": "xhigh",
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=518222, cached=445554, cache_write=72652, completion=10673, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 the failed-write path leaves the `delete=False` temp file in the runs dir, and the existing test that patches `Path.replace` never checks for it.\nF2: DROP \u2014 the function-local import and suppressions are a layering and style issue with no wrong behavior.\nF3: DROP \u2014 the blocking calls run inside a single `asyncio.run` task with no other coroutine on the loop to starve, so there is no observable effect today.\nF4: DROP \u2014 the only source that sets `flag_reason` without a kind is `_cf_slices_needing_tasks`, and `NOT_READY` is that source's designed kind (D2), so nothing is misclassified.\nF5: DROP \u2014 `_check_record` validates that the record exists and the selected item carries the same index, so the `StopIteration` cannot fire.\nF1: KEEP \u2014 the failed-write path leaves the `delete=False` temp file in the runs dir, and the existing test that patches `Path.replace` never checks for it.\nF2: DROP \u2014 the function-local import and suppressions are a layering and style issue with no wrong behavior.\nF3: DROP \u2014 the blocking calls run inside a single `asyncio.run` task with no other coroutine on the loop to starve, so there is no observable effect today.\nF4: DROP \u2014 the only source that sets `flag_reason` without a kind is `_cf_slices_needing_tasks`, and `NOT_READY` is that source's designed kind (D2), so nothing is misclassified.\nF5: DROP \u2014 `_check_record` validates that the record exists and the selected item carries the same index, so the `StopIteration` cannot fire."
+}

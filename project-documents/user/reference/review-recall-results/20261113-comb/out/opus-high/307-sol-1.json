@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The purchase never touches the `tbbo` tier: its range is already held and the slice rules out changes to it. A tier gap would therefore be there before the purchase, so the unchanged-health check already covers this case."
+  ],
+  "F2": [
+   "KEEP",
+   "Confirmed: both products want `tbbo` and `ohlcv-1m`, and both are volume families. The statistics coverage tags each volume check with its family, but `over_sessions` drops that tag and the names are grouped by product only. So an `over` failure for one family lists the other family's sessions."
+  ]
+ },
+ "wall_seconds": 36.9,
+ "duration_seconds": 36.912975708954036,
+ "cost_usd": 0.2901051,
+ "effort": "high",
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=248614, cached=225052, cache_write=23544, completion=2792, reasoning=None)",
+ "raw_output": "I've read both cited files and the slice design. Verdicts:\n\nF1: DROP \u2014 The purchase never touches the `tbbo` tier: its range is already held and the slice rules out changes to it. A tier gap would therefore be there before the purchase, so the unchanged-health check already covers this case.\nF2: KEEP \u2014 Confirmed: both products want `tbbo` and `ohlcv-1m`, and both are volume families. The statistics coverage tags each volume check with its family, but `over_sessions` drops that tag and the names are grouped by product only. So an `over` failure for one family lists the other family's sessions.\nF1: DROP \u2014 The purchase never touches the `tbbo` tier (already held, and the slice rules out changing it), so any tier gap is there before the purchase and the unchanged-health check already covers it.\nF2: KEEP \u2014 Both `tbbo` and `ohlcv-1m` are volume families for each product, but `over_sessions` drops each check's family and groups names by product only, so an `over` failure for one family lists the other family's sessions."
+}

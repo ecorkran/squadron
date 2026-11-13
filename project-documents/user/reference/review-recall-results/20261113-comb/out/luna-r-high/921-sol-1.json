@@ -1,0 +1,43 @@
+{
+ "case": "921",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2",
+  "F4": "sol/1/3",
+  "F5": "sol/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "run()` blocks until `mt-run` returns, so polling cannot stop the pass when the trailing-completion line appears."
+  ],
+  "F2": [
+   "KEEP",
+   "The sudoers rule runs an operator-checkout script as root, allowing anyone who can modify it to execute arbitrary root code."
+  ],
+  "F3": [
+   "KEEP",
+   "The `mt-*` argument wildcard can match additional whitespace-separated units, extending the grant to unrelated services."
+  ],
+  "F4": [
+   "KEEP",
+   "The truncated-day index is not passed into the phase, and the seed gate can also skip truncated days behind the gap frontier."
+  ],
+  "F5": [
+   "KEEP",
+   "Repair and subprocess output bypass `say()`, so acceptance details and failure evidence are absent from the saved log."
+  ]
+ },
+ "wall_seconds": 21.9,
+ "duration_seconds": 21.90893358318135,
+ "cost_usd": 0.00354843,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=52656, cached=27963, cache_write=None, completion=1599, reasoning=1177)",
+ "raw_output": "F1: KEEP \u2014 `run()` blocks until `mt-run` returns, so polling cannot stop the pass when the trailing-completion line appears.\nF2: KEEP \u2014 The sudoers rule runs an operator-checkout script as root, allowing anyone who can modify it to execute arbitrary root code.\nF3: KEEP \u2014 The `mt-*` argument wildcard can match additional whitespace-separated units, extending the grant to unrelated services.\nF4: KEEP \u2014 The truncated-day index is not passed into the phase, and the seed gate can also skip truncated days behind the gap frontier.\nF5: KEEP \u2014 Repair and subprocess output bypass `say()`, so acceptance details and failure evidence are absent from the saved log.\nF1: KEEP \u2014 `run()` blocks until `mt-run` returns, so polling cannot stop the pass when the trailing-completion line appears.\nF2: KEEP \u2014 The sudoers rule runs an operator-checkout script as root, allowing anyone who can modify it to execute arbitrary root code.\nF3: KEEP \u2014 The `mt-*` wildcard can match additional whitespace-separated units, extending the grant to unrelated services.\nF4: KEEP \u2014 The seed gate can start at the gap frontier, leaving truncated days behind it excluded from the repair window.\nF5: KEEP \u2014 Repair and subprocess output bypass `say()`, so acceptance details and failure evidence are absent from the saved log."
+}

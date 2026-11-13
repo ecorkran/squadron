@@ -1,0 +1,38 @@
+{
+ "case": "175",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Re-reading profile configuration after a provider failure can mask the original error and discard its usage record."
+  ],
+  "F2": [
+   "KEEP",
+   "Run totals silently omit paid findings-addressed judge calls, overstating their coverage."
+  ],
+  "F3": [
+   "DROP",
+   "Repeated pricing warnings are noisy, but the duplicated resolution does not itself change the cost."
+  ],
+  "F4": [
+   "DROP",
+   "The duplicated literal is a maintainability issue, not a current behavioral defect."
+  ]
+ },
+ "wall_seconds": 35.9,
+ "duration_seconds": 35.8435775837861,
+ "cost_usd": 0.06760775,
+ "effort": null,
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=192143, cached=139295, cache_write=None, completion=1559, reasoning=954)",
+ "raw_output": "F1: KEEP \u2014 Re-reading profile configuration after a provider failure can mask the original error and discard its usage record.\nF2: KEEP \u2014 Run totals silently omit paid findings-addressed judge calls, overstating their coverage.\nF3: DROP \u2014 Repeated pricing warnings are noisy, but the duplicated resolution does not itself change the cost.\nF4: DROP \u2014 The duplicated literal is a maintainability issue, not a current behavioral defect.\nF1: KEEP \u2014 Re-reading profile configuration after a provider failure can mask the original error and discard its usage record.\nF2: KEEP \u2014 Run totals silently omit paid findings-addressed judge calls, overstating their coverage.\nF3: DROP \u2014 Repeated pricing warnings are noisy, but the duplicated resolution does not itself change the cost.\nF4: DROP \u2014 The duplicated literal is a maintainability issue, not a current behavioral defect."
+}

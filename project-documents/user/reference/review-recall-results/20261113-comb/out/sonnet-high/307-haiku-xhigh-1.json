@@ -1,0 +1,48 @@
+{
+ "case": "307",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "fetch_estimate` returns the top-level payload, but the summary sits under `phases[name==\"purchase\"].summary`, so `_check_scope` raises `KeyError: 'wanted_days'` on real output."
+  ],
+  "F2": [
+   "KEEP",
+   "a non-empty estimate-only plan always has verdict `estimate_only`, and `judge_estimate` accepts only `allowed`, so the full run can never reach BUY."
+  ],
+  "F3": [
+   "KEEP",
+   "with `check_ceilings=False` the judge returns BUY before looking at `reasons`, so a space shortfall is reported as a buy and the PM is told to set ceilings."
+  ],
+  "F4": [
+   "DROP",
+   "the name attribution and the `.get` default are cosmetic. The failure still fires from the cross-tier count."
+  ],
+  "F5": [
+   "DROP",
+   "slice` is an operator-supplied argument to a manually run script, so a path-traversal value is not a realistic input."
+  ],
+  "F6": [
+   "DROP",
+   "the mypy scope is a documented repo-wide convention that predates this change, and the new scripts don't change it."
+  ]
+ },
+ "wall_seconds": 42.3,
+ "duration_seconds": 42.30044708400965,
+ "cost_usd": 0.21476009999999998,
+ "effort": "high",
+ "tool_calls_made": 16,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=241405, cached=205018, cache_write=36369, completion=4757, reasoning=None)",
+ "raw_output": "I've checked all six findings against the code. Here's where they stand.\n\nF1 and F2 are real: the estimate payload nests the summary under `phases`, and a real estimate's verdict is `estimate_only`, which the judge never accepts. F3 is also real, since `--estimate` returns BUY for any non-empty plan, including one refused for archive space.\n\nF1: KEEP \u2014 `fetch_estimate` returns the top-level payload, but the summary sits under `phases[name==\"purchase\"].summary`, so `_check_scope` raises `KeyError: 'wanted_days'` on real output.\nF2: KEEP \u2014 a non-empty estimate-only plan always has verdict `estimate_only`, and `judge_estimate` accepts only `allowed`, so the full run can never reach BUY.\nF3: KEEP \u2014 with `check_ceilings=False` the judge returns BUY before looking at `reasons`, so a space shortfall is reported as a buy and the PM is told to set ceilings.\nF4: DROP \u2014 the name attribution and the `.get` default are cosmetic. The failure still fires from the cross-tier count.\nF5: DROP \u2014 `--slice` is an operator-supplied argument to a manually run script, so a path-traversal value is not a realistic input.\nF6: DROP \u2014 the mypy scope is a documented repo-wide convention that predates this change, and the new scripts don't change it.\nF1: KEEP \u2014 `fetch_estimate` returns the top-level payload, but the summary is under `phases[name==\"purchase\"].summary`, so `_check_scope` raises `KeyError: 'wanted_days'` on real output.\nF2: KEEP \u2014 a non-empty estimate-only plan always has verdict `estimate_only` (`spend_guard.py:266-267`), and `judge_estimate` accepts only `allowed`, so the full run can never reach BUY.\nF3: KEEP \u2014 with `check_ceilings=False` the judge returns BUY before it reads `reasons`, so an archive-space shortfall is reported as a buy and the PM is told to set ceilings.\nF4: DROP \u2014 the name attribution and the `.get` default only affect which session names are printed, and the failure still fires from the cross-tier count.\nF5: DROP \u2014 `--slice` is an operator-supplied argument to a manually run script, so a path-traversal value is not a realistic input.\nF6: DROP \u2014 the mypy scope is a documented repo-wide convention that predates this change, and the new scripts don't alter it."
+}

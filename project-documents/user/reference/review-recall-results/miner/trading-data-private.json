@@ -1,0 +1,738 @@
+[
+ {
+  "repo": "trading-data-private",
+  "fix": "6839b55966",
+  "date": "2026-07-08",
+  "subject": "fix: seed minute gaps when gap table is empty but bars exist",
+  "introducers": [
+   "c9033e13a5"
+  ],
+  "review": null,
+  "head": "c9033e13a5",
+  "base": "c9033e13a5^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "c74858e784",
+  "date": "2026-05-26",
+  "subject": "fix: catch PoolTimeout explicitly; demote to WARNING without traceback",
+  "introducers": [
+   "b375854f9f"
+  ],
+  "review": null,
+  "head": "b375854f9f",
+  "base": "b375854f9f^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "411b6a6eee",
+  "date": "2026-05-18",
+  "subject": "fix: retry HTTP timeouts in eodhd_get; quiet transient-failure logging",
+  "introducers": [
+   "17b459a455",
+   "45b4c58660"
+  ],
+  "review": null,
+  "head": "17b459a455",
+  "base": "17b459a455^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "3396a0c0b5",
+  "date": "2026-05-18",
+  "subject": "fix: treat EODHD 404 as EMPTY and catch ProviderResponseError per-symbol",
+  "introducers": [
+   "17b459a455",
+   "8f0ca078f8",
+   "9de12c2b63",
+   "b375854f9f",
+   "bab2bccae4"
+  ],
+  "review": null,
+  "head": "17b459a455",
+  "base": "17b459a455^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "5c0f4a0094",
+  "date": "2026-05-14",
+  "subject": "fix: use added_date as lower bound for universe-filtered equity_universe",
+  "introducers": [
+   "b2623bcbe5"
+  ],
+  "review": null,
+  "head": "b2623bcbe5",
+  "base": "b2623bcbe5^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "7d2dbe2202",
+  "date": "2026-05-13",
+  "subject": "fix: use %s placeholders and NOT delisted_at_eodhd AS active for psycopg3",
+  "introducers": [
+   "f8b49a3c3a"
+  ],
+  "review": null,
+  "head": "f8b49a3c3a",
+  "base": "f8b49a3c3a^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "38ee7e92f7",
+  "date": "2026-05-10",
+  "subject": "fix(daemon): display oldest\u2192newest chunk end dates, not chunk starts",
+  "introducers": [
+   "4e6289e611",
+   "a45862e1f1",
+   "c9033e13a5",
+   "d9240e84b9",
+   "e311614cd7"
+  ],
+  "review": null,
+  "head": "4e6289e611",
+  "base": "4e6289e611^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "4e6289e611",
+  "date": "2026-05-10",
+  "subject": "fix(daemon): show first-chunk outcome in verbose output, not last",
+  "introducers": [
+   "d9240e84b9"
+  ],
+  "review": null,
+  "head": "d9240e84b9",
+  "base": "d9240e84b9^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "e311614cd7",
+  "date": "2026-05-10",
+  "subject": "fix(daemon): release seed connection before chunk loop to prevent idle-in-transaction lock hold",
+  "introducers": [
+   "0b54315662",
+   "1f7dc637e9",
+   "a45862e1f1",
+   "b375854f9f",
+   "c9033e13a5",
+   "d9240e84b9"
+  ],
+  "review": null,
+  "head": "c9033e13a5",
+  "base": "c9033e13a5^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "c9033e13a5",
+  "date": "2026-05-10",
+  "subject": "fix(daemon): skip minute gap seed for fully-covered symbols",
+  "introducers": [
+   "1f7dc637e9",
+   "d9240e84b9"
+  ],
+  "review": null,
+  "head": "d9240e84b9",
+  "base": "d9240e84b9^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "3705d21853",
+  "date": "2026-05-10",
+  "subject": "fix(daemon): raise minute read timeout 30s\u219260s to handle large intraday chunks",
+  "introducers": [
+   "b375854f9f"
+  ],
+  "review": null,
+  "head": "b375854f9f",
+  "base": "b375854f9f^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "5f6131b0b5",
+  "date": "2026-05-09",
+  "subject": "fix(cli): use 5-day window for pull current-check, not staleness threshold",
+  "introducers": [
+   "0183b63e2a"
+  ],
+  "review": null,
+  "head": "0183b63e2a",
+  "base": "0183b63e2a^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "0183b63e2a",
+  "date": "2026-05-09",
+  "subject": "fix(cli): skip already-current symbols in mt data pull",
+  "introducers": [
+   "17b459a455",
+   "4b5c23a2df",
+   "9fbc863707"
+  ],
+  "review": null,
+  "head": "9fbc863707",
+  "base": "9fbc863707^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "caca017d42",
+  "date": "2026-05-09",
+  "subject": "fix(daemon): align AcquisitionStateRepository with post-152 schema",
+  "introducers": [
+   "dfbaa74605"
+  ],
+  "review": null,
+  "head": "dfbaa74605",
+  "base": "dfbaa74605^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "48b26c53f2",
+  "date": "2026-05-09",
+  "subject": "fix: migration 036 psycopg3 + hermetic cold-start test (slice 156)",
+  "introducers": [
+   "cdc219e6b3"
+  ],
+  "review": null,
+  "head": "cdc219e6b3",
+  "base": "cdc219e6b3^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "bcef4208e4",
+  "date": "2026-05-09",
+  "subject": "fix(cli): caggs status \u2014 handle BC sentinel from cagg_watermark",
+  "introducers": [
+   "34e759fc5f"
+  ],
+  "review": null,
+  "head": "34e759fc5f",
+  "base": "34e759fc5f^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "5305edd7cc",
+  "date": "2026-05-07",
+  "subject": "fix(cli): caggs refresh \u2014 cast NULL params to timestamptz",
+  "introducers": [
+   "17b459a455"
+  ],
+  "review": null,
+  "head": "17b459a455",
+  "base": "17b459a455^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "0b54315662",
+  "date": "2026-05-07",
+  "subject": "fix: minute backfill convergence \u2014 shrink gap rows; tolerate trailing weekends",
+  "introducers": [
+   "1f7dc637e9",
+   "b375854f9f"
+  ],
+  "review": null,
+  "head": "1f7dc637e9",
+  "base": "1f7dc637e9^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "a0a234e837",
+  "date": "2026-05-06",
+  "subject": "fix: STEADY_STATE mode requires symbols to have bar data, not just no UNKNOWN gaps",
+  "introducers": [
+   "17b459a455"
+  ],
+  "review": null,
+  "head": "17b459a455",
+  "base": "17b459a455^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "1f7dc637e9",
+  "date": "2026-05-06",
+  "subject": "fix: commit minute bars per-chunk so Ctrl-C does not discard fetched data",
+  "introducers": [
+   "45b4c58660",
+   "6aa370a1d6",
+   "b375854f9f",
+   "bab2bccae4",
+   "e317dd31b7"
+  ],
+  "review": null,
+  "head": "6aa370a1d6",
+  "base": "6aa370a1d6^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "66c92889ab",
+  "date": "2026-05-06",
+  "subject": "fix: accept None volume from EODHD; treat as 0 not malformed",
+  "introducers": [
+   "b375854f9f"
+  ],
+  "review": null,
+  "head": "b375854f9f",
+  "base": "b375854f9f^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "6aa370a1d6",
+  "date": "2026-05-06",
+  "subject": "fix: seed minute data_gaps with UNKNOWN on cold symbol",
+  "introducers": [
+   "bab2bccae4"
+  ],
+  "review": null,
+  "head": "bab2bccae4",
+  "base": "bab2bccae4^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "4b5c23a2df",
+  "date": "2026-05-06",
+  "subject": "fix: case-fold symbols to upper; wire QuotaBucket for pull fetch; fix empty-gap false-success",
+  "introducers": [
+   "17b459a455"
+  ],
+  "review": null,
+  "head": "17b459a455",
+  "base": "17b459a455^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "92281e1841",
+  "date": "2026-05-05",
+  "subject": "fix: route all CA reads/writes to TimescaleDB; remove MarketDB remnants",
+  "introducers": [
+   "0ecec8f203",
+   "1aad3f70cb",
+   "350a65ed0f",
+   "3ca11e7de6",
+   "5b528f74f7",
+   "8c53089e3c",
+   "8cedd85f71",
+   "9c300c0f84",
+   "cd2ca88808"
+  ],
+  "review": null,
+  "head": "8cedd85f71",
+  "base": "8cedd85f71^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "424c54e0c7",
+  "date": "2026-05-05",
+  "subject": "fix: use list (not tuple) for = ANY param; psycopg3 serializes tuples as row composites",
+  "introducers": [
+   "7395b1cf3a",
+   "e8fe0194a4"
+  ],
+  "review": null,
+  "head": "7395b1cf3a",
+  "base": "7395b1cf3a^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "7395b1cf3a",
+  "date": "2026-05-05",
+  "subject": "fix: cast array param to text[] in gap selector ANY clause",
+  "introducers": [
+   "762e14a931"
+  ],
+  "review": null,
+  "head": "762e14a931",
+  "base": "762e14a931^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "762e14a931",
+  "date": "2026-05-05",
+  "subject": "fix: use = ANY(%s) instead of IN %s for tuple param in gap selector",
+  "introducers": [
+   "e8fe0194a4"
+  ],
+  "review": null,
+  "head": "e8fe0194a4",
+  "base": "e8fe0194a4^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "fcc0e26005",
+  "date": "2026-05-05",
+  "subject": "fix: split cagg DDL into per-view execute() calls; fix refresh policy offsets and jobs column name",
+  "introducers": [
+   "b5a1a3291e",
+   "cdc219e6b3"
+  ],
+  "review": null,
+  "head": "b5a1a3291e",
+  "base": "b5a1a3291e^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "02170e710b",
+  "date": "2026-05-05",
+  "subject": "fix: use raw psycopg.connect for autocommit migrations; fix unit tests",
+  "introducers": [
+   "b5a1a3291e"
+  ],
+  "review": null,
+  "head": "b5a1a3291e",
+  "base": "b5a1a3291e^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "b5a1a3291e",
+  "date": "2026-05-05",
+  "subject": "fix: run cagg CREATE migrations with autocommit (timescale restriction)",
+  "introducers": [
+   "5d835e1e67",
+   "fef5583e3c"
+  ],
+  "review": null,
+  "head": "5d835e1e67",
+  "base": "5d835e1e67^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "934c8f7c58",
+  "date": "2026-05-05",
+  "subject": "fix(status): distinguish no-match-for-filter from unknown symbol in --symbol output",
+  "introducers": [
+   "f878371273"
+  ],
+  "review": null,
+  "head": "f878371273",
+  "base": "f878371273^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "cff985bccb",
+  "date": "2026-05-03",
+  "subject": "fix(146): make --daily/--minute exclusive selectors, not toggles",
+  "introducers": [
+   "3ca11e7de6"
+  ],
+  "review": null,
+  "head": "3ca11e7de6",
+  "base": "3ca11e7de6^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "d2286873a2",
+  "date": "2026-05-03",
+  "subject": "fix(145): use last completed trading session as target_end, not yesterday calendar date",
+  "introducers": [
+   "8f0ca078f8"
+  ],
+  "review": null,
+  "head": "8f0ca078f8",
+  "base": "8f0ca078f8^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "8f0ca078f8",
+  "date": "2026-05-03",
+  "subject": "fix(145): set daily target_end to yesterday \u2014 EODHD returns prior close, not today's",
+  "introducers": [
+   "b375854f9f",
+   "bab2bccae4"
+  ],
+  "review": null,
+  "head": "bab2bccae4",
+  "base": "bab2bccae4^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "c201b08815",
+  "date": "2026-05-03",
+  "subject": "fix(145): remove double advisory_lock \u2014 caller holds it, gap functions don't re-acquire",
+  "introducers": [
+   "4338d07778"
+  ],
+  "review": null,
+  "head": "4338d07778",
+  "base": "4338d07778^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "920f1fc098",
+  "date": "2026-05-03",
+  "subject": "fix(145): correct DAEMON_LOCK_TIMEOUT to '30s' (PostgreSQL unit syntax)",
+  "introducers": [
+   "6845cfaf0b"
+  ],
+  "review": null,
+  "head": "6845cfaf0b",
+  "base": "6845cfaf0b^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "13224df2b1",
+  "date": "2026-05-01",
+  "subject": "fix(142): defer target_end_ts to slice 144 (no trading_calendar table)",
+  "introducers": [
+   "6153da6030",
+   "dfbaa74605"
+  ],
+  "review": null,
+  "head": "6153da6030",
+  "base": "6153da6030^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "6153da6030",
+  "date": "2026-05-01",
+  "subject": "fix(142): tolerate missing daily_ohlcv until slice 143 creates it",
+  "introducers": [
+   "dfbaa74605"
+  ],
+  "review": null,
+  "head": "dfbaa74605",
+  "base": "dfbaa74605^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "e51726d168",
+  "date": "2026-05-01",
+  "subject": "fix(141): suppress venue-mapper warning for known non-US exchanges",
+  "introducers": [
+   "35f1d53fac"
+  ],
+  "review": null,
+  "head": "35f1d53fac",
+  "base": "35f1d53fac^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "ddf90108c7",
+  "date": "2026-05-01",
+  "subject": "fix(141): handle Finnhub 429 via x-ratelimit-reset, not blind retries",
+  "introducers": [
+   "35f1d53fac",
+   "a7b087fe3f"
+  ],
+  "review": null,
+  "head": "a7b087fe3f",
+  "base": "a7b087fe3f^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "a7b087fe3f",
+  "date": "2026-05-01",
+  "subject": "fix(141): drop OTC tiers and non-US ADRs; correct token bucket and narrow exception catch",
+  "introducers": [
+   "35f1d53fac",
+   "877ae8b6ad",
+   "c38a4bc2eb"
+  ],
+  "review": null,
+  "head": "877ae8b6ad",
+  "base": "877ae8b6ad^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "58c2a3ad0a",
+  "date": "2026-04-29",
+  "subject": "fix(daemon): use last_attempt_ts for work-queue freshness, not last_success_ts",
+  "introducers": [
+   "7140374fd4",
+   "86d8354d5f",
+   "d36df0e34c",
+   "d51e844c25",
+   "fa40bce77d"
+  ],
+  "review": null,
+  "head": "d36df0e34c",
+  "base": "d36df0e34c^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "0341d0e47f",
+  "date": "2026-04-29",
+  "subject": "fix(cli): provider-filter status output; scope slice 129 universe swap",
+  "introducers": [
+   "7140374fd4",
+   "d51e844c25"
+  ],
+  "review": null,
+  "head": "7140374fd4",
+  "base": "7140374fd4^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "b3d23bc75e",
+  "date": "2026-04-26",
+  "subject": "fix(data): enforce (symbol, time) uniqueness on minute_ohlcv",
+  "introducers": [
+   "3b46828c40"
+  ],
+  "review": null,
+  "head": "3b46828c40",
+  "base": "3b46828c40^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "fdeed85301",
+  "date": "2026-04-26",
+  "subject": "fix(data): coerce EODHD null-volume bars to volume=0",
+  "introducers": [
+   "c75b67f039"
+  ],
+  "review": null,
+  "head": "c75b67f039",
+  "base": "c75b67f039^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "4863bc1e54",
+  "date": "2026-04-25",
+  "subject": "fix(schema): extract _schema_migrations_table_exists to resolve None subscript",
+  "introducers": [
+   "fef5583e3c"
+  ],
+  "review": null,
+  "head": "fef5583e3c",
+  "base": "fef5583e3c^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "d36df0e34c",
+  "date": "2026-04-18",
+  "subject": "fix: resolve pre-existing test failures and status.py KeyError",
+  "introducers": [
+   "5b528f74f7",
+   "fa40bce77d"
+  ],
+  "review": null,
+  "head": "fa40bce77d",
+  "base": "fa40bce77d^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "af717bf178",
+  "date": "2026-04-13",
+  "subject": "fix: raise on AV API errors in minute provider; use instrument registry for update-all",
+  "introducers": [
+   "4597eaf14d",
+   "7d766b6c1e",
+   "851c729370"
+  ],
+  "review": null,
+  "head": "4597eaf14d",
+  "base": "4597eaf14d^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "e57c3576cb",
+  "date": "2026-04-13",
+  "subject": "fix: wire month and extended_hours params in AlphaVantage minute provider",
+  "introducers": [
+   "7d766b6c1e"
+  ],
+  "review": null,
+  "head": "7d766b6c1e",
+  "base": "7d766b6c1e^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "1649428429",
+  "date": "2026-04-13",
+  "subject": "fix: release rate limiter lock during sleep window",
+  "introducers": [
+   "289eff4486",
+   "637dbced69",
+   "98d1d02167"
+  ],
+  "review": null,
+  "head": "637dbced69",
+  "base": "637dbced69^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "27aba92e32",
+  "date": "2026-04-13",
+  "subject": "fix: raise MIN_DAYS to 5 to tolerate weekends and single-day holidays",
+  "introducers": [
+   "fa40bce77d"
+  ],
+  "review": null,
+  "head": "fa40bce77d",
+  "base": "fa40bce77d^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "385441f088",
+  "date": "2026-04-11",
+  "subject": "fix: resolve verification bugs found during slice 122 phase 6",
+  "introducers": [
+   "311eec92d7",
+   "fa40bce77d"
+  ],
+  "review": null,
+  "head": "fa40bce77d",
+  "base": "fa40bce77d^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "487f613832",
+  "date": "2026-04-03",
+  "subject": "fix: report only newly inserted rows in seed counts",
+  "introducers": [
+   "92cb970922",
+   "bbd28408a3",
+   "fc8f32be2d"
+  ],
+  "review": null,
+  "head": "fc8f32be2d",
+  "base": "fc8f32be2d^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "27d7b3bf13",
+  "date": "2026-04-03",
+  "subject": "fix: cast NULL-check params to text in list_instruments to resolve IndeterminateDatatype",
+  "introducers": [
+   "bbd28408a3"
+  ],
+  "review": null,
+  "head": "bbd28408a3",
+  "base": "bbd28408a3^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "675275dedc",
+  "date": "2026-04-02",
+  "subject": "fix: escape apostrophes in holiday name SQL generation",
+  "introducers": [
+   "41bcaf9506"
+  ],
+  "review": null,
+  "head": "41bcaf9506",
+  "base": "41bcaf9506^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "415931c626",
+  "date": "2026-04-02",
+  "subject": "fix: use autocommit in TimescaleDB pool configure to avoid INTRANS state",
+  "introducers": [
+   "3b46828c40"
+  ],
+  "review": null,
+  "head": "3b46828c40",
+  "base": "3b46828c40^"
+ },
+ {
+  "repo": "trading-data-private",
+  "fix": "b7f1d80315",
+  "date": "2026-03-29",
+  "subject": "fix: validate config values against allowed choices",
+  "introducers": [
+   "0173ebc9b5",
+   "8e2a90a6fd"
+  ],
+  "review": null,
+  "head": "8e2a90a6fd",
+  "base": "8e2a90a6fd^"
+ }
+]

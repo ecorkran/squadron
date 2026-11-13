@@ -1,0 +1,48 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Teardown catches the extra `destroy()` error and preserves the original mount failure, so no behavior is lost."
+  ],
+  "F2": [
+   "DROP",
+   "The latest error remains surfaced, and aligning the documentation and test name is a low-value clarification."
+  ],
+  "F3": [
+   "DROP",
+   "The referenced tokens are defined and loaded by the app; the fallback only affects a missing stylesheet or token."
+  ],
+  "F4": [
+   "DROP",
+   "The subscriptions have intentional lifecycle coverage, and their inert callbacks do not cause incorrect behavior."
+  ],
+  "F5": [
+   "DROP",
+   "File length and lint suppression are maintainability concerns, not defects requiring a pre-merge fix."
+  ],
+  "F6": [
+   "KEEP",
+   "Adding the first series does not trigger the range effect, so an already-set range stays unapplied until it changes."
+  ]
+ },
+ "wall_seconds": 131.2,
+ "duration_seconds": 131.1984845418483,
+ "cost_usd": 0.00819265,
+ "effort": "high",
+ "tool_calls_made": 19,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=162925, cached=140465, cache_write=None, completion=9084, reasoning=8273)",
+ "raw_output": "F1: DROP \u2014 Teardown catches the extra `destroy()` error and preserves the original mount failure, so no behavior is lost.\nF2: DROP \u2014 The latest error remains surfaced, and aligning the documentation and test name is a low-value clarification.\nF3: DROP \u2014 The referenced tokens are defined and loaded by the app; the fallback only affects a missing stylesheet or token.\nF4: DROP \u2014 The subscriptions have intentional lifecycle coverage, and their inert callbacks do not cause incorrect behavior.\nF5: DROP \u2014 File length and lint suppression are maintainability concerns, not defects requiring a pre-merge fix.\nF6: KEEP \u2014 Adding the first series does not trigger the range effect, so an already-set range stays unapplied until it changes.\nF1: DROP \u2014 Teardown catches the extra `destroy()` error and preserves the original mount failure in state.\nF2: DROP \u2014 The latest error is surfaced at runtime; the documentation and test-name mismatch is low value.\nF3: DROP \u2014 The referenced tokens are defined and loaded by the app, so the fallback only applies if that stylesheet or a token is missing.\nF4: DROP \u2014 The subscriptions are intentional lifecycle scaffolding with tests; their inert callbacks cause no incorrect behavior.\nF5: DROP \u2014 File length and lint suppression are maintainability concerns, not defects requiring a pre-merge fix.\nF6: KEEP \u2014 Adding the first series does not trigger the range effect, so an already-set range remains unapplied until it changes."
+}

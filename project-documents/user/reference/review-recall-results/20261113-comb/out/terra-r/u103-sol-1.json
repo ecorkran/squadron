@@ -1,0 +1,28 @@
+{
+ "case": "u103",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Adding data does not rerun the range effect, so the existing Context range remains unapplied."
+  ],
+  "F2": [
+   "KEEP",
+   "Empty or cleared series still satisfy the count guard, allowing range calls against an empty time scale."
+  ]
+ },
+ "wall_seconds": 12.1,
+ "duration_seconds": 12.110061625018716,
+ "cost_usd": 0.03148265,
+ "effort": null,
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=83208, cached=56453, cache_write=None, completion=381, reasoning=46)",
+ "raw_output": "F1: KEEP \u2014 Adding data does not rerun the range effect, so the existing Context range remains unapplied.\nF2: KEEP \u2014 Empty or cleared series still satisfy the count guard, allowing range calls against an empty time scale.\nF1: KEEP \u2014 Adding data does not rerun the range effect, so the existing Context range remains unapplied.\nF2: KEEP \u2014 Empty or cleared series still satisfy the count guard, allowing range calls against an empty time scale."
+}

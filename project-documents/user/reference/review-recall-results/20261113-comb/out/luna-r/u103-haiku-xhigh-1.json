@@ -1,0 +1,68 @@
+{
+ "case": "u103",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8",
+  "F10": "haiku-xhigh/1/9"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Adding a series mutates only a ref, so the range effect will not run until another dependency changes."
+  ],
+  "F2": [
+   "DROP",
+   "Returning `undefined` when the chart is not live is documented behavior of the facade, not an unhandled failure."
+  ],
+  "F3": [
+   "DROP",
+   "The theme defines the tokens and is imported by the app; omission intentionally uses the provider\u2019s documented optional-style defaults."
+  ],
+  "F4": [
+   "DROP",
+   "File and function length are guidance, and the teardown closure runs only after its captured variables are initialized."
+  ],
+  "F5": [
+   "DROP",
+   "This is a future-proofing and lint-scope concern, not a current behavioral defect."
+  ],
+  "F6": [
+   "DROP",
+   "The indicator effect is an explicit placeholder and its lack of behavior does not break a supported path."
+  ],
+  "F7": [
+   "DROP",
+   "The callbacks have no observable work even without the guards, so the test\u2019s weakness does not establish a runtime defect."
+  ],
+  "F8": [
+   "DROP",
+   "The duplicated test helpers are a DRY concern, not a defect requiring action before merge."
+  ],
+  "F9": [
+   "DROP",
+   "The spy\u2019s weaker typing reduces contract checking but does not cause incorrect runtime behavior."
+  ],
+  "F10": [
+   "DROP",
+   "The initial border-box measurement is corrected by the observer, with no demonstrated persistent or user-visible sizing failure."
+  ]
+ },
+ "wall_seconds": 44.9,
+ "duration_seconds": 44.91744420886971,
+ "cost_usd": 0.00482357,
+ "effort": null,
+ "tool_calls_made": 19,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=101592, cached=75807, cache_write=None, completion=2974, reasoning=1990)",
+ "raw_output": "F1: KEEP \u2014 Adding a series mutates only a ref, so the range effect will not run until another dependency changes.\nF2: DROP \u2014 Returning `undefined` when the chart is not live is documented behavior of the facade, not an unhandled failure.\nF3: DROP \u2014 The theme defines the tokens and is imported by the app; omission intentionally uses the provider\u2019s documented optional-style defaults.\nF4: DROP \u2014 File and function length are guidance, and the teardown closure runs only after its captured variables are initialized.\nF5: DROP \u2014 This is a future-proofing and lint-scope concern, not a current behavioral defect.\nF6: DROP \u2014 The indicator effect is an explicit placeholder and its lack of behavior does not break a supported path.\nF7: DROP \u2014 The callbacks have no observable work even without the guards, so the test\u2019s weakness does not establish a runtime defect.\nF8: DROP \u2014 The duplicated test helpers are a DRY concern, not a defect requiring action before merge.\nF9: DROP \u2014 The spy\u2019s weaker typing reduces contract checking but does not cause incorrect runtime behavior.\nF10: DROP \u2014 The initial border-box measurement is corrected by the observer, with no demonstrated persistent or user-visible sizing failure.\nF1: KEEP \u2014 Adding a series mutates only a ref, so the range effect will not run until another dependency changes.\nF2: DROP \u2014 Returning `undefined` when the chart is not live is documented behavior of the facade, not an unhandled failure.\nF3: DROP \u2014 The theme defines the tokens and is imported by the app; omission intentionally uses the provider\u2019s documented optional-style defaults.\nF4: DROP \u2014 File and function length are guidance, and the teardown closure runs only after its captured variables are initialized.\nF5: DROP \u2014 This is a future-proofing and lint-scope concern, not a current behavioral defect.\nF6: DROP \u2014 The indicator effect is an explicit placeholder and its lack of behavior does not break a supported path.\nF7: DROP \u2014 The callbacks have no observable work even without the guards, so the test\u2019s weakness does not establish a runtime defect.\nF8: DROP \u2014 The duplicated test helpers are a DRY concern, not a defect requiring action before merge.\nF9: DROP \u2014 The spy\u2019s weaker typing reduces contract checking but does not cause incorrect runtime behavior.\nF10: DROP \u2014 The initial border-box measurement is corrected by the observer, with no demonstrated persistent or user-visible sizing failure."
+}

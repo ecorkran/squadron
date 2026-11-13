@@ -1,0 +1,43 @@
+{
+ "case": "932",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Production templates pass through the loader, which resolves null settings sources."
+  ],
+  "F2": [
+   "KEEP",
+   "Invalid timeout values can prematurely stop background work and return partial results."
+  ],
+  "F3": [
+   "DROP",
+   "The synchronous reads have no demonstrated meaningful performance impact."
+  ],
+  "F4": [
+   "DROP",
+   "A missing load test alone does not establish a behavior defect."
+  ],
+  "F5": [
+   "DROP",
+   "File length and extraction opportunities are maintainability concerns, not behavior defects."
+  ]
+ },
+ "wall_seconds": 12.4,
+ "duration_seconds": 12.363647457910702,
+ "cost_usd": 0.05930345,
+ "effort": null,
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=161383, cached=110389, cache_write=None, completion=558, reasoning=141)",
+ "raw_output": "F1: DROP \u2014 Production templates pass through the loader, which resolves null settings sources.\nF2: KEEP \u2014 Invalid timeout values can prematurely stop background work and return partial results.\nF3: DROP \u2014 The synchronous reads have no demonstrated meaningful performance impact.\nF4: DROP \u2014 A missing load test alone does not establish a behavior defect.\nF5: DROP \u2014 File length and extraction opportunities are maintainability concerns, not behavior defects.\nF1: DROP \u2014 Production templates pass through the loader, which resolves null settings sources.\nF2: KEEP \u2014 Invalid timeout values can prematurely stop background work and return partial results.\nF3: DROP \u2014 The synchronous reads have no demonstrated meaningful performance impact.\nF4: DROP \u2014 A missing load test alone does not establish a behavior defect.\nF5: DROP \u2014 File length and extraction opportunities are maintainability concerns, not behavior defects."
+}

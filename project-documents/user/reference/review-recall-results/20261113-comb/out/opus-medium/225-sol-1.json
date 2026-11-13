@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The store connection is autocommit (`store_context.py:160`), so `ledger_totals` and `raw_counts` each read from their own snapshot. An ingest that commits between the two reads makes raw rows appear without their ledger rows, and coverage falsely reports a mismatch and exits 3."
+  ],
+  "F2": [
+   "KEEP",
+   "raw_counts` counts every `tick_trade` row in the time window, ignoring dataset, symbols and unit (even though `tick_trade` has a `unit_id`). Rows from other request shapes or products in the same session window therefore show up as mismatches against this shape's ledger."
+  ],
+  "F3": [
+   "DROP",
+   "The work grows with sessions in the range times instruments, which is small in practice. The 100,000-key probe is not a realistic load, so this has no real performance effect."
+  ]
+ },
+ "wall_seconds": 24.5,
+ "duration_seconds": 24.478866999968886,
+ "cost_usd": 0.2857298,
+ "effort": "medium",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=108460, cached=79861, cache_write=28587, completion=2012, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The store connection is autocommit (`store_context.py:160`), so `ledger_totals` and `raw_counts` each read from their own snapshot. An ingest that commits between the two reads makes raw rows appear without their ledger rows, and coverage falsely reports a mismatch and exits 3.\nF2: KEEP \u2014 `raw_counts` counts every `tick_trade` row in the time window, ignoring dataset, symbols and unit (even though `tick_trade` has a `unit_id`). Rows from other request shapes or products in the same session window therefore show up as mismatches against this shape's ledger.\nF3: DROP \u2014 The work grows with sessions in the range times instruments, which is small in practice. The 100,000-key probe is not a realistic load, so this has no real performance effect.\nF1: KEEP \u2014 The store connection is autocommit (`store_context.py:160`), so `ledger_totals` and `raw_counts` each read from their own snapshot, and an ingest committing between them makes coverage falsely report a mismatch and exit 3.\nF2: KEEP \u2014 `raw_counts` counts every `tick_trade` row in the time window, ignoring dataset, symbols and `unit_id`, so other request shapes in the same session window show up as false mismatches.\nF3: DROP \u2014 The work grows with sessions in the range times instruments, which is small in practice, so the 100,000-key probe is not a realistic load and this has no real performance effect."
+}

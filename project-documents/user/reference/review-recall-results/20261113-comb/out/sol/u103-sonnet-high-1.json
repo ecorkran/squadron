@@ -1,0 +1,48 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The secondary teardown error is caught and logged; the original failure remains exposed."
+  ],
+  "F2": [
+   "DROP",
+   "This is a documentation/test-name mismatch, not a demonstrated behavioral defect."
+  ],
+  "F3": [
+   "DROP",
+   "All referenced tokens exist and are loaded; this guards against hypothetical future stylesheet regressions."
+  ],
+  "F4": [
+   "DROP",
+   "The inert subscriptions and indicator observer are explicitly documented scaffolding."
+  ],
+  "F5": [
+   "DROP",
+   "File length and lint-suppression scope do not establish a runtime defect."
+  ],
+  "F6": [
+   "KEEP",
+   "Adding the first series never retriggers range translation, leaving the viewport inconsistent with Context."
+  ]
+ },
+ "wall_seconds": 31.7,
+ "duration_seconds": 31.673638332867995,
+ "cost_usd": 0.034794,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=87806, cached=75520, cache_write=None, completion=267, reasoning=18)",
+ "raw_output": "F1: DROP \u2014 The secondary teardown error is caught and logged; the original failure remains exposed.\nF2: DROP \u2014 This is a documentation/test-name mismatch, not a demonstrated behavioral defect.\nF3: DROP \u2014 All referenced tokens exist and are loaded; this guards against hypothetical future stylesheet regressions.\nF4: DROP \u2014 The inert subscriptions and indicator observer are explicitly documented scaffolding.\nF5: DROP \u2014 File length and lint-suppression scope do not establish a runtime defect.\nF6: KEEP \u2014 Adding the first series never retriggers range translation, leaving the viewport inconsistent with Context.\nF1: DROP \u2014 The secondary teardown error is caught; the original failure remains logged and exposed.\nF2: DROP \u2014 This is a documentation/test-name mismatch without a demonstrated behavioral defect.\nF3: DROP \u2014 All required tokens exist and are loaded; missing-token handling is hypothetical hardening.\nF4: DROP \u2014 The inert subscriptions and indicator observer are explicitly documented scaffolding.\nF5: DROP \u2014 File length and lint-suppression scope do not demonstrate a functional defect.\nF6: KEEP \u2014 Adding the first series does not retrigger range translation, leaving the viewport inconsistent with Context."
+}

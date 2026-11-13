@@ -1,0 +1,58 @@
+{
+ "case": "921",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The blocking mt-run invocation prevents journal polling from stopping the minute pass after its trailing phase."
+  ],
+  "F2": [
+   "KEEP",
+   "Nonzero verify exits and verdict-free error output can incorrectly produce CUTOVER COMPLETE."
+  ],
+  "F3": [
+   "KEEP",
+   "The wildcard mt-run grant permits arbitrary production CLI commands as root, exceeding the intended limited privileges."
+  ],
+  "F4": [
+   "KEEP",
+   "The repair interpreter command lacks a NOPASSWD rule, so verification polls can require renewed interactive authentication."
+  ],
+  "F5": [
+   "DROP",
+   "Bounded retries for sessions lacking bars are intentional, and the finding demonstrates no lost data or incorrect coverage acceptance."
+  ],
+  "F6": [
+   "KEEP",
+   "The unnormalized never-run timestamp can raise DataError, and finish-time comparison can incorrectly declare concurrently ingested bars materialized."
+  ],
+  "F7": [
+   "KEEP",
+   "Repair verdicts bypass the log writer, leaving the promised cutover evidence file without its acceptance results."
+  ],
+  "F8": [
+   "DROP",
+   "The duplication is a maintainability concern, not an independently actionable behavioral defect."
+  ]
+ },
+ "wall_seconds": 41.0,
+ "duration_seconds": 40.74268858321011,
+ "cost_usd": 0.1272412,
+ "effort": null,
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=247699, cached=200372, cache_write=None, completion=1255, reasoning=494)",
+ "raw_output": "F1: KEEP \u2014 The blocking mt-run invocation prevents journal polling from stopping the minute pass after its trailing phase.\nF2: KEEP \u2014 Nonzero verify exits and verdict-free error output can incorrectly produce CUTOVER COMPLETE.\nF3: KEEP \u2014 The wildcard mt-run grant permits arbitrary production CLI commands as root, exceeding the intended limited privileges.\nF4: KEEP \u2014 The repair interpreter command lacks a NOPASSWD rule, so verification polls can require renewed interactive authentication.\nF5: DROP \u2014 Bounded retries for sessions lacking bars are intentional, and the finding demonstrates no lost data or incorrect coverage acceptance.\nF6: KEEP \u2014 The unnormalized never-run timestamp can raise DataError, and finish-time comparison can incorrectly declare concurrently ingested bars materialized.\nF7: KEEP \u2014 Repair verdicts bypass the log writer, leaving the promised cutover evidence file without its acceptance results.\nF8: DROP \u2014 The duplication is a maintainability concern, not an independently actionable behavioral defect.\nF1: KEEP \u2014 The blocking mt-run invocation prevents journal polling from stopping the minute pass after its trailing phase.\nF2: KEEP \u2014 Nonzero verify exits and verdict-free error output can incorrectly produce CUTOVER COMPLETE.\nF3: KEEP \u2014 The wildcard mt-run grant permits arbitrary production CLI commands as root, exceeding the intended limited privileges.\nF4: KEEP \u2014 The repair interpreter command lacks a NOPASSWD rule, so verification polls can require renewed interactive authentication.\nF5: DROP \u2014 Bounded retries for sessions lacking bars are intentional, and the finding demonstrates no lost data or incorrect coverage acceptance.\nF6: KEEP \u2014 Unnormalized never-run timestamps can crash verification, while finish-time comparison can incorrectly declare concurrently ingested bars materialized.\nF7: KEEP \u2014 Repair verdicts bypass the log writer, leaving the promised cutover evidence file without acceptance results.\nF8: DROP \u2014 The duplication is a maintainability concern rather than an independent behavioral defect."
+}

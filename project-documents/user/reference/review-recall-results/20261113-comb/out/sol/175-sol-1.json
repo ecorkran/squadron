@@ -1,0 +1,33 @@
+{
+ "case": "175",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "State persistence omits prior_rounds, so run totals exclude earlier loop iterations\u2019 usage."
+  ],
+  "F2": [
+   "KEEP",
+   "Folding copies only the first part\u2019s usage metadata, undercounting split-review spend and tokens."
+  ],
+  "F3": [
+   "KEEP",
+   "Failed parts lack input outputs, causing folding to raise and discard captured usage and the original error."
+  ]
+ },
+ "wall_seconds": 30.6,
+ "duration_seconds": 30.59531483403407,
+ "cost_usd": 0.0184352,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=86095, cached=81792, cache_write=None, completion=165, reasoning=13)",
+ "raw_output": "F1: KEEP \u2014 State persistence omits prior_rounds, so run totals exclude earlier loop iterations\u2019 usage.\nF2: KEEP \u2014 Folding copies only the first part\u2019s usage metadata, undercounting split-review spend and tokens.\nF3: KEEP \u2014 Failed parts lack input outputs, causing folding to raise and discard captured usage and the original error.\nF1: KEEP \u2014 State persistence omits prior_rounds, so run totals exclude earlier loop iterations\u2019 usage.\nF2: KEEP \u2014 Folding retains only the first part\u2019s usage metadata, undercounting split-review usage and cost.\nF3: KEEP \u2014 Failed parts lack input outputs, causing folding to raise and discard captured usage and the original error."
+}

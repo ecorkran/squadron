@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The duplicated validation is low-value refactoring and does not cause incorrect behavior."
+  ],
+  "F2": [
+   "DROP",
+   "The project config uses mypy only on `src`, so the claimed strict-pyright test errors are not established."
+  ]
+ },
+ "wall_seconds": 17.5,
+ "duration_seconds": 17.483597582904622,
+ "cost_usd": 0.00259315,
+ "effort": null,
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=55297, cached=38945, cache_write=None, completion=1137, reasoning=838)",
+ "raw_output": "F1: DROP \u2014 The duplicated validation is low-value refactoring and does not cause incorrect behavior.\nF2: DROP \u2014 The project config uses mypy only on `src`, so the claimed strict-pyright test errors are not established.\nF1: DROP \u2014 The duplicate validation is low-value refactoring and does not cause incorrect behavior.\nF2: DROP \u2014 The project config uses mypy rather than strict pyright and does not include tests, so the claimed errors are not established."
+}

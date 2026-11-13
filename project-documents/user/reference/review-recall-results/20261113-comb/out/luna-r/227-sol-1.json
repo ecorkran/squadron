@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "On rerun, the old cron lines retain the added arguments while only the new lines are normalized, so the comparison falsely fails."
+  ],
+  "F2": [
+   "KEEP",
+   "A failed health command can leave an older clean summary as the last log line, allowing the health gate to pass on stale evidence."
+  ],
+  "F3": [
+   "KEEP",
+   "An `OSError` inside a step escapes `run_steps`, so `main()` never writes the promised failure report."
+  ]
+ },
+ "wall_seconds": 23.2,
+ "duration_seconds": 23.21191787510179,
+ "cost_usd": 0.00329791,
+ "effort": null,
+ "tool_calls_made": 9,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=75757, cached=55581, cache_write=None, completion=1449, reasoning=994)",
+ "raw_output": "F1: KEEP \u2014 On rerun, the old cron lines retain the added arguments while only the new lines are normalized, so the comparison falsely fails.\nF2: KEEP \u2014 A failed health command can leave an older clean summary as the last log line, allowing the health gate to pass on stale evidence.\nF3: KEEP \u2014 An `OSError` inside a step escapes `run_steps`, so `main()` never writes the promised failure report.\nF1: KEEP \u2014 On rerun, old cron lines retain the added arguments while only new lines are normalized, so the comparison falsely fails.\nF2: KEEP \u2014 A failed health command can leave an older clean summary as the last log line, allowing the gate to pass on stale evidence.\nF3: KEEP \u2014 An `OSError` inside a step escapes `run_steps`, preventing `main()` from writing the promised failure report."
+}

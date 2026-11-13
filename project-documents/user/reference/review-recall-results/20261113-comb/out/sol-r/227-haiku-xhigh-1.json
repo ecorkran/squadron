@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Missing or empty health logs raise uncaught exceptions after cutover changes, bypassing the promised failure report."
+  ],
+  "F2": [
+   "DROP",
+   "The test weaknesses do not establish a separate runtime defect beyond F1."
+  ],
+  "F3": [
+   "DROP",
+   "The replication SQL is valid; missing database-backed coverage alone is not a defect."
+  ]
+ },
+ "wall_seconds": 10.0,
+ "duration_seconds": 10.015641500009224,
+ "cost_usd": 0.056629500000000006,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=79869, cached=55615, cache_write=None, completion=256, reasoning=14)",
+ "raw_output": "F1: KEEP \u2014 Missing or empty health logs raise uncaught exceptions after cutover changes, bypassing the promised failure report.\nF2: DROP \u2014 The test weaknesses do not establish a separate runtime defect beyond F1.\nF3: DROP \u2014 The replication SQL is valid; missing database-backed coverage alone is not a defect.\nF1: KEEP \u2014 Missing or empty health logs raise uncaught exceptions after cutover changes, bypassing the promised failure report.\nF2: DROP \u2014 The test weaknesses do not establish a separate behavioral defect beyond F1.\nF3: DROP \u2014 The replication SQL is valid; missing database-backed coverage alone is not a defect."
+}

@@ -1,0 +1,58 @@
+{
+ "case": "921",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "fire_unit_until` calls `mt-run` through a blocking `subprocess.run`, and `mt-run` loops until the unbounded minute unit ends, so the stop-on-trailing-line check is never reached in time."
+  ],
+  "F2": [
+   "KEEP",
+   "Success is only the absence of `FAIL` or `[WAIT]`, so a refused scan or a traceback with no verdict still reports `CUTOVER COMPLETE`."
+  ],
+  "F3": [
+   "KEEP",
+   "mt-run *` runs the production `mt` CLI as root with any arguments, `cat` exposes the whole env file, and the header's \"nothing wider\" claim is false."
+  ],
+  "F4": [
+   "KEEP",
+   "No sudoers rule matches `/opt/manta-trading/.venv/bin/python`, so each repair and verify call prompts for a password during the long verify polls."
+  ],
+  "F5": [
+   "KEEP",
+   "A legitimately empty session in a chunk makes the whole chunk PARTIAL, which becomes UNKNOWN, is re-requested until it reaches RETRY_EXHAUSTED, and no test covers it."
+  ],
+  "F6": [
+   "KEEP",
+   "The probe compares bar time against the refresh finish rather than its start, so a stale cagg can pass as fresh, and it skips the `-infinity` normalization that makes a never-succeeded job raise."
+  ],
+  "F7": [
+   "KEEP",
+   "_repair` prints verify output directly instead of through `say`, so the log the script calls its full narration omits the `[PASS]`/`[FAIL]` verdicts it is meant to keep."
+  ],
+  "F8": [
+   "DROP",
+   "The duplicated `sudo -v` and print lines are a maintainability lapse with no effect on behaviour."
+  ]
+ },
+ "wall_seconds": 130.2,
+ "duration_seconds": 130.1871329168789,
+ "cost_usd": 0.08581168,
+ "effort": "xhigh",
+ "tool_calls_made": 19,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=540677, cached=434870, cache_write=105791, completion=26033, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `fire_unit_until` calls `mt-run` through a blocking `subprocess.run`, and `mt-run` loops until the unbounded minute unit ends, so the stop-on-trailing-line check is never reached in time.\nF2: KEEP \u2014 Success is only the absence of `FAIL` or `[WAIT]`, so a refused scan or a traceback with no verdict still reports `CUTOVER COMPLETE`.\nF3: KEEP \u2014 `mt-run *` runs the production `mt` CLI as root with any arguments, `cat` exposes the whole env file, and the header's \"nothing wider\" claim is false.\nF4: KEEP \u2014 No sudoers rule matches `/opt/manta-trading/.venv/bin/python`, so each repair and verify call prompts for a password during the long verify polls.\nF5: KEEP \u2014 A legitimately empty session in a chunk makes the whole chunk PARTIAL, which becomes UNKNOWN, is re-requested until it reaches RETRY_EXHAUSTED, and no test covers it.\nF6: KEEP \u2014 The probe compares bar time against the refresh finish rather than its start, so a stale cagg can pass as fresh, and it skips the `-infinity` normalization that makes a never-succeeded job raise.\nF7: KEEP \u2014 `_repair` prints verify output directly instead of through `say`, so the log the script calls its full narration omits the `[PASS]`/`[FAIL]` verdicts it is meant to keep.\nF8: DROP \u2014 The duplicated `sudo -v` and print lines are a maintainability lapse with no effect on behaviour.\nF1: KEEP \u2014 `fire_unit_until` calls `mt-run` through a blocking `subprocess.run`, and `mt-run` loops until the unbounded minute unit ends, so the stop-on-trailing-line check is never reached in time.\nF2: KEEP \u2014 Success is only the absence of `FAIL` or `[WAIT]`, so a refused scan or a traceback with no verdict still reports `CUTOVER COMPLETE`.\nF3: KEEP \u2014 `mt-run *` runs the production `mt` CLI as root with any arguments, `cat` exposes the whole env file, and the header's \"nothing wider\" claim is false.\nF4: KEEP \u2014 No sudoers rule matches `/opt/manta-trading/.venv/bin/python`, so each repair and verify call prompts for a password during the long verify polls.\nF5: KEEP \u2014 A legitimately empty session in a chunk makes the whole chunk PARTIAL, which becomes UNKNOWN, is re-requested until it reaches RETRY_EXHAUSTED, and no test covers it.\nF6: KEEP \u2014 The probe compares bar time against the refresh finish rather than its start, so a stale cagg can pass as fresh, and it skips the `-infinity` normalization that makes a never-succeeded job raise.\nF7: KEEP \u2014 `_repair` prints verify output directly instead of through `say`, so the log the script calls its full narration omits the `[PASS]`/`[FAIL]` verdicts it is meant to keep.\nF8: DROP \u2014 The duplicated `sudo -v` and print lines are a maintainability lapse with no effect on behaviour."
+}

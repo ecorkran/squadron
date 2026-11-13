@@ -1,0 +1,43 @@
+{
+ "case": "197",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "_write_atomic` creates the temp file with `delete=False` and its `except OSError` branch only logs and re-raises, so a failed write or rename leaves a hidden temp file behind."
+  ],
+  "F2": [
+   "DROP",
+   "The function-local import avoids a cycle and is a layering and style point, not wrong behavior."
+  ],
+  "F3": [
+   "DROP",
+   "The CLI runs a single task under `asyncio.run`, so blocking calls starve nothing and the finding concedes low impact."
+  ],
+  "F4": [
+   "DROP",
+   "The not-ready default is deliberate and tested. The in-repo source in `sources.py` sets `flag_reason` for a design-review flag without a kind, and \"not ready\" is the correct kind for that case."
+  ],
+  "F5": [
+   "DROP",
+   "ItemRerun.replace` and `_outcome` only look up an item index that `_validate` already checked against the report, so the `StopIteration` path is not reachable."
+  ]
+ },
+ "wall_seconds": 26.6,
+ "duration_seconds": 26.613173208897933,
+ "cost_usd": 0.1479983,
+ "effort": "high",
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=179168, cached=153343, cache_write=25807, completion=2854, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `_write_atomic` creates the temp file with `delete=False` and its `except OSError` branch only logs and re-raises, so a failed write or rename leaves a hidden temp file behind.\nF2: DROP \u2014 The function-local import avoids a cycle and is a layering and style point, not wrong behavior.\nF3: DROP \u2014 The CLI runs a single task under `asyncio.run`, so blocking calls starve nothing and the finding concedes low impact.\nF4: DROP \u2014 The not-ready default is deliberate and tested. The in-repo source in `sources.py` sets `flag_reason` for a design-review flag without a kind, and \"not ready\" is the correct kind for that case.\nF5: DROP \u2014 `ItemRerun.replace` and `_outcome` only look up an item index that `_validate` already checked against the report, so the `StopIteration` path is not reachable.\nF1: KEEP \u2014 `_write_atomic` creates the temp file with `delete=False` and its `except OSError` branch only logs and re-raises, so a failed write or rename leaves a hidden temp file behind.\nF2: DROP \u2014 The function-local import avoids a cycle and is a layering and style point, not wrong behavior.\nF3: DROP \u2014 The CLI runs a single task under `asyncio.run`, so the blocking calls starve nothing and the finding concedes the impact is low.\nF4: DROP \u2014 The not-ready default is deliberate and tested, and the in-repo design-review flag in `sources.py` sets `flag_reason` without a kind, so \"not ready\" is the correct kind there.\nF5: DROP \u2014 `_check_record` in `_validate` rejects a request whose index has no record in the report, so the `next(...)` lookups in `ItemRerun.replace` and `_reconcile` can't raise `StopIteration`."
+}

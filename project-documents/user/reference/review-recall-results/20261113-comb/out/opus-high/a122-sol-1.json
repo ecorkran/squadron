@@ -1,0 +1,38 @@
+{
+ "case": "a122",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2",
+  "F4": "sol/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The observer is shared across all projects, and lines 108-111 drop every entry not in the current project's list, so ticking project B wipes A's poll times, overdue markers and standing faults."
+  ],
+  "F2": [
+   "KEEP",
+   "wait, no: DROP \u2014 The budget is a soft check between calls, and the journal-then-spawn order is deliberate; a check between the commit and `Popen` would leave a journaled-but-unlaunched entry, which is worse than overrunning slightly."
+  ],
+  "F3": [
+   "KEEP",
+   "After a `PollFailure` on an unconfirmed launch, the overdue marker is not set and `_still_overdue` never replays `_faulted`, so between polls the run looks recovered and `_close_recovered` closes the escalation; this is the flapping the confirmed path explicitly prevents."
+  ],
+  "F4": [
+   "KEEP",
+   "_tick_project` returns `True` on every unexpected exception even when `escalate` writes nothing, and `ResidentProcess._loop` only waits when no work is reported, so a persistent exception spins in a tight loop logging errors."
+  ]
+ },
+ "wall_seconds": 25.7,
+ "duration_seconds": 25.662071709055454,
+ "cost_usd": 0.21200019999999997,
+ "effort": "high",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=126935, cached=108730, cache_write=18193, completion=2186, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The observer is shared across all projects, and lines 108-111 drop every entry not in the current project's list, so ticking project B wipes A's poll times, overdue markers and standing faults.\nF2: KEEP \u2014 wait, no: DROP \u2014 The budget is a soft check between calls, and the journal-then-spawn order is deliberate; a check between the commit and `Popen` would leave a journaled-but-unlaunched entry, which is worse than overrunning slightly.\nF3: KEEP \u2014 After a `PollFailure` on an unconfirmed launch, the overdue marker is not set and `_still_overdue` never replays `_faulted`, so between polls the run looks recovered and `_close_recovered` closes the escalation; this is the flapping the confirmed path explicitly prevents.\nF4: KEEP \u2014 `_tick_project` returns `True` on every unexpected exception even when `escalate` writes nothing, and `ResidentProcess._loop` only waits when no work is reported, so a persistent exception spins in a tight loop logging errors.\nF1: KEEP \u2014 Every project shares one observer, and lines 108-111 drop all entries outside the current project, so ticking another project wipes the first project's poll times, overdue markers and standing faults.\nF2: DROP \u2014 The budget is a soft check between calls, and journaling before spawning is deliberate; checking again after the commit would leave a journaled entry with no launch, which is worse than a slight overrun.\nF3: KEEP \u2014 After a `PollFailure` the unconfirmed path never marks the entry overdue, and `_still_overdue` does not replay `_faulted`, so between polls the fault disappears and `_close_recovered` closes the escalation early.\nF4: KEEP \u2014 `_tick_project` returns `True` after every unexpected exception even when `escalate` writes nothing, and `ResidentProcess._loop` only waits when no work is reported, so a persistent exception spins in a tight loop that logs an error each time."
+}

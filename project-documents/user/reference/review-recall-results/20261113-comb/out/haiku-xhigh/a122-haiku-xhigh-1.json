@@ -1,0 +1,63 @@
+{
+ "case": "a122",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "observe()` rebuilds its poll, overdue and fault maps from only the calling project's entries, and every project's tick calls it, so each project's call wipes the others' poll times."
+  ],
+  "F2": [
+   "DROP",
+   "a missing load test is a coverage gap, not a defect in the changed code; the defect it would catch is F1, which is already kept."
+  ],
+  "F3": [
+   "KEEP",
+   "the unconfirmed path never replays `_faulted`, so `_close_recovered` closes `run_observation_failed` on the tick after a poll failure and it reopens at the next poll."
+  ],
+  "F4": [
+   "KEEP",
+   "the store returns an open row unchanged, so a second run's fault in the same kind is silently dropped and the escalation keeps stale payload."
+  ],
+  "F5": [
+   "KEEP",
+   "the re-raise branch in `tenant.py` does not call `logger.exception`, which the Python rules require and the slice's own task doc states."
+  ],
+  "F6": [
+   "DROP",
+   "the broad catch is a deliberate, documented per-project isolation that logs and escalates rather than swallowing; the finding is a rule-wording question, not a wrong-behavior defect."
+  ],
+  "F7": [
+   "DROP",
+   "the three `pipeline`/`params` definitions carry identical values, so this is a maintainability tidy-up with no current wrong behavior."
+  ],
+  "F8": [
+   "DROP",
+   "LaunchTracker.confirm` is only used by tests, and production confirmation through `_confirm` works, so the issue is dead code rather than a defect."
+  ],
+  "F9": [
+   "DROP",
+   "the stale module docstring is a documentation issue only."
+  ]
+ },
+ "wall_seconds": 89.5,
+ "duration_seconds": 89.53257691697218,
+ "cost_usd": 0.02357165,
+ "effort": "xhigh",
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=186336, cached=127305, cache_write=59023, completion=18672, reasoning=None)",
+ "raw_output": "I'll start with the code cited in F1, F3, and F8, since they share the observer and launch-tracker state.\nF1, F3, F4, F5, F8 and F9 are checked against the code I've read so far. Next I'll verify the callers, the store dedup, the duplicated parameter keys, and the load-test directory.\nF1: KEEP \u2014 `observe()` rebuilds its poll, overdue and fault maps from only the calling project's entries, and every project's tick calls it, so each project's call wipes the others' poll times.\nF2: DROP \u2014 a missing load test is a coverage gap, not a defect in the changed code; the defect it would catch is F1, which is already kept.\nF3: KEEP \u2014 the unconfirmed path never replays `_faulted`, so `_close_recovered` closes `run_observation_failed` on the tick after a poll failure and it reopens at the next poll.\nF4: KEEP \u2014 the store returns an open row unchanged, so a second run's fault in the same kind is silently dropped and the escalation keeps stale payload.\nF5: KEEP \u2014 the re-raise branch in `tenant.py` does not call `logger.exception`, which the Python rules require and the slice's own task doc states.\nF6: DROP \u2014 the broad catch is a deliberate, documented per-project isolation that logs and escalates rather than swallowing; the finding is a rule-wording question, not a wrong-behavior defect.\nF7: DROP \u2014 the three `pipeline`/`params` definitions carry identical values, so this is a maintainability tidy-up with no current wrong behavior.\nF8: DROP \u2014 `LaunchTracker.confirm` is only used by tests, and production confirmation through `_confirm` works, so the issue is dead code rather than a defect.\nF9: DROP \u2014 the stale module docstring is a documentation issue only.\nF1: KEEP \u2014 `observe()` rebuilds its poll, overdue and fault maps from only the calling project's entries, so each project's call wipes the others' poll times and every run is polled every tick.\nF2: DROP \u2014 a missing load test is a coverage gap, not a defect in the changed code; the defect it would catch is F1, which is already kept.\nF3: KEEP \u2014 the unconfirmed path never replays `_faulted`, so `_close_recovered` closes `run_observation_failed` on the next tick and it reopens at the next poll.\nF4: KEEP \u2014 the store returns an open row unchanged, so a second run's fault of the same kind is silently dropped and the escalation keeps stale payload.\nF5: KEEP \u2014 the re-raise branch in `tenant.py` does not call `logger.exception`, which the Python rules require before a re-raise.\nF6: DROP \u2014 the broad catch is a deliberate, documented per-project isolation that logs and escalates rather than swallowing; the finding is a rule-wording question, not a wrong-behavior defect.\nF7: DROP \u2014 the three `pipeline`/`params` definitions carry identical values, so this is a maintainability tidy-up with no current wrong behavior.\nF8: DROP \u2014 `LaunchTracker.confirm` is only called from tests and production confirmation via `_confirm` works, so this is dead code rather than a defect.\nF9: DROP \u2014 the stale module docstring is a documentation issue only."
+}

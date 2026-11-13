@@ -1,0 +1,48 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The teardown exception is caught, while the original create failure remains logged and surfaced in state."
+  ],
+  "F2": [
+   "KEEP",
+   "A later operation failure overwrites the first error despite the documented first-error contract."
+  ],
+  "F3": [
+   "KEEP",
+   "Missing theme tokens silently leave chart fields to library defaults instead of surfacing the configuration failure."
+  ],
+  "F4": [
+   "DROP",
+   "The inert subscriptions are intentional lifecycle scaffolding, and no harmful behavior from them is shown."
+  ],
+  "F5": [
+   "DROP",
+   "File length, function size, and lint-suppression scope are maintainability concerns, not defects in behavior."
+  ],
+  "F6": [
+   "KEEP",
+   "Adding a series only updates a ref, so a previously set range is not applied until another dependency changes."
+  ]
+ },
+ "wall_seconds": 58.3,
+ "duration_seconds": 58.238650291925296,
+ "cost_usd": 0.00440476,
+ "effort": null,
+ "tool_calls_made": 15,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=79840, cached=59986, cache_write=None, completion=3639, reasoning=2965)",
+ "raw_output": "F1: DROP \u2014 The teardown exception is caught, while the original create failure remains logged and surfaced in state.\nF2: KEEP \u2014 A later operation failure overwrites the first error despite the documented first-error contract.\nF3: KEEP \u2014 Missing theme tokens silently leave chart fields to library defaults instead of surfacing the configuration failure.\nF4: DROP \u2014 The inert subscriptions are intentional lifecycle scaffolding, and no harmful behavior from them is shown.\nF5: DROP \u2014 File length, function size, and lint-suppression scope are maintainability concerns, not defects in behavior.\nF6: KEEP \u2014 Adding a series only updates a ref, so a previously set range is not applied until another dependency changes.\nF1: DROP \u2014 The teardown error is caught and logged separately, while the original create failure remains surfaced in state.\nF2: KEEP \u2014 A later operation failure overwrites the first error despite the documented first-error contract.\nF3: KEEP \u2014 Missing theme tokens silently leave chart fields to library defaults instead of surfacing the configuration failure.\nF4: DROP \u2014 The no-op subscriptions are intentional lifecycle scaffolding, and the claim describes unnecessary complexity rather than a merge-blocking defect.\nF5: DROP \u2014 File length, function size, and lint-suppression scope are maintainability concerns, not defects in behavior.\nF6: KEEP \u2014 Adding a series updates only a ref, so a range set while the chart is empty is not applied until another dependency changes."
+}

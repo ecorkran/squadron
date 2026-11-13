@@ -1,0 +1,2501 @@
+[
+ {
+  "repo": "context-forge",
+  "fix": "88f73e0337",
+  "date": "2026-11-12",
+  "subject": "fix: accept singular/plural for field names and subcommands",
+  "introducers": [
+   "4853423b52",
+   "7d9ac3fa89",
+   "83a196fd16",
+   "d1bd899a84"
+  ],
+  "review": null,
+  "head": "7d9ac3fa89",
+  "base": "7d9ac3fa89^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "58eb51e136",
+  "date": "2026-11-03",
+  "subject": "fix: skip the remote guide tag lookup outside cf guides info",
+  "introducers": [
+   "18507f73cb",
+   "a0ad21f573",
+   "a31e3b6568",
+   "a581addee4",
+   "d711586591"
+  ],
+  "review": "project-documents/user/reviews/935-review.code.agent-scoped-rule-marker.md",
+  "head": "efe12e3642",
+  "base": "18507f73cb^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "7ba8d680c2",
+  "date": "2026-10-29",
+  "subject": "fix: surface unexpected read errors in parseSlicePlan",
+  "introducers": [
+   "09384f2a36",
+   "3ef8fe8149",
+   "422e07c526",
+   "46b68cd8c7",
+   "4bdf47053a",
+   "6031e8ab48",
+   "83b34d43b9",
+   "ac52315590",
+   "ba5e58d9e4",
+   "cf19a5f6f7",
+   "f0a029813b"
+  ],
+  "review": "project-documents/user/reviews/264-review.code.brownfield-aware-cf-next.md",
+  "head": "00d9ba2224",
+  "base": "ac52315590^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "83b34d43b9",
+  "date": "2026-10-29",
+  "subject": "fix: read Status: deprecated/deferred from plan lines",
+  "introducers": [
+   "3ef8fe8149",
+   "5103cdfce4",
+   "bbf54f7b1d",
+   "c62e6db74e",
+   "e00494a70e"
+  ],
+  "review": null,
+  "head": "3ef8fe8149",
+  "base": "3ef8fe8149^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "e12ab0fc3e",
+  "date": "2026-10-27",
+  "subject": "fix: register adopted architecture, plan and concept in next and list slices",
+  "introducers": [
+   "4188c97947",
+   "d293bc656e"
+  ],
+  "review": null,
+  "head": "4188c97947",
+  "base": "4188c97947^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "f5d4ed3f1f",
+  "date": "2026-10-27",
+  "subject": "fix: name the real cf set plan command when no slice plan is set",
+  "introducers": [
+   "4188c97947",
+   "7d9ac3fa89"
+  ],
+  "review": null,
+  "head": "7d9ac3fa89",
+  "base": "7d9ac3fa89^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "eb204caa76",
+  "date": "2026-10-27",
+  "subject": "fix: report a .gitignore write failure as a failed init step",
+  "introducers": [
+   "06baf58dba",
+   "3843295b79",
+   "83af292d17"
+  ],
+  "review": null,
+  "head": "83af292d17",
+  "base": "83af292d17^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "13ca7ea536",
+  "date": "2026-10-25",
+  "subject": "fix: drop stale adoption.state unset warning from cf next",
+  "introducers": [
+   "3f7a882cb0",
+   "8c69557585",
+   "aa8f069334",
+   "bac95b09d1"
+  ],
+  "review": "project-documents/user/reviews/266-review.code.conventions-reconciliation.md",
+  "head": "80ef264992",
+  "base": "8c69557585^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "249d2e6dd3",
+  "date": "2026-10-25",
+  "subject": "fix: skip git init when cf init runs inside an existing repository",
+  "introducers": [
+   "3e99ee59d8"
+  ],
+  "review": null,
+  "head": "3e99ee59d8",
+  "base": "3e99ee59d8^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "485cb3d9a3",
+  "date": "2026-10-24",
+  "subject": "fix: harden rule resolution validation, unique temp file, move readRulesExclude",
+  "introducers": [
+   "18507f73cb",
+   "3442ca7eb1",
+   "bed22298ec"
+  ],
+  "review": "project-documents/user/reviews/266-review.code.conventions-reconciliation.md",
+  "head": "80ef264992",
+  "base": "3442ca7eb1^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "668631d4bc",
+  "date": "2026-10-23",
+  "subject": "fix: unchecked retroactive active slice falls through to normal status",
+  "introducers": [
+   "2cb966620b"
+  ],
+  "review": null,
+  "head": "2cb966620b",
+  "base": "2cb966620b^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "2fba049286",
+  "date": "2026-10-22",
+  "subject": "fix: avoid argument-spread overflow in probe fence sizing",
+  "introducers": [
+   "68733757a6"
+  ],
+  "review": null,
+  "head": "68733757a6",
+  "base": "68733757a6^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "41d934c9cf",
+  "date": "2026-10-21",
+  "subject": "fix: list CI files relative to the project folder in Adoption Facts",
+  "introducers": [
+   "4d64f150f7"
+  ],
+  "review": "project-documents/user/reviews/261-review.code.detection-and-adoption-state.md",
+  "head": "f8657488c9",
+  "base": "4d64f150f7^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "5e840ccb8b",
+  "date": "2026-10-21",
+  "subject": "fix: gather adoption facts before persisting adoption.state",
+  "introducers": [
+   "4d64f150f7"
+  ],
+  "review": "project-documents/user/reviews/261-review.code.detection-and-adoption-state.md",
+  "head": "f8657488c9",
+  "base": "4d64f150f7^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "6664d9af34",
+  "date": "2026-10-20",
+  "subject": "fix(core): onboarding recipe passes project name to cf init via --name",
+  "introducers": [
+   "b37946eeba"
+  ],
+  "review": null,
+  "head": "b37946eeba",
+  "base": "b37946eeba^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "59d36d91bf",
+  "date": "2026-10-19",
+  "subject": "fix: suggest plain cf build for Phase 2 architecture",
+  "introducers": [
+   "47fa921b16"
+  ],
+  "review": null,
+  "head": "47fa921b16",
+  "base": "47fa921b16^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "66bb6ab128",
+  "date": "2026-10-19",
+  "subject": "fix: cf next names the initiative to select and build in Phase 2",
+  "introducers": [
+   "f8c12b2125"
+  ],
+  "review": null,
+  "head": "f8c12b2125",
+  "base": "f8c12b2125^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "351d108363",
+  "date": "2026-10-19",
+  "subject": "fix: use 'cf guides install' in error and tool messages",
+  "introducers": [
+   "6e9b3ca0fa",
+   "a687c80384"
+  ],
+  "review": "project-documents/user/reviews/246-review.code.permissiveness-setting.md",
+  "head": "6837256dde",
+  "base": "a687c80384^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "95dede6cc6",
+  "date": "2026-10-18",
+  "subject": "fix: detect unregistered concept file in Phase 0 cf next",
+  "introducers": [
+   "392872cc38",
+   "47fa921b16",
+   "8175e7b593",
+   "9c86989e6b"
+  ],
+  "review": null,
+  "head": "9c86989e6b",
+  "base": "9c86989e6b^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "3cf5f62efe",
+  "date": "2026-10-14",
+  "subject": "fix: order the setup-ide required-rules lint hint so the file is created first",
+  "introducers": [
+   "5ab3e70bff"
+  ],
+  "review": null,
+  "head": "5ab3e70bff",
+  "base": "5ab3e70bff^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "a037a7765f",
+  "date": "2026-10-14",
+  "subject": "fix: find the slice index behind bold prefixes in plan entries",
+  "introducers": [
+   "09384f2a36",
+   "3ef8fe8149"
+  ],
+  "review": null,
+  "head": "3ef8fe8149",
+  "base": "3ef8fe8149^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "432ed0e081",
+  "date": "2026-10-14",
+  "subject": "fix: truncate long values in cf config get",
+  "introducers": [
+   "54a71ee31f",
+   "facf1c0d88"
+  ],
+  "review": null,
+  "head": "facf1c0d88",
+  "base": "facf1c0d88^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "242fc601db",
+  "date": "2026-10-14",
+  "subject": "fix: commit the removal on tarball guide uninstall",
+  "introducers": [
+   "a31e3b6568",
+   "e124e0a821"
+  ],
+  "review": "project-documents/user/reviews/925-review.code.guide-install-robustness.md",
+  "head": "a91eba9f27",
+  "base": "e124e0a821^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "5ab3e70bff",
+  "date": "2026-10-13",
+  "subject": "fix: offer the guide's required-rules block for weak ESLint flat configs",
+  "introducers": [
+   "340bb38a03"
+  ],
+  "review": "project-documents/user/reviews/215-review.code.native-setup-ide-install.md",
+  "head": "57a6b15471",
+  "base": "340bb38a03^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "21105930fe",
+  "date": "2026-10-13",
+  "subject": "fix: name the unchanged case when a guide install makes no commit",
+  "introducers": [
+   "696d0df81d"
+  ],
+  "review": "project-documents/user/reviews/927-review.code.worktree-dedup-and-explicit-project-worktree-resolution.md",
+  "head": "dd58f337c6",
+  "base": "696d0df81d^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "d19b4d4c3f",
+  "date": "2026-10-13",
+  "subject": "fix: drop hardcoded rule list from setup-ide claude note",
+  "introducers": [
+   "d205392b4f"
+  ],
+  "review": "project-documents/user/reviews/215-review.code.native-setup-ide-install.md",
+  "head": "57a6b15471",
+  "base": "d205392b4f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "9006d54c5f",
+  "date": "2026-10-13",
+  "subject": "fix(cli): contain manifest prune to the project and keep dry-run errors",
+  "introducers": [
+   "527d3ba78c"
+  ],
+  "review": "project-documents/user/reviews/archive/215-review.code.native-setup-ide-install.md",
+  "head": "291dabe401",
+  "base": "527d3ba78c^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "e96f56332f",
+  "date": "2026-10-13",
+  "subject": "fix(cli): keep trailing bytes when replacing managed block (#38)",
+  "introducers": [
+   "2f75a72d21"
+  ],
+  "review": null,
+  "head": "2f75a72d21",
+  "base": "2f75a72d21^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "955d836a29",
+  "date": "2026-10-13",
+  "subject": "fix(cli): drop stray newline from default applyTo glob (#40)",
+  "introducers": [
+   "a768de999f"
+  ],
+  "review": null,
+  "head": "a768de999f",
+  "base": "a768de999f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "e984cea3cf",
+  "date": "2026-10-12",
+  "subject": "fix(core): harden slice design fence tracking and template checks",
+  "introducers": [
+   "2e9355acd2",
+   "7403aa074e",
+   "8858036ffe",
+   "930a2949bc",
+   "ea4ac00170"
+  ],
+  "review": "project-documents/user/reviews/214-review.code.native-slice-design-validation.md",
+  "head": "3d1268e86a",
+  "base": "2e9355acd2^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "ed5a339d0c",
+  "date": "2026-10-08",
+  "subject": "fix(core): send storage diagnostics to stderr, not stdout",
+  "introducers": [
+   "9f46826bfd",
+   "dd221e79ff",
+   "ed402c8bb5"
+  ],
+  "review": null,
+  "head": "dd221e79ff",
+  "base": "dd221e79ff^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "5993e73076",
+  "date": "2026-10-07",
+  "subject": "fix(core): identify the default worktree by isDefault, not name",
+  "introducers": [
+   "467363007f",
+   "79b0c1d6c8",
+   "79cb625953",
+   "87d8aaa6c9"
+  ],
+  "review": "project-documents/user/reviews/932-review.code.restore-default-worktree-range-on-sibling-removal.md",
+  "head": "459f41c3ed",
+  "base": "79b0c1d6c8^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "79cb625953",
+  "date": "2026-10-07",
+  "subject": "fix(core): restore default worktree range when a sibling is removed",
+  "introducers": [
+   "0e93c90af4",
+   "752d4a3123",
+   "e3ea16978a"
+  ],
+  "review": null,
+  "head": "0e93c90af4",
+  "base": "0e93c90af4^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "995b04c542",
+  "date": "2026-10-07",
+  "subject": "fix(core): narrow guide.exclude protection and commit config with re-extract",
+  "introducers": [
+   "23c9d1b957",
+   "696d0df81d",
+   "7055211c9e",
+   "85d6574c88",
+   "90c4f8f651",
+   "fd4ea69376"
+  ],
+  "review": "project-documents/user/reviews/213-review.code.cf-check-fix-worktree-aware-writes.md",
+  "head": "c881f68b8b",
+  "base": "23c9d1b957^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "f00645e691",
+  "date": "2026-10-05",
+  "subject": "fix(cli): refuse setup-ide --dry-run when the guide script ignores the flag",
+  "introducers": [
+   "a1c68dbb22"
+  ],
+  "review": null,
+  "head": "a1c68dbb22",
+  "base": "a1c68dbb22^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "afd8f74a31",
+  "date": "2026-10-05",
+  "subject": "fix(core): defer a checkout whose readiness probe fails instead of aborting the fix run",
+  "introducers": [
+   "1d4ccbf97f",
+   "cf048f03fc"
+  ],
+  "review": "project-documents/user/reviews/archive/213-review.code.cf-check-fix-worktree-aware-writes.md",
+  "head": "ec7f752e96",
+  "base": "1d4ccbf97f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "a304bb14d7",
+  "date": "2026-10-03",
+  "subject": "fix(core): stage tarball guide extract and swap into place",
+  "introducers": [
+   "6ba7048c9a",
+   "71a3b7d93f"
+  ],
+  "review": "project-documents/user/reviews/926-review.code.worktree-scoped-validate-check-attribution-and-scope-reporting.md",
+  "head": "b7f892e600",
+  "base": "6ba7048c9a^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "7a9a23b132",
+  "date": "2026-10-03",
+  "subject": "fix: skip worktree propagation when setup-ide is declined",
+  "introducers": [
+   "4ccaeac4db",
+   "dea4dd1c7e",
+   "f6b175098c"
+  ],
+  "review": null,
+  "head": "4ccaeac4db",
+  "base": "4ccaeac4db^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "ef7276832f",
+  "date": "2026-10-02",
+  "subject": "fix: propagate .agents/skills to copilot worktrees",
+  "introducers": [
+   "aca284cb56"
+  ],
+  "review": null,
+  "head": "aca284cb56",
+  "base": "aca284cb56^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "334d42b998",
+  "date": "2026-10-02",
+  "subject": "fix: install Codex skills to ~/.agents/skills",
+  "introducers": [
+   "aa44f80ae6"
+  ],
+  "review": "project-documents/user/reviews/925-review.code.guide-install-robustness.md",
+  "head": "a91eba9f27",
+  "base": "aa44f80ae6^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "b3b33521b5",
+  "date": "2026-10-01",
+  "subject": "fix(core): clarify fallback index collisions and prefer explicit plan entries (closes #67)",
+  "introducers": [
+   "3908e21588",
+   "a424a027b1"
+  ],
+  "review": null,
+  "head": "a424a027b1",
+  "base": "a424a027b1^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "0c77949262",
+  "date": "2026-09-25",
+  "subject": "fix(cli): don't mask a later cf status error as a resolution failure",
+  "introducers": [
+   "334d1ab680",
+   "3df96db9d8",
+   "8a168710be",
+   "e0eacf34d2"
+  ],
+  "review": null,
+  "head": "334d1ab680",
+  "base": "334d1ab680^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "f8466322e8",
+  "date": "2026-09-25",
+  "subject": "fix(mcp): merge per-view fix results in workflow_check",
+  "introducers": [
+   "1289ae8c8c",
+   "a2344f4500",
+   "f2cfc05ac0"
+  ],
+  "review": "project-documents/user/reviews/926-review.code.worktree-scoped-validate-check-attribution-and-scope-reporting.md",
+  "head": "b7f892e600",
+  "base": "f2cfc05ac0^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "5b1168a3f1",
+  "date": "2026-09-25",
+  "subject": "fix(cli): apply check fixes per worktree before merging",
+  "introducers": [
+   "1289ae8c8c",
+   "8503d17777",
+   "added39938",
+   "f2cfc05ac0"
+  ],
+  "review": "project-documents/user/reviews/926-review.code.worktree-scoped-validate-check-attribution-and-scope-reporting.md",
+  "head": "b7f892e600",
+  "base": "f2cfc05ac0^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "d33147e90e",
+  "date": "2026-09-25",
+  "subject": "fix(core): normalize checkout root in check-result dedup key",
+  "introducers": [
+   "1289ae8c8c",
+   "709f467c15",
+   "e3c94e9a79"
+  ],
+  "review": "project-documents/user/reviews/926-review.code.worktree-scoped-validate-check-attribution-and-scope-reporting.md",
+  "head": "b7f892e600",
+  "base": "e3c94e9a79^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "9cef1ba540",
+  "date": "2026-09-25",
+  "subject": "fix(cli): resolve worktree from CWD under explicit --project",
+  "introducers": [
+   "48dc80af86",
+   "c7fd2ebf78"
+  ],
+  "review": null,
+  "head": "48dc80af86",
+  "base": "48dc80af86^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "acffc1a2bc",
+  "date": "2026-09-22",
+  "subject": "fix: stop range-filtering initiatives in cf list arch (#97)",
+  "introducers": [
+   "4188c97947",
+   "f7874ef11c"
+  ],
+  "review": null,
+  "head": "f7874ef11c",
+  "base": "f7874ef11c^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "580915e0b1",
+  "date": "2026-09-22",
+  "subject": "fix: report per-path outcomes from cf validate frontmatter (#92, #96)",
+  "introducers": [
+   "a662ad0989",
+   "a7286db992"
+  ],
+  "review": "project-documents/user/reviews/923-review.code.frontmatter-validate-command-dateupdated-stamp.md",
+  "head": "1976437730",
+  "base": "a662ad0989^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "e9597a5eb2",
+  "date": "2026-09-22",
+  "subject": "fix: scope cf validate frontmatter to the caller's worktree (#88)",
+  "introducers": [
+   "a7286db992"
+  ],
+  "review": "project-documents/user/reviews/923-review.code.frontmatter-validate-command-dateupdated-stamp.md",
+  "head": "1976437730",
+  "base": "a7286db992^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "6ba7048c9a",
+  "date": "2026-09-19",
+  "subject": "fix: honor proxy variables for tarball guide download and name failures",
+  "introducers": [
+   "07691b4221",
+   "1df7421e9c",
+   "71a3b7d93f",
+   "ff80db3461"
+  ],
+  "review": "project-documents/user/reviews/925-review.code.guide-install-robustness.md",
+  "head": "a91eba9f27",
+  "base": "07691b4221^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "9a63989b50",
+  "date": "2026-09-19",
+  "subject": "fix: correct git.integration_branch description to match no-prefix rule",
+  "introducers": [
+   "88e9a335cd"
+  ],
+  "review": null,
+  "head": "88e9a335cd",
+  "base": "88e9a335cd^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "d16d0ffa75",
+  "date": "2026-09-18",
+  "subject": "fix: honor configured guide.source on tarball update",
+  "introducers": [
+   "64b47ddd63",
+   "71a3b7d93f",
+   "d711586591"
+  ],
+  "review": null,
+  "head": "d711586591",
+  "base": "d711586591^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "1df7421e9c",
+  "date": "2026-09-18",
+  "subject": "fix: drop git wiring from tarball guide installs",
+  "introducers": [
+   "71a3b7d93f"
+  ],
+  "review": null,
+  "head": "71a3b7d93f",
+  "base": "71a3b7d93f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "acd061837d",
+  "date": "2026-09-15",
+  "subject": "fix: tolerate zero-padded filenames in resolveFileByIndex",
+  "introducers": [
+   "ebdb601dc8"
+  ],
+  "review": null,
+  "head": "ebdb601dc8",
+  "base": "ebdb601dc8^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "d50a2c5fb0",
+  "date": "2026-09-10",
+  "subject": "fix(core): let guide update run in a repository with no commits yet",
+  "introducers": [
+   "1f74793a54"
+  ],
+  "review": null,
+  "head": "1f74793a54",
+  "base": "1f74793a54^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "0287288876",
+  "date": "2026-09-09",
+  "subject": "fix(core): source guide strategy default from ConfigKeys, drop silent catches",
+  "introducers": [
+   "13abc2b3bd",
+   "a581addee4"
+  ],
+  "review": null,
+  "head": "13abc2b3bd",
+  "base": "13abc2b3bd^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "b1032c72aa",
+  "date": "2026-09-09",
+  "subject": "fix: surface offline guide-install guidance from setup-ide (#78)",
+  "introducers": [
+   "07691b4221",
+   "6154b52322",
+   "f6b175098c"
+  ],
+  "review": null,
+  "head": "07691b4221",
+  "base": "07691b4221^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "07691b4221",
+  "date": "2026-09-04",
+  "subject": "fix: surface actionable guide-install errors instead of hangs/generic text",
+  "introducers": [
+   "1757f1fda9",
+   "71a3b7d93f"
+  ],
+  "review": null,
+  "head": "71a3b7d93f",
+  "base": "71a3b7d93f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "94eea4d066",
+  "date": "2026-08-09",
+  "subject": "fix(core): stamp dateUpdated on frontmatter writes",
+  "introducers": [
+   "55335eeb60",
+   "66fa324a2b",
+   "added39938",
+   "b5ea908088",
+   "d66abc9fda"
+  ],
+  "review": null,
+  "head": "66fa324a2b",
+  "base": "66fa324a2b^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "08ec68d121",
+  "date": "2026-08-09",
+  "subject": "fix(core): use canonical in_progress spelling in suggestedFix prose",
+  "introducers": [
+   "1e1f7c59e6"
+  ],
+  "review": null,
+  "head": "1e1f7c59e6",
+  "base": "1e1f7c59e6^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "860e0949bb",
+  "date": "2026-08-09",
+  "subject": "fix(cli): pair fix-log entries by rule and file in check output",
+  "introducers": [
+   "b030219830"
+  ],
+  "review": null,
+  "head": "b030219830",
+  "base": "b030219830^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "175084d55a",
+  "date": "2026-08-09",
+  "subject": "fix(core): read frontmatter status leniently via normalizeStatus in ConsistencyChecker",
+  "introducers": [
+   "12436a75a7",
+   "2639beec8f",
+   "46148fbb48",
+   "55335eeb60",
+   "a424a027b1",
+   "f11a531408"
+  ],
+  "review": null,
+  "head": "f11a531408",
+  "base": "f11a531408^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "abff73df7f",
+  "date": "2026-08-09",
+  "subject": "fix(core): reject hyphenated status in validateFrontmatter",
+  "introducers": [
+   "254c74e56d",
+   "2ed7cee7a0",
+   "5bb8fd671c",
+   "7652611ceb",
+   "b3b90b8b8d"
+  ],
+  "review": null,
+  "head": "2ed7cee7a0",
+  "base": "2ed7cee7a0^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "fdfdfaf416",
+  "date": "2026-08-07",
+  "subject": "fix: correct hardcoded status prose string for underscored STATUS constant",
+  "introducers": [
+   "1e1f7c59e6"
+  ],
+  "review": null,
+  "head": "1e1f7c59e6",
+  "base": "1e1f7c59e6^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "b04eea425a",
+  "date": "2026-08-06",
+  "subject": "fix: do not range-filter listings for single-worktree projects",
+  "introducers": [
+   "1d8d20ffa5",
+   "69cd41ffde"
+  ],
+  "review": null,
+  "head": "69cd41ffde",
+  "base": "69cd41ffde^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "af68c78813",
+  "date": "2026-08-03",
+  "subject": "fix(cli): skip the root-path default worktree during propagation",
+  "introducers": [
+   "9bedbc8966"
+  ],
+  "review": null,
+  "head": "9bedbc8966",
+  "base": "9bedbc8966^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "0169a6f9a1",
+  "date": "2026-08-03",
+  "subject": "fix(core): resolve the project conventions file instead of hardcoding CLAUDE.md",
+  "introducers": [
+   "1b366f89bc"
+  ],
+  "review": null,
+  "head": "1b366f89bc",
+  "base": "1b366f89bc^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "4ccaeac4db",
+  "date": "2026-08-03",
+  "subject": "fix(cli): propagate IDE files recursively and fail on unknown targets",
+  "introducers": [
+   "11a2229e6e",
+   "9bedbc8966",
+   "aca284cb56",
+   "f6b175098c"
+  ],
+  "review": null,
+  "head": "aca284cb56",
+  "base": "aca284cb56^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "180c04fa8b",
+  "date": "2026-08-02",
+  "subject": "fix(core): suggest in_progress instead of in-progress in check output",
+  "introducers": [
+   "1e1f7c59e6",
+   "2639beec8f",
+   "55335eeb60",
+   "a424a027b1",
+   "f11a531408"
+  ],
+  "review": null,
+  "head": "f11a531408",
+  "base": "f11a531408^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "2ed7cee7a0",
+  "date": "2026-08-02",
+  "subject": "fix(core): reject draft as invalid frontmatter status value",
+  "introducers": [
+   "7652611ceb"
+  ],
+  "review": null,
+  "head": "7652611ceb",
+  "base": "7652611ceb^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "dd221e79ff",
+  "date": "2026-08-01",
+  "subject": "fix(core): migrate macOS storage path to XDG-style ~/.config (#53)",
+  "introducers": [
+   "549111ff87"
+  ],
+  "review": null,
+  "head": "549111ff87",
+  "base": "549111ff87^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "69cd41ffde",
+  "date": "2026-08-01",
+  "subject": "fix(core): honor worktree indexRange in cf next band warning (#48)",
+  "introducers": [
+   "4091b2c0ca",
+   "e2931be48d"
+  ],
+  "review": null,
+  "head": "4091b2c0ca",
+  "base": "4091b2c0ca^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "46b68cd8c7",
+  "date": "2026-07-31",
+  "subject": "fix(core): parse [~] plan-line entries as deprecated",
+  "introducers": [
+   "09384f2a36",
+   "095d1b38ae",
+   "422e07c526",
+   "ba5e58d9e4"
+  ],
+  "review": null,
+  "head": "095d1b38ae",
+  "base": "095d1b38ae^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "cf7a275e5b",
+  "date": "2026-07-30",
+  "subject": "fix: preserve literal braces and report worktree sync in guide update",
+  "introducers": [
+   "04cfec3e87",
+   "ce690e089f"
+  ],
+  "review": null,
+  "head": "ce690e089f",
+  "base": "ce690e089f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "7403aa074e",
+  "date": "2026-07-17",
+  "subject": "fix: make frontmatter parser indentation-aware (#64)",
+  "introducers": [
+   "8858036ffe"
+  ],
+  "review": null,
+  "head": "8858036ffe",
+  "base": "8858036ffe^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "ccc90c45f9",
+  "date": "2026-07-15",
+  "subject": "fix(core): tolerate annotated verdicts in normalizeVerdict",
+  "introducers": [
+   "5f47b67deb"
+  ],
+  "review": null,
+  "head": "5f47b67deb",
+  "base": "5f47b67deb^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "7652611ceb",
+  "date": "2026-07-14",
+  "subject": "fix(core): unify frontmatter status validation with normalizeStatus",
+  "introducers": [
+   "b3b90b8b8d",
+   "c84efac6dd",
+   "fad41e76c4"
+  ],
+  "review": null,
+  "head": "fad41e76c4",
+  "base": "fad41e76c4^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "5103cdfce4",
+  "date": "2026-07-14",
+  "subject": "fix: recognize \"deferred\" as a valid slice status",
+  "introducers": [
+   "4e9a5690fb",
+   "690ead2959",
+   "bbf54f7b1d"
+  ],
+  "review": null,
+  "head": "4e9a5690fb",
+  "base": "4e9a5690fb^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "cd58e395f9",
+  "date": "2026-07-14",
+  "subject": "fix(core): migrate-personal must delete from the shared file, not auto-route",
+  "introducers": [
+   "8ec1c12636"
+  ],
+  "review": null,
+  "head": "8ec1c12636",
+  "base": "8ec1c12636^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "2b00963f4b",
+  "date": "2026-07-13",
+  "subject": "fix(cli): default config set to project scope instead of machine-wide user scope",
+  "introducers": [
+   "3de95899ac",
+   "4853423b52",
+   "54a71ee31f",
+   "b5d4d614da"
+  ],
+  "review": null,
+  "head": "3de95899ac",
+  "base": "3de95899ac^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "4e9a5690fb",
+  "date": "2026-07-12",
+  "subject": "fix: don't abort cf status/next on unrecognized slice status (#62)",
+  "introducers": [
+   "01248d46b6",
+   "4091b2c0ca",
+   "665f16345f",
+   "690ead2959",
+   "bbf54f7b1d"
+  ],
+  "review": null,
+  "head": "bbf54f7b1d",
+  "base": "bbf54f7b1d^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "83bc083ca4",
+  "date": "2026-07-07",
+  "subject": "fix: correct cf next stale-phase remediation and un-orphan arch gate (#58, #59)",
+  "introducers": [
+   "289a072d97",
+   "50a9dbbc80"
+  ],
+  "review": null,
+  "head": "289a072d97",
+  "base": "289a072d97^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "03863277b9",
+  "date": "2026-07-06",
+  "subject": "fix: coerce cf config set value toward the key's declared type",
+  "introducers": [
+   "3de95899ac",
+   "54a71ee31f"
+  ],
+  "review": null,
+  "head": "3de95899ac",
+  "base": "3de95899ac^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "3de95899ac",
+  "date": "2026-07-04",
+  "subject": "fix(cli): resolve cf config --project to projectPath, not raw name",
+  "introducers": [
+   "54a71ee31f"
+  ],
+  "review": null,
+  "head": "54a71ee31f",
+  "base": "54a71ee31f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "b1e7788756",
+  "date": "2026-06-21",
+  "subject": "fix: surface plan-only initiatives in project_structure model",
+  "introducers": [
+   "ceb36554b8"
+  ],
+  "review": null,
+  "head": "ceb36554b8",
+  "base": "ceb36554b8^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "9c86989e6b",
+  "date": "2026-06-20",
+  "subject": "fix: cf next detects completed Phase 1 via initiative plan on disk",
+  "introducers": [
+   "8175e7b593",
+   "e2931be48d"
+  ],
+  "review": null,
+  "head": "8175e7b593",
+  "base": "8175e7b593^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "c09813c566",
+  "date": "2026-05-31",
+  "subject": "fix: normalize artifact values in resolveArtifactPath to fix double-prefix bug",
+  "introducers": [
+   "6426a92017",
+   "8a6e1d3216",
+   "8d67963cf7"
+  ],
+  "review": null,
+  "head": "6426a92017",
+  "base": "6426a92017^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "04b2554acf",
+  "date": "2026-04-11",
+  "subject": "fix: recommend cf set phase before cf build when slice plan missing in wrong phase",
+  "introducers": [
+   "d3b5939a53"
+  ],
+  "review": null,
+  "head": "d3b5939a53",
+  "base": "d3b5939a53^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "8da8cc8479",
+  "date": "2026-04-09",
+  "subject": "fix(cli): unify cf get table and JSON output paths",
+  "introducers": [
+   "02451f0e56",
+   "064c9a8c82",
+   "367fb83c8b",
+   "480b0cbed7",
+   "4e1b228751",
+   "4ea224a346",
+   "508f3584b3",
+   "6e8389df96",
+   "88d93640b8",
+   "9f46826bfd"
+  ],
+  "review": null,
+  "head": "4e1b228751",
+  "base": "4e1b228751^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "fad41e76c4",
+  "date": "2026-04-06",
+  "subject": "fix(core): cf check noise reduction and auto-fix coverage",
+  "introducers": [
+   "55335eeb60"
+  ],
+  "review": null,
+  "head": "55335eeb60",
+  "base": "55335eeb60^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "e042662d62",
+  "date": "2026-04-04",
+  "subject": "fix(core): context profile parser handles compact YAML format",
+  "introducers": [
+   "dc5f89991d",
+   "dce96a0bfb"
+  ],
+  "review": null,
+  "head": "dc5f89991d",
+  "base": "dc5f89991d^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "6a99b5e30a",
+  "date": "2026-03-31",
+  "subject": "fix: physically remove guide directory from worktree after submodule deinit",
+  "introducers": [
+   "70f34b6a84"
+  ],
+  "review": null,
+  "head": "70f34b6a84",
+  "base": "70f34b6a84^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "70f34b6a84",
+  "date": "2026-03-31",
+  "subject": "fix: scope guide uninstall to worktree when operationPath differs from projectPath",
+  "introducers": [
+   "9f8684c55d",
+   "a31e3b6568"
+  ],
+  "review": null,
+  "head": "9f8684c55d",
+  "base": "9f8684c55d^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "26aca91cbe",
+  "date": "2026-03-30",
+  "subject": "fix: submodule update fetches before --remote, uses --init for resilience",
+  "introducers": [
+   "48b6d3ca28"
+  ],
+  "review": null,
+  "head": "48b6d3ca28",
+  "base": "48b6d3ca28^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "79f1776b18",
+  "date": "2026-03-30",
+  "subject": "fix: show slices/tasks outside worktree range when plan is cross-initiative",
+  "introducers": [
+   "087ec3bc4e",
+   "1cbe989909",
+   "4188c97947",
+   "ed698c1ebc"
+  ],
+  "review": null,
+  "head": "4188c97947",
+  "base": "4188c97947^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "efcb2c14e9",
+  "date": "2026-03-30",
+  "subject": "fix: improve error message when artifact index not found in current plan",
+  "introducers": [
+   "042b364d9f"
+  ],
+  "review": null,
+  "head": "042b364d9f",
+  "base": "042b364d9f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "daec117a0d",
+  "date": "2026-03-27",
+  "subject": "fix: install-commands now removes stale slash commands from previous versions",
+  "introducers": [
+   "27b0d8b272",
+   "4202d19cc3"
+  ],
+  "review": null,
+  "head": "4202d19cc3",
+  "base": "4202d19cc3^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "c6aa0cbffd",
+  "date": "2026-03-27",
+  "subject": "fix(mcp): resolve project from CWD when projectId is omitted",
+  "introducers": [
+   "11adfbf3c6"
+  ],
+  "review": null,
+  "head": "11adfbf3c6",
+  "base": "11adfbf3c6^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "d286a1288d",
+  "date": "2026-03-25",
+  "subject": "fix: return empty result instead of error for empty tasks/plans directories",
+  "introducers": [
+   "4188c97947",
+   "8d67963cf7"
+  ],
+  "review": null,
+  "head": "4188c97947",
+  "base": "4188c97947^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "c71b21cfa7",
+  "date": "2026-03-24",
+  "subject": "fix: validate compound command args as numeric, warn on invalid artifact values",
+  "introducers": [
+   "516c25b120"
+  ],
+  "review": null,
+  "head": "516c25b120",
+  "base": "516c25b120^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "016dfc4d1a",
+  "date": "2026-03-23",
+  "subject": "fix(cli): cf init re-runs setup steps on already-registered project",
+  "introducers": [
+   "3e99ee59d8",
+   "9c2071d333",
+   "d7547183b9"
+  ],
+  "review": null,
+  "head": "d7547183b9",
+  "base": "d7547183b9^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "231128d935",
+  "date": "2026-03-23",
+  "subject": "fix: revise onboard flow to use cf init as primary path",
+  "introducers": [
+   "3c477f79bc",
+   "c82032ebf1"
+  ],
+  "review": null,
+  "head": "c82032ebf1",
+  "base": "c82032ebf1^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "9f8684c55d",
+  "date": "2026-03-22",
+  "subject": "fix(cli): include version in guides uninstall output and commit message",
+  "introducers": [
+   "a31e3b6568"
+  ],
+  "review": null,
+  "head": "a31e3b6568",
+  "base": "a31e3b6568^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "4e1b228751",
+  "date": "2026-03-22",
+  "subject": "fix(cli): apply worktree overlay in cf get --json and cf prompt get",
+  "introducers": [
+   "480b0cbed7",
+   "7af4aaa423"
+  ],
+  "review": null,
+  "head": "480b0cbed7",
+  "base": "480b0cbed7^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "608d8865b0",
+  "date": "2026-03-22",
+  "subject": "fix: include worktreePath in applyWorktreeOverlay projectPath resolution",
+  "introducers": [
+   "5bd9d84b95",
+   "a2344f4500"
+  ],
+  "review": null,
+  "head": "a2344f4500",
+  "base": "a2344f4500^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "367fb83c8b",
+  "date": "2026-03-20",
+  "subject": "fix: remove worktree overlay fallback, make fileSlice/fileTasks/instruction optional",
+  "introducers": [
+   "480b0cbed7",
+   "6e8389df96",
+   "7b6b5f043d",
+   "94a98ca4f8",
+   "a4537a775d",
+   "c28b21c280"
+  ],
+  "review": null,
+  "head": "c28b21c280",
+  "base": "c28b21c280^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "a2344f4500",
+  "date": "2026-03-19",
+  "subject": "fix(mcp): workflow_check applies worktree overlays matching CLI behavior",
+  "introducers": [
+   "928fa2ae43"
+  ],
+  "review": null,
+  "head": "928fa2ae43",
+  "base": "928fa2ae43^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "1073149a40",
+  "date": "2026-03-19",
+  "subject": "fix(core): reorder cf:build template to place instruction before tools",
+  "introducers": [
+   "4459ecc12f",
+   "88d93640b8"
+  ],
+  "review": null,
+  "head": "88d93640b8",
+  "base": "88d93640b8^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "4f1860ed36",
+  "date": "2026-03-19",
+  "subject": "fix(core): checkAll scans all discovered slice plans for per-slice rules",
+  "introducers": [
+   "3908e21588",
+   "80f4c82d66"
+  ],
+  "review": null,
+  "head": "80f4c82d66",
+  "base": "80f4c82d66^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "11adfbf3c6",
+  "date": "2026-03-19",
+  "subject": "fix(mcp,cli): accept project names in MCP tools, remove stale bundled prompt message",
+  "introducers": [
+   "20018e1d5b",
+   "ce690e089f",
+   "d6c0a43700"
+  ],
+  "review": null,
+  "head": "d6c0a43700",
+  "base": "d6c0a43700^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "ed26d2d0b1",
+  "date": "2026-03-18",
+  "subject": "fix(cli): remove unused findByNameOrId import",
+  "introducers": [
+   "480b0cbed7"
+  ],
+  "review": null,
+  "head": "480b0cbed7",
+  "base": "480b0cbed7^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "c0ab0f7280",
+  "date": "2026-03-18",
+  "subject": "fix(core): sync() reads target commit from projectPath and fetches before checkout",
+  "introducers": [
+   "d711586591"
+  ],
+  "review": null,
+  "head": "d711586591",
+  "base": "d711586591^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "e2931be48d",
+  "date": "2026-03-15",
+  "subject": "fix(core): remove isFirstRunState gate that blocked FR-5",
+  "introducers": [
+   "47fa921b16"
+  ],
+  "review": null,
+  "head": "47fa921b16",
+  "base": "47fa921b16^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "74fdb37795",
+  "date": "2026-03-15",
+  "subject": "fix(core): FR-5 now suggests specific slice index from plan",
+  "introducers": [
+   "47fa921b16",
+   "a09d20ce46"
+  ],
+  "review": null,
+  "head": "a09d20ce46",
+  "base": "a09d20ce46^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "a09d20ce46",
+  "date": "2026-03-15",
+  "subject": "fix(core): add phase advance hint to FR-5 rationale",
+  "introducers": [
+   "47fa921b16"
+  ],
+  "review": null,
+  "head": "47fa921b16",
+  "base": "47fa921b16^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "cca8b03db9",
+  "date": "2026-03-15",
+  "subject": "fix(core): use cf set plan/arch aliases; add registration hint to FR-4",
+  "introducers": [
+   "47fa921b16",
+   "5c2e42ca1f"
+  ],
+  "review": null,
+  "head": "47fa921b16",
+  "base": "47fa921b16^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "bbfe663fc6",
+  "date": "2026-03-15",
+  "subject": "fix(mcp): set instruction to match developmentPhase in project_create",
+  "introducers": [
+   "5c1c5296fd"
+  ],
+  "review": null,
+  "head": "5c1c5296fd",
+  "base": "5c1c5296fd^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "0d344fb7b1",
+  "date": "2026-03-15",
+  "subject": "fix(core): allow empty fileSlice in context build; simplify FR-2 command",
+  "introducers": [
+   "3029d8c8da",
+   "47fa921b16"
+  ],
+  "review": null,
+  "head": "47fa921b16",
+  "base": "47fa921b16^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "487924b55e",
+  "date": "2026-03-15",
+  "subject": "fix(cli,core): set correct instruction on cf init; remove 'Unknown Slice' fallback",
+  "introducers": [
+   "3029d8c8da",
+   "9c2071d333"
+  ],
+  "review": null,
+  "head": "9c2071d333",
+  "base": "9c2071d333^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "728523796a",
+  "date": "2026-03-11",
+  "subject": "fix(cli): rename 'task' command and alias to 'tasks' for consistency",
+  "introducers": [
+   "8798891c5c",
+   "a03ddbf4e4"
+  ],
+  "review": null,
+  "head": "8798891c5c",
+  "base": "8798891c5c^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "8798891c5c",
+  "date": "2026-03-11",
+  "subject": "fix(core): rename fileTasks alias from 'tasks' to 'task' for consistency",
+  "introducers": [
+   "83a196fd16"
+  ],
+  "review": null,
+  "head": "83a196fd16",
+  "base": "83a196fd16^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "added39938",
+  "date": "2026-03-11",
+  "subject": "fix(cli): run cf check across all worktree overlays for full coverage",
+  "introducers": [
+   "8503d17777",
+   "a933941b18"
+  ],
+  "review": null,
+  "head": "8503d17777",
+  "base": "8503d17777^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "191fde6fc0",
+  "date": "2026-03-11",
+  "subject": "fix(mcp): prompt_list and prompt_get fall back to bundled prompts when no project resolved",
+  "introducers": [
+   "0d02d83db3",
+   "20018e1d5b",
+   "46755f0e67",
+   "489eff7718"
+  ],
+  "review": null,
+  "head": "20018e1d5b",
+  "base": "20018e1d5b^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "dc11cda69b",
+  "date": "2026-03-11",
+  "subject": "fix(cli): apply worktree overlay for slice plan derivation in cf set",
+  "introducers": [
+   "042b364d9f"
+  ],
+  "review": null,
+  "head": "042b364d9f",
+  "base": "042b364d9f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "d071a2e1c3",
+  "date": "2026-03-11",
+  "subject": "fix(cli): make arch/next/plan/slice/task commands worktree-aware",
+  "introducers": [
+   "377246476b",
+   "7dff90a0cd",
+   "8264498df3",
+   "8a168710be",
+   "a03ddbf4e4",
+   "c7fd2ebf78"
+  ],
+  "review": null,
+  "head": "377246476b",
+  "base": "377246476b^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "e699165880",
+  "date": "2026-03-11",
+  "subject": "fix(cli): make cf build worktree-aware with field overlay",
+  "introducers": [
+   "0533dc5a43",
+   "c7fd2ebf78",
+   "e1f1848a4e"
+  ],
+  "review": null,
+  "head": "e1f1848a4e",
+  "base": "e1f1848a4e^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "3df96db9d8",
+  "date": "2026-03-11",
+  "subject": "fix(cli): make cf status worktree-aware with field overlay",
+  "introducers": [
+   "3083fffe5e",
+   "6d1fe48095",
+   "8a168710be",
+   "f8c370c9fd"
+  ],
+  "review": null,
+  "head": "3083fffe5e",
+  "base": "3083fffe5e^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "b5ea908088",
+  "date": "2026-03-09",
+  "subject": "fix(core): allow updateFrontmatterField to insert new keys",
+  "introducers": [
+   "d66abc9fda"
+  ],
+  "review": null,
+  "head": "d66abc9fda",
+  "base": "d66abc9fda^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "cf19a5f6f7",
+  "date": "2026-03-09",
+  "subject": "fix(core): track source line numbers in SlicePlanEntry for checkbox fixes",
+  "introducers": [
+   "422e07c526",
+   "55335eeb60"
+  ],
+  "review": null,
+  "head": "55335eeb60",
+  "base": "55335eeb60^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "3ba6ef960e",
+  "date": "2026-03-08",
+  "subject": "fix(core): resolve null-safety issue in arch file existence check",
+  "introducers": [
+   "f8c12b2125"
+  ],
+  "review": null,
+  "head": "f8c12b2125",
+  "base": "f8c12b2125^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "4bdf47053a",
+  "date": "2026-03-07",
+  "subject": "fix(core): slice plan heading exclusion uses startsWith instead of includes",
+  "introducers": [
+   "422e07c526"
+  ],
+  "review": null,
+  "head": "422e07c526",
+  "base": "422e07c526^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "ba5e58d9e4",
+  "date": "2026-03-07",
+  "subject": "fix(core): slice plan parser supports unindexed entries",
+  "introducers": [
+   "422e07c526"
+  ],
+  "review": null,
+  "head": "422e07c526",
+  "base": "422e07c526^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "50a9dbbc80",
+  "date": "2026-03-07",
+  "subject": "fix(core): cf next recommends architecture before slice plan when neither exists",
+  "introducers": [
+   "5c2e42ca1f"
+  ],
+  "review": null,
+  "head": "5c2e42ca1f",
+  "base": "5c2e42ca1f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "7a472b38e1",
+  "date": "2026-03-07",
+  "subject": "fix(electron): normalize YYYYMMDD dates to YYYY-MM-DD for HTML date input",
+  "introducers": [
+   "a6db65a463"
+  ],
+  "review": null,
+  "head": "a6db65a463",
+  "base": "a6db65a463^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "8d67963cf7",
+  "date": "2026-03-07",
+  "subject": "fix: resolve artifact paths correctly, enhance status and task commands",
+  "introducers": [
+   "4126c402a3",
+   "665f16345f",
+   "8264498df3",
+   "930a2949bc",
+   "a03ddbf4e4",
+   "ebdb601dc8",
+   "fa634b9b7b"
+  ],
+  "review": null,
+  "head": "a03ddbf4e4",
+  "base": "a03ddbf4e4^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "cc059f99e3",
+  "date": "2026-03-06",
+  "subject": "fix(core,cli): phase resolution, instruction matching, and template conditionals",
+  "introducers": [
+   "04cfec3e87",
+   "87eacb389c",
+   "aae1b9cb29",
+   "e048af156a"
+  ],
+  "review": null,
+  "head": "87eacb389c",
+  "base": "87eacb389c^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "87eacb389c",
+  "date": "2026-03-05",
+  "subject": "fix(cli): cf build --phase now overrides instruction prompt",
+  "introducers": [
+   "0533dc5a43"
+  ],
+  "review": null,
+  "head": "0533dc5a43",
+  "base": "0533dc5a43^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "0eb9674f77",
+  "date": "2026-03-05",
+  "subject": "fix(core): detect submodule before clone and handle detached HEAD update",
+  "introducers": [
+   "c4991ec3da",
+   "d5ed014720"
+  ],
+  "review": null,
+  "head": "d5ed014720",
+  "base": "d5ed014720^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "1cbe989909",
+  "date": "2026-03-05",
+  "subject": "fix(cli): show concise usage hint for cf project, full help via --help",
+  "introducers": [
+   "508f3584b3",
+   "c1bfb3fc04"
+  ],
+  "review": null,
+  "head": "c1bfb3fc04",
+  "base": "c1bfb3fc04^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "5f7e30112a",
+  "date": "2026-03-05",
+  "subject": "fix(cli): accept positional name/ID argument for cf project rm",
+  "introducers": [
+   "1bacf961c0"
+  ],
+  "review": null,
+  "head": "1bacf961c0",
+  "base": "1bacf961c0^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "879fe7708c",
+  "date": "2026-03-05",
+  "subject": "fix(cli): update no-resolution error to guide toward cf init",
+  "introducers": [
+   "c7fd2ebf78"
+  ],
+  "review": null,
+  "head": "c7fd2ebf78",
+  "base": "c7fd2ebf78^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "0b929550b4",
+  "date": "2026-03-05",
+  "subject": "fix: clean up stale monorepo references in fixtures and comments",
+  "introducers": [
+   "04cfec3e87"
+  ],
+  "review": null,
+  "head": "04cfec3e87",
+  "base": "04cfec3e87^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "10be0e515a",
+  "date": "2026-03-04",
+  "subject": "fix: read version from package.json instead of hardcoded strings",
+  "introducers": [
+   "3166a02620",
+   "55d78bd254"
+  ],
+  "review": null,
+  "head": "55d78bd254",
+  "base": "55d78bd254^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "55d78bd254",
+  "date": "2026-03-04",
+  "subject": "fix(cli): update hardcoded version string in index.ts to 0.2.0",
+  "introducers": [
+   "e5a46e7a78"
+  ],
+  "review": null,
+  "head": "e5a46e7a78",
+  "base": "e5a46e7a78^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "fc132d9e32",
+  "date": "2026-03-03",
+  "subject": "fix(core): add slice alias for fileSlice in template variable substitution",
+  "introducers": [
+   "3029d8c8da"
+  ],
+  "review": null,
+  "head": "3029d8c8da",
+  "base": "3029d8c8da^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "0a3fcb969a",
+  "date": "2026-03-03",
+  "subject": "fix(electron): show empty state when project has no directory set",
+  "introducers": [
+   "2a75c86d2a",
+   "e9c0f3b0f3"
+  ],
+  "review": null,
+  "head": "e9c0f3b0f3",
+  "base": "e9c0f3b0f3^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "a5669d96ff",
+  "date": "2026-03-01",
+  "subject": "fix(core): surface planned slices from slice plan main body in buildModel",
+  "introducers": [
+   "b637d88e02"
+  ],
+  "review": null,
+  "head": "b637d88e02",
+  "base": "b637d88e02^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "23c2597dae",
+  "date": "2026-02-28",
+  "subject": "fix: update stale {{slice}} template variable in default constants",
+  "introducers": [
+   "7c52150b84"
+  ],
+  "review": null,
+  "head": "7c52150b84",
+  "base": "7c52150b84^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "879417833b",
+  "date": "2026-02-22",
+  "subject": "fix(electron): regenerate context after auto-save on field edits",
+  "introducers": [
+   "2a75c86d2a",
+   "31da25e6c9",
+   "f13f0888e0"
+  ],
+  "review": null,
+  "head": "f13f0888e0",
+  "base": "f13f0888e0^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "8a490bda38",
+  "date": "2026-02-22",
+  "subject": "fix(electron): auto-trigger context generation when project changes",
+  "introducers": [
+   "f13f0888e0"
+  ],
+  "review": null,
+  "head": "f13f0888e0",
+  "base": "f13f0888e0^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "8e7ba18a56",
+  "date": "2026-02-17",
+  "subject": "fix(electron): update StorageClient inline type imports to @context-forge/core",
+  "introducers": [
+   "f4a183283c"
+  ],
+  "review": null,
+  "head": "f4a183283c",
+  "base": "f4a183283c^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "14bbd3f22e",
+  "date": "2026-02-17",
+  "subject": "fix(#33): resolve prompt/statement paths as absolute from projectPath",
+  "introducers": [
+   "30cd4c1079",
+   "8a14161401",
+   "9baa974178",
+   "e0a4b7187d"
+  ],
+  "review": null,
+  "head": "8a14161401",
+  "base": "8a14161401^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "83b29491d0",
+  "date": "2026-02-17",
+  "subject": "fix(#33): replace CWD fallback with explicit \"no project configured\" errors",
+  "introducers": [
+   "2b87073bca",
+   "662c513832",
+   "8a14161401",
+   "f53fc669fe"
+  ],
+  "review": null,
+  "head": "2b87073bca",
+  "base": "2b87073bca^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "0939286734",
+  "date": "2026-02-14",
+  "subject": "fix(29): merge form state instead of replacing to preserve settings-only fields",
+  "introducers": [
+   "31da25e6c9"
+  ],
+  "review": null,
+  "head": "31da25e6c9",
+  "base": "31da25e6c9^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "8900d94cc2",
+  "date": "2026-02-13",
+  "subject": "fix: flush pending auto-save on app quit to prevent data loss",
+  "introducers": [
+   "2a0f2fbd8f"
+  ],
+  "review": null,
+  "head": "2a0f2fbd8f",
+  "base": "2a0f2fbd8f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "70494e12c8",
+  "date": "2026-02-13",
+  "subject": "fix(128): restore projectPath on app load and project switch",
+  "introducers": [
+   "2a0f2fbd8f",
+   "e2bede415e"
+  ],
+  "review": null,
+  "head": "e2bede415e",
+  "base": "e2bede415e^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "1daaebcc1e",
+  "date": "2026-02-13",
+  "subject": "fix(128): show selected path and validation errors immediately",
+  "introducers": [
+   "f4a183283c"
+  ],
+  "review": null,
+  "head": "f4a183283c",
+  "base": "f4a183283c^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "031f3f7fba",
+  "date": "2025-11-18",
+  "subject": "fix: improve sync script exclusions and keyword detection",
+  "introducers": [
+   "bea60b3141"
+  ],
+  "review": null,
+  "head": "bea60b3141",
+  "base": "bea60b3141^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "0c93e25517",
+  "date": "2025-10-21",
+  "subject": "fix: set project date to today when creating new project (fixes #17)",
+  "introducers": [
+   "82c39e1763"
+  ],
+  "review": null,
+  "head": "82c39e1763",
+  "base": "82c39e1763^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "d11c2f1cde",
+  "date": "2025-10-20",
+  "subject": "fix: auto-fill task file name from slice in real-time (fixes #18)",
+  "introducers": [
+   "6d88e7ffda"
+  ],
+  "review": null,
+  "head": "6d88e7ffda",
+  "base": "6d88e7ffda^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "82c39e1763",
+  "date": "2025-10-12",
+  "subject": "fix: inherit developmentPhase, workType, and projectDate from current form on new project creation",
+  "introducers": [
+   "03e70b6e65",
+   "222e8b0e32",
+   "f80e948270"
+  ],
+  "review": null,
+  "head": "222e8b0e32",
+  "base": "222e8b0e32^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "0f098796ea",
+  "date": "2025-10-11",
+  "subject": "fix: correct markdown parser to allow ### headers in statement content",
+  "introducers": [
+   "662c513832"
+  ],
+  "review": null,
+  "head": "662c513832",
+  "base": "662c513832^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "8e693eddcd",
+  "date": "2025-10-11",
+  "subject": "fix: update StatementManager defaults to match markdown file format",
+  "introducers": [
+   "662c513832"
+  ],
+  "review": null,
+  "head": "662c513832",
+  "base": "662c513832^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "0a533b1ea7",
+  "date": "2025-10-11",
+  "subject": "fix: resolve ProjectData type errors and remove invalid default instruction",
+  "introducers": [
+   "a6362a45c4"
+  ],
+  "review": null,
+  "head": "a6362a45c4",
+  "base": "a6362a45c4^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "01dbf7056e",
+  "date": "2025-10-11",
+  "subject": "fix: resolve TypeScript errors in ContextTemplateEngine and index",
+  "introducers": [
+   "30cd4c1079",
+   "7d5e61c00f"
+  ],
+  "review": null,
+  "head": "30cd4c1079",
+  "base": "30cd4c1079^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "c3c3ef60e5",
+  "date": "2025-10-08",
+  "subject": "fix: replace Node.js require() with fetch() in SectionBuilder",
+  "introducers": [
+   "bdfd5fee75"
+  ],
+  "review": null,
+  "head": "bdfd5fee75",
+  "base": "bdfd5fee75^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "2b87073bca",
+  "date": "2025-10-08",
+  "subject": "fix: update StatementManager path from private/ to user/",
+  "introducers": [
+   "e0a4b7187d"
+  ],
+  "review": null,
+  "head": "e0a4b7187d",
+  "base": "e0a4b7187d^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "615e2a881f",
+  "date": "2025-10-08",
+  "subject": "fix: replace silent error fallback with explicit error message",
+  "introducers": [
+   "7d5e61c00f"
+  ],
+  "review": null,
+  "head": "7d5e61c00f",
+  "base": "7d5e61c00f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "13cb4b71c9",
+  "date": "2025-10-07",
+  "subject": "fix: resolve TypeScript errors in TemplateProcessor",
+  "introducers": [
+   "25e4202f6a",
+   "8ce1266686",
+   "af28e305db"
+  ],
+  "review": null,
+  "head": "8ce1266686",
+  "base": "8ce1266686^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "ed5d85c6a0",
+  "date": "2025-10-06",
+  "subject": "fix: resolve TypeScript errors in ContextBuilderApp",
+  "introducers": [
+   "4e792150bc",
+   "f53fc669fe"
+  ],
+  "review": null,
+  "head": "4e792150bc",
+  "base": "4e792150bc^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "8a14161401",
+  "date": "2025-10-06",
+  "subject": "fix: select correct context initialization prompt based on monorepo mode",
+  "introducers": [
+   "210efe9d65",
+   "2285025749",
+   "30cd4c1079",
+   "662c513832",
+   "7d5e61c00f",
+   "e0a4b7187d",
+   "f40eab98e1",
+   "f53fc669fe",
+   "fed0239c45"
+  ],
+  "review": null,
+  "head": "fed0239c45",
+  "base": "fed0239c45^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "ba7890f234",
+  "date": "2025-10-05",
+  "subject": "fix: use useState with dependency on isMonorepoEnabled only",
+  "introducers": [
+   "f475d66493"
+  ],
+  "review": null,
+  "head": "f475d66493",
+  "base": "f475d66493^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "f475d66493",
+  "date": "2025-10-05",
+  "subject": "fix: use useRef to truly capture initial monorepo setting",
+  "introducers": [
+   "31da25e6c9",
+   "72c67a1150"
+  ],
+  "review": null,
+  "head": "72c67a1150",
+  "base": "72c67a1150^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "72c67a1150",
+  "date": "2025-10-05",
+  "subject": "fix: use stable reference for monorepo controls visibility",
+  "introducers": [
+   "872de9ccbe"
+  ],
+  "review": null,
+  "head": "872de9ccbe",
+  "base": "872de9ccbe^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "237fb72e29",
+  "date": "2025-09-26",
+  "subject": "fix: bundle markdown dependencies in renderer process",
+  "introducers": [
+   "36b8ca5be3"
+  ],
+  "review": null,
+  "head": "36b8ca5be3",
+  "base": "36b8ca5be3^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "5b95761c22",
+  "date": "2025-09-26",
+  "subject": "fix: correct renderer HTML path for production builds",
+  "introducers": [
+   "36b8ca5be3"
+  ],
+  "review": null,
+  "head": "36b8ca5be3",
+  "base": "36b8ca5be3^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "f475239baa",
+  "date": "2025-09-26",
+  "subject": "fix: resolve Electron Node.js module externalization errors",
+  "introducers": [
+   "210efe9d65",
+   "21dec03fe8",
+   "30cd4c1079",
+   "36b8ca5be3",
+   "3d93956470",
+   "516477a325",
+   "7d5e61c00f",
+   "a7d23b3b46",
+   "d1ea25d469",
+   "e51aec27fa",
+   "ee779c1d8a",
+   "fed0239c45"
+  ],
+  "review": null,
+  "head": "fed0239c45",
+  "base": "fed0239c45^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "f86fedf1a5",
+  "date": "2025-09-26",
+  "subject": "fix: resolve major taskFile TypeScript errors across codebase",
+  "introducers": [
+   "31da25e6c9"
+  ],
+  "review": null,
+  "head": "31da25e6c9",
+  "base": "31da25e6c9^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "fed0239c45",
+  "date": "2025-09-26",
+  "subject": "fix: resolve all SystemPromptParser TypeScript errors",
+  "introducers": [
+   "662c513832",
+   "d1ea25d469"
+  ],
+  "review": null,
+  "head": "662c513832",
+  "base": "662c513832^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "21dec03fe8",
+  "date": "2025-09-26",
+  "subject": "fix: add explicit Promise return types to SystemPromptParser async methods",
+  "introducers": [
+   "d1ea25d469"
+  ],
+  "review": null,
+  "head": "d1ea25d469",
+  "base": "d1ea25d469^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "355565e5d1",
+  "date": "2025-09-25",
+  "subject": "fix: Settings Dialog checkbox not updating properly",
+  "introducers": [
+   "4e792150bc"
+  ],
+  "review": null,
+  "head": "4e792150bc",
+  "base": "4e792150bc^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "f0790cc78a",
+  "date": "2025-09-16",
+  "subject": "fix: integrate enhanced TemplateProcessor into ContextTemplateEngine",
+  "introducers": [
+   "7077fe78ee",
+   "7d5e61c00f"
+  ],
+  "review": null,
+  "head": "7077fe78ee",
+  "base": "7077fe78ee^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "6228a80d40",
+  "date": "2025-09-15",
+  "subject": "fix: include custom monorepoNote in context generation",
+  "introducers": [
+   "e51aec27fa"
+  ],
+  "review": null,
+  "head": "e51aec27fa",
+  "base": "e51aec27fa^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "c6633455be",
+  "date": "2025-09-15",
+  "subject": "fix: exclude template field from project object when monorepo is deselected",
+  "introducers": [
+   "ee779c1d8a"
+  ],
+  "review": null,
+  "head": "ee779c1d8a",
+  "base": "ee779c1d8a^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "be22d70440",
+  "date": "2025-09-14",
+  "subject": "fix: increase monorepo structure field character limit from 2000 to 8000",
+  "introducers": [
+   "b363a41fa4"
+  ],
+  "review": null,
+  "head": "b363a41fa4",
+  "base": "b363a41fa4^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "6477db3333",
+  "date": "2025-09-13",
+  "subject": "fix: revert development phases to original values",
+  "introducers": [
+   "dc04f1b71e"
+  ],
+  "review": null,
+  "head": "dc04f1b71e",
+  "base": "dc04f1b71e^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "3faa05d8bc",
+  "date": "2025-09-13",
+  "subject": "fix: restore availableTools field persistence",
+  "introducers": [
+   "0c6085694d",
+   "11d1c97981",
+   "2a0f2fbd8f"
+  ],
+  "review": null,
+  "head": "11d1c97981",
+  "base": "11d1c97981^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "0c6085694d",
+  "date": "2025-09-13",
+  "subject": "fix: resolve form reset issue and TypeScript errors",
+  "introducers": [
+   "2a0f2fbd8f",
+   "31da25e6c9",
+   "78534e6436",
+   "a6362a45c4"
+  ],
+  "review": null,
+  "head": "2a0f2fbd8f",
+  "base": "2a0f2fbd8f^"
+ },
+ {
+  "repo": "context-forge",
+  "fix": "78534e6436",
+  "date": "2025-09-13",
+  "subject": "fix: add {project} template variable mapping",
+  "introducers": [
+   "52ed49feff",
+   "9baa974178",
+   "af28e305db",
+   "b363a41fa4",
+   "e51aec27fa"
+  ],
+  "review": null,
+  "head": "52ed49feff",
+  "base": "52ed49feff^"
+ }
+]

@@ -1,0 +1,48 @@
+{
+ "case": "307",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "pass --estimate-only --json` nests each phase's summary under `phases[].summary`, so `judge` and `_estimate_only` raise `KeyError` on the top-level `requests`/`planned_usd` reads and stop before any spend."
+  ],
+  "F2": [
+   "KEEP",
+   "evaluate_spend` sets `estimate_only` for every non-empty plan, so the estimate verdict is never `allowed` and `judge_estimate` refuses every real plan."
+  ],
+  "F3": [
+   "KEEP",
+   "with `check_ceilings=False`, `judge_estimate` returns BUY before reading `reasons`, so a space shortfall prints the ceiling command as the fix."
+  ],
+  "F4": [
+   "KEEP",
+   "over names are pooled by product across tier and bar volume checks, so one family's failure lists the other's sessions; the `or ()` is correct because `to_dict` omits `volume_checks` when it is None."
+  ],
+  "F5": [
+   "DROP",
+   "the operator types `--slice`, so a path-like value is operator error rather than untrusted input, and the impact is low."
+  ],
+  "F6": [
+   "DROP",
+   "pyproject.toml` is not in the change, and the type-checker coverage gap is tooling config with no wrong behavior shown."
+  ]
+ },
+ "wall_seconds": 80.8,
+ "duration_seconds": 80.82023175014183,
+ "cost_usd": 0.029809079999999998,
+ "effort": "xhigh",
+ "tool_calls_made": 18,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=453246, cached=369658, cache_write=83574, completion=16275, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `pass --estimate-only --json` nests each phase's summary under `phases[].summary`, so `judge` and `_estimate_only` raise `KeyError` on the top-level `requests`/`planned_usd` reads and stop before any spend.\nF2: KEEP \u2014 `evaluate_spend` sets `estimate_only` for every non-empty plan, so the estimate verdict is never `allowed` and `judge_estimate` refuses every real plan.\nF3: KEEP \u2014 with `check_ceilings=False`, `judge_estimate` returns BUY before reading `reasons`, so a space shortfall prints the ceiling command as the fix.\nF4: KEEP \u2014 over names are pooled by product across tier and bar volume checks, so one family's failure lists the other's sessions; the `or ()` is correct because `to_dict` omits `volume_checks` when it is None.\nF5: DROP \u2014 the operator types `--slice`, so a path-like value is operator error rather than untrusted input, and the impact is low.\nF6: DROP \u2014 `pyproject.toml` is not in the change, and the type-checker coverage gap is tooling config with no wrong behavior shown.\nF1: KEEP \u2014 `pass --estimate-only --json` nests each phase's summary under `phases[].summary`, so `judge` and `_estimate_only` raise `KeyError` on the top-level `requests`/`planned_usd` reads and stop before any spend.\nF2: KEEP \u2014 `evaluate_spend` sets `estimate_only` for every non-empty plan, so the estimate verdict is never `allowed` and `judge_estimate` refuses every real plan.\nF3: KEEP \u2014 with `check_ceilings=False`, `judge_estimate` returns BUY before reading `reasons`, so a space shortfall prints the ceiling command as the fix.\nF4: KEEP \u2014 over names are pooled by product across tier and bar volume checks, so one family's failure lists the other's sessions; the `or ()` is correct because `to_dict` omits `volume_checks` when it is None.\nF5: DROP \u2014 the operator types `--slice`, so a path-like value is operator error rather than untrusted input, and the impact is low.\nF6: DROP \u2014 `pyproject.toml` is not in the change, and the type-checker coverage gap is tooling config with no wrong behavior shown."
+}

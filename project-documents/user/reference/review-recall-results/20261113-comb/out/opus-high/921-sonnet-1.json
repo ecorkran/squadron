@@ -1,0 +1,38 @@
+{
+ "case": "921",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "MT_INSTALL` lets `manta` run, as root and with no password, a script in a checkout that `manta` owns and can edit. That makes the rule full root, which contradicts its \"nothing wider\" claim."
+  ],
+  "F2": [
+   "DROP",
+   "The imports really are unsorted, but that is a lint/style issue with no effect on behaviour."
+  ],
+  "F3": [
+   "DROP",
+   "bounds_conn` (line 901) is opened and released on its own, with no outer connection held. The setup `conn` is released before the loop (line 792) and `chunk_conn` is closed at line 833, so there is no nested checkout and no deadlock risk."
+  ],
+  "F4": [
+   "DROP",
+   "Duplicated test scaffolding and the substring checks in already-existing code are maintainability points, not defects."
+  ]
+ },
+ "wall_seconds": 40.1,
+ "duration_seconds": 40.054354541003704,
+ "cost_usd": 0.17227040000000002,
+ "effort": "high",
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=123299, cached=112374, cache_write=10909, completion=3091, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `MT_INSTALL` lets `manta` run, as root and with no password, a script in a checkout that `manta` owns and can edit. That makes the rule full root, which contradicts its \"nothing wider\" claim.\nF2: DROP \u2014 The imports really are unsorted, but that is a lint/style issue with no effect on behaviour.\nF3: DROP \u2014 `bounds_conn` (line 901) is opened and released on its own, with no outer connection held. The setup `conn` is released before the loop (line 792) and `chunk_conn` is closed at line 833, so there is no nested checkout and no deadlock risk.\nF4: DROP \u2014 Duplicated test scaffolding and the substring checks in already-existing code are maintainability points, not defects.\n**Verdict:** Fix one finding (F1) before merging. Drop the other three (F2, F3, F4).\n\n### [FAIL] F1: The sudoers rule effectively gives the operator account full root\ncategory: security\nlocation: deploy/sudoers.d/manta-ops:9\n\nF1: KEEP \u2014 `MT_INSTALL` lets `manta` run `/home/manta/source/repos/manta/trading-data/deploy/install-production.sh --ref *` as root with no password. That script sits in `manta`'s own checkout, so `manta` can edit it and then run it as root. This is unrestricted root, which contradicts the \"nothing wider\" claim in the header comment. The fix is to run a root-owned installed copy of the script, or to admit in the comment that the rule grants full root.\n\n### [NOTE] F2: Import blocks are not sorted the way ruff's `I` rule expects\ncategory: style\nlocation: scripts/cutover_921_minute_sessions.py:45-58\n\nF2: DROP \u2014 The `cutover_common` import list really is out of order (`NOTES_DIR, fire_unit_until, start_log` come before `CutoverError, fire_unit, ...`). But this is a lint issue with no effect on behaviour, and `ruff check --fix` sorts it.\n\n### [PASS] F3: Extra pool connection opened for each chunk\ncategory: resource-management\nlocation: src/manta_trading/data/acquisition/daemon/minute.py:901\n\nF3: DROP \u2014 `bounds_conn` is opened and released on its own at lines 901\u2013904, and no other connection is held at that point. The setup `conn` goes back to the pool before the loop (line 792), and the gap-picking `chunk_conn` closes at line 833. The write `chunk_conn` opens only afterwards (line 923). There is no nested checkout, so the pool cannot run out or deadlock here.\n\n### [NOTE] F4: Test mock setup is duplicated, and the script matches on printed text\ncategory: maintainability\nlocation: test/unit/data/acquisition/daemon/test_minute.py\n\nF4: DROP \u2014 The copied test scaffolding and the substring checks on printed output (the `FAIL` check predates this change) make the code harder to maintain. They don't cause wrong behaviour."
+}

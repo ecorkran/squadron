@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The duplicated settings resolution is a maintainability concern, not a demonstrated behavioral defect."
+  ],
+  "F2": [
+   "KEEP",
+   "The broad fake return types force suppressions that bypass strict test type checking and can conceal test bugs."
+  ]
+ },
+ "wall_seconds": 29.8,
+ "duration_seconds": 29.803421082906425,
+ "cost_usd": 0.00483323,
+ "effort": null,
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=102910, cached=70953, cache_write=None, completion=1856, reasoning=1598)",
+ "raw_output": "F1: DROP \u2014 The duplicated settings resolution is a maintainability concern, not a demonstrated behavioral defect.\nF2: KEEP \u2014 The broad fake return types force suppressions that bypass strict test type checking and can conceal test bugs.\nF1: DROP \u2014 The duplicated settings resolution is a maintainability concern, not a demonstrated behavioral defect.\nF2: DROP \u2014 The type suppressions are a test-quality concern, but no runtime defect is shown."
+}

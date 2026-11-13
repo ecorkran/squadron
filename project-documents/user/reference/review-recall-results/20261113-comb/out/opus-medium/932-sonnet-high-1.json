@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The duplication is real, but both call sites read the same keys and apply the same policy, so nothing behaves wrongly; this is a maintainability refactor, not a defect."
+  ],
+  "F2": [
+   "DROP",
+   "The `object` annotations and type suppressions are a test-typing quality issue that causes no wrong behavior, and the broad `pytest.raises` is a style nit."
+  ]
+ },
+ "wall_seconds": 12.9,
+ "duration_seconds": 12.857535917079076,
+ "cost_usd": 0.1788279,
+ "effort": "medium",
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=66012, cached=47274, cache_write=18728, completion=925, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The duplication is real, but both call sites read the same keys and apply the same policy, so nothing behaves wrongly; this is a maintainability refactor, not a defect.\nF2: DROP \u2014 The `object` annotations and type suppressions are a test-typing quality issue that causes no wrong behavior, and the broad `pytest.raises` is a style nit.\nF1: DROP \u2014 The duplication is real, but both call sites read the same keys and apply the same policy, so nothing behaves wrongly; this is a maintainability refactor, not a defect.\nF2: DROP \u2014 The `object` annotations and type suppressions are a test-typing quality issue that causes no wrong behavior, and the broad `pytest.raises` is a style nit."
+}

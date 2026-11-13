@@ -1,0 +1,48 @@
+{
+ "case": "921",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The new sudoers rule lets `manta` run a script from its own writable checkout as root, with any `--ref`, and the `mt-*` and `mt-run *` wildcards match arbitrary extra arguments, so `manta` effectively gets full root despite the \"nothing wider\" claim."
+  ],
+  "F2": [
+   "DROP",
+   "Parsing `[WAIT]`/`FAIL` out of the printed text works correctly today; the literal's duplication is a maintainability issue, not a current defect."
+  ],
+  "F3": [
+   "DROP",
+   "Opening the log before preflight only means a stray log file/directory may be created before the script refuses to run from the wrong directory; low impact."
+  ],
+  "F4": [
+   "KEEP",
+   "last_successful_finish < max(created_at)` misses bars written while a refresh was running, so `--verify` can call stale cagg data fresh and the acceptance step reports a false FAIL, the exact wrong verdict this probe was added to prevent."
+  ],
+  "F5": [
+   "DROP",
+   "Import ordering is a lint/style point with no effect on behaviour."
+  ],
+  "F6": [
+   "DROP",
+   "Duplicated test setup and mock-heavy tests are a test-quality concern, not a defect in the changed code."
+  ]
+ },
+ "wall_seconds": 55.3,
+ "duration_seconds": 55.30217804200947,
+ "cost_usd": 0.345727,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=135508, cached=105177, cache_write=30317, completion=4067, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The new sudoers rule lets `manta` run a script from its own writable checkout as root, with any `--ref`, and the `mt-*` and `mt-run *` wildcards match arbitrary extra arguments, so `manta` effectively gets full root despite the \"nothing wider\" claim.\nF2: DROP \u2014 Parsing `[WAIT]`/`FAIL` out of the printed text works correctly today; the literal's duplication is a maintainability issue, not a current defect.\nF3: DROP \u2014 Opening the log before preflight only means a stray log file/directory may be created before the script refuses to run from the wrong directory; low impact.\nF4: KEEP \u2014 `last_successful_finish < max(created_at)` misses bars written while a refresh was running, so `--verify` can call stale cagg data fresh and the acceptance step reports a false FAIL, the exact wrong verdict this probe was added to prevent.\nF5: DROP \u2014 Import ordering is a lint/style point with no effect on behaviour.\nF6: DROP \u2014 Duplicated test setup and mock-heavy tests are a test-quality concern, not a defect in the changed code.\nF1: KEEP \u2014 The new sudoers rule lets `manta` run a script from its own writable checkout as root, with any `--ref`, and the `mt-*` and `mt-run *` wildcards match arbitrary extra arguments, so `manta` effectively gets full root despite the \"nothing wider\" claim.\nF2: DROP \u2014 Parsing `[WAIT]`/`FAIL` out of the printed text works correctly today; the literal's duplication is a maintainability issue, not a current defect.\nF3: DROP \u2014 Opening the log before preflight only means a stray log file/directory may be created before the script refuses to run from the wrong directory; low impact.\nF4: KEEP \u2014 `last_successful_finish < max(created_at)` misses bars written while a refresh was running, so `--verify` can call stale cagg data fresh and the acceptance step reports a false FAIL, the exact wrong verdict this probe was added to prevent.\nF5: DROP \u2014 Import ordering is a lint/style point with no effect on behaviour.\nF6: DROP \u2014 Duplicated test setup and mock-heavy tests are a test-quality concern, not a defect in the changed code."
+}

@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The duplicate check is a low-value DRY concern, not a behavioral defect."
+  ],
+  "F2": [
+   "DROP",
+   "This project uses mypy rather than strict pyright, and the bare generics do not violate its configured checks."
+  ]
+ },
+ "wall_seconds": 52.2,
+ "duration_seconds": 52.18775074998848,
+ "cost_usd": 0.00362954,
+ "effort": "high",
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=55295, cached=38944, cache_write=None, completion=3210, reasoning=2914)",
+ "raw_output": "F1: DROP \u2014 The duplicate check is a low-value DRY concern, not a behavioral defect.\nF2: DROP \u2014 This project uses mypy rather than strict pyright, and the bare generics do not violate its configured checks.\nF1: DROP \u2014 The duplicated check is a low-value DRY concern, not a behavioral defect.\nF2: DROP \u2014 The project uses mypy rather than strict pyright, so the claimed pyright merge blocker does not apply."
+}

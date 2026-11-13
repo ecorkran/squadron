@@ -1,0 +1,38 @@
+{
+ "case": "175",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Misleading and redundant logging does not cause a functional defect."
+  ],
+  "F2": [
+   "DROP",
+   "The review already resolved the same profile and provider before making the failing call."
+  ],
+  "F3": [
+   "KEEP",
+   "Compact\u2019s failure handler discards available error telemetry, leaving incurred spend unrecorded."
+  ],
+  "F4": [
+   "DROP",
+   "Duplicate pricing produces redundant warnings but does not change recorded costs."
+  ]
+ },
+ "wall_seconds": 39.7,
+ "duration_seconds": 39.72919820807874,
+ "cost_usd": 0.03191,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=101426, cached=90880, cache_write=None, completion=173, reasoning=13)",
+ "raw_output": "F1: DROP \u2014 Misleading and redundant logging does not cause a functional defect.\nF2: DROP \u2014 The review already resolved the same profile and provider before making the failing call.\nF3: KEEP \u2014 Compact\u2019s failure handler discards available error telemetry, leaving incurred spend unrecorded.\nF4: DROP \u2014 Duplicate pricing produces redundant warnings but does not change recorded costs.\nF1: DROP \u2014 Redundant traceback logging does not cause a functional defect.\nF2: DROP \u2014 The same profile and provider were already successfully resolved before the failing call.\nF3: KEEP \u2014 Compact\u2019s failure handler discards available error telemetry, leaving incurred spend unrecorded.\nF4: DROP \u2014 Repricing duplicates warnings but does not produce incorrect recorded costs."
+}

@@ -1,0 +1,33 @@
+{
+ "case": "188",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The route declares `date | datetime`, so Pydantic tries `date` first and turns a midnight timestamp like `2026-06-01T00:00:00Z` into a bare date; `resolve_window` (windows.py:46-47) then widens `end` to 23:59:59.999999, which pulls in an extra day of rows."
+  ],
+  "F2": [
+   "KEEP",
+   "Building the model and serializing it run on the event loop after the executor call (kalshi_timeseries.py:125-126, 168-174), and with up to 75,000 rows that blocks the loop far beyond the 1 ms limit in the project's async rule."
+  ],
+  "F3": [
+   "DROP",
+   "Wiring a CI job is infrastructure work outside the changed code, and the slice explicitly defers it to slice 907; the load tests themselves were added."
+  ]
+ },
+ "wall_seconds": 44.9,
+ "duration_seconds": 44.84533637482673,
+ "cost_usd": 0.20495069999999999,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=106497, cached=92964, cache_write=13519, completion=3874, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The route declares `date | datetime`, so Pydantic tries `date` first and turns a midnight timestamp like `2026-06-01T00:00:00Z` into a bare date; `resolve_window` (windows.py:46-47) then widens `end` to 23:59:59.999999, which pulls in an extra day of rows.\nF2: KEEP \u2014 Building the model and serializing it run on the event loop after the executor call (kalshi_timeseries.py:125-126, 168-174), and with up to 75,000 rows that blocks the loop far beyond the 1 ms limit in the project's async rule.\nF3: DROP \u2014 Wiring a CI job is infrastructure work outside the changed code, and the slice explicitly defers it to slice 907; the load tests themselves were added.\n**Verdict: FAIL.** Two findings should be fixed before merge (F1 and F2). F3 doesn't block the merge.\n\n### [FAIL] F1: Midnight timestamps are read as whole days\ncategory: correctness\nlocation: src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92\n\nKEEP. Both routes type `start` and `end` as `date | datetime`, with `date` listed first. In that case Pydantic accepts a midnight timestamp such as `2026-06-01T00:00:00Z` as a bare `date`. `resolve_window` (`src/manta_trading/api_server/routes/windows.py:46-47`) then treats that date as a whole UTC day, so the end bound becomes `2026-06-01T23:59:59.999999Z`. The response silently includes an extra day of rows. The fix is to keep date-only inputs and timestamps apart, for example by checking the raw string's form before resolving it. Add regression tests for midnight timestamps with and without an offset.\n\n### [FAIL] F2: Large responses block the event loop\ncategory: concurrency\nlocation: src/manta_trading/api_server/routes/kalshi_timeseries.py:123-126\n\nKEEP. Only the database read goes through `run_in_executor`. `CandlesResponse.build(...)` and `timeseries_response(...)` run on the event loop afterwards, and so do `TradesResponse.build(...)` and its serialization at lines 168-174. The row ceiling `API_MAX_BARS_PER_REQUEST` is 75,000 (`src/manta_trading/constants.py:1287`). The reviewer's benchmark puts a full-size response at roughly 1.2 s of synchronous work. The project's Python rules allow at most 1 ms of synchronous work inside an async handler, so this blocks every other request while it runs. The bars route has the same pattern, but these are new handlers that add new blocking paths. Move model construction and serialization into the executor after the connection is released, and add a load test that checks event-loop latency during a concurrent large response.\n\n### [NOTE] F3: Load tests are not enforced by CI\ncategory: process\nlocation: test/load/test_188_kalshi_api_nfr.py:37-46\n\nDROP. Adding a CI job is infrastructure work outside the code this change touched, and the slice plan explicitly defers CI gating to slice 907. The change does add the load tier the rules ask for (`test/load/test_188_kalshi_api_nfr.py`), so the remaining gap is CI wiring, not a defect in this change."
+}

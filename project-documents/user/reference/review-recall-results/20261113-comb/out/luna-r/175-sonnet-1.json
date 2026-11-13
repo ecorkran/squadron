@@ -1,0 +1,38 @@
+{
+ "case": "175",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The extra traceback is misleading and noisy, but does not cause a material behavior or data defect."
+  ],
+  "F2": [
+   "KEEP",
+   "A failure during the repeated profile/provider lookup can replace the original provider error reported for the step."
+  ],
+  "F3": [
+   "KEEP",
+   "When compaction fails after spending tokens, the failure result drops telemetry that can be carried by a provider error."
+  ],
+  "F4": [
+   "DROP",
+   "The separate warning sets can repeat pricing warnings, but the re-pricing preserves the same cost and basis."
+  ]
+ },
+ "wall_seconds": 45.2,
+ "duration_seconds": 45.22064750012942,
+ "cost_usd": 0.00785605,
+ "effort": null,
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=182929, cached=135615, cache_write=None, completion=3537, reasoning=2986)",
+ "raw_output": "F1: DROP \u2014 The extra traceback is misleading and noisy, but does not cause a material behavior or data defect.\nF2: KEEP \u2014 A failure during the repeated profile/provider lookup can replace the original provider error reported for the step.\nF3: KEEP \u2014 When compaction fails after spending tokens, the failure result drops telemetry that can be carried by a provider error.\nF4: DROP \u2014 The separate warning sets can repeat pricing warnings, but the re-pricing preserves the same cost and basis.\nF1: DROP \u2014 The misleading traceback is noisy but does not cause a material behavior or data defect.\nF2: KEEP \u2014 A failure during the profile/provider lookup can replace the original provider error reported for the step.\nF3: KEEP \u2014 A compact failure can discard telemetry from a failed provider call even though the error carries its spend.\nF4: DROP \u2014 Repeated pricing warnings are noisy, but the failure path still records the same cost and basis."
+}

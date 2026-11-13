@@ -1,0 +1,58 @@
+{
+ "case": "175",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Folding preserves only the first part\u2019s usage, undercounting split reviews."
+  ],
+  "F2": [
+   "KEEP",
+   "Compact failures discard available telemetry, including spend captured before reconnect fails."
+  ],
+  "F3": [
+   "KEEP",
+   "Missing alias attribution mislabels subscription costs and records the alias as the model."
+  ],
+  "F4": [
+   "DROP",
+   "Both omissions predate this change and fall outside its specified capture scope."
+  ],
+  "F5": [
+   "DROP",
+   "The keys currently match; duplication alone causes no incorrect behavior."
+  ],
+  "F6": [
+   "DROP",
+   "This requests additional test coverage without demonstrating a parser defect."
+  ],
+  "F7": [
+   "DROP",
+   "Shared plumbing would reduce duplication but fixes no demonstrated behavioral defect."
+  ],
+  "F8": [
+   "DROP",
+   "Length-guideline violations alone do not establish incorrect behavior."
+  ]
+ },
+ "wall_seconds": 57.6,
+ "duration_seconds": 57.5850830830168,
+ "cost_usd": 0.0194208,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=121375, cached=119168, cache_write=None, completion=309, reasoning=14)",
+ "raw_output": "F1: KEEP \u2014 Folding preserves only the first part\u2019s usage, undercounting split reviews.\nF2: KEEP \u2014 Compact failures discard available telemetry, including spend captured before reconnect fails.\nF3: KEEP \u2014 Missing alias attribution mislabels subscription costs and records the alias as the model.\nF4: DROP \u2014 Both omissions predate this change and fall outside its specified capture scope.\nF5: DROP \u2014 The keys currently match; duplication alone causes no incorrect behavior.\nF6: DROP \u2014 This requests additional test coverage without demonstrating a parser defect.\nF7: DROP \u2014 Shared plumbing would reduce duplication but fixes no demonstrated behavioral defect.\nF8: DROP \u2014 Length-guideline violations alone do not establish incorrect behavior.\nF1: KEEP \u2014 Folding preserves only the first part\u2019s usage, undercounting split reviews.\nF2: KEEP \u2014 Compact failures discard available telemetry, including spend captured before reconnect fails.\nF3: KEEP \u2014 Missing alias attribution mislabels subscription costs and records the alias as the model.\nF4: DROP \u2014 These omissions predate the change and are outside its specified capture scope.\nF5: DROP \u2014 The keys currently match; duplication causes no demonstrated behavioral defect.\nF6: DROP \u2014 Additional fixture coverage is requested without demonstrating a parser defect.\nF7: DROP \u2014 Refactoring duplicated plumbing fixes no demonstrated behavioral defect.\nF8: DROP \u2014 Exceeding length guidelines alone does not establish incorrect behavior."
+}

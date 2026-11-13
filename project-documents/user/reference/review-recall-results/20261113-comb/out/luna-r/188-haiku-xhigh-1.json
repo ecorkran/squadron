@@ -1,0 +1,63 @@
+{
+ "case": "188",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Building and serializing ceiling-sized responses on the event loop can block unrelated requests."
+  ],
+  "F2": [
+   "KEEP",
+   "The public field description calls the watermark the newest trade time, which can mislead clients about tape freshness."
+  ],
+  "F3": [
+   "KEEP",
+   "The response can report `tape_filtered=true` while still returning previously stored trades, contradicting its public description."
+  ],
+  "F4": [
+   "DROP",
+   "The duplication is a maintenance concern, and the integration test verifies the membership logic agrees with SQL."
+  ],
+  "F5": [
+   "DROP",
+   "This is an inaccurate implementation claim, but the current schema works and the test catches future column drift."
+  ],
+  "F6": [
+   "DROP",
+   "The mapping matches the column order today, so the finding describes a hypothetical future change."
+  ],
+  "F7": [
+   "DROP",
+   "The helpers use different boundary conventions correctly; the duplication is not a current behavior defect."
+  ],
+  "F8": [
+   "DROP",
+   "These are missing load-test assertions, not evidence of a defect in a path that currently works."
+  ],
+  "F9": [
+   "DROP",
+   "File and helper size guidance is a maintainability concern, not a merge-blocking defect."
+  ]
+ },
+ "wall_seconds": 46.1,
+ "duration_seconds": 46.080055749975145,
+ "cost_usd": 0.00579601,
+ "effort": null,
+ "tool_calls_made": 11,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=100079, cached=67171, cache_write=None, completion=3667, reasoning=2921)",
+ "raw_output": "F1: KEEP \u2014 Building and serializing ceiling-sized responses on the event loop can block unrelated requests.\nF2: KEEP \u2014 The public field description calls the watermark the newest trade time, which can mislead clients about tape freshness.\nF3: KEEP \u2014 The response can report `tape_filtered=true` while still returning previously stored trades, contradicting its public description.\nF4: DROP \u2014 The duplication is a maintenance concern, and the integration test verifies the membership logic agrees with SQL.\nF5: DROP \u2014 This is an inaccurate implementation claim, but the current schema works and the test catches future column drift.\nF6: DROP \u2014 The mapping matches the column order today, so the finding describes a hypothetical future change.\nF7: DROP \u2014 The helpers use different boundary conventions correctly; the duplication is not a current behavior defect.\nF8: DROP \u2014 These are missing load-test assertions, not evidence of a defect in a path that currently works.\nF9: DROP \u2014 File and helper size guidance is a maintainability concern, not a merge-blocking defect.\nF1: KEEP \u2014 Building and serializing ceiling-sized responses on the event loop can block unrelated requests.\nF2: KEEP \u2014 The field description calls the watermark the newest trade time, which can mislead clients about tape freshness.\nF3: KEEP \u2014 The response can report `tape_filtered=true` while returning previously stored trades, contradicting its public description.\nF4: DROP \u2014 The duplication is a maintenance concern, and the integration test verifies agreement with the SQL predicate.\nF5: DROP \u2014 This is an inaccurate implementation claim, but the current schema works and a test catches future column drift.\nF6: DROP \u2014 The mapping matches the column order today, so the finding describes a hypothetical future change.\nF7: DROP \u2014 The helpers use different boundary conventions correctly, and `gaps.py` was not changed.\nF8: DROP \u2014 Missing load-test assertions do not demonstrate a defect in a path that currently works.\nF9: DROP \u2014 File and helper size guidance is a maintainability concern, not a behavior defect."
+}

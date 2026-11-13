@@ -1,0 +1,38 @@
+{
+ "case": "197",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2",
+  "F4": "sol/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The undesigned-only source excludes an existing design, so unresolved reviews cannot be resumed."
+  ],
+  "F2": [
+   "KEEP",
+   "An unregistered linked worktree can have leftovers committed and be switched before registration is checked."
+  ],
+  "F3": [
+   "KEEP",
+   "Synchronous subprocesses and file operations in this async path can block the event loop well beyond the required bound."
+  ],
+  "F4": [
+   "KEEP",
+   "A null item raises `AttributeError` outside the loader\u2019s documented error handling and escapes item-resume rejection handling."
+  ]
+ },
+ "wall_seconds": 64.8,
+ "duration_seconds": 64.8350499169901,
+ "cost_usd": 0.00953925,
+ "effort": "high",
+ "tool_calls_made": 23,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=291683, cached=242845, cache_write=None, completion=4454, reasoning=3450)",
+ "raw_output": "F1: KEEP \u2014 The undesigned-only source excludes an existing design, so unresolved reviews cannot be resumed.\nF2: KEEP \u2014 An unregistered linked worktree can have leftovers committed and be switched before registration is checked.\nF3: KEEP \u2014 Synchronous subprocesses and file operations in this async path can block the event loop well beyond the required bound.\nF4: KEEP \u2014 A null item raises `AttributeError` outside the loader\u2019s documented error handling and escapes item-resume rejection handling.\nF1: KEEP \u2014 The undesigned-only source excludes slices with existing designs, preventing unresolved reviews from being resumed.\nF2: KEEP \u2014 An unregistered linked worktree can have leftovers committed and be switched before registration is checked.\nF3: KEEP \u2014 Synchronous subprocess and file operations in this async path can block the event loop far beyond the required bound.\nF4: KEEP \u2014 A null item raises `AttributeError` outside the loader\u2019s error handling and escapes item-resume rejection handling."
+}

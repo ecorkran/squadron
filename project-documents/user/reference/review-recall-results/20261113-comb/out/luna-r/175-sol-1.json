@@ -1,0 +1,33 @@
+{
+ "case": "175",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Earlier loop rounds are omitted from persisted action results, so run usage totals undercount their spend."
+  ],
+  "F2": [
+   "KEEP",
+   "Folding split reviews copies only the first part\u2019s usage metadata, undercounting the combined review."
+  ],
+  "F3": [
+   "KEEP",
+   "A failed part lacks the input and verdict required by the fold, causing a second error that discards its captured usage."
+  ]
+ },
+ "wall_seconds": 16.8,
+ "duration_seconds": 16.770498084137216,
+ "cost_usd": 0.005420190000000001,
+ "effort": null,
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=123158, cached=81929, cache_write=None, completion=956, reasoning=553)",
+ "raw_output": "F1: KEEP \u2014 Earlier loop rounds are omitted from persisted action results, so run usage totals undercount their spend.\nF2: KEEP \u2014 Folding split reviews copies only the first part\u2019s usage metadata, undercounting the combined review.\nF3: KEEP \u2014 A failed part lacks the input and verdict required by the fold, causing a second error that discards its captured usage.\nF1: KEEP \u2014 Earlier loop rounds are omitted from persisted action results, so run usage totals undercount their spend.\nF2: KEEP \u2014 Folding split reviews copies only the first part\u2019s usage metadata, undercounting the combined review.\nF3: KEEP \u2014 A failed part lacks the input and verdict required by the fold, causing a second error that discards its captured usage."
+}

@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "run_steps` only catches `StepFailed` and `CalledProcessError`, so any other error skips the report write in `main()`. That breaks the docstring's promise. It can really happen: `step_production` line 224 reads the production health log without the exists/empty guard that `run_health` has, and that step runs after the cron file is installed."
+  ],
+  "F2": [
+   "DROP",
+   "the `split(\"/\")[0]` assertion can't fail, but the `startswith(f\"{CHECKOUT}/scripts/...\")` check just above it already proves the user field is stripped. The rest of the finding asks for a test of a path that already works."
+  ],
+  "F3": [
+   "DROP",
+   "this is a missing test for a short `\\gexec` branch copied from `provision_roles.sql`. The finding shows no defect in the SQL."
+  ]
+ },
+ "wall_seconds": 26.5,
+ "duration_seconds": 26.493884791852906,
+ "cost_usd": 0.2786836,
+ "effort": "high",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=144802, cached=117940, cache_write=26850, completion=1961, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `run_steps` only catches `StepFailed` and `CalledProcessError`, so any other error skips the report write in `main()`. That breaks the docstring's promise. It can really happen: `step_production` line 224 reads the production health log without the exists/empty guard that `run_health` has, and that step runs after the cron file is installed.\nF2: DROP \u2014 the `split(\"/\")[0]` assertion can't fail, but the `startswith(f\"{CHECKOUT}/scripts/...\")` check just above it already proves the user field is stripped. The rest of the finding asks for a test of a path that already works.\nF3: DROP \u2014 this is a missing test for a short `\\gexec` branch copied from `provision_roles.sql`. The finding shows no defect in the SQL.\nF1: KEEP \u2014 `run_steps` only catches `StepFailed` and `CalledProcessError`, so any other error, such as an `IndexError` from the unguarded health-log read at `scripts/cutover_227_tick_backup.py:224`, skips the report write in `main()`, even though the docstring says the report is always written.\nF2: DROP \u2014 the `split(\"/\")[0]` assertion can't fail, but the `startswith(f\"{CHECKOUT}/scripts/...\")` check just above it already proves the user field is stripped, and the rest asks for a test of a path that already works.\nF3: DROP \u2014 this is a missing test for a short `\\gexec` branch copied from `provision_roles.sql`, and the finding shows no actual defect in the SQL."
+}

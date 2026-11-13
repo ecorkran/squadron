@@ -1,0 +1,38 @@
+{
+ "case": "197",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Invalid pipeline definitions escape uncaught, while missing pipelines incorrectly return HALTED instead of REJECTED."
+  ],
+  "F2": [
+   "DROP",
+   "Required fields fail explicitly; clearer diagnostics and unused dataclass defaults do not establish a functional defect."
+  ],
+  "F3": [
+   "DROP",
+   "Orphan cleanup and restrictive report permissions have no demonstrated merge-blocking functional impact."
+  ],
+  "F4": [
+   "DROP",
+   "The deferred import avoids initialization problems, and private cross-module imports are a structural concern rather than a behavioral defect."
+  ]
+ },
+ "wall_seconds": 18.4,
+ "duration_seconds": 18.394123333040625,
+ "cost_usd": 0.058933400000000004,
+ "effort": null,
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=74337, cached=50274, cache_write=None, completion=578, reasoning=139)",
+ "raw_output": "F1: KEEP \u2014 Invalid pipeline definitions escape uncaught, while missing pipelines incorrectly return HALTED instead of REJECTED.\nF2: DROP \u2014 Required fields fail explicitly; clearer diagnostics and unused dataclass defaults do not establish a functional defect.\nF3: DROP \u2014 Orphan cleanup and restrictive report permissions have no demonstrated merge-blocking functional impact.\nF4: DROP \u2014 The deferred import avoids initialization problems, and private cross-module imports are a structural concern rather than a behavioral defect.\nF1: KEEP \u2014 Invalid pipeline definitions escape uncaught, while missing pipelines incorrectly return HALTED instead of REJECTED.\nF2: DROP \u2014 Missing fields already fail explicitly; improved diagnostics alone do not establish a functional defect.\nF3: DROP \u2014 Temporary-file cleanup and restrictive permissions have no demonstrated merge-blocking functional impact.\nF4: DROP \u2014 The deferred import avoids initialization problems, and the dependency structure causes no demonstrated behavioral defect."
+}

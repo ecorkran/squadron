@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "On a rerun, `step_check` saves the already-updated cron file as `old`, but `production_changes` strips the new arguments only from `new`, so step 4 fails every rerun and breaks the documented \"re-run the whole script\" recovery."
+  ],
+  "F2": [
+   "KEEP",
+   "run_health` ignores the health script's exit status and reads whatever line is last in the log, so if the script exits before appending (bad arguments, log write failure), an earlier clean `FLAGS` line can pass the gate."
+  ],
+  "F3": [
+   "KEEP",
+   "run_steps` catches only `StepFailed` and `CalledProcessError`, so an `OSError` from a file read, `arm.touch()` or a missing executable escapes `main()` before it writes the report, breaking the script's promise that the report is written on failure."
+  ]
+ },
+ "wall_seconds": 41.9,
+ "duration_seconds": 41.90945454197936,
+ "cost_usd": 0.2553084,
+ "effort": "high",
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=172888, cached=153460, cache_write=19412, completion=3419, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 On a rerun, `step_check` saves the already-updated cron file as `old`, but `production_changes` strips the new arguments only from `new`, so step 4 fails every rerun and breaks the documented \"re-run the whole script\" recovery.\nF2: KEEP \u2014 `run_health` ignores the health script's exit status and reads whatever line is last in the log, so if the script exits before appending (bad arguments, log write failure), an earlier clean `FLAGS` line can pass the gate.\nF3: KEEP \u2014 `run_steps` catches only `StepFailed` and `CalledProcessError`, so an `OSError` from a file read, `arm.touch()` or a missing executable escapes `main()` before it writes the report, breaking the script's promise that the report is written on failure.\nF1: KEEP \u2014 On a rerun, `step_check` saves the already-updated cron file as `old`, but `production_changes` strips the new arguments only from `new`, so step 4 fails on every rerun and the documented rerun recovery breaks.\nF2: KEEP \u2014 `run_health` ignores the health command's exit status and reads whatever line is last in the log, so if the script exits before appending (argument error, log write failure), an older clean `FLAGS` line can pass the health gates.\nF3: KEEP \u2014 `run_steps` catches only `StepFailed` and `CalledProcessError`, so an `OSError` from a file read, `arm.touch()` or a missing executable escapes before `main()` writes the report, breaking the script's promise that the report is written on failure."
+}

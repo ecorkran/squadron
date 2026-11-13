@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "launch()` validates after the journal entry is written, so a ValueError (an empty pipeline is reachable) leaves an orphan entry that the observer later reports as \"vanished\"; the checkout, `,` and params examples are not reachable, but the ordering defect is real."
+  ],
+  "F2": [
+   "DROP",
+   "the ~300-line guideline is soft (\"where practical\") and the split is a design preference, not a defect."
+  ],
+  "F3": [
+   "DROP",
+   "the `getattr` point is style, and a missing non-negative grace check only yields a loud LAUNCH_OVERDUE escalation for a nonsensical operator value, not a silent failure."
+  ]
+ },
+ "wall_seconds": 71.5,
+ "duration_seconds": 71.45648525003344,
+ "cost_usd": 0.02441534,
+ "effort": "xhigh",
+ "tool_calls_made": 14,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=370994, cached=305844, cache_write=65136, completion=14468, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `launch()` validates after the journal entry is written, so a ValueError (an empty pipeline is reachable) leaves an orphan entry that the observer later reports as \"vanished\"; the checkout, `,` and params examples are not reachable, but the ordering defect is real.\nF2: DROP \u2014 the ~300-line guideline is soft (\"where practical\") and the split is a design preference, not a defect.\nF3: DROP \u2014 the `getattr` point is style, and a missing non-negative grace check only yields a loud LAUNCH_OVERDUE escalation for a nonsensical operator value, not a silent failure.\nF1: KEEP \u2014 `launch()` validates after the journal entry is written, so a ValueError (an empty pipeline is reachable) leaves an orphan entry that the observer later reports as \"vanished\"; the checkout, `,` and params examples are not reachable, but the ordering defect is real.\nF2: DROP \u2014 the ~300-line guideline is soft (\"where practical\") and the split is a design preference, not a defect.\nF3: DROP \u2014 the `getattr` point is style, and a missing non-negative grace check only yields a loud LAUNCH_OVERDUE escalation for a nonsensical operator value, not a silent failure."
+}

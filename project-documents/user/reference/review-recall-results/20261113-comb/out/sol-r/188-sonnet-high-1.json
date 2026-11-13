@@ -1,0 +1,43 @@
+{
+ "case": "188",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The date-first union can parse midnight timestamps as dates, expanding an explicit midnight end bound to the entire day."
+  ],
+  "F2": [
+   "DROP",
+   "The positional indexes match the current repository column order; corruption requires a hypothetical future change."
+  ],
+  "F3": [
+   "DROP",
+   "The current candle mapping works; the finding concerns misleading documentation and future extensibility."
+  ],
+  "F4": [
+   "DROP",
+   "All current callers supply the expected period parameters, and the duplicated ceiling checks agree."
+  ],
+  "F5": [
+   "DROP",
+   "The recorder is reset before use, and count and fetch share one connection, preventing the claimed vacuous pass."
+  ]
+ },
+ "wall_seconds": 22.0,
+ "duration_seconds": 21.967133209109306,
+ "cost_usd": 0.058661700000000004,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=69761, cached=45337, cache_write=None, completion=528, reasoning=126)",
+ "raw_output": "F1: KEEP \u2014 The date-first union can parse midnight timestamps as dates, expanding an explicit midnight end bound to the entire day.\nF2: DROP \u2014 The positional indexes match the current repository column order; corruption requires a hypothetical future change.\nF3: DROP \u2014 The current candle mapping works; the finding concerns misleading documentation and future extensibility.\nF4: DROP \u2014 All current callers supply the expected period parameters, and the duplicated ceiling checks agree.\nF5: DROP \u2014 The recorder is reset before use, and count and fetch share one connection, preventing the claimed vacuous pass.\nF1: KEEP \u2014 The date-first union can parse midnight timestamps as dates, silently expanding an explicit midnight end bound to the whole day.\nF2: DROP \u2014 The positional indexes match the current column order; corruption requires a hypothetical future change.\nF3: DROP \u2014 The current candle mapping works; this concerns documentation and future extensibility rather than an existing defect.\nF4: DROP \u2014 Current callers supply exactly the expected period parameter, and both ceiling checks correctly enforce the same limit.\nF5: DROP \u2014 The recorder is reset before use, and count and fetch share one connection, preventing the claimed vacuous pass."
+}

@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "run_steps` only catches `StepFailed` and `CalledProcessError`, and `main()` writes the report only after it returns. So an `IndexError` from the unguarded `.splitlines()[-1]` at line 224 (or a `StopIteration`/`ValueError` from the host helpers) kills the run after the cron file is installed and leaves no report, which breaks the script's stated contract."
+  ],
+  "F2": [
+   "DROP",
+   "the vacuous assertion only weakens a test; the line above it already shows the user field is stripped, because the weekly command starts with the checkout path. The missing `main()` test is a coverage gap, not a defect."
+  ],
+  "F3": [
+   "DROP",
+   "the REPLICATION branch is short, copied from `provision_roles.sql`, and looks correct. Pointing out that no database test runs it is a missing-test note, not a defect."
+  ]
+ },
+ "wall_seconds": 21.2,
+ "duration_seconds": 21.18795120785944,
+ "cost_usd": 0.3229327,
+ "effort": "medium",
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=96446, cached=61568, cache_write=34868, completion=1532, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `run_steps` only catches `StepFailed` and `CalledProcessError`, and `main()` writes the report only after it returns. So an `IndexError` from the unguarded `.splitlines()[-1]` at line 224 (or a `StopIteration`/`ValueError` from the host helpers) kills the run after the cron file is installed and leaves no report, which breaks the script's stated contract.\nF2: DROP \u2014 the vacuous assertion only weakens a test; the line above it already shows the user field is stripped, because the weekly command starts with the checkout path. The missing `main()` test is a coverage gap, not a defect.\nF3: DROP \u2014 the REPLICATION branch is short, copied from `provision_roles.sql`, and looks correct. Pointing out that no database test runs it is a missing-test note, not a defect.\nF1: KEEP \u2014 `run_steps` catches only `StepFailed`/`CalledProcessError` and `main()` writes the report only after it returns, so an `IndexError` from line 224 (or `StopIteration`/`ValueError` from host helpers) after the cron install leaves no report, breaking the documented contract.\nF2: DROP \u2014 the vacuous assertion is redundant with the `startswith(CHECKOUT\u2026)` check and the untested `main()` path is a coverage gap, not a defect in behavior.\nF3: DROP \u2014 the REPLICATION branch is short, correct-looking, and copied from `provision_roles.sql`; lacking a database test for it is a missing-test note, not a defect."
+}

@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Only the new cron is normalized, so rerunning after installation falsely fails step 4."
+  ],
+  "F2": [
+   "KEEP",
+   "Failed health execution can reuse an old clean log summary and incorrectly pass the health gates."
+  ],
+  "F3": [
+   "KEEP",
+   "Host I/O exceptions escape run_steps(), preventing the failure report and completed-step evidence from being written."
+  ]
+ },
+ "wall_seconds": 33.2,
+ "duration_seconds": 33.1470808328595,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=97574, cached=90496, cache_write=None, completion=148, reasoning=0)",
+ "raw_output": "F1: KEEP \u2014 Only the new cron is normalized, so rerunning after installation falsely fails step 4.\nF2: KEEP \u2014 Failed health execution can reuse an old clean log summary and incorrectly pass the health gates.\nF3: KEEP \u2014 Host I/O exceptions escape run_steps(), preventing the failure report and completed-step evidence from being written.\nF1: KEEP \u2014 Only the new cron is normalized, so rerunning after installation falsely fails step 4.\nF2: KEEP \u2014 Failed health execution can reuse an old clean log summary and incorrectly pass the health gates.\nF3: KEEP \u2014 Host I/O exceptions escape run_steps(), preventing the failure report and completed-step evidence from being written."
+}

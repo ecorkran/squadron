@@ -1,0 +1,23 @@
+{
+ "case": "307",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet/1/0"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The project gates on mypy, not strict pyright (pyproject.toml scopes mypy to `src/manta_trading`), and the cited `object` return can't trip a checker because `pv` is typed `ModuleType`, so `pv.check_dataset_edge` is `Any`; the bare generics are strict-mode-only, with no runtime effect."
+  ]
+ },
+ "wall_seconds": 44.8,
+ "duration_seconds": 44.77718970901333,
+ "cost_usd": 0.017251609999999997,
+ "effort": "xhigh",
+ "tool_calls_made": 9,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=255273, cached=206541, cache_write=48720, completion=8958, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The project gates on mypy, not strict pyright (pyproject.toml scopes mypy to `src/manta_trading`), and the cited `object` return can't trip a checker because `pv` is typed `ModuleType`, so `pv.check_dataset_edge` is `Any`; the bare generics are strict-mode-only, with no runtime effect.\nVerdict: no findings to keep. The review has one finding, F1, and it is DROP.\n\nF1: DROP \u2014 The project gates on mypy, not strict pyright (pyproject.toml scopes mypy to `src/manta_trading`), and the cited `object` return can't trip a checker because `pv` is typed `ModuleType`, so `pv.check_dataset_edge` is `Any`; the bare generics are strict-mode-only, with no runtime effect.\n\nI could not run mypy or pyright because Bash is disabled in this session, so this verdict rests on reading `pyproject.toml` and the cited code."
+}

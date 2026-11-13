@@ -1,0 +1,43 @@
+{
+ "case": "188",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "pydantic likely accepts a zero-time datetime string as a date, and the leftmost union member wins the tie, so `end=\u2026T00:00:00Z` becomes end-of-day (not run; no Bash here)."
+  ],
+  "F2": [
+   "KEEP",
+   "from_row` hard-codes positional indexes against a derived column tuple, so reordering `TRADE_COLUMNS` silently swaps the Decimal price fields."
+  ],
+  "F3": [
+   "DROP",
+   "the docstring overclaims and `_CANDLE_OBJECTS` values are unused, but `test_nested_field_set_is_exactly_what_candle_columns_describes` enforces parity, so this is cleanup."
+  ],
+  "F4": [
+   "DROP",
+   "the `extra` truthiness coupling is hypothetical; both current callers pass correct arguments."
+  ],
+  "F5": [
+   "DROP",
+   "count and fetch share one checkout, so an unrecorded connection fails the count assertion loudly rather than passing vacuously; test-only code."
+  ]
+ },
+ "wall_seconds": 133.7,
+ "duration_seconds": 133.65577966696583,
+ "cost_usd": 0.036318760000000005,
+ "effort": "xhigh",
+ "tool_calls_made": 14,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=451839, cached=366816, cache_write=85009, completion=29639, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 pydantic likely accepts a zero-time datetime string as a date, and the leftmost union member wins the tie, so `end=\u2026T00:00:00Z` becomes end-of-day (not run; no Bash here).\nF2: KEEP \u2014 `from_row` hard-codes positional indexes against a derived column tuple, so reordering `TRADE_COLUMNS` silently swaps the Decimal price fields.\nF3: DROP \u2014 the docstring overclaims and `_CANDLE_OBJECTS` values are unused, but `test_nested_field_set_is_exactly_what_candle_columns_describes` enforces parity, so this is cleanup.\nF4: DROP \u2014 the `extra` truthiness coupling is hypothetical; both current callers pass correct arguments.\nF5: DROP \u2014 count and fetch share one checkout, so an unrecorded connection fails the count assertion loudly rather than passing vacuously; test-only code.\nF1: KEEP \u2014 pydantic likely accepts a zero-time datetime string as a date, and the leftmost union member wins the tie, so `end=\u2026T00:00:00Z` becomes end-of-day (not run; no Bash here).\nF2: KEEP \u2014 `from_row` hard-codes positional indexes against a derived column tuple, so reordering `TRADE_COLUMNS` silently swaps the Decimal price fields.\nF3: DROP \u2014 the docstring overclaims and `_CANDLE_OBJECTS` values are unused, but `test_nested_field_set_is_exactly_what_candle_columns_describes` enforces parity, so this is cleanup.\nF4: DROP \u2014 the `extra` truthiness coupling is hypothetical; both current callers pass correct arguments.\nF5: DROP \u2014 count and fetch share one checkout, so an unrecorded connection fails the count assertion loudly rather than passing vacuously; test-only code.\n\nVerdict: not ready to merge. F1 and F2 should be fixed first; F3\u2013F5 can be dropped from this merge."
+}

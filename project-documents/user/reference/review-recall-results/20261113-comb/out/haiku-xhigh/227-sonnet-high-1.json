@@ -1,0 +1,28 @@
+{
+ "case": "227",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "step_production` reads the health log with no existence guard, so a missing log raises `FileNotFoundError` and skips the report, and `run_health` ignores the health command's exit code and trusts an unchecked last log line, so a failed run can pass on a stale healthy line."
+  ],
+  "F2": [
+   "KEEP",
+   "strip_new_args` hard-codes the 17/main replication host that `backup-clusters.conf` owns, so a table edit makes the TD3 guard report a false change and block cutover, and the other duplicated literals break CLAUDE.md's define-once rule."
+  ]
+ },
+ "wall_seconds": 96.0,
+ "duration_seconds": 95.99373887502588,
+ "cost_usd": 0.030160430000000005,
+ "effort": "xhigh",
+ "tool_calls_made": 16,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=462464, cached=383393, cache_write=79055, completion=19434, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `step_production` reads the health log with no existence guard, so a missing log raises `FileNotFoundError` and skips the report, and `run_health` ignores the health command's exit code and trusts an unchecked last log line, so a failed run can pass on a stale healthy line.\nF2: KEEP \u2014 `strip_new_args` hard-codes the 17/main replication host that `backup-clusters.conf` owns, so a table edit makes the TD3 guard report a false change and block cutover, and the other duplicated literals break CLAUDE.md's define-once rule.\nF1: KEEP \u2014 `step_production` reads the health log with no existence guard, so a missing log raises `FileNotFoundError` and skips the report, and `run_health` ignores the health command's exit code and trusts an unchecked last log line, so a failed run can pass on a stale healthy line.\nF2: KEEP \u2014 `strip_new_args` hard-codes the 17/main replication host that `backup-clusters.conf` owns, so a table edit makes the TD3 guard report a false change and block cutover, and the other duplicated literals break CLAUDE.md's define-once rule."
+}

@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The assertion only guards a future enum change; its removal under optimization causes no current defect."
+  ],
+  "F2": [
+   "DROP",
+   "The per-verb exception mapping works, and the split policy is a maintainability concern."
+  ],
+  "F3": [
+   "DROP",
+   "The finding describes function length and code organization, not a behavior defect."
+  ]
+ },
+ "wall_seconds": 18.4,
+ "duration_seconds": 18.416375541128218,
+ "cost_usd": 0.00181803,
+ "effort": null,
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=28964, cached=18193, cache_write=None, completion=1118, reasoning=848)",
+ "raw_output": "F1: DROP \u2014 The assertion only guards a future enum change; its removal under optimization causes no current defect.\nF2: DROP \u2014 The per-verb exception mapping works, and the split policy is a maintainability concern.\nF3: DROP \u2014 The finding describes function length and code organization, not a behavior defect.\nF1: KEEP \u2014 Optimized Python can skip the completeness check, silently omitting any newly added status from the rendered buckets.\nF2: DROP \u2014 The per-verb exception mapping works; the split policy is a maintainability concern.\nF3: DROP \u2014 Function length and helper organization are style concerns, not behavior defects."
+}

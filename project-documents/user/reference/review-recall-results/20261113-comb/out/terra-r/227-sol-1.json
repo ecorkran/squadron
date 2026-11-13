@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Reruns compare installed arguments against stripped arguments, causing step 4 to fail."
+  ],
+  "F2": [
+   "KEEP",
+   "A failed health invocation can leave an old clean log line that passes the gate."
+  ],
+  "F3": [
+   "KEEP",
+   "Host I/O errors escape the step handler and prevent the failure report from being written."
+  ]
+ },
+ "wall_seconds": 11.2,
+ "duration_seconds": 11.217124083079398,
+ "cost_usd": 0.03220235,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=77814, cached=49507, cache_write=None, completion=284, reasoning=30)",
+ "raw_output": "F1: KEEP \u2014 Reruns compare installed arguments against stripped arguments, causing step 4 to fail.\nF2: KEEP \u2014 A failed health invocation can leave an old clean log line that passes the gate.\nF3: KEEP \u2014 Host I/O errors escape the step handler and prevent the failure report from being written.\nF1: KEEP \u2014 Reruns compare installed arguments against stripped arguments, causing step 4 to fail.\nF2: KEEP \u2014 A failed health invocation can leave an old clean log line that passes the gate.\nF3: KEEP \u2014 Host I/O errors escape the step handler and prevent the failure report from being written."
+}

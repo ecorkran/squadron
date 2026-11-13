@@ -1,0 +1,28 @@
+{
+ "case": "u103",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Adding populated data only mutates a ref, so the range effect does not rerun to apply the current Context range."
+  ],
+  "F2": [
+   "KEEP",
+   "Empty additions and updates that clear data leave a positive series count, allowing range changes to reach an empty time scale and fail."
+  ]
+ },
+ "wall_seconds": 13.6,
+ "duration_seconds": 13.568595917196944,
+ "cost_usd": 0.033882800000000005,
+ "effort": null,
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=64629, cached=51908, cache_write=None, completion=325, reasoning=49)",
+ "raw_output": "F1: KEEP \u2014 Adding populated data only mutates a ref, so the range effect does not rerun to apply the current Context range.\nF2: KEEP \u2014 Empty additions and updates that clear data leave a positive series count, allowing range changes to reach an empty time scale and fail.\nF1: KEEP \u2014 Adding populated data only mutates a ref, so the range effect does not rerun to apply the current Context range.\nF2: KEEP \u2014 Empty additions and updates that clear data leave a positive series count, allowing range changes to reach an empty time scale and fail."
+}

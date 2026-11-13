@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A completion notification before the original result empties the ledger, causing dispatch to return without consuming the queued continuation."
+  ],
+  "F2": [
+   "KEEP",
+   "The background timeout remains active after task completion and can return partial success before the parent continuation finishes."
+  ]
+ },
+ "wall_seconds": 57.9,
+ "duration_seconds": 57.85467795887962,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=101813, cached=93440, cache_write=None, completion=128, reasoning=18)",
+ "raw_output": "F1: KEEP \u2014 A completion notification before the original result empties the ledger, causing dispatch to return without consuming the queued continuation.\nF2: KEEP \u2014 The background timeout remains active after task completion and can return partial success before the parent continuation finishes.\nF1: KEEP \u2014 Reproduction confirms an early completion notification causes dispatch to return before reading the queued parent continuation.\nF2: KEEP \u2014 Reproduction confirms the background timer can expire after task completion, returning partial success before the parent continuation finishes."
+}

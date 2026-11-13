@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The coverage reads run on an autocommit connection, so an ingest that commits between the ledger and raw reads gives a false mismatch and exit 3. The raw scan is long, which widens that window."
+  ],
+  "F2": [
+   "DROP",
+   "The universe has only ES, so no other product's rows share the window today. A second product is future work."
+  ],
+  "F3": [
+   "DROP",
+   "Real sessions and keys per range are small, so the 100k-key probe is unrealistic and the cost is negligible."
+  ]
+ },
+ "wall_seconds": 39.8,
+ "duration_seconds": 39.82146712508984,
+ "cost_usd": 0.18000780000000002,
+ "effort": "high",
+ "tool_calls_made": 12,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=230635, cached=200922, cache_write=29693, completion=4033, reasoning=None)",
+ "raw_output": "Checking whether the tick universe holds more than one product, which decides F2. Then I'll finish.\nF1: KEEP \u2014 The coverage reads run on an autocommit connection, so an ingest that commits between the ledger and raw reads gives a false mismatch and exit 3. The raw scan is long, which widens that window.\nF2: DROP \u2014 The universe has only ES, so no other product's rows share the window today. A second product is future work.\nF3: DROP \u2014 Real sessions and keys per range are small, so the 100k-key probe is unrealistic and the cost is negligible.\nF1: KEEP \u2014 The coverage reads run on an autocommit connection, so an ingest that commits between the ledger and raw reads gives a false mismatch and exit 3.\nF2: DROP \u2014 The universe has only ES, so no other product's rows share the window today; a second product is future work.\nF3: DROP \u2014 Real sessions and keys per range are small, so the 100k-key probe is unrealistic and the cost is negligible."
+}

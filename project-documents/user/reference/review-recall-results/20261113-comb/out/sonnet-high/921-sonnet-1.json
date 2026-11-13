@@ -1,0 +1,38 @@
+{
+ "case": "921",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The install script sits in the operator's own checkout, so that user can edit it and run it as root. This defeats the rule's stated \"nothing wider\" limit."
+  ],
+  "F2": [
+   "KEEP",
+   "In `scripts/cutover_921_minute_sessions.py`, `fire_unit_until` and `start_log` come before `CutoverError`. That breaks ruff's isort ordering, and `I` is selected in `pyproject.toml`. I did not check the other three files."
+  ],
+  "F3": [
+   "DROP",
+   "The `chunk_conn` block closes before `bounds_conn` opens at `minute.py:901`, so the checkouts are not nested."
+  ],
+  "F4": [
+   "DROP",
+   "Test scaffolding duplication and substring matching in the cutover script are style points, not defects."
+  ]
+ },
+ "wall_seconds": 20.5,
+ "duration_seconds": 20.515075457980856,
+ "cost_usd": 0.0980341,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=71778, cached=54755, cache_write=17011, completion=2382, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The install script sits in the operator's own checkout, so that user can edit it and run it as root. This defeats the rule's stated \"nothing wider\" limit.\nF2: KEEP \u2014 In `scripts/cutover_921_minute_sessions.py`, `fire_unit_until` and `start_log` come before `CutoverError`. That breaks ruff's isort ordering, and `I` is selected in `pyproject.toml`. I did not check the other three files.\nF3: DROP \u2014 The `chunk_conn` block closes before `bounds_conn` opens at `minute.py:901`, so the checkouts are not nested.\nF4: DROP \u2014 Test scaffolding duplication and substring matching in the cutover script are style points, not defects.\nF1: KEEP \u2014 The install script is in the operator's own checkout, so that user can edit it and run it as root, which defeats the rule's \"nothing wider\" claim.\nF2: KEEP \u2014 In `scripts/cutover_921_minute_sessions.py`, `fire_unit_until` and `start_log` come before `CutoverError`. That breaks ruff's `I` ordering, which `pyproject.toml` selects.\nF3: DROP \u2014 The `chunk_conn` block closes before `bounds_conn` opens at `minute.py:901`, so the checkouts are not nested.\nF4: DROP \u2014 Duplicated test scaffolding and substring matching in the cutover script are style points, not defects."
+}

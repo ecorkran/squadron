@@ -1,0 +1,38 @@
+{
+ "case": "188",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The only caller, `_candle_window`, always passes `{\"period\": period}`, so nothing breaks today; the typed `period` argument is a design cleanup."
+  ],
+  "F2": [
+   "DROP",
+   "Both checks agree, and the early return inside `_read` only skips the fetch before `_admit_rows` refuses the request; this is a refactoring suggestion, not a defect."
+  ],
+  "F3": [
+   "DROP",
+   "Count and fetch run on the same checked-out connection in one `_read` closure, so a connection without the recorder would fail the `counts` assertion rather than pass vacuously; the private `_pool` access is a test-maintenance concern."
+  ],
+  "F4": [
+   "DROP",
+   "The positional indexes match the current `TRADE_COLUMNS` order exactly, so the output is correct today; the risk only appears if the columns are reordered later."
+  ]
+ },
+ "wall_seconds": 31.2,
+ "duration_seconds": 31.216174583882093,
+ "cost_usd": 0.3385701,
+ "effort": "medium",
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=157515, cached=125221, cache_write=32280, completion=2727, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The only caller, `_candle_window`, always passes `{\"period\": period}`, so nothing breaks today; the typed `period` argument is a design cleanup.\nF2: DROP \u2014 Both checks agree, and the early return inside `_read` only skips the fetch before `_admit_rows` refuses the request; this is a refactoring suggestion, not a defect.\nF3: DROP \u2014 Count and fetch run on the same checked-out connection in one `_read` closure, so a connection without the recorder would fail the `counts` assertion rather than pass vacuously; the private `_pool` access is a test-maintenance concern.\nF4: DROP \u2014 The positional indexes match the current `TRADE_COLUMNS` order exactly, so the output is correct today; the risk only appears if the columns are reordered later.\nAll four findings are dropped; none needs fixing before merge. Each claim was checked against the code after the change.\n\n### [NOTE] F1: `_window` ties the period filter to a non-empty `extra` dict\ncategory: maintainability\nlocation: src/manta_trading/data/kalshi/serve_timeseries.py:177-200\n\nF1: DROP \u2014 The only caller, `_candle_window` (line 218), always passes `{\"period\": period}`, so the period value is always bound and the clause always appears. The failure needs a future caller that doesn't exist yet. Making `period` a typed argument is a cleanup, not a defect.\n\n### [NOTE] F2: The ceiling check appears both inside `_read` and in `_admit_rows`\ncategory: maintainability\nlocation: src/manta_trading/api_server/routes/kalshi_timeseries.py:115-124, 161-167\n\nF2: DROP \u2014 Both checks use the same `count > max_rows` test. The early return in `_read` only skips the row fetch before `_admit_rows` returns the 422, so nothing behaves wrongly today. The shared helper is a refactoring suggestion.\n\n### [NOTE] F3: The load test reads the private `pool._pool` and uses a class-level recorder\ncategory: testing\nlocation: test/load/test_188_kalshi_api_nfr.py:132-174, 272-295\n\nF3: DROP \u2014 `get_trades` runs the count and the fetch on the same checked-out connection in one `_read` closure. So if a connection lacked the recording cursor, the `counts` assertion would fail rather than let the `not fetches` check pass vacuously. Reading `_pool` is a test-maintenance concern, not a defect in shipped code.\n\n### [NOTE] F4: `TradeRecord.from_row` reads `TradeRow.values` by position\ncategory: maintainability\nlocation: src/manta_trading/api_server/models/kalshi_timeseries.py:162-175\n\nF4: DROP \u2014 Indexes 0\u20137 match the current order of `TRADE_COLUMNS` minus `market_ticker` (`trade_repository.py:45-55`), so every field maps correctly today. Wrong data would only appear if the columns were reordered later. Building the record with `zip(TRADE_VALUE_COLUMNS, values)` would be a worthwhile follow-up, but it isn't needed for this merge."
+}

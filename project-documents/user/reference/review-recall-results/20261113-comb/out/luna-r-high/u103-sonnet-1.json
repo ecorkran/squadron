@@ -1,0 +1,43 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The listeners add minor no-op callbacks but do not cause a meaningful defect, and their lifecycle is intentionally exercised here."
+  ],
+  "F2": [
+   "DROP",
+   "File length and stale task comments are maintainability concerns, not behavioral defects."
+  ],
+  "F3": [
+   "KEEP",
+   "Adding a series does not trigger the range effect, so the stored range is not applied until another dependency changes."
+  ],
+  "F4": [
+   "KEEP",
+   "Later operation failures overwrite the error despite the public contract promising to retain the first error."
+  ],
+  "F5": [
+   "DROP",
+   "The stale spec reference and text assertion do not cause a meaningful runtime or test failure."
+  ]
+ },
+ "wall_seconds": 44.7,
+ "duration_seconds": 44.67729587503709,
+ "cost_usd": 0.0041278800000000004,
+ "effort": "high",
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=74580, cached=54868, cache_write=None, completion=3216, reasoning=2629)",
+ "raw_output": "F1: DROP \u2014 The listeners add minor no-op callbacks but do not cause a meaningful defect, and their lifecycle is intentionally exercised here.\nF2: DROP \u2014 File length and stale task comments are maintainability concerns, not behavioral defects.\nF3: KEEP \u2014 Adding a series does not trigger the range effect, so the stored range is not applied until another dependency changes.\nF4: KEEP \u2014 Later operation failures overwrite the error despite the public contract promising to retain the first error.\nF5: DROP \u2014 The stale spec reference and text assertion do not cause a meaningful runtime or test failure.\nF1: DROP \u2014 The unused subscriptions add minor overhead, but their lifecycle setup is intentional and this is not a merge-blocking defect.\nF2: DROP \u2014 File length and stale task comments are maintainability concerns, not behavioral defects.\nF3: KEEP \u2014 Adding a series does not trigger the range effect, so the stored range is not applied until another dependency changes.\nF4: KEEP \u2014 Later operation failures overwrite the error despite the public contract promising to retain the first error.\nF5: DROP \u2014 The stale spec reference and text assertion do not cause a meaningful runtime or test failure."
+}

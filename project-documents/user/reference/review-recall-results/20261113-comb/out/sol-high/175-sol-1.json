@@ -1,0 +1,33 @@
+{
+ "case": "175",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Persistence omits prior_rounds, so run totals exclude usage from earlier loop iterations."
+  ],
+  "F2": [
+   "KEEP",
+   "Split-review folding copies only the first part\u2019s usage, underreporting combined spend and tokens."
+  ],
+  "F3": [
+   "KEEP",
+   "Failed parts lack required inputs, causing folding to raise and discard captured usage and the original error."
+  ]
+ },
+ "wall_seconds": 38.6,
+ "duration_seconds": 38.623510292032734,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=98188, cached=87680, cache_write=None, completion=168, reasoning=20)",
+ "raw_output": "F1: KEEP \u2014 Persistence omits prior_rounds, so run totals exclude usage from earlier loop iterations.\nF2: KEEP \u2014 Split-review folding copies only the first part\u2019s usage, underreporting combined spend and tokens.\nF3: KEEP \u2014 Failed parts lack required inputs, causing folding to raise and discard captured usage and the original error.\nF1: KEEP \u2014 Persistence omits prior_rounds, so run totals exclude usage from earlier loop iterations.\nF2: KEEP \u2014 Split-review folding copies only the first part\u2019s usage instead of aggregating all parts.\nF3: KEEP \u2014 Failed parts lack required inputs, causing folding to raise and discard captured usage and the original error."
+}

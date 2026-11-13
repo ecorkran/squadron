@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Autocommit reads can straddle an ingest commit and falsely report a ledger/raw mismatch."
+  ],
+  "F2": [
+   "KEEP",
+   "Raw counts include every request shape in the window, falsely flagging valid rows excluded by the shape-filtered ledger."
+  ],
+  "F3": [
+   "DROP",
+   "The repeated scans are inefficient, but the finding establishes no correctness failure or material operational impact in this CLI path."
+  ]
+ },
+ "wall_seconds": 20.5,
+ "duration_seconds": 20.50183550012298,
+ "cost_usd": 0.0573481,
+ "effort": null,
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=123774, cached=103121, cache_write=None, completion=573, reasoning=119)",
+ "raw_output": "F1: KEEP \u2014 Autocommit reads can straddle an ingest commit and falsely report a ledger/raw mismatch.\nF2: KEEP \u2014 Raw counts include every request shape in the window, falsely flagging valid rows excluded by the shape-filtered ledger.\nF3: DROP \u2014 The repeated scans are inefficient, but the finding establishes no correctness failure or material operational impact in this CLI path.\nF1: KEEP \u2014 Autocommit reads can straddle an ingest commit and falsely report a ledger/raw mismatch.\nF2: KEEP \u2014 Raw counts include unrelated request shapes that the ledger query excludes, causing false mismatches.\nF3: DROP \u2014 Repeated scanning is inefficient, but no material operational impact or correctness failure is established for this CLI path."
+}

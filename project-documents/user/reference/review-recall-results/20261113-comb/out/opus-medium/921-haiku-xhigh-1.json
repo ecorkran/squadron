@@ -1,0 +1,58 @@
+{
+ "case": "921",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "run()` calls `subprocess.run`, which waits for `mt-run` to exit, and `mt-run` itself waits on `while is_running` (deploy/mt-run:129). So the poll for the trailing line only starts after the unbounded minute pass has already ended."
+  ],
+  "F2": [
+   "KEEP",
+   "scan refused\" on stderr with exit 2, or a traceback, contains neither `FAIL` nor `[WAIT]` and the return code is ignored, so the run reports CUTOVER COMPLETE."
+  ],
+  "F3": [
+   "KEEP",
+   "mt-run *` runs the production CLI as root with any arguments, and the NOPASSWD installer lives under the operator's own home where that account can edit it. Together they amount to passwordless root, which contradicts the rule's own header."
+  ],
+  "F4": [
+   "DROP",
+   "the script is run by an operator at a terminal and sudo prompts on the tty, so a missing rule means a password prompt, not wrong behaviour."
+  ],
+  "F5": [
+   "KEEP",
+   "session bounds come from the calendar, not the symbol's own activity. An illiquid or halted name with an empty session is judged PARTIAL, so a fully collected chunk is re-requested until it becomes RETRY_EXHAUSTED."
+  ],
+  "F6": [
+   "DROP",
+   "the paused-job and start-vs-finish cases are rare and fail closed (they misdiagnose or wait, they do not falsely pass). The `-infinity` crash only reaches a false pass through the F2 defect, which is fixed separately."
+  ],
+  "F7": [
+   "DROP",
+   "leaving the verdicts out of the log file is a completeness gap in the narration record, not wrong behaviour."
+  ],
+  "F8": [
+   "DROP",
+   "duplication is a style concern, and it goes away when F1 is fixed."
+  ]
+ },
+ "wall_seconds": 53.8,
+ "duration_seconds": 53.75832595815882,
+ "cost_usd": 0.4429083999999999,
+ "effort": "medium",
+ "tool_calls_made": 9,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=209897, cached=169856, cache_write=40025, completion=4390, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 `run()` calls `subprocess.run`, which waits for `mt-run` to exit, and `mt-run` itself waits on `while is_running` (deploy/mt-run:129). So the poll for the trailing line only starts after the unbounded minute pass has already ended.\nF2: KEEP \u2014 \"scan refused\" on stderr with exit 2, or a traceback, contains neither `FAIL` nor `[WAIT]` and the return code is ignored, so the run reports CUTOVER COMPLETE.\nF3: KEEP \u2014 `mt-run *` runs the production CLI as root with any arguments, and the NOPASSWD installer lives under the operator's own home where that account can edit it. Together they amount to passwordless root, which contradicts the rule's own header.\nF4: DROP \u2014 the script is run by an operator at a terminal and sudo prompts on the tty, so a missing rule means a password prompt, not wrong behaviour.\nF5: KEEP \u2014 session bounds come from the calendar, not the symbol's own activity. An illiquid or halted name with an empty session is judged PARTIAL, so a fully collected chunk is re-requested until it becomes RETRY_EXHAUSTED.\nF6: DROP \u2014 the paused-job and start-vs-finish cases are rare and fail closed (they misdiagnose or wait, they do not falsely pass). The `-infinity` crash only reaches a false pass through the F2 defect, which is fixed separately.\nF7: DROP \u2014 leaving the verdicts out of the log file is a completeness gap in the narration record, not wrong behaviour.\nF8: DROP \u2014 duplication is a style concern, and it goes away when F1 is fixed.\nF1: KEEP \u2014 `run()` blocks in `subprocess.run` until `mt-run` exits, and `mt-run` itself waits for the unit to stop (deploy/mt-run:129), so the trailing-line poll never stops the unbounded minute pass early.\nF2: KEEP \u2014 a \"scan refused\" on stderr (exit 2) or a traceback contains neither `FAIL` nor `[WAIT]`, and the exit code is ignored, so the cutover reports CUTOVER COMPLETE.\nF3: KEEP \u2014 `mt-run *` gives passwordless root to the whole CLI, and the NOPASSWD installer lives in the operator's own writable checkout, which together amount to root access the rule's header says it does not grant.\nF4: DROP \u2014 the script is run interactively and sudo prompts on the tty, so the missing rule only causes a password prompt, not wrong behaviour.\nF5: KEEP \u2014 session bounds come from the calendar, so a halted or illiquid symbol's empty session marks a fully collected chunk PARTIAL, which wastes retries and leaves the row RETRY_EXHAUSTED.\nF6: DROP \u2014 the paused-job and start-versus-finish cases are rare and fail closed, and the `-infinity` crash only becomes a false pass through the F2 defect, which is fixed separately.\nF7: DROP \u2014 the log file missing the verdict lines leaves the record incomplete but does not change what the cutover does.\nF8: DROP \u2014 the duplication is a style issue, and fixing F1 removes it anyway."
+}

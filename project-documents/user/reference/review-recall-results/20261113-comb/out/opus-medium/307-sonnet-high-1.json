@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The two loops really are duplicated (one skips definitions, one doesn't), but this is a DRY/style point with no wrong behavior."
+  ],
+  "F2": [
+   "DROP",
+   "The project has no pyright config (it uses mypy per subpackage), so these annotations block nothing and are style-only test typing."
+  ]
+ },
+ "wall_seconds": 15.8,
+ "duration_seconds": 15.77768420893699,
+ "cost_usd": 0.19968980000000003,
+ "effort": "medium",
+ "tool_calls_made": 4,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=94724, cached=74679, cache_write=20033, completion=1172, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The two loops really are duplicated (one skips definitions, one doesn't), but this is a DRY/style point with no wrong behavior.\nF2: DROP \u2014 The project has no pyright config (it uses mypy per subpackage), so these annotations block nothing and are style-only test typing.\nF1: DROP \u2014 The two loops are duplicated (one skips definitions, the other doesn't), but this is a DRY/style point and causes no wrong behavior.\nF2: DROP \u2014 The project has no strict pyright config (pyproject.toml uses mypy per subpackage), so these bare generics block nothing and are only a test typing style issue."
+}

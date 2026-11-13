@@ -1,0 +1,38 @@
+{
+ "case": "175",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The failure-path profile and provider lookups can raise and replace the original ProviderError before its usage is recorded."
+  ],
+  "F2": [
+   "KEEP",
+   "The findings-addressed judge makes an LLM call without recording its usage, so run totals undercount spend."
+  ],
+  "F3": [
+   "KEEP",
+   "Passing a fresh warning set bypasses per-run pricing-warning deduplication, causing repeated warnings in looped reviews."
+  ],
+  "F4": [
+   "DROP",
+   "The duplicated tier literal is a maintainability issue but does not cause incorrect behavior."
+  ]
+ },
+ "wall_seconds": 98.5,
+ "duration_seconds": 98.4832425408531,
+ "cost_usd": 0.009234570000000001,
+ "effort": "high",
+ "tool_calls_made": 20,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=178958, cached=139197, cache_write=None, completion=7733, reasoning=6918)",
+ "raw_output": "F1: KEEP \u2014 The failure-path profile and provider lookups can raise and replace the original ProviderError before its usage is recorded.\nF2: KEEP \u2014 The findings-addressed judge makes an LLM call without recording its usage, so run totals undercount spend.\nF3: KEEP \u2014 Passing a fresh warning set bypasses per-run pricing-warning deduplication, causing repeated warnings in looped reviews.\nF4: DROP \u2014 The duplicated tier literal is a maintainability issue but does not cause incorrect behavior.\nF1: KEEP \u2014 The redundant profile/provider lookups can raise in the failure handler, replacing the ProviderError and losing its usage record.\nF2: KEEP \u2014 The findings-addressed judge records no usage, so pipeline run totals omit its LLM spend.\nF3: KEEP \u2014 A fresh warning set bypasses per-run pricing-warning deduplication and can produce repeated warnings in looped reviews.\nF4: DROP \u2014 Duplicating the tier literal violates a maintainability convention but does not cause incorrect behavior."
+}

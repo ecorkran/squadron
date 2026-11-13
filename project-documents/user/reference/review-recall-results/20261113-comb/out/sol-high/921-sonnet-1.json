@@ -1,0 +1,38 @@
+{
+ "case": "921",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The new sudoers rule permits passwordless root execution of an operator-editable script, enabling arbitrary root commands."
+  ],
+  "F2": [
+   "DROP",
+   "Unsorted imports are lint/style violations, not behavioral defects."
+  ],
+  "F3": [
+   "DROP",
+   "Both earlier connection contexts exit before the bounds checkout, so connections are not nested."
+  ],
+  "F4": [
+   "DROP",
+   "Duplicated test scaffolding and substring checks show no concrete behavioral defect."
+  ]
+ },
+ "wall_seconds": 55.5,
+ "duration_seconds": 55.49875941686332,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=83739, cached=82048, cache_write=None, completion=201, reasoning=22)",
+ "raw_output": "F1: KEEP \u2014 The new sudoers rule permits passwordless root execution of an operator-editable script, enabling arbitrary root commands.\nF2: DROP \u2014 Unsorted imports are lint/style violations, not behavioral defects.\nF3: DROP \u2014 Both earlier connection contexts exit before the bounds checkout, so connections are not nested.\nF4: DROP \u2014 Duplicated test scaffolding and substring checks show no concrete behavioral defect.\nF1: KEEP \u2014 The new sudoers rule allows passwordless root execution of an operator-editable script, enabling arbitrary root commands.\nF2: DROP \u2014 Unsorted imports are lint/style violations, not behavioral defects.\nF3: DROP \u2014 Earlier connection contexts exit before the bounds checkout, so connections are not nested.\nF4: DROP \u2014 Duplicated test scaffolding and substring checks demonstrate no concrete behavioral defect."
+}

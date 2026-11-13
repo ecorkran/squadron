@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "An empty pipeline passes pre-journal validation, then raises after journaling and can be misclassified as a vanished run."
+  ],
+  "F2": [
+   "DROP",
+   "The file-size and cohesion concerns do not identify a behavioral defect."
+  ],
+  "F3": [
+   "KEEP",
+   "A negative launch grace is accepted and causes premature overdue detection and recovery decisions."
+  ]
+ },
+ "wall_seconds": 28.7,
+ "duration_seconds": 28.7066077911295,
+ "cost_usd": 0.04806325,
+ "effort": null,
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=173741, cached=139145, cache_write=None, completion=1302, reasoning=579)",
+ "raw_output": "F1: KEEP \u2014 An empty pipeline passes pre-journal validation, then raises after journaling and can be misclassified as a vanished run.\nF2: DROP \u2014 The file-size and cohesion concerns do not identify a behavioral defect.\nF3: KEEP \u2014 A negative launch grace is accepted and causes premature overdue detection and recovery decisions.\nF1: KEEP \u2014 An empty pipeline passes pre-journal validation, then raises after journaling and can be misclassified as a vanished run.\nF2: DROP \u2014 The file-size and cohesion concerns do not identify a behavioral defect.\nF3: KEEP \u2014 A negative launch grace is accepted and causes premature overdue detection and recovery decisions."
+}

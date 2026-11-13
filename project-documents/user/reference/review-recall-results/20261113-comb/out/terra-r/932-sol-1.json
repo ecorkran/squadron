@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A completed task can clear the ledger before the original result, causing dispatch to miss its queued continuation."
+  ],
+  "F2": [
+   "KEEP",
+   "The timeout remains active after the last task finishes, so it can return partial text while the parent continuation is still running."
+  ]
+ },
+ "wall_seconds": 7.9,
+ "duration_seconds": 7.904799957992509,
+ "cost_usd": 0.03241995,
+ "effort": null,
+ "tool_calls_made": 1,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=65845, cached=36679, cache_write=None, completion=284, reasoning=82)",
+ "raw_output": "F1: KEEP \u2014 A completed task can clear the ledger before the original result, causing dispatch to miss its queued continuation.\nF2: KEEP \u2014 The timeout remains active after the last task finishes, so it can return partial text while the parent continuation is still running.\nF1: KEEP \u2014 A task can clear the ledger before the original result, causing dispatch to miss its queued continuation.\nF2: KEEP \u2014 The timeout remains active after the last task finishes, so dispatch can return partial text while the parent continuation is still running."
+}

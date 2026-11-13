@@ -1,0 +1,58 @@
+{
+ "case": "921",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "subprocess.run` waits for `mt-run` to finish, so the journal poll cannot stop the unbounded pass early."
+  ],
+  "F2": [
+   "KEEP",
+   "Missing verdicts and nonzero repair exits can still produce a successful cutover result."
+  ],
+  "F3": [
+   "KEEP",
+   "The wildcard `mt-run` sudo grant runs arbitrary production CLI arguments as root."
+  ],
+  "F4": [
+   "KEEP",
+   "The repair command has no matching sudoers rule and can prompt or fail when sudo credentials expire."
+  ],
+  "F5": [
+   "KEEP",
+   "A legitimately empty session makes the chunk retry repeatedly and can exhaust it despite no further data being available."
+  ],
+  "F6": [
+   "KEEP",
+   "The probe can misreport freshness by ignoring job health, mishandling `-infinity`, and comparing against finish time."
+  ],
+  "F7": [
+   "KEEP",
+   "The log omits repair verdicts, so it fails to preserve the acceptance evidence it is meant to record."
+  ],
+  "F8": [
+   "DROP",
+   "The duplicated helpers are a maintainability concern, not a merge-blocking behavior defect."
+  ]
+ },
+ "wall_seconds": 39.1,
+ "duration_seconds": 38.88011883292347,
+ "cost_usd": 0.00895402,
+ "effort": null,
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=225109, cached=165832, cache_write=None, completion=2736, reasoning=1999)",
+ "raw_output": "F1: KEEP \u2014 `subprocess.run` waits for `mt-run` to finish, so the journal poll cannot stop the unbounded pass early.\nF2: KEEP \u2014 Missing verdicts and nonzero repair exits can still produce a successful cutover result.\nF3: KEEP \u2014 The wildcard `mt-run` sudo grant runs arbitrary production CLI arguments as root.\nF4: KEEP \u2014 The repair command has no matching sudoers rule and can prompt or fail when sudo credentials expire.\nF5: KEEP \u2014 A legitimately empty session makes the chunk retry repeatedly and can exhaust it despite no further data being available.\nF6: KEEP \u2014 The probe can misreport freshness by ignoring job health, mishandling `-infinity`, and comparing against finish time.\nF7: KEEP \u2014 The log omits repair verdicts, so it fails to preserve the acceptance evidence it is meant to record.\nF8: DROP \u2014 The duplicated helpers are a maintainability concern, not a merge-blocking behavior defect.\nF1: KEEP \u2014 `run()` blocks until `mt-run` exits, so the journal poll cannot stop the unbounded pass early.\nF2: KEEP \u2014 Missing verdicts and nonzero repair exits can still produce a successful cutover result.\nF3: KEEP \u2014 The wildcard `mt-run` sudo grant permits arbitrary production CLI arguments to run as root.\nF4: KEEP \u2014 The repair command has no matching sudoers rule and can prompt or fail when sudo credentials expire.\nF5: KEEP \u2014 An empty session in a chunk triggers retries and can exhaust the gap even when no more data is available.\nF6: KEEP \u2014 The probe ignores refresh-job health and can misjudge freshness by mishandling `-infinity` and comparing against finish time.\nF7: KEEP \u2014 The log omits repair verdicts, so it does not preserve the acceptance evidence it is meant to record.\nF8: DROP \u2014 The duplicated helpers are a maintainability concern, not a behavior defect requiring action before merge."
+}

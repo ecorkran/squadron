@@ -1,0 +1,33 @@
+{
+ "case": "188",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The new routes accept `date | datetime`, and Pydantic parses a timestamp with a zero time part as a `date`; `resolve_window` (`windows.py:46-47`) then turns `end=\u2026T00:00:00Z` into 23:59:59.999999, so the query returns an extra day of data with no warning."
+  ],
+  "F2": [
+   "KEEP",
+   "After the executor read, `CandlesResponse.build` and `timeseries_response` run on the event loop for up to `max_rows` rows (`kalshi_timeseries.py:125-126`, `:168-174`), breaking the project's <1 ms sync-in-async rule and blocking other requests."
+  ],
+  "F3": [
+   "DROP",
+   "The CI workflow is untouched infrastructure, and this slice openly assigns it to slice 907; the load tests themselves exist and run when opted in."
+  ]
+ },
+ "wall_seconds": 35.0,
+ "duration_seconds": 34.971299916971475,
+ "cost_usd": 0.2582221,
+ "effort": "medium",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=111312, cached=87186, cache_write=24110, completion=2359, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The new routes accept `date | datetime`, and Pydantic parses a timestamp with a zero time part as a `date`; `resolve_window` (`windows.py:46-47`) then turns `end=\u2026T00:00:00Z` into 23:59:59.999999, so the query returns an extra day of data with no warning.\n\nF2: KEEP \u2014 After the executor read, `CandlesResponse.build` and `timeseries_response` run on the event loop for up to `max_rows` rows (`kalshi_timeseries.py:125-126`, `:168-174`), breaking the project's <1 ms sync-in-async rule and blocking other requests.\n\nF3: DROP \u2014 The CI workflow is untouched infrastructure, and this slice openly assigns it to slice 907; the load tests themselves exist and run when opted in.\nF1: KEEP \u2014 The new routes accept `date | datetime`, and Pydantic parses a timestamp with a zero time part as a `date`; `resolve_window` (`windows.py:46-47`) then turns `end=\u2026T00:00:00Z` into 23:59:59.999999, so the query returns an extra day of data with no warning.\nF2: KEEP \u2014 After the executor read, `CandlesResponse.build` and `timeseries_response` run on the event loop for up to `max_rows` rows (`kalshi_timeseries.py:125-126`, `:168-174`), breaking the project's <1 ms sync-in-async rule and blocking other requests.\nF3: DROP \u2014 The CI workflow is untouched infrastructure, and this slice openly assigns it to slice 907; the load tests themselves exist and run when opted in."
+}

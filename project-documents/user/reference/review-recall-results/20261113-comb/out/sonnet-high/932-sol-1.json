@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "This is the race the slice's D6 design documents and accepts. The owed follow-up turn is dropped and logged at the start of the next dispatch."
+  ],
+  "F2": [
+   "KEEP",
+   "The idle timer was armed while a task was tracked and stays on after the last task clears. A silent parent continuation longer than the 1800s default can then hit the timeout. `_stop_background` has nothing to stop, and `dispatch` returns partial text as success. This breaks the \"foreground turns get no timer (#165)\" rule in `_collect_turns`."
+  ]
+ },
+ "wall_seconds": 28.8,
+ "duration_seconds": 28.772237166995183,
+ "cost_usd": 0.16515439999999998,
+ "effort": "high",
+ "tool_calls_made": 5,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=183587, cached=152971, cache_write=30600, completion=2661, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 This is the race the slice's D6 design documents and accepts. The owed follow-up turn is dropped and logged at the start of the next dispatch.\nF2: KEEP \u2014 The idle timer was armed while a task was tracked and stays on after the last task clears. A silent parent continuation longer than the 1800s default can then hit the timeout. `_stop_background` has nothing to stop, and `dispatch` returns partial text as success. This breaks the \"foreground turns get no timer (#165)\" rule in `_collect_turns`.\nF1: DROP \u2014 This is the race slice 932's D6 documents and accepts. The owed follow-up turn is dropped and logged at the start of the next dispatch.\nF2: KEEP \u2014 The idle timer stays armed after the last tracked task clears, so a silent parent continuation longer than the 1800s default hits the timeout. There is nothing to stop, and `dispatch` returns partial text as success. This breaks the \"foreground turns get no timer (#165)\" rule in `_collect_turns`."
+}

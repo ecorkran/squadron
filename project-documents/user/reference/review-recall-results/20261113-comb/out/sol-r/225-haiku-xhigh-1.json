@@ -1,0 +1,53 @@
+{
+ "case": "225",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "PoolTimeout subclasses psycopg.OperationalError, so the existing handler already maps it to exit 4."
+  ],
+  "F2": [
+   "DROP",
+   "The only configured universe entry has no tier, making this failure conditional on a future configuration change."
+  ],
+  "F3": [
+   "DROP",
+   "Only ES is currently supported, so the claimed cross-product mismatch requires a future product addition."
+  ],
+  "F4": [
+   "KEEP",
+   "A future observed_at timestamp produces misleading negative-day output instead of a meaningful age."
+  ],
+  "F5": [
+   "DROP",
+   "The current CLI caller rejects invalid ranges; the proposed API caller does not yet exist."
+  ],
+  "F6": [
+   "DROP",
+   "No measured performance defect is demonstrated, and the query already bounds the hypertable scan by time."
+  ],
+  "F7": [
+   "DROP",
+   "Missing integration coverage alone is not a behavioral defect requiring a pre-merge fix."
+  ]
+ },
+ "wall_seconds": 48.7,
+ "duration_seconds": 48.704852415947244,
+ "cost_usd": 0.10114250000000001,
+ "effort": null,
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=215841, cached=181105, cache_write=None, completion=1356, reasoning=648)",
+ "raw_output": "F1: DROP \u2014 PoolTimeout subclasses psycopg.OperationalError, so the existing handler already maps it to exit 4.\nF2: DROP \u2014 The only configured universe entry has no tier, making this failure conditional on a future configuration change.\nF3: DROP \u2014 Only ES is currently supported, so the claimed cross-product mismatch requires a future product addition.\nF4: KEEP \u2014 A future observed_at timestamp produces misleading negative-day output instead of a meaningful age.\nF5: DROP \u2014 The current CLI caller rejects invalid ranges; the proposed API caller does not yet exist.\nF6: DROP \u2014 No measured performance defect is demonstrated, and the query already bounds the hypertable scan by time.\nF7: DROP \u2014 Missing integration coverage alone is not a behavioral defect requiring a pre-merge fix.\nF1: DROP \u2014 PoolTimeout subclasses psycopg.OperationalError, so the existing handler already maps it to exit 4.\nF2: DROP \u2014 The only configured universe entry has no tier, so the claimed failure requires a future configuration change.\nF3: DROP \u2014 Only ES is currently supported, so the cross-product mismatch requires a future product addition.\nF4: KEEP \u2014 Clock skew can produce a negative age that renders misleadingly as \u201c-1d 23h ago.\u201d\nF5: DROP \u2014 The current CLI caller rejects invalid ranges, and the proposed API caller does not yet exist.\nF6: DROP \u2014 The time-bounded hypertable query has no demonstrated performance defect warranting a pre-merge fix.\nF7: DROP \u2014 Missing integration coverage alone does not establish a behavioral defect."
+}

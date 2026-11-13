@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "haiku-xhigh",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The duplication is real, but both sites read the same config file today, since the CLI always passes `os.getcwd()` and `project_config_path` resolves both forms identically, so it is a maintainability point rather than wrong behavior."
+  ],
+  "F2": [
+   "DROP",
+   "The `-> object` annotations and 35 suppressions in `test_sdk_session.py` are test typing hygiene; pyright stays clean and no test or product behavior is affected."
+  ]
+ },
+ "wall_seconds": 52.1,
+ "duration_seconds": 52.11232908279635,
+ "cost_usd": 0.021916160000000004,
+ "effort": "xhigh",
+ "tool_calls_made": 17,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=604087, cached=550776, cache_write=53287, completion=9544, reasoning=None)",
+ "raw_output": "F1: DROP \u2014 The duplication is real, but both sites read the same config file today, since the CLI always passes `os.getcwd()` and `project_config_path` resolves both forms identically, so it is a maintainability point rather than wrong behavior.\nF2: DROP \u2014 The `-> object` annotations and 35 suppressions in `test_sdk_session.py` are test typing hygiene; pyright stays clean and no test or product behavior is affected.\nF1: DROP \u2014 The duplicated policy wiring is real, but every production caller resolves config from the process cwd (`cli/commands/run.py` passes `os.getcwd()`, and `dispatch_run.py` passes no cwd), so both sites read the same file today. It is a maintainability point, not wrong behavior.\nF2: DROP \u2014 The `-> object` helper annotations and the 35 suppressions in `test_sdk_session.py` are test typing hygiene that does not change what the tests or product code do."
+}

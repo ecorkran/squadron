@@ -1,0 +1,33 @@
+{
+ "case": "188",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The `date | datetime` parameters can parse midnight timestamps as dates, expanding the requested bound to a whole UTC day."
+  ],
+  "F2": [
+   "KEEP",
+   "Model construction and serialization run synchronously in the async handlers, so large responses can block unrelated requests."
+  ],
+  "F3": [
+   "DROP",
+   "CI gating is explicitly deferred to slice 907, and the load tests are intentionally opt-in in this change."
+  ]
+ },
+ "wall_seconds": 43.4,
+ "duration_seconds": 43.37987149995752,
+ "cost_usd": 0.00810863,
+ "effort": null,
+ "tool_calls_made": 12,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=184154, cached=129303, cache_write=None, completion=2661, reasoning=2091)",
+ "raw_output": "F1: KEEP \u2014 The `date | datetime` parameters can parse midnight timestamps as dates, expanding the requested bound to a whole UTC day.\nF2: KEEP \u2014 Model construction and serialization run synchronously in the async handlers, so large responses can block unrelated requests.\nF3: DROP \u2014 CI gating is explicitly deferred to slice 907, and the load tests are intentionally opt-in in this change.\nF1: KEEP \u2014 The union can parse a midnight timestamp as a date, causing the date-bound logic to expand it to a whole UTC day.\nF2: KEEP \u2014 Model construction and serialization run synchronously in the async handlers, blocking the event loop for large responses.\nF3: DROP \u2014 CI gating is explicitly deferred to slice 907, so the opt-in load tests match this change\u2019s stated scope."
+}

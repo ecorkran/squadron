@@ -1,0 +1,33 @@
+{
+ "case": "225",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Separate autocommit snapshots can report a false mismatch when ingestion commits between the reads."
+  ],
+  "F2": [
+   "KEEP",
+   "Raw counts include rows from other request shapes that the ledger comparison excludes."
+  ],
+  "F3": [
+   "DROP",
+   "The repeated scans are inefficient, but the cited timing does not establish a consequential failure in the current CLI."
+  ]
+ },
+ "wall_seconds": 43.6,
+ "duration_seconds": 43.60180366691202,
+ "cost_usd": 0.0703999,
+ "effort": null,
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=256002, cached=205718, cache_write=None, completion=1966, reasoning=1027)",
+ "raw_output": "F1: KEEP \u2014 Separate autocommit snapshots can report a false mismatch when ingestion commits between the reads.\n\nF2: KEEP \u2014 Raw counts include rows from other request shapes that the ledger comparison excludes.\n\nF3: DROP \u2014 The repeated scans are inefficient, but the cited timing does not establish a consequential failure in the current CLI.\nF1: KEEP \u2014 Separate autocommit snapshots can report a false mismatch when ingestion commits between the reads.\n\nF2: KEEP \u2014 Raw counts include rows from other request shapes that the ledger comparison excludes.\n\nF3: DROP \u2014 The repeated scans are inefficient, but the cited timing does not establish a consequential failure in the current CLI."
+}

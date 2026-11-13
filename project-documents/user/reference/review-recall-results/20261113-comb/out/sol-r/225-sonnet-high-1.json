@@ -1,0 +1,38 @@
+{
+ "case": "225",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The reported failure requires a future multi-product configuration; the current universe contains only ES."
+  ],
+  "F2": [
+   "KEEP",
+   "An unknown wanted end leaves only held sessions in scope, allowing status to falsely report caught up."
+  ],
+  "F3": [
+   "DROP",
+   "The duplicate manifest read has no demonstrated material performance or correctness impact."
+  ],
+  "F4": [
+   "DROP",
+   "The assertion currently holds, and removing it under optimization does not break the existing layout."
+  ]
+ },
+ "wall_seconds": 17.5,
+ "duration_seconds": 17.506093207979575,
+ "cost_usd": 0.049259399999999995,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=61413, cached=41314, cache_write=None, completion=493, reasoning=141)",
+ "raw_output": "F1: DROP \u2014 The reported failure requires a future multi-product configuration; the current universe contains only ES.\nF2: KEEP \u2014 An unknown wanted end leaves only held sessions in scope, allowing status to falsely report caught up.\nF3: DROP \u2014 The duplicate manifest read has no demonstrated material performance or correctness impact.\nF4: DROP \u2014 The assertion currently holds, and removing it under optimization does not break the existing layout.\nF1: DROP \u2014 The claimed failure depends on a future second product; the current universe contains only ES.\nF2: KEEP \u2014 With no known wanted end, an empty or complete held-session list incorrectly reports caught up.\nF3: DROP \u2014 The duplicate query has no demonstrated material performance impact or concrete correctness failure.\nF4: DROP \u2014 The assertion holds for the current layout, so its removal under optimization causes no current defect."
+}

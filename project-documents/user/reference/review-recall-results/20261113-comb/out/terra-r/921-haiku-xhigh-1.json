@@ -1,0 +1,58 @@
+{
+ "case": "921",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The blocking `mt-run` call prevents journal polling from stopping the pass at the trailing marker."
+  ],
+  "F2": [
+   "KEEP",
+   "A failed verify with no `FAIL` or `WAIT` text can produce a successful cutover verdict."
+  ],
+  "F3": [
+   "KEEP",
+   "The sudoers rule permits root execution through broad `mt-run` arguments and an operator-checkout installer."
+  ],
+  "F4": [
+   "KEEP",
+   "The sudoers rule does not authorize the repair interpreter command, so it can prompt or fail unattended."
+  ],
+  "F5": [
+   "KEEP",
+   "An empty session makes the entire chunk retry and eventually become terminal even if data arrives later."
+  ],
+  "F6": [
+   "KEEP",
+   "The freshness probe can crash on `-infinity` and can accept a refresh that started before the bars were written."
+  ],
+  "F7": [
+   "KEEP",
+   "Verify output bypasses `say()`, so the promised cutover log omits the acceptance evidence."
+  ],
+  "F8": [
+   "DROP",
+   "The duplicated control flow is a maintainability concern, not a behavioral defect."
+  ]
+ },
+ "wall_seconds": 37.9,
+ "duration_seconds": 37.75337249995209,
+ "cost_usd": 0.07998084999999999,
+ "effort": null,
+ "tool_calls_made": 14,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=241468, cached=179197, cache_write=None, completion=1750, reasoning=568)",
+ "raw_output": "F1: KEEP \u2014 The blocking `mt-run` call prevents journal polling from stopping the pass at the trailing marker.\n\nF2: KEEP \u2014 A failed verify with no `FAIL` or `WAIT` text can produce a successful cutover verdict.\n\nF3: KEEP \u2014 The sudoers rule permits root execution through broad `mt-run` arguments and an operator-checkout installer.\n\nF4: KEEP \u2014 The sudoers rule does not authorize the repair interpreter command, so it can prompt or fail unattended.\n\nF5: KEEP \u2014 An empty session makes the entire chunk retry and eventually become terminal even if data arrives later.\n\nF6: KEEP \u2014 The freshness probe can crash on `-infinity` and can accept a refresh that started before the bars were written.\n\nF7: KEEP \u2014 Verify output bypasses `say()`, so the promised cutover log omits the acceptance evidence.\n\nF8: DROP \u2014 The duplicated control flow is a maintainability concern, not a behavioral defect.\nF1: KEEP \u2014 The blocking `mt-run` call prevents journal polling from stopping the pass at the trailing marker.\n\nF2: KEEP \u2014 A failed verify with no `FAIL` or `WAIT` text can produce a successful cutover verdict.\n\nF3: KEEP \u2014 The sudoers rule permits root execution through broad `mt-run` arguments and an operator-checkout installer.\n\nF4: KEEP \u2014 The sudoers rule does not authorize the repair interpreter command, so it can prompt or fail unattended.\n\nF5: KEEP \u2014 An empty session makes the entire chunk retry and eventually become terminal even if data arrives later.\n\nF6: KEEP \u2014 The freshness probe can crash on `-infinity` and accept a refresh that started before the bars were written.\n\nF7: KEEP \u2014 Verify output bypasses `say()`, so the promised cutover log omits the acceptance evidence.\n\nF8: DROP \u2014 The duplicated control flow is a maintainability concern, not a behavioral defect."
+}

@@ -1,0 +1,64 @@
+[
+ {
+  "repo": "trading-engine",
+  "fix": "9e3a2bae1a",
+  "date": "2026-11-12",
+  "subject": "fix: refuse str and bytes in require_iterable_of",
+  "introducers": [
+   "185e400340"
+  ],
+  "review": "project-documents/user/reviews/105-review.code.labels-signals-and-declarations.md",
+  "head": "6211cf1c16",
+  "base": "185e400340^"
+ },
+ {
+  "repo": "trading-engine",
+  "fix": "6078e2bc58",
+  "date": "2026-11-11",
+  "subject": "fix: keep distinct integers distinct in as_real and share the loop guard",
+  "introducers": [
+   "7dd4748d05"
+  ],
+  "review": "project-documents/user/reviews/105-review.code.labels-signals-and-declarations.md",
+  "head": "6211cf1c16",
+  "base": "7dd4748d05^"
+ },
+ {
+  "repo": "trading-engine",
+  "fix": "eda526f7b2",
+  "date": "2026-11-10",
+  "subject": "fix: refuse masked arrays and correct the series alignment docstring",
+  "introducers": [
+   "cc19d8f07c",
+   "dc315ed9e8"
+  ],
+  "review": null,
+  "head": "cc19d8f07c",
+  "base": "cc19d8f07c^"
+ },
+ {
+  "repo": "trading-engine",
+  "fix": "ccae5e3527",
+  "date": "2026-11-08",
+  "subject": "fix: harden market validation and share type guards",
+  "introducers": [
+   "45472f7e1d",
+   "8bc356a086"
+  ],
+  "review": "project-documents/user/reviews/102-review.code.market-and-instrument-model.md",
+  "head": "1b665d05e3",
+  "base": "45472f7e1d^"
+ },
+ {
+  "repo": "trading-engine",
+  "fix": "8cabaa3564",
+  "date": "2026-10-26",
+  "subject": "fix: range-check calendar coverage and session_index time against int64",
+  "introducers": [
+   "840c368077"
+  ],
+  "review": null,
+  "head": "840c368077",
+  "base": "840c368077^"
+ }
+]

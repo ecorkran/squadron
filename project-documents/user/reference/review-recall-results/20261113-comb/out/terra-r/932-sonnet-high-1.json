@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "terra-r",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The duplicated policy wiring is a maintainability concern, not a demonstrated behavior defect."
+  ],
+  "F2": [
+   "DROP",
+   "The type suppressions and broad exception assertion do not demonstrate a production defect."
+  ]
+ },
+ "wall_seconds": 12.5,
+ "duration_seconds": 12.514917999971658,
+ "cost_usd": 0.03493645,
+ "effort": null,
+ "tool_calls_made": 2,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=97469, cached=67329, cache_write=None, completion=286, reasoning=93)",
+ "raw_output": "F1: DROP \u2014 The duplicated policy wiring is a maintainability concern, not a demonstrated behavior defect.\nF2: DROP \u2014 The type suppressions and broad exception assertion do not demonstrate a production defect.\nF1: DROP \u2014 The duplicated policy wiring is a maintainability concern, not a demonstrated behavior defect.\nF2: DROP \u2014 The type suppressions and broad exception assertion do not demonstrate a production defect."
+}

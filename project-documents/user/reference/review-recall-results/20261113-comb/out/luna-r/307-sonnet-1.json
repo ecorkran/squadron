@@ -1,0 +1,23 @@
+{
+ "case": "307",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sonnet/1/0"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The project uses mypy configured for `src/manta_trading`, not strict pyright over tests and scripts, so these annotations are not a confirmed merge-blocking check failure."
+  ]
+ },
+ "wall_seconds": 36.1,
+ "duration_seconds": 36.078532666899264,
+ "cost_usd": 0.0039552300000000006,
+ "effort": null,
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=85428, cached=64223, cache_write=None, completion=2385, reasoning=2088)",
+ "raw_output": "F1: DROP \u2014 The project uses mypy configured for `src/manta_trading`, not strict pyright over tests and scripts, so these annotations are not a confirmed merge-blocking check failure.\nF1: KEEP \u2014 `_status` returns `object` where `CompletedProcess[str]` is required, a type mismatch the project\u2019s touched-file mypy check should catch."
+}

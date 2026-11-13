@@ -1,0 +1,43 @@
+{
+ "case": "932",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Broad helper annotations reduce type-checking precision but do not demonstrate incorrect test or runtime behavior."
+  ],
+  "F2": [
+   "DROP",
+   "The sleeps exercise relative timeout behavior, and no concrete CI failure or timing race is established."
+  ],
+  "F3": [
+   "DROP",
+   "The suppression covers valid settings-source strings and does not cause incorrect SDK options."
+  ],
+  "F4": [
+   "KEEP",
+   "One-shot SDK dispatch reads project overrides from the supplied cwd while launching the CLI in the process cwd, unlike persistent sessions."
+  ],
+  "F5": [
+   "DROP",
+   "The docstring reference and helper placement are documentation and organization concerns without behavioral impact."
+  ]
+ },
+ "wall_seconds": 16.9,
+ "duration_seconds": 16.85684333392419,
+ "cost_usd": 0.08241230000000001,
+ "effort": null,
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=138147, cached=104543, cache_write=None, completion=475, reasoning=64)",
+ "raw_output": "F1: DROP \u2014 Broad helper annotations reduce type-checking precision but do not demonstrate incorrect test or runtime behavior.\nF2: DROP \u2014 The sleeps exercise relative timeout behavior, and no concrete CI failure or timing race is established.\nF3: DROP \u2014 The suppression covers valid settings-source strings and does not cause incorrect SDK options.\nF4: KEEP \u2014 One-shot SDK dispatch reads project overrides from the supplied cwd while launching the CLI in the process cwd, unlike persistent sessions.\nF5: DROP \u2014 The docstring reference and helper placement are documentation and organization concerns without behavioral impact.\nF1: DROP \u2014 Broad helper return types weaken static checking but do not demonstrate a behavioral defect.\nF2: DROP \u2014 The tests exercise relative timeout behavior without establishing a concrete timing race or failure.\nF3: DROP \u2014 The suppressed type mismatch does not change the valid settings-source values passed to the SDK.\nF4: KEEP \u2014 One-shot SDK dispatch reads project overrides from the supplied cwd but launches the CLI in the process cwd, allowing mismatched project settings.\nF5: DROP \u2014 The docstring reference and helper placement are documentation and organization concerns, not behavioral defects."
+}

@@ -1,0 +1,38 @@
+{
+ "case": "175",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Expected provider failures are logged as unexpected with a traceback despite already having a warning log."
+  ],
+  "F2": [
+   "KEEP",
+   "If the profile or provider lookup fails in the handler, it replaces the original provider error reported for the step."
+  ],
+  "F3": [
+   "KEEP",
+   "A compact failure with provider telemetry returns without recording the spend already captured on the error."
+  ],
+  "F4": [
+   "KEEP",
+   "Fresh warning sets bypass run-level deduplication, so partial-pricing warnings recur for reviews in the same run."
+  ]
+ },
+ "wall_seconds": 107.6,
+ "duration_seconds": 107.61703124991618,
+ "cost_usd": 0.011293880000000001,
+ "effort": "high",
+ "tool_calls_made": 21,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=291841, cached=237608, cache_write=None, completion=6989, reasoning=6166)",
+ "raw_output": "F1: KEEP \u2014 Expected provider failures are logged as unexpected with a traceback despite already having a warning log.\nF2: KEEP \u2014 If the profile or provider lookup fails in the handler, it replaces the original provider error reported for the step.\nF3: KEEP \u2014 A compact failure with provider telemetry returns without recording the spend already captured on the error.\nF4: KEEP \u2014 Fresh warning sets bypass run-level deduplication, so partial-pricing warnings recur for reviews in the same run.\nF1: KEEP \u2014 Expected provider failures are logged as unexpected with a traceback, duplicating the existing warning.\nF2: KEEP \u2014 A failure in the profile or provider lookup would replace the original provider error reported for the step.\nF3: KEEP \u2014 Compact failures with telemetry on the error return without recording the spend.\nF4: KEEP \u2014 Fresh warning sets bypass per-run deduplication, so partial-pricing warnings recur across reviews."
+}

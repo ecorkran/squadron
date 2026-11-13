@@ -1,0 +1,43 @@
+{
+ "case": "921",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2",
+  "F4": "sol/1/3",
+  "F5": "sol/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "fire_unit_until` makes a blocking `run([\"mt-run\", ...])` call, and `deploy/mt-run:129` doesn't return until the unit stops, so `wait_for_unit_or_line` only starts once the pass has ended and the cutover still waits for the full backfill."
+  ],
+  "F2": [
+   "KEEP",
+   "MT_INSTALL` lets the `manta` user run, as root and without a password, a script in a checkout that same user can edit, which amounts to unrestricted passwordless root."
+  ],
+  "F3": [
+   "KEEP",
+   "in sudoers, `*` also matches spaces, so `systemctl stop|start|restart mt-* other.service` passes the rule and the passwordless grant covers any unit, not just `mt-*`."
+  ],
+  "F4": [
+   "KEEP",
+   "when a later terminal gap row moves `_gap_frontier` past a truncated day (or the frontier is at or past `target_end`), `seed_from` starts after that day or seeding is skipped, so `uncovered_days` never gets that day re-seeded and the new fix fails in a state that can happen."
+  ],
+  "F5": [
+   "KEEP",
+   "_repair` only `print`s its output, so the `--verify` FAIL/WAIT lines and acceptance numbers are missing from the new cutover log, even though the final message says \"read the FAIL lines\" and calls the file the \"full narration\"."
+  ]
+ },
+ "wall_seconds": 66.4,
+ "duration_seconds": 66.34914549998939,
+ "cost_usd": 0.4752688,
+ "effort": "high",
+ "tool_calls_made": 9,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=243296, cached=201893, cache_write=41385, completion=5154, reasoning=None)",
+ "raw_output": "Done checking all five findings against the code; here is the verdict for each.\n\nF1: KEEP \u2014 `fire_unit_until` makes a blocking `run([\"mt-run\", ...])` call, and `deploy/mt-run:129` doesn't return until the unit stops, so `wait_for_unit_or_line` only starts once the pass has ended and the cutover still waits for the full backfill.\nF2: KEEP \u2014 `MT_INSTALL` lets the `manta` user run, as root and without a password, a script in a checkout that same user can edit, which amounts to unrestricted passwordless root.\nF3: KEEP \u2014 in sudoers, `*` also matches spaces, so `systemctl stop|start|restart mt-* other.service` passes the rule and the passwordless grant covers any unit, not just `mt-*`.\nF4: KEEP \u2014 when a later terminal gap row moves `_gap_frontier` past a truncated day (or the frontier is at or past `target_end`), `seed_from` starts after that day or seeding is skipped, so `uncovered_days` never gets that day re-seeded and the new fix fails in a state that can happen.\nF5: KEEP \u2014 `_repair` only `print`s its output, so the `--verify` FAIL/WAIT lines and acceptance numbers are missing from the new cutover log, even though the final message says \"read the FAIL lines\" and calls the file the \"full narration\".\nF1: KEEP \u2014 `run()` blocks on `mt-run`, which doesn't return until the unit stops (`deploy/mt-run:129`), so `wait_for_unit_or_line` only starts after the pass ends and the unbounded wait is still there.\nF2: KEEP \u2014 `MT_INSTALL` gives passwordless root to a script in a checkout the `manta` user can edit, which amounts to unrestricted passwordless root.\nF3: KEEP \u2014 in sudoers `*` also matches whitespace, so `systemctl stop|start|restart mt-* other.service` matches the rule and the grant covers any systemd unit.\nF4: KEEP \u2014 when a later terminal gap moves `_gap_frontier` past a truncated day, or puts it at or after `target_end`, the seed starts after that day or never runs, so the new `uncovered_days` fix never re-seeds it.\nF5: KEEP \u2014 `_repair` only `print`s its output, so the `--verify` FAIL/WAIT lines and acceptance numbers never reach the new log, even though the script calls it the \"full narration\" and says \"read the FAIL lines\"."
+}

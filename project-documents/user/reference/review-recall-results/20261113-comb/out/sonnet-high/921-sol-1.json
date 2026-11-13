@@ -1,0 +1,43 @@
+{
+ "case": "921",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "sonnet-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2",
+  "F4": "sol/1/3",
+  "F5": "sol/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "run()` blocks in `subprocess.run()` until `mt-run` returns, and `mt-run` (`deploy/mt-run:129`) waits for the unit to finish. `wait_for_unit_or_line` therefore only polls after the unbounded firing has already ended."
+  ],
+  "F2": [
+   "KEEP",
+   "the passwordless root rule names an installer path in the operator's own checkout, so anyone able to write as that account can get root without a password."
+  ],
+  "F3": [
+   "KEEP",
+   "a sudoers `*` matches spaces, so `systemctl stop mt-x ssh.service` matches the `mt-*` rule and the grant covers non-`mt-` units."
+  ],
+  "F4": [
+   "DROP",
+   "the repair resets existing truncated days through `update_data_gaps`, and the root cause is fixed. The terminal-only edge case behind the frontier isn't a realistic path to wrong data."
+  ],
+  "F5": [
+   "KEEP",
+   "the runbook says the log carries the `--verify` measurements, but `_repair` only `print`s its output and `say()` is the only thing written to the log. The acceptance evidence never reaches the file."
+  ]
+ },
+ "wall_seconds": 54.0,
+ "duration_seconds": 54.04002787498757,
+ "cost_usd": 0.23346740000000002,
+ "effort": "high",
+ "tool_calls_made": 13,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=346113, cached=307467, cache_write=38622, completion=4757, reasoning=None)",
+ "raw_output": "Checking F4 now. I'm looking at how the repair path handles truncated days that sit behind the gap frontier, and then I'll check F5.\nF1: KEEP \u2014 `run()` blocks in `subprocess.run()` until `mt-run` returns, and `mt-run` (`deploy/mt-run:129`) waits for the unit to finish. `wait_for_unit_or_line` therefore only polls after the unbounded firing has already ended.\nF2: KEEP \u2014 the passwordless root rule names an installer path in the operator's own checkout, so anyone able to write as that account can get root without a password.\nF3: KEEP \u2014 a sudoers `*` matches spaces, so `systemctl stop mt-x ssh.service` matches the `mt-*` rule and the grant covers non-`mt-` units.\nF4: DROP \u2014 the repair resets existing truncated days through `update_data_gaps`, and the root cause is fixed. The terminal-only edge case behind the frontier isn't a realistic path to wrong data.\nF5: KEEP \u2014 the runbook says the log carries the `--verify` measurements, but `_repair` only `print`s its output and `say()` is the only thing written to the log. The acceptance evidence never reaches the file.\nF1: KEEP \u2014 `run()` blocks until `mt-run` returns, and `mt-run` waits for the unit to end, so the journal wait only starts after the unbounded firing is over.\nF2: KEEP \u2014 the passwordless root rule names an installer in the operator's own checkout, so anyone who can write as that account gets root without a password.\nF3: KEEP \u2014 a sudoers `*` matches spaces, so `systemctl stop mt-x ssh.service` matches the `mt-*` rule and the grant reaches non-`mt-` units.\nF4: DROP \u2014 the repair resets existing truncated days through `update_data_gaps` and the root cause is fixed, so the terminal-only edge case behind the frontier isn't a realistic route to wrong data.\nF5: KEEP \u2014 the runbook says the log carries the `--verify` measurements, but `_repair` only `print`s its output and just `say()` writes to the log, so the acceptance evidence never reaches the file."
+}

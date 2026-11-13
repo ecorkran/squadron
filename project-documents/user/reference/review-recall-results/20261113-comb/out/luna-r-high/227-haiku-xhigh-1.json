@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Unexpected exceptions can escape `run_steps` before `main()` writes the promised cutover report."
+  ],
+  "F2": [
+   "DROP",
+   "The weak assertions reduce test coverage but do not establish a defect in changed behavior."
+  ],
+  "F3": [
+   "DROP",
+   "The replication branch is untested, but the code shown applies it when requested and no defect is demonstrated."
+  ]
+ },
+ "wall_seconds": 33.2,
+ "duration_seconds": 33.158791041933,
+ "cost_usd": 0.00467155,
+ "effort": "high",
+ "tool_calls_made": 9,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=111724, cached=82965, cache_write=None, completion=1932, reasoning=1520)",
+ "raw_output": "F1: KEEP \u2014 Unexpected exceptions can escape `run_steps` before `main()` writes the promised cutover report.\nF2: DROP \u2014 The weak assertions reduce test coverage but do not establish a defect in changed behavior.\nF3: DROP \u2014 The replication branch is untested, but the code shown applies it when requested and no defect is demonstrated.\nF1: KEEP \u2014 Unexpected exceptions can escape `run_steps` before `main()` writes the promised cutover report.\nF2: DROP \u2014 The weak assertions reduce test coverage but do not establish a defect in changed behavior.\nF3: DROP \u2014 The replication branch is untested, but the code shown applies it when requested and no defect is demonstrated."
+}

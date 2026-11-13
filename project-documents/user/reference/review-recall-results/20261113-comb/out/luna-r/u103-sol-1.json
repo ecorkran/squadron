@@ -1,0 +1,28 @@
+{
+ "case": "u103",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Adding a series does not rerun the range effect, so an existing range remains unapplied until another dependency changes."
+  ],
+  "F2": [
+   "KEEP",
+   "The series count tracks series existence rather than populated data, so empty or cleared series can allow an invalid range call."
+  ]
+ },
+ "wall_seconds": 13.9,
+ "duration_seconds": 13.891506958985701,
+ "cost_usd": 0.00235345,
+ "effort": null,
+ "tool_calls_made": 10,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=58242, cached=43125, cache_write=None, completion=821, reasoning=398)",
+ "raw_output": "F1: KEEP \u2014 Adding a series does not rerun the range effect, so an existing range remains unapplied until another dependency changes.\nF2: KEEP \u2014 The series count tracks series existence rather than populated data, so empty or cleared series can allow an invalid range call.\nF1: KEEP \u2014 Adding a series does not rerun the range effect, so an existing range remains unapplied until another dependency changes.\nF2: KEEP \u2014 The series count tracks series existence rather than populated data, so empty or cleared series can allow an invalid range call."
+}

@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "An empty pipeline passes prevalidation but raises after journaling, leaving an unresolved entry later misclassified as vanished."
+  ],
+  "F2": [
+   "DROP",
+   "File length and separation of concerns are maintainability suggestions, not demonstrated behavioral defects."
+  ],
+  "F3": [
+   "KEEP",
+   "The CLI accepts negative launch grace values, and startup validation lets them bypass the observer\u2019s grace period."
+  ]
+ },
+ "wall_seconds": 16.4,
+ "duration_seconds": 16.41724883299321,
+ "cost_usd": 0.05276139999999999,
+ "effort": null,
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=82776, cached=61674, cache_write=None, completion=439, reasoning=114)",
+ "raw_output": "F1: KEEP \u2014 An empty pipeline passes prevalidation but raises after journaling, leaving an unresolved entry later misclassified as vanished.\nF2: DROP \u2014 File length and separation of concerns are maintainability suggestions, not demonstrated behavioral defects.\nF3: KEEP \u2014 The CLI accepts negative launch grace values, and startup validation lets them bypass the observer\u2019s grace period.\nF1: KEEP \u2014 An empty pipeline passes prevalidation but raises after journaling, leaving an unresolved entry later misclassified as vanished.\nF2: DROP \u2014 File length and separation of concerns are maintainability suggestions, not demonstrated behavioral defects.\nF3: KEEP \u2014 The CLI accepts negative launch grace values, and startup validation lets them bypass the observer\u2019s grace period."
+}

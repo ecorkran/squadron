@@ -1,0 +1,28 @@
+{
+ "case": "227",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Uncaught log-read errors bypass report writing, and health checks can pass using stale successful log entries."
+  ],
+  "F2": [
+   "DROP",
+   "The constants match the current deployment; hypothetical configuration drift and duplication alone are not merge-blocking defects."
+  ]
+ },
+ "wall_seconds": 19.9,
+ "duration_seconds": 19.928261040942743,
+ "cost_usd": 0.0396572,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=94559, cached=79232, cache_write=None, completion=108, reasoning=0)",
+ "raw_output": "F1: KEEP \u2014 Uncaught log-read errors bypass report writing, and health checks can pass using stale successful log entries.\nF2: DROP \u2014 The constants match the current deployment; hypothetical configuration drift and duplication alone are not merge-blocking defects.\nF1: KEEP \u2014 Uncaught log-read errors bypass report writing, and health checks can pass using stale successful log entries.\nF2: DROP \u2014 The constants match the current deployment; hypothetical configuration drift and duplication alone are not merge-blocking defects."
+}

@@ -1,0 +1,38 @@
+{
+ "case": "175",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol-high",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The logging is noisy but does not cause a functional defect."
+  ],
+  "F2": [
+   "DROP",
+   "Those lookups already succeeded before the call; masking requires an unestablished configuration change."
+  ],
+  "F3": [
+   "KEEP",
+   "Compact failures discard available error telemetry, omitting known spend from run statistics."
+  ],
+  "F4": [
+   "DROP",
+   "Duplicate pricing warnings do not change recorded costs or action behavior."
+  ]
+ },
+ "wall_seconds": 37.1,
+ "duration_seconds": 37.097381458152086,
+ "cost_usd": null,
+ "effort": "high",
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=103907, cached=93568, cache_write=None, completion=184, reasoning=20)",
+ "raw_output": "F1: DROP \u2014 The logging is noisy but does not cause a functional defect.\nF2: DROP \u2014 Those lookups already succeeded before the call; masking requires an unestablished configuration change.\nF3: KEEP \u2014 Compact failures discard available error telemetry, omitting known spend from run statistics.\nF4: DROP \u2014 Duplicate pricing warnings do not change recorded costs or action behavior.\nF1: DROP \u2014 Noisy or misleading logging does not cause a functional defect.\nF2: DROP \u2014 These lookups already succeeded before the provider call; no reachable secondary failure is established.\nF3: KEEP \u2014 Compact failures discard available error telemetry, omitting known spend from run statistics.\nF4: DROP \u2014 Redundant pricing and repeated warnings do not produce incorrect recorded costs."
+}

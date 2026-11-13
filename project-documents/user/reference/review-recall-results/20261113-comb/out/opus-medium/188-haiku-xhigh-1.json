@@ -1,0 +1,63 @@
+{
+ "case": "188",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-medium",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The route builds up to 75k pydantic records and serializes ~35 MB on the event loop thread, which blocks every other request for close to a second; the project's async rule forbids this."
+  ],
+  "F2": [
+   "KEEP",
+   "The published OpenAPI description says \"newest stored trade\", but the field actually carries the trades watermark, so clients reading the contract will misjudge freshness."
+  ],
+  "F3": [
+   "DROP",
+   "This only arises when a category is excluded after its trades were already collected, and choosing between filtering and rewording is a design call, not a clear defect."
+  ],
+  "F4": [
+   "DROP",
+   "The duplicate check currently gives the same answer as the SQL and an integration test catches any drift, so what remains is docstring and DRY wording."
+  ],
+  "F5": [
+   "DROP",
+   "The docstring overclaims, but the existing test fails if `CANDLE_COLUMNS` changes, so no silent failure can ship today."
+  ],
+  "F6": [
+   "DROP",
+   "The positions match `TRADE_COLUMNS` today; this is hardening against a future reorder, not a current defect."
+  ],
+  "F7": [
+   "DROP",
+   "It is about `gaps.py`, which this change did not touch."
+  ],
+  "F8": [
+   "DROP",
+   "Weak load-test assertions and a stale docstring count are test-quality points, not defects in behavior."
+  ],
+  "F9": [
+   "DROP",
+   "File and function size guidance is style only."
+  ]
+ },
+ "wall_seconds": 23.8,
+ "duration_seconds": 23.746336166979745,
+ "cost_usd": 0.256114,
+ "effort": "medium",
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=75610, cached=50119, cache_write=25481, completion=2069, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 The route builds up to 75k pydantic records and serializes ~35 MB on the event loop thread, which blocks every other request for close to a second; the project's async rule forbids this.\nF2: KEEP \u2014 The published OpenAPI description says \"newest stored trade\", but the field actually carries the trades watermark, so clients reading the contract will misjudge freshness.\nF3: DROP \u2014 This only arises when a category is excluded after its trades were already collected, and choosing between filtering and rewording is a design call, not a clear defect.\nF4: DROP \u2014 The duplicate check currently gives the same answer as the SQL and an integration test catches any drift, so what remains is docstring and DRY wording.\nF5: DROP \u2014 The docstring overclaims, but the existing test fails if `CANDLE_COLUMNS` changes, so no silent failure can ship today.\nF6: DROP \u2014 The positions match `TRADE_COLUMNS` today; this is hardening against a future reorder, not a current defect.\nF7: DROP \u2014 It is about `gaps.py`, which this change did not touch.\nF8: DROP \u2014 Weak load-test assertions and a stale docstring count are test-quality points, not defects in behavior.\nF9: DROP \u2014 File and function size guidance is style only.\nF1: KEEP \u2014 The route builds up to 75k pydantic records and serializes ~35 MB on the event loop thread, which blocks every other request for close to a second; the project's async rule forbids this.\nF2: KEEP \u2014 The published OpenAPI description says \"newest stored trade\", but the field actually carries the trades watermark, so clients reading the contract will misjudge freshness.\nF3: DROP \u2014 This only arises when a category is excluded after its trades were already collected, and choosing between filtering and rewording is a design call, not a clear defect.\nF4: DROP \u2014 The duplicate check currently gives the same answer as the SQL and an integration test catches any drift, so what remains is docstring and DRY wording.\nF5: DROP \u2014 The docstring overclaims, but the existing test fails if `CANDLE_COLUMNS` changes, so no silent failure can ship today.\nF6: DROP \u2014 The positions match `TRADE_COLUMNS` today; this is hardening against a future reorder, not a current defect.\nF7: DROP \u2014 It is about `gaps.py`, which this change did not touch.\nF8: DROP \u2014 Weak load-test assertions and a stale docstring count are test-quality points, not defects in behavior.\nF9: DROP \u2014 File and function size guidance is style only."
+}

@@ -1,0 +1,43 @@
+{
+ "case": "188",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "In lax mode, pydantic accepts a zero-time datetime string as a `date`, and the `date | datetime` union is a tie, so the leftmost type (`date`) wins; `end=\u2026T00:00:00Z` then widens to 23:59:59.999999 and the client silently gets a day of extra data (no test covers a midnight `end`)."
+  ],
+  "F2": [
+   "DROP",
+   "The positional indexes match the current `TRADE_COLUMNS` order exactly; the finding only guards against a hypothetical future reorder."
+  ],
+  "F3": [
+   "DROP",
+   "This is a dead-map and docstring-accuracy point; behaviour is correct today, and the reviewer admits the parity test already catches column drift."
+  ],
+  "F4": [
+   "DROP",
+   "Both current callers use `extra` correctly; this is a design-smell and DRY remark with no wrong behaviour."
+  ],
+  "F5": [
+   "DROP",
+   "This is test-harness fragility, already mitigated by the `count(*)`-seen assertion; it doesn't affect product behaviour."
+  ]
+ },
+ "wall_seconds": 75.0,
+ "duration_seconds": 74.9946670839563,
+ "cost_usd": 0.42198420000000003,
+ "effort": "high",
+ "tool_calls_made": 8,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=232134, cached=202124, cache_write=29992, completion=7037, reasoning=None)",
+ "raw_output": "F1: KEEP \u2014 In lax mode, pydantic accepts a zero-time datetime string as a `date`, and the `date | datetime` union is a tie, so the leftmost type (`date`) wins; `end=\u2026T00:00:00Z` then widens to 23:59:59.999999 and the client silently gets a day of extra data (no test covers a midnight `end`).\nF2: DROP \u2014 The positional indexes match the current `TRADE_COLUMNS` order exactly; the finding only guards against a hypothetical future reorder.\nF3: DROP \u2014 This is a dead-map and docstring-accuracy point; behaviour is correct today, and the reviewer admits the parity test already catches column drift.\nF4: DROP \u2014 Both current callers use `extra` correctly; this is a design-smell and DRY remark with no wrong behaviour.\nF5: DROP \u2014 This is test-harness fragility, already mitigated by the `count(*)`-seen assertion; it doesn't affect product behaviour.\nF1: KEEP \u2014 In lax mode, pydantic accepts a zero-time datetime string as a `date`, and the `date | datetime` union is a tie, so the leftmost type (`date`) wins; `end=\u2026T00:00:00Z` then widens to 23:59:59.999999 and the client silently gets a day of extra data (no test covers a midnight `end`).\nF2: DROP \u2014 The positional indexes match the current `TRADE_COLUMNS` order exactly; the finding only guards against a hypothetical future reorder.\nF3: DROP \u2014 This is a dead-map and docstring-accuracy point; behaviour is correct today, and the reviewer admits the parity test already catches column drift.\nF4: DROP \u2014 Both current callers use `extra` correctly; this is a design-smell and DRY remark with no wrong behaviour.\nF5: DROP \u2014 This is test-harness fragility, already mitigated by the `count(*)`-seen assertion; it doesn't affect product behaviour."
+}

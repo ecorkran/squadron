@@ -1,0 +1,68 @@
+{
+ "case": "u103",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "sol-r",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8",
+  "F10": "haiku-xhigh/1/9"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Adding a populated series does not retrigger the range effect, leaving the current context range unapplied."
+  ],
+  "F2": [
+   "DROP",
+   "The facade explicitly documents undefined results when not live, and callers receive a readiness flag."
+  ],
+  "F3": [
+   "DROP",
+   "The required tokens are defined and the stylesheet is imported before rendering; no reachable missing-token failure is demonstrated."
+  ],
+  "F4": [
+   "DROP",
+   "Size guidance and declaration ordering do not establish a runtime defect; teardown runs after initialization."
+  ],
+  "F5": [
+   "DROP",
+   "The broad lint suppression is a maintenance concern, not evidence of an actual render-time ref violation."
+  ],
+  "F6": [
+   "DROP",
+   "The explicitly deferred indicator effect is unnecessary scaffolding but causes no incorrect behavior."
+  ],
+  "F7": [
+   "DROP",
+   "The test is vacuous, but the currently inert subscription handlers have no behavior requiring protection."
+  ],
+  "F8": [
+   "DROP",
+   "Duplicated test helpers are a refactoring concern without a demonstrated behavioral defect."
+  ],
+  "F9": [
+   "DROP",
+   "Stronger spy typing would catch future interface drift, but no current contract failure is identified."
+  ],
+  "F10": [
+   "DROP",
+   "The observer corrects the initial box measurement, and no meaningful visible sizing defect is established."
+  ]
+ },
+ "wall_seconds": 23.9,
+ "duration_seconds": 23.901845541782677,
+ "cost_usd": 0.06389500000000001,
+ "effort": null,
+ "tool_calls_made": 3,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=99092, cached=74810, cache_write=None, completion=785, reasoning=137)",
+ "raw_output": "F1: KEEP \u2014 Adding a populated series does not retrigger the range effect, leaving the current context range unapplied.\nF2: DROP \u2014 The facade explicitly documents undefined results when not live, and callers receive a readiness flag.\nF3: DROP \u2014 The required tokens are defined and the stylesheet is imported before rendering; no reachable missing-token failure is demonstrated.\nF4: DROP \u2014 Size guidance and declaration ordering do not establish a runtime defect; teardown runs after initialization.\nF5: DROP \u2014 The broad lint suppression is a maintenance concern, not evidence of an actual render-time ref violation.\nF6: DROP \u2014 The explicitly deferred indicator effect is unnecessary scaffolding but causes no incorrect behavior.\nF7: DROP \u2014 The test is vacuous, but the currently inert subscription handlers have no behavior requiring protection.\nF8: DROP \u2014 Duplicated test helpers are a refactoring concern without a demonstrated behavioral defect.\nF9: DROP \u2014 Stronger spy typing would catch future interface drift, but no current contract failure is identified.\nF10: DROP \u2014 The observer corrects the initial box measurement, and no meaningful visible sizing defect is established.\nF1: KEEP \u2014 Adding a populated series does not retrigger the range effect, leaving the current context range unapplied.\nF2: DROP \u2014 Returning undefined while not live is documented, and the hook exposes readiness to callers.\nF3: DROP \u2014 The tokens exist and the stylesheet loads before rendering; no reachable missing-token failure is demonstrated.\nF4: DROP \u2014 File length and declaration ordering are maintenance concerns, and teardown runs after initialization.\nF5: DROP \u2014 Broad lint suppression does not establish an actual render-time ref violation.\nF6: DROP \u2014 The documented placeholder effect adds scaffolding but causes no incorrect behavior.\nF7: DROP \u2014 The test is vacuous, but the inert handlers have no behavior requiring teardown protection.\nF8: DROP \u2014 Duplicated test helpers are a refactoring concern without a behavioral defect.\nF9: DROP \u2014 Stronger spy typing would prevent future drift, but no current contract failure is identified.\nF10: DROP \u2014 The observer corrects the initial measurement, and no meaningful visible sizing defect is established."
+}

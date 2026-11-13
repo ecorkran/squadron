@@ -1,0 +1,33 @@
+{
+ "case": "175",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "luna-r-high",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Loop iterations in `prior_rounds` are not persisted, so the report omits their usage."
+  ],
+  "F2": [
+   "KEEP",
+   "The folded split-review result retains only the first part\u2019s usage metadata."
+  ],
+  "F3": [
+   "KEEP",
+   "A failed part lacks the input output required by folding, which replaces the provider failure and discards its captured usage."
+  ]
+ },
+ "wall_seconds": 22.1,
+ "duration_seconds": 22.074018457904458,
+ "cost_usd": 0.006726790000000001,
+ "effort": "high",
+ "tool_calls_made": 10,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=129709, cached=76479, cache_write=None, completion=1278, reasoning=832)",
+ "raw_output": "F1: KEEP \u2014 Loop iterations in `prior_rounds` are not persisted, so the report omits their usage.\nF2: KEEP \u2014 The folded split-review result retains only the first part\u2019s usage metadata.\nF3: KEEP \u2014 A failed part lacks the input output required by folding, which replaces the provider failure and discards its captured usage.\nF1: KEEP \u2014 Earlier loop iterations are not persisted in `action_results`, so their usage is omitted from run totals.\nF2: KEEP \u2014 The folded split-review result retains only the first part\u2019s usage metadata.\nF3: KEEP \u2014 A failed part lacks the input output required by folding, which replaces the provider failure and discards its captured usage."
+}

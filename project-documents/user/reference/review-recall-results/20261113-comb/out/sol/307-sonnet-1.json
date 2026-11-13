@@ -1,0 +1,23 @@
+{
+ "case": "307",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "sol",
+ "refs": {
+  "F1": "sonnet/1/0"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "These annotation issues do not establish incorrect runtime behavior; `_status` returns the required `CompletedProcess` object."
+  ]
+ },
+ "wall_seconds": 38.4,
+ "duration_seconds": 38.368607374839485,
+ "cost_usd": 0.0282664,
+ "effort": null,
+ "tool_calls_made": null,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=84626, cached=74624, cache_write=None, completion=80, reasoning=16)",
+ "raw_output": "F1: DROP \u2014 These annotation issues do not establish incorrect runtime behavior; `_status` returns the required `CompletedProcess` object.\nF1: DROP \u2014 The loose annotations do not demonstrate a behavioral defect; `_status` returns the required `CompletedProcess` object."
+}
