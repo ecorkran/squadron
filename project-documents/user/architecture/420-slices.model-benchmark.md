@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 420-arch.model-benchmark.md
 project: squadron
 dateCreated: 20261104
-dateUpdated: 20261106
+dateUpdated: 20261113
 status: not_started
 ---
 
@@ -155,6 +155,29 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
    - **Interfaces:** Provides planted-defect cases, recall records and the recall report. Consumes 421's records and sandbox, and 400's normalization.
    - **Risk Level:** Medium (how defects are planted and how loose the matcher is decide whether the number means anything)
    - **Relative Effort:** 3/5
+
+9. [ ] **(428) Design Review Recall** — Planted-flaw benchmark for slice designs and concepts. Known flaws (a dropped requirement, a contradicted decision, an unstated interface, unrealistic scope) are planted into a trusted design. Each reviewer config reviews the planted copy and the clean copy. Recall is matched to planted flaws by 427's rule. Precision and false alarms are graded against the design text.
+   - **Value:** Shows which review config catches design-level problems before code is written. Code-review results can't say that.
+   - **Success Criteria:**
+     - Each planted flaw records its location (section), its category, and the edit that plants it. The clean copy is reviewed too.
+     - Recall per reviewer config, with n, using 427's matching rule.
+     - Findings on the clean copy are reported as false alarms.
+     - Precision is graded against the design text, since no fix commit exists to check against.
+   - **Dependencies:** [427, 402]. Shares 427's matcher and recall report; uses 402's finding vocabulary.
+   - **Interfaces:** Provides design-review recall records and report. Consumes 427's matcher and 421's records.
+   - **Risk Level:** Medium (planted flaws must be realistic, not obvious; precision is semantic). Planted cases are curated expected outputs. 427 already does this for code, so this follows 427; the non-goal on curated datasets (300) needs a PM check.
+   - **Relative Effort:** 3/5
+
+10. [ ] **(429) Task Breakdown Review Recall** — The same method for task breakdowns, reviewed against their slice design. Planted flaws: a criterion with no task, a task that contradicts a decision, dependencies out of order, a task with no test. The design is the reference, so recall is exact. Only precision is semantic.
+   - **Value:** Shows which config catches breakdown gaps that would otherwise surface during implementation.
+   - **Success Criteria:**
+     - Each planted flaw is checked against the design text, so the planted list is exact.
+     - Recall per reviewer config, with n, using 428's report.
+     - False alarms on the clean breakdown are reported.
+   - **Dependencies:** [428].
+   - **Interfaces:** Consumes 428's planting method, matcher and report.
+   - **Risk Level:** Low (the design is the reference, so recall is exact; precision is the only semantic part)
+   - **Relative Effort:** 2/5
 
 ---
 
