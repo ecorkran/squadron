@@ -221,7 +221,7 @@ Best pipeline so far (both single runs): haiku-xhigh review, then opus-high comb
 
 **Next, for an accuracy comparison:** a random sample across all graded items, with code-settled answers where the code decides. Compare Sonnet high against Opus and others. Opus needs your go-ahead.
 
-## 12. Random batches of graded issues (2026-11-14 to 2026-11-15)
+## 12. Random batches of graded issues (2026-11-13)
 
 **Method:** four seeded random batches of ten issues, drawn from the 221 grid 2 graded issues without replacement. Each batch went to one Sonnet high agent with the finding text only, no earlier grade. The agent settled an item from the code and the base-to-head diff, or escalated it. Each batch used about 130k to 150k subagent tokens, roughly 1% of the session meter.
 
@@ -236,7 +236,11 @@ Best pipeline so far (both single runs): haiku-xhigh review, then opus-high comb
 **Still open, with the grades that depend on them:**
 - **197-I15, ruled REAL:** a changed line with a pre-existing defect is REAL, because the change touched it. The original PREEXISTING grade is wrong under this rule.
 - **307-I1, ruled REAL:** a defect in a new mode is REAL, even when it repeats an existing mismatch. PREEXISTING applies only to code the change neither added nor touched.
-- **197-I14:** after a git-halted batch, is a plain `sq run --resume <run_id>` a supported recovery that must keep working, or is item resume the only intended recovery?
-- **921-I5:** is the 921 cutover meant to run to completion without a password prompt once the sudoers rule is installed, or is an operator at the terminal expected to re-authenticate?
+- **197-I14, decided:** plain `sq run --resume` after a halted batch is not a supported recovery. Item resume is the recovery. Graded MINOR: the state problem is real, but it only shows on a path nobody should use.
+- **921-I5, decided:** the cutover runs unattended. The repair runs as `manta-trading` via `sudo -u`, not root. Graded REAL. Needs a narrow sudoers alias on the host and in trading-data before the cutover.
 - **225-I11:** the config says mypy, and CI runs no type checker. Whether the original FALSE holds still needs a mypy run.
-- **921-I9:** the sorter says REAL, the original says MINOR. Not examined yet.
+- **921-I9, decided:** REAL. The freshness probe compares the refresh's finish time with the newest bar's `created_at`, so a bar written during a refresh can read as fresh when the refresh never saw it. Every mass check read is a minimum, so the result is a wrong FAIL, not a false PASS. Fix: compare against the refresh's start time (`last_run_started_at`). Original MINOR grade left in the data; this adjudication overrides it.
+
+**Batches 5 and 6 (added 2026-11-13):** two more seeded batches of ten, same method (Sonnet high, finding text only, no earlier grade). All 20 settled, none escalated. 19 agree with the original pass. The one disagreement is 307-I4: the original says REAL, the sorter says MINOR (loose attribution in a failure message; the failure itself fires correctly). Decided REAL: the over-session listing is wrong data, not a message. Subagent cost: batch 5 115,688 tokens, batch 6 122,632. Across all six batches: 53 settled, 49 agree (92%). **Opus, same 60 items** (batches 1–6, same brief, no earlier grades): 60 of 60 settled. Opus agrees with the original on 56 of 60 (93%). Opus and Sonnet high agree on 49 of 53 items both settled. Opus disagrees with the original on 921-I9 (Opus REAL), a122-I13 (Opus MINOR), a122-I15 (Opus REAL), and 197-I14 (Opus REAL, against the decision above).
+
+**Decided since:** 197-I14 (plain resume after a halt is not a supported recovery; graded MINOR, `197-graded.json` updated). 225-I11 checked: `mypy` passes on `status_reads.py` at head, and the project has no pyright config, so the original FALSE holds.

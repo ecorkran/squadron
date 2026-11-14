@@ -1,0 +1,133 @@
+[
+  {
+    "id": "188-I18",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/manta_trading/data/kalshi/candle_repository.py:50-62 CANDLE_COLUMNS = 4+4+6 nested + volume_fp + open_interest_fp = 16",
+      "src/manta_trading/data/kalshi/serve_timeseries.py:72 new docstring says 'fourteen value columns'",
+      "src/manta_trading/api_server/models/kalshi_timeseries.py:5 new module docstring says 'fourteen flat stored columns'",
+      "test/unit/api_server/test_kalshi_models.py:186 test docstring says 'fourteen values'"
+    ],
+    "escalation_question": null,
+    "reason": "True: the mapping has sixteen columns and the new docstrings say fourteen. Code is correct; only prose is wrong."
+  },
+  {
+    "id": "175-I10",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/squadron/pipeline/actions/summary.py:187 _execute_summary runs to end of 398-line file (352 at base)",
+      "src/squadron/pipeline/actions/dispatch.py:1 file is 931 lines at head (835 at base)"
+    ],
+    "escalation_question": null,
+    "reason": "Length claims are accurate and the diff grew both files, but this is a style guideline point with no behavioral effect."
+  },
+  {
+    "id": "197-I25",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/squadron/cli/commands/run.py:930-941 _take_run_lock enters lock on an ExitStack only when pipeline_mutates",
+      "src/squadron/cli/commands/run.py:944-954 _locked closes the unstarted coroutine on typer.Exit then asyncio.run",
+      "src/squadron/cli/commands/run.py:1234,1247,1292,1305,1326 five call sites"
+    ],
+    "escalation_question": null,
+    "reason": "The code works as written; the coroutine is closed on the refusal path. The finding is a simplification suggestion (factory or nullcontext), not a defect."
+  },
+  {
+    "id": "197-I14",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/squadron/cli/commands/run_item.py:78-87 item resume calls _run_pipeline_sdk with the batch's run_id and from_step=each step",
+      "src/squadron/cli/commands/run.py:238-239 init_run skipped when run_id given; run.py:263 step callback still installed",
+      "src/squadron/cli/commands/run.py:279 state_mgr.finalize(run_id, result) overwrites the batch run's status with this one-item run's result",
+      "src/squadron/pipeline/state.py:280-321 _append_step appends a new StepState for the each step",
+      "src/squadron/pipeline/executor.py:577 on_step_complete only after normal return; executor.py:1599 GitEnvironmentError re-raised so a halted batch has no 'slices' entry",
+      "src/squadron/pipeline/executor.py:1654-1666 under on_item_failure: continue the each step returns COMPLETED even when the item is flagged",
+      "src/squadron/pipeline/state.py:459-471 first_unfinished_step then returns None",
+      "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:139 design: run state unchanged; run's status stays COMPLETED"
+    ],
+    "escalation_question": null,
+    "reason": "Item resume rewrites the batch run's terminal status from one item's run and appends a COMPLETED 'slices' step. After a halted batch, a plain `sq run --resume <id>` then reports all steps complete while items are still not_run. This contradicts D8's 'run state unchanged', and the item-resume tests bypass _run_pipeline so they cannot catch it."
+  },
+  {
+    "id": "197-I21",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/squadron/pipeline/batch_report.py:378 ItemRerun.replace uses next() without default",
+      "src/squadron/pipeline/item_resume.py:208-211 _check_record rejects the request unless a record with request.index exists",
+      "src/squadron/pipeline/item_resume.py:288 item chosen by str(index) == request.index; batch_report.py:138 record index = str(item['index']), so replace always finds it",
+      "src/squadron/pipeline/item_resume.py:136 raise AssertionError('unreachable') after the with block"
+    ],
+    "escalation_question": null,
+    "reason": "A bare next() would raise StopIteration if the index were missing, but validation guarantees the record exists with the same string index before any replace, _reconcile or _outcome call. This is hardening against input that cannot arrive, plus a style note about the dead assert."
+  },
+  {
+    "id": "227-I11",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "test/unit/test_setup_backup.py: 1072 lines at head; diff +310/-50"
+    ],
+    "escalation_question": null,
+    "reason": "True: the test file is large and grew in this diff. It is a file-size style point with no effect on behavior."
+  },
+  {
+    "id": "225-I16",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/manta_trading/cli/commands/tick_store_cmds.py:67-80 run_mapped(storage=...) checks isinstance(exc, storage) before exit_code_for (added in diff)",
+      "src/manta_trading/cli/commands/tick_store_cmds.py: _read_storage() builds the per-verb tuple via a local import"
+    ],
+    "escalation_question": null,
+    "reason": "Accurate description of a design split in exit-code policy, but the behavior is correct (the findings themselves say it works and is tested). Maintainability only."
+  },
+  {
+    "id": "227-I12",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "scripts/cutover_227_helpers.py:95-99 production_changes strips new args only from `new` lines; `old` lines are compared unstripped",
+      "scripts/cutover_227_helpers.py:84-88 strip_new_args removes --url-key, --replication-host, --remote",
+      "scripts/cutover_227_tick_backup.py:95 step_check captures ctx.old_cron from the installed file",
+      "scripts/cutover_227_tick_backup.py:114-121 step_apply requires production_changes to be empty",
+      "scripts/cutover_227_tick_backup.py:6-8 documented recovery: re-run the whole script, every step check-then-act"
+    ],
+    "escalation_question": null,
+    "reason": "After a first run installs the cron file, a rerun reads the already-updated file as old_cron. Its production lines keep the new arguments while the new side is stripped, so the comparison always differs and step 4 fails. That breaks the script's documented re-run recovery path."
+  },
+  {
+    "id": "921-I5",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "deploy/sudoers.d/manta-ops:1-14 new file; header claims 'exactly the commands those scripts issue'; no alias covers /opt/manta-trading/.venv/bin/python",
+      "scripts/cutover_921_minute_sessions.py:93-100 _repair runs `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode>` with captured output",
+      "scripts/cutover_921_minute_sessions.py:200-212 new _verify_when_fresh sleeps 15 min between --verify polls (up to 5), so the sudo timestamp lapses before each poll",
+      "scripts/cutover_common.py:64-70 run() prefixes plain `sudo` (no -n)",
+      "scripts/cutover_common.py:77-79 unit_active runs `systemctl is-active` without sudo, so MT_UNITS' is-active entry is unused"
+    ],
+    "escalation_question": null,
+    "reason": "The new sudoers rule omits the repair/verify command, the one the cutover issues most often. Each poll after a 15-minute sleep therefore blocks on a password prompt, or fails without a TTY, which defeats the file's stated purpose in an hours-long cutover. The env-file read alias is used (cutover_common.py:226) and is a secondary point."
+  },
+  {
+    "id": "175-I20",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/squadron/pipeline/executor.py:2046 diff wires usage_capture into each fan-out branch",
+      "src/squadron/pipeline/executor.py:2072-2082 any failed branch returns a StepResult with action_results=[]",
+      "src/squadron/pipeline/executor.py:2084-2092 the step persists only the reducer's single ActionResult",
+      "src/squadron/pipeline/intelligence/fan_in/reducers.py:57-82 CollectReducer keeps action_type/success/outputs/verdict only, no metadata",
+      "src/squadron/pipeline/intelligence/fan_in/reducers.py:98-133 FirstPassReducer builds ActionResult without metadata",
+      "src/squadron/stats/usage_report.py:113-134 usage rows come only from metadata[USAGE_KEY] of persisted action_results",
+      "project-documents/user/slices/175-slice.usage-and-cost-tracking.md:267 promises a UsageRecord in run state for every LLM action"
+    ],
+    "escalation_question": null,
+    "reason": "Branch LLM actions stamp usage into their ActionResult metadata, but both reducers rebuild a fresh ActionResult without metadata, and failed fan-outs persist none. So fan-out spend never reaches run state or `sq stats`, a silent gap in the new feature's data."
+  }
+]

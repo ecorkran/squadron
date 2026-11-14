@@ -1,0 +1,125 @@
+[
+  {
+    "id": "a122-I23",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/amoeba/runner/tick.py:194-200 (head) _close_recovered closes every open project escalation whose kind is not in this tick's TickFaults",
+      "src/amoeba/runner/faults.py:183-191 (head) escalate() writes unexpected_fault straight to raise_project_escalation, never into TickFaults",
+      "src/amoeba/runner/tenant.py:148 (head) the only escalate() caller, which aborts the tick, so a faulted tick closes nothing",
+      "project-documents/user/slices/122-slice.runner-tenant-and-control-surface.md:297 (head) D8: every open project-scoped escalation whose kind did not recur in a complete tick is closed"
+    ],
+    "escalation_question": null,
+    "reason": "The mechanics are as described: an intermittent unexpected_fault closes on the next complete tick. But the slice design (D8) says outright that every project-scoped kind closes this way, and the closed row stays in history. What's left is a docstring and intent point, not a defect."
+  },
+  {
+    "id": "225-I10",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/manta_trading/data/tick/status_reads.py:50 (head, new file) _UNITS repeats the join string",
+      "src/manta_trading/data/tick/manifest_reads.py:90 (head) UNIT_FROM holds the identical string",
+      "src/manta_trading/data/tick/manifest_reads.py:5-6 (head) docstring says every SQL statement on tick_request/tick_archive_unit lives in one of three modules"
+    ],
+    "escalation_question": null,
+    "reason": "The duplicated join constant and the fourth SQL home are real, but the SQL is identical and correct. This is a DRY/layout point with no behavioral effect."
+  },
+  {
+    "id": "307-I4",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "scripts/cutover_304_evidence.py:216,232-233 (head) named is keyed by product only and extended with every over verdict from each coverage doc",
+      "scripts/purchase_accounting.py:105-116 (head) over_sessions ignores each verdict's family",
+      "scripts/purchase_accounting.py:119-128 (head) over_failures attaches named[product] to every family row that has a nonzero over count",
+      "src/manta_trading/data/tick/tick_coverage_statistics.py:55-71 (head) the statistics coverage volume_checks hold verdicts for both TICK_TIER and BAR_1M",
+      "src/manta_trading/data/tick/tick_coverage.py:76-78,93 (head) each verdict carries family; volume_checks is dropped from non-statistics docs, so the .get default is intentional",
+      "project-documents/user/slices/307-slice.futures-history-acquisition.md:231 (head) D6 item 4: over counts are per product and volume family, and each over session is listed by name"
+    ],
+    "escalation_question": null,
+    "reason": "Over-session names are not filtered by family. When both volume families have over sessions, each family's failure line lists the other family's sessions, so the evidence names the wrong sessions per family against D6 item 4. The secondary claim about the volume_checks default is wrong: non-statistics coverage documents omit that key by design."
+  },
+  {
+    "id": "u103-I18",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/app/App.tsx:18-22 (head) SymbolTimeframeProvider > IndicatorProvider nesting around RouterProvider",
+      "src/test/support/render-with-contexts.tsx:20-26 (head, new file) ChartContexts repeats the same nesting for tests"
+    ],
+    "escalation_question": null,
+    "reason": "The provider nesting is written twice, so the test wrapper could drift from App. Both copies are correct today. This is a DRY/test-maintenance point."
+  },
+  {
+    "id": "u103-I7",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "eslint.config.js:55-79 (head) react-hooks/refs set to off for all of src/chart/use-chart-provider.ts, with a comment justifying it for the useMemo facade construction"
+    ],
+    "escalation_question": null,
+    "reason": "The suppression covers the whole file, not one line. That is lint-config hygiene, and no actual violation is shown in the file."
+  },
+  {
+    "id": "932-I12",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/squadron/pipeline/sdk_session.py:333-341 (head) except Exception around client.stop_task, logged with logger.exception and a comment explaining the SDK raises bare Exception",
+      "claude_agent_sdk/_internal/query.py:780,1174 (installed SDK) control-request timeout and control errors are raised as bare Exception, so no narrower type exists"
+    ],
+    "escalation_question": null,
+    "reason": "The catch is broad, but the SDK really does raise bare Exception here. The stop is best-effort cleanup, and the failure is logged at ERROR with a justifying comment. The point is rule wording, not wrong behavior."
+  },
+  {
+    "id": "175-I12",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/squadron/models/aliases.py:217-224 (head) get_all_aliases re-reads both TOML files on each call (uncached, already true at base)",
+      "src/squadron/pipeline/resolver.py:89 (head, diff) adds one get_all_aliases call per resolve",
+      "src/squadron/models/aliases.py:335 (head) price_usage adds one call per priced record",
+      "src/squadron/data/models.toml (head) about 10 KB, 467 lines"
+    ],
+    "escalation_question": null,
+    "reason": "The new code does add uncached parses of a small TOML file. Each one runs once per resolve or record, next to LLM calls that take seconds, so the effect on async latency is negligible. This is a performance point with no real effect."
+  },
+  {
+    "id": "921-I17",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/manta_trading/data/acquisition/daemon/minute.py:60-63 (head, diff) imports RepairScanTimeout and build_truncated_day_index from data.gaps.repair_921",
+      "src/manta_trading/data/acquisition/daemon/minute.py:352-374 (head, diff) _build_truncated_index runs the scan every cycle and logs and continues on timeout",
+      "src/manta_trading/data/gaps/repair_921.py:1-15 (head) module docstring frames it as the slice-921 repair"
+    ],
+    "escalation_question": null,
+    "reason": "The daemon does now depend on a slice-named repair module. This is a module-placement and naming point. Behavior is correct, and nothing breaks unless someone later deletes the module."
+  },
+  {
+    "id": "225-I8",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/manta_trading/data/tick/tick_coverage.py:94-115 (head) build_coverage has no end > start check; with end <= start the filter yields no sessions and mismatched is false",
+      "src/manta_trading/cli/commands/tick_store_cmds.py:216-222 (head) the only caller rejects end <= start",
+      "src/manta_trading/cli/commands/tick_store_cmds.py:58-63 (head) --start/--end are date-only, so the datetime comparison guards the .date() values passed in"
+    ],
+    "escalation_question": null,
+    "reason": "The function itself has no guard, but its only caller at head already rejects an empty or inverted range. The finding is hardening against a future API caller, not a current defect."
+  },
+  {
+    "id": "175-I19",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/squadron/stats/usage_report.py:112-116 (head, new file) totals come only from each persisted step's action_results",
+      "src/squadron/pipeline/state.py:508 (head) _append_step serializes only step_result.action_results",
+      "src/squadron/pipeline/executor.py:223-226 (head) earlier loop rounds' ActionResults live only in StepResult.prior_rounds",
+      "src/squadron/pipeline/run_observer.py:52-53 (head) RunStateRecorder.round_completed records nothing",
+      "project-documents/user/slices/175-slice.usage-and-cost-tracking.md:157 (head) design: \"The cost of a loop is the whole loop (#210).\""
+    ],
+    "escalation_question": null,
+    "reason": "Usage records for earlier loop rounds are attached to ActionResults that are never persisted, so sq stats run totals cover only the final round of each loop. The slice design explicitly requires the whole loop's cost, so totals are wrong for any multi-round loop."
+  }
+]

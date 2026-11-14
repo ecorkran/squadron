@@ -1,0 +1,126 @@
+[
+ {
+  "id": "a122-I15",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/amoeba/runner/observe.py:243-247 at head: exit_code == USAGE_ERROR_EXIT_CODE alone selects LaunchFailure.USAGE_ERROR when no run state exists",
+   "src/amoeba/runner/tick.py:123-141 at head: USAGE_ERROR becomes UpstreamShapeError, message includes the stderr tail; tenant.py:142 re-raises it",
+   "project-documents/user/architecture/120-arch.runner-routing-engine.md:58 at head: exit 2 from a launch stopping the resident process is the specified behavior (slice 122 D6)"
+  ],
+  "escalation_question": null,
+  "reason": "The code does classify on exit code alone and the process exits, but that is the documented design (arch 120, slice 122 D6, which also says decisions never rest on message text). The failure message carries the stderr tail, so the operator is not misled; the finding is a disagreement with a deliberate rule."
+ },
+ {
+  "id": "188-I4",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/manta_trading/data/kalshi/serve_timeseries.py:147-166 at head: docstring says membership test is not re-spelled, yet code reads params['trades_excluded_categories'] and evaluates (category or '') in bound",
+   "src/manta_trading/data/kalshi/selection.py:168-170 at head: the SQL COALESCE(s.category,'') = ANY(...) and the parameter key are defined here",
+   "test/integration/test_kalshi_serving.py:446-477 at head: TestTapeFiltered runs the SQL predicate and tape_filtered over five cases and asserts they agree"
+  ],
+  "escalation_question": null,
+  "reason": "The docstring overstates and the key literal plus Python comparison duplicate selection.py, so the claim is true, but behavior is correct today and a parity test would fail on divergence or a renamed key. It is a duplication and docstring-accuracy point."
+ },
+ {
+  "id": "932-I6",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/squadron/pipeline/sdk_session.py:323-327 at head: _background_idle_timeout_s calls get_typed_config from async _collect_turns, once per dispatch that is waiting",
+   "src/squadron/pipeline/sdk_session.py:458-460 and src/squadron/pipeline/actions/dispatch.py:147,153 at head: further new get_typed_config calls in async functions",
+   "src/squadron/config/manager.py:20-110 at head: load_config does two small TOML reads; copytree only on a one-time legacy migration",
+   "src/squadron/providers/openai/provider.py:63 at head: same sync-config-read pattern already existed"
+  ],
+  "escalation_question": null,
+  "reason": "The new call sites do synchronous reads in async functions, which literally conflicts with the python.md <1ms rule, but the reads are two tiny local TOML files, once per dispatch or session open, with no measurable effect, and the pattern pre-exists. The DIP/monkeypatching variant is a design preference."
+ },
+ {
+  "id": "225-I17",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/manta_trading/data/tick/tick_status_build.py:179-227 at head: _product_status is about 48 lines; file is 245 lines (under the 300 guideline)",
+   "src/manta_trading/cli/commands/tick_status_render.py:57-109 at head: _product_lines is about 50 lines",
+   "src/manta_trading/data/tick/tick_status_build.py:130 and tick_coverage.py:25: jsonable defined in the build module and imported by tick_coverage"
+  ],
+  "escalation_question": null,
+  "reason": "Sizes are at or marginally around the soft guideline and the reviewer itself says it is not blocking; the jsonable placement is a module-organisation preference. Style only."
+ },
+ {
+  "id": "175-I15",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/squadron/cli/stats_views.py:29 at head: new SUBSCRIPTION_TIER = 'subscription' (added in base..head), used at line 179",
+   "src/squadron/pipeline/intelligence/pools/strategies.py:39 and src/squadron/cli/commands/models.py:33 at head: existing dict keys with the same literal",
+   "src/squadron/data/models.toml: cost_tier = 'subscription' values"
+  ],
+  "escalation_question": null,
+  "reason": "The literal is spelled in more places and the new constant adds another definition, which breaks the define-once guideline, but the value is a stable config vocabulary and no behavior is wrong."
+ },
+ {
+  "id": "175-I1",
+  "settled": true,
+  "grade": "REAL",
+  "evidence": [
+   "src/squadron/pipeline/actions/review.py:506 at head: each part stamps its own USAGE_KEY record into part.metadata",
+   "src/squadron/pipeline/actions/review.py:293-294 at head: results folded by fold_review_parts",
+   "src/squadron/pipeline/actions/review_fold.py:85-91 at head: _metadata copies parts[0].metadata and sums only TOOL_CALLS_MADE_KEY; no usage aggregation anywhere in the file",
+   "src/squadron/stats/usage_report.py:130-140 at head: one usage record is read per action result, so only part 1's spend is reported",
+   "tests/pipeline/actions/test_review_action_parts.py at head: no assertion on folded usage"
+  ],
+  "escalation_question": null,
+  "reason": "Code at head keeps only the first part's USAGE_KEY on a folded multi-part review, so tokens, turns and cost for parts 2..N are lost from run state and stats, which is exactly what the usage-tracking slice is meant to capture."
+ },
+ {
+  "id": "197-I5",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/squadron/integrations/context_forge.py:183-184 at head: int(e['completed']), int(e['total']) added in base..head",
+   "src/squadron/integrations/context_forge.py:168,181 at head: int(e['index']) already raises a bare KeyError the same way for malformed cf output",
+   "src/squadron/integrations/context_forge.py:58-59 at head: TaskEntry defaults 0; only test code builds entries without counts",
+   "context-forge packages/cli/src/commands/task.ts:211-246: cf list tasks --json has emitted completed and total since March 2026",
+   "src/squadron/pipeline/sources.py:231 at head: total > 0 guard on the all-checked check"
+  ],
+  "escalation_question": null,
+  "reason": "A cf that omits the keys would raise a bare KeyError, but cf has emitted them for months and the existing index parse already behaves identically. The dataclass defaults only matter for hand-built entries (tests); real parses never use them. Hardening and tidiness point."
+ },
+ {
+  "id": "u103-I21",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/test/use-chart-provider.translation.test.tsx:15-22 at head: LINE_SERIES const declared before the imports at lines 22-23"
+  ],
+  "escalation_question": null,
+  "reason": "True, but ES imports are hoisted so nothing breaks; it is an import-ordering style issue in a test file."
+ },
+ {
+  "id": "a122-I21",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "tests/runner/test_budget_coverage.py:20 at head: imports _link from runner.test_probes with pyright ignore",
+   "tests/runner/test_probes.py:240 at head: def _link",
+   "tests/runner/test_factory.py:88 and tests/runner/test_tenant.py:180 at head: private attribute access with pyright ignores"
+  ],
+  "escalation_question": null,
+  "reason": "Test-hygiene point: cross-test-module private import and private-attribute access are real but cause no wrong behavior."
+ },
+ {
+  "id": "932-I1",
+  "settled": true,
+  "grade": "REAL",
+  "evidence": [
+   "src/squadron/pipeline/sdk_session.py:252-253 at head: returns as soon as own_result_seen and the ledger is empty",
+   "src/squadron/pipeline/sdk_turns.py:55-70 at head: a TaskNotificationMessage clears the task from the ledger the moment it is read, whether or not it precedes the own result",
+   "src/squadron/pipeline/sdk_session.py:244-250 at head: an injected result read before own result is only discarded with a warning, in the next dispatch",
+   "slice 932 design D6 (project-documents/user/slices/932-slice...md:166): acknowledges the race where an agent finishes just before our result and a follow-up is still owed, then accepts dropping it into the next dispatch"
+  ],
+  "escalation_question": null,
+  "reason": "With the ordering start, notification, own result, the ledger is empty at the own result so dispatch returns the pre-continuation text and the owed follow-up turn is later discarded as leftover. The design documents the race but the slice's own criterion (return only after the follow-up turn) is violated, and the lost turn may hold the step's artifact or answer."
+ }
+]

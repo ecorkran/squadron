@@ -1,0 +1,124 @@
+[
+ {
+  "id": "a122-I23",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/amoeba/runner/tick.py:194-200 (head): _close_recovered closes any open project escalation whose kind is not in this tick's faults",
+   "src/amoeba/runner/faults.py:152 (head): escalate() raises unexpected_fault via raise_project_escalation, outside TickFaults",
+   "project-documents/user/slices/122-slice.runner-tenant-and-control-surface.md:297: D8 closure rule is 'every open project-scoped escalation whose kind did not recur', no exemption for unexpected_fault"
+  ],
+  "escalation_question": null,
+  "reason": "The code does what the slice 122 D8 spec says: every open project escalation whose kind did not recur is closed on a complete tick. Closing an unexpected_fault after a clean tick is the specified recovery behavior; the intermittent-bug scenario is a design preference, not a deviation."
+ },
+ {
+  "id": "225-I10",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/manta_trading/data/tick/status_reads.py:50-57 (head): _UNITS and _LEDGER_UNITS repeat the unit/request join",
+   "src/manta_trading/data/tick/manifest_reads.py:90 (head): UNIT_FROM defines the same join",
+   "src/manta_trading/data/tick/manifest_reads.py:5-6 (head): docstring claims all tick_request/tick_archive_unit SQL is in three modules; status_reads.py (new in diff) is a fourth"
+  ],
+  "escalation_question": null,
+  "reason": "The claim is true: status_reads.py is a new file that repeats the join and contradicts the manifest_reads docstring's single-home statement. It is a duplication and docstring-accuracy point with no behavioral effect."
+ },
+ {
+  "id": "307-I4",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "scripts/cutover_304_evidence.py:216,232-233 (head): named is keyed by product only, extended from every coverage read of the product",
+   "scripts/purchase_accounting.py:105-128 (head): over_sessions ignores the family field; over_failures looks up named by row.product",
+   "src/manta_trading/data/tick/tick_coverage.py:93 (head): verdict dict carries family",
+   "src/manta_trading/data/tick/tick_coverage_statistics.py:61-71 (head): volume checks are made for each volume family"
+  ],
+  "escalation_question": null,
+  "reason": "The name list is not filtered by family, so a failure row for one volume family can list the other family's over sessions. The failure and its count still fire correctly and every named session really is over; only attribution in the message is loose. The 'or ()' point is not a defect because volume_checks is legitimately absent on non-statistics reads."
+ },
+ {
+  "id": "u103-I18",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/test/support/render-with-contexts.tsx:20-26 (head): ChartContexts nests SymbolTimeframeProvider and IndicatorProvider",
+   "src/app/App.tsx:16-24 (head): same two-provider nesting around RouterProvider"
+  ],
+  "escalation_question": null,
+  "reason": "The two-provider nesting is duplicated between App and the test wrapper, which could drift. The wrapper's header comment documents it as the single place for tests; the duplication is small and a test-fixture concern."
+ },
+ {
+  "id": "u103-I7",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "eslint.config.js:55-79 (head): react-hooks/refs turned off for all of src/chart/use-chart-provider.ts, with a documented rationale",
+   "src/chart/use-chart-provider.ts:144-159 (head): the useMemo calls that trigger the false positive",
+   "src/chart/use-chart-provider.ts:341 (head): the only other .current read is outside render-time memo bodies, so no live violation is hidden"
+  ],
+  "escalation_question": null,
+  "reason": "The suppression is broader than the construct it covers, which is a true but low-value hardening point. The config documents why, and nothing in the file reads a ref during render, so no current bug is masked."
+ },
+ {
+  "id": "932-I12",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/squadron/pipeline/sdk_session.py:329-349 (head): _stop_background catches Exception around client.stop_task, logs with logger.exception, continues",
+   "src/squadron/pipeline/sdk_session.py:337-340 (head): comment explains that the SDK raises a bare Exception so no narrower type exists",
+   "pyproject.toml:87: BLE001 enforced; the noqa is local and justified"
+  ],
+  "escalation_question": null,
+  "reason": "It is a best-effort cleanup loop that logs at ERROR with a stack and a stated reason, and a re-raise would abandon the remaining ids. The rule-letter objection is true, but it is a justified, observable swallow with low value to change."
+ },
+ {
+  "id": "175-I12",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/squadron/models/aliases.py:217-224 (head): get_all_aliases re-parses builtin and user models.toml on every call, no cache",
+   "src/squadron/pipeline/resolver.py:89 (head): new call per resolve (diff adds it)",
+   "src/squadron/models/aliases.py:335 (head): price_usage calls get_all_aliases per usage record",
+   "src/squadron/data/models.toml: 10 KB; tomllib.load measured about 1 ms locally"
+  ],
+  "escalation_question": null,
+  "reason": "The claim is true and the diff adds the calls, but the existing resolver already called it several times per resolve and the cost is about 1 ms per call at human-scale event rates. A performance point with no real effect."
+ },
+ {
+  "id": "921-I17",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/manta_trading/data/acquisition/daemon/minute.py:60-63 (head): imports RepairScanTimeout and build_truncated_day_index from data.gaps.repair_921 (added in diff)",
+   "src/manta_trading/data/gaps/repair_921.py:1,225 (head): module is slice-921 repair tooling that defines the index"
+  ],
+  "escalation_question": null,
+  "reason": "The daemon does depend on a slice-named repair module, which is a layering and naming smell. Behavior is correct, and the scan timeout is handled with an ERROR log and a documented fail-safe in _build_truncated_index."
+ },
+ {
+  "id": "225-I8",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/manta_trading/data/tick/tick_coverage.py:94-115 (head): build_coverage has no end<=start check; an empty range gives no sessions and mismatched false",
+   "src/manta_trading/cli/commands/tick_store_cmds.py:216-222 (head): CLI guards end<=start; options are date-only so the date comparison cannot differ",
+   "src/manta_trading/cli/commands/tick_store_cmds.py:230 (head): the CLI is the only caller of build_coverage"
+  ],
+  "escalation_question": null,
+  "reason": "True that the function itself does not validate, but the sole caller guards the range and no other caller exists. The concern is speculative hardening for a future slice-230 caller."
+ },
+ {
+  "id": "175-I19",
+  "settled": true,
+  "grade": "REAL",
+  "evidence": [
+   "src/squadron/stats/usage_report.py:112-116 (head): totals built only from state.completed_steps[].action_results",
+   "src/squadron/pipeline/state.py:482-507 (head): _append_step serializes step_result.action_results only; prior_rounds is dropped",
+   "src/squadron/pipeline/run_observer.py:52-53 (head): round_completed records nothing",
+   "src/squadron/pipeline/executor.py:1280,1295,1305 (head): loop returns the final round in action_results and earlier rounds only in prior_rounds",
+   "project-documents/user/slices/175-slice.usage-and-cost-tracking.md:157: spec says 'The cost of a loop is the whole loop'"
+  ],
+  "escalation_question": null,
+  "reason": "The persisted run state keeps only the final round of a loop step, so sq stats run totals omit the spend of every earlier round, contradicting the slice's own statement that run totals cover the whole loop. Review/revise loops cost real money, so this is wrong cost data in the new report."
+ }
+]

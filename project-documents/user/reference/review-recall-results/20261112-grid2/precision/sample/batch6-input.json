@@ -1,0 +1,304 @@
+{
+ "cases": {
+  "175": {
+   "repo": "squadron",
+   "base": "3812c815b377eadfd7741ab1734c350c73789e2b",
+   "head": "1cbd6be4317f37498b07a31cd9cb64562fdb9d0a",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175"
+  },
+  "188": {
+   "repo": "trading-data",
+   "base": "0c6060f80be38524eb02585c44a481a9b6cdf453",
+   "head": "3e29c2afc500d786b26ee925efd0eb9269e18d52",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188"
+  },
+  "197": {
+   "repo": "squadron",
+   "base": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece",
+   "head": "90a40dbf40289fd46b99e999c957a6e9295545be",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197"
+  },
+  "225": {
+   "repo": "trading-data",
+   "base": "09106ab48bda1b7397cfefa0145928a82e3056ac",
+   "head": "f328230d409b21ef1c9d8f8d96db21a478169076",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225"
+  },
+  "932": {
+   "repo": "squadron",
+   "base": "262d0ba064dcc6fa09efb5908eecc1447fd0582b",
+   "head": "d89cc060d2fe3033ed479d7e4eb69aadc779bd97",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932"
+  },
+  "a122": {
+   "repo": "amoeba",
+   "base": "f8097604697cfefb5fb7313d29648a1c6c22b221",
+   "head": "e07f13739a5c7cd88c04fe2dffcc57b2a1eb5793",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122"
+  },
+  "u103": {
+   "repo": "trading-ui",
+   "base": "a4f9b6cf446929d056689df48082a701467d74e7",
+   "head": "d56c493f769d429a40f9e8052eba04ad6254e8c2",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103"
+  }
+ },
+ "items": [
+  {
+   "id": "a122-I15",
+   "case": "a122",
+   "members": [
+    {
+     "ref": "haiku-xhigh/3/4",
+     "severity": "CONCERN",
+     "title": "Any exit code 2 from `sq run` with no run state stops the whole process",
+     "location": "src/amoeba/runner/observe.py:243-247",
+     "description": "The usage-error classification uses the exit code alone (`exit_code == USAGE_ERROR_EXIT_CODE`). `ProjectTick._record_finished` turns that into `UpstreamShapeError` (`tick.py:132-140`), and the tenant re-raises it (`tenant.py:142-144`). The resident process then exits 15 for every project.\n\nExit 2 is also a common code for argument-parse errors. A node whose parameters `sq` rejects would therefore read as \"sq lacks --run-id\" and stop the Runner. The operator's message would point the wrong way, even though the stderr tail is recorded. The repo's stubs only exercise the `--run-id` case, so I could not confirm what `sq` returns for other argument errors. Confirm that before slice 125 launches work, and key the shape classification on the missing-option stderr signature, not the exit code alone. Test: exit 2 with an unrelated stderr line should block the node, not raise."
+    }
+   ]
+  },
+  {
+   "id": "188-I4",
+   "case": "188",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/3",
+     "severity": "CONCERN",
+     "title": "`tape_filtered` re-spells the membership test and hard-codes the parameter key, against its own docstring",
+     "location": "src/manta_trading/data/kalshi/serve_timeseries.py:147-166",
+     "description": "The docstring says \"The membership test is not re-spelled here\u2026 so a change to one cannot leave the other behind.\" The function re-implements `COALESCE(s.category, '') = ANY(...)` as `(category or \"\") in bound`, and reads `selection.params[\"trades_excluded_categories\"]`, a literal duplicated from `selection.py:168-170`. The integration test `TestTapeFiltered.test_agrees_with_the_sql_predicate` does catch divergence, so the risk is covered by a test rather than by construction. Either move the membership rule into one helper in `selection.py` that both the SQL and the Python path use, or correct the docstring to name the test as the guard."
+    },
+    {
+     "ref": "haiku-xhigh/2/4",
+     "severity": "CONCERN",
+     "title": "`tape_filtered` re-spells the membership test, and its docstring says it does not",
+     "location": "src/manta_trading/data/kalshi/serve_timeseries.py:147",
+     "description": "The docstring (lines 150\u2013152) says the membership test \"is not re-spelled here\" and that \"a change to one cannot leave the other behind.\" The function then runs the membership test in Python, `(category or \"\") in bound` (line 166). It also reads the parameter through the literal key `\"trades_excluded_categories\"` (line 159). That string is defined in `selection.py` (lines 156 and 170), so it is now duplicated across modules.\n\nThe claim is false. A change to the comparison in `trades_filter_sql`, such as case folding, would not reach `tape_filtered`. The only guard is the five-case `TestTapeFiltered` parametrization. The `isinstance` guard at lines 160\u2013162 exists only to narrow a dict value this function reaches into.\n\nFix: compute the flag in SQL. Compose `trades_filter_sql(excluded).predicate` as a `... AS tape_filtered` column in the `market_context` statement (`_CONTEXT_QUERY`, line 85). Then delete `tape_filtered` and its guards."
+    },
+    {
+     "ref": "haiku-xhigh/3/7",
+     "severity": "CONCERN",
+     "title": "`tape_filtered` re-spells the trades-filter membership test in Python",
+     "location": "src/manta_trading/data/kalshi/serve_timeseries.py:147",
+     "description": "The docstring says \"The membership test is not re-spelled here.\" The function returns `(category or \"\") in bound` (line 166). That is the Python form of the `COALESCE(s.category, '') = ANY(...)` predicate in `trades_filter_sql`. The project rule against duplicated logic points the other way, and the sibling `trade_status.py` says its predicates are \"never re-spelled.\" The parametrized `TestTapeFiltered` keeps the two in agreement, which is real mitigation. The cost is a second spelling, plus a dependence on the internal parameter key `trades_excluded_categories` (line 164).\n\nFix: compute the flag in SQL on the connection that already runs `market_context`, by embedding `trades_filter_sql(excluded).predicate` in that query. SQL then becomes the only spelling."
+    },
+    {
+     "ref": "sonnet/3/4",
+     "severity": "CONCERN",
+     "title": "`tape_filtered` reads a magic parameter key from `trades_filter_sql` and adds a runtime type guard",
+     "location": "src/manta_trading/data/kalshi/serve_timeseries.py:149-165",
+     "description": "The docstring says the membership test is not restated, but the function reads `selection.params[\"trades_excluded_categories\"]` and re-implements the `COALESCE(category, '') = ANY(...)` comparison in Python. The parameter name and the `isinstance` guard couple this code to the internals of `selection.py`. The integration test `test_agrees_with_the_sql_predicate` limits the drift risk. A cleaner design would put an evaluator next to `trades_filter_sql`, so the Python and SQL forms live in one module."
+    },
+    {
+     "ref": "sonnet-high/2/3",
+     "severity": "CONCERN",
+     "title": "`tape_filtered` re-implements the filter's membership test and depends on a parameter-name string",
+     "location": "src/manta_trading/data/kalshi/serve_timeseries.py:#tape_filtered",
+     "description": "The docstring says the membership test \"is not re-spelled here.\" In fact the function reads `selection.params[\"trades_excluded_categories\"]` by string literal, which is defined in `selection.py`. It then re-implements the `COALESCE(s.category,'') = ANY(...)` comparison in Python as `(category or \"\") in bound`. That scatters a magic key and duplicates the logic, which the project rules forbid. Having a `# pragma: no cover` branch raise a `TypeError` on shape is a sign of the awkward coupling. A pure-Python membership predicate lives next to `trades_filter_sql` and is used by both would remove the need to introspect the SQL parameters. The integration test `TestTapeFiltered` does check parity with SQL, which mitigates this."
+    },
+    {
+     "ref": "sonnet-high/3/3",
+     "severity": "CONCERN",
+     "title": "`tape_filtered` re-spells a parameter key it says it doesn't re-spell",
+     "location": "src/manta_trading/data/kalshi/serve_timeseries.py:156-168",
+     "description": "The docstring says the membership test \"is not re-spelled here\". The code still hard-codes `selection.params[\"trades_excluded_categories\"]` and the `COALESCE(..., '')` semantics from `selection.py:168-170`. It also relies on the `list` type of the bound value, with a `# pragma: no cover` guard. Renaming that key in `selection.py` would turn this into a `KeyError` at request time. The parametrized integration test would catch it, but this is still a second spelling. Have `selection.py` expose the evaluator or the key as a named constant, as the project's \"define it once\" rule asks."
+    }
+   ]
+  },
+  {
+   "id": "932-I6",
+   "case": "932",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/2",
+     "severity": "CONCERN",
+     "title": "Synchronous config reads run on the event loop inside async functions",
+     "location": "src/squadron/pipeline/actions/dispatch.py:147",
+     "description": "The project rule for async code says any `async def` that calls synchronous code must guarantee under 1 ms worst case, and reviewers must verify this. This slice adds `get_typed_config` calls in `one_shot_dispatch_with_telemetry` (`dispatch.py:147` and `:153`), in `open_pipeline_session` (`sdk_session.py:455-460`), and in `_collect_turns` through `_background_idle_timeout_s` (`sdk_session.py:224` and `:327`). Each call goes through `load_config`, which opens and parses two TOML files synchronously. `user_config_path()` can also run `shutil.copytree` during the one-time config migration. A file read cannot be guaranteed under 1 ms. One one-shot dispatch performs two full config loads on the loop.\n\nFix: read the three values once in a synchronous setup step (for example when the session is built), or move the read to `asyncio.to_thread`. I did not check whether the existing callers, such as `events/dispatcher.py:92` and `tools/cf_tools.py:221`, run in async functions. If they do, this is a pattern the slice follows, not one it introduces."
+    },
+    {
+     "ref": "haiku-xhigh/2/3",
+     "severity": "CONCERN",
+     "title": "Synchronous config reads run on the event loop in async functions",
+     "location": "src/squadron/pipeline/sdk_session.py:323",
+     "description": "`_background_idle_timeout_s` is called from the async `_collect_turns` (sdk_session.py:224) and calls `get_typed_config`, which reads TOML synchronously. The same pattern appears in the async `one_shot_dispatch_with_telemetry` (dispatch.py:142-153) and the async `open_pipeline_session` (sdk_session.py:455-461). `python.md` requires synchronous code in an async function to run in under 1 ms worst case. This can be exceeded: `_config_dir()` (src/squadron/config/manager.py:24-32) can run `shutil.copytree` on first use after a config migration. The steady-state cost is small, but the rule is explicit and these are new call sites. Read the config at a synchronous boundary, or move the read to `asyncio.to_thread`."
+    },
+    {
+     "ref": "haiku-xhigh/3/2",
+     "severity": "CONCERN",
+     "title": "Synchronous config-file reads run on the event loop",
+     "location": "src/squadron/pipeline/sdk_session.py:323",
+     "description": "`_background_idle_timeout_s` is called from the async `_collect_turns` (line 224). `open_pipeline_session` (lines 458\u2013460) and `one_shot_dispatch_with_telemetry` (`dispatch.py:147,153`) are also async and call `get_typed_config`. Each call runs `load_config`, which does two synchronous `open()` and `tomllib` reads (`config/manager.py:82\u2013102`). The project rule requires that synchronous code in async functions be guaranteed under 1 ms, and file reads cannot guarantee that. The same pattern predates this diff (`openai/provider.py:63`, `tools/cf_tools.py:221`), but the new call sites add to it. Read the config once in `open_pipeline_session`, store the value on the session, and reuse it. Use `asyncio.to_thread` for any remaining reads."
+    },
+    {
+     "ref": "sonnet-high/3/2",
+     "severity": "CONCERN",
+     "title": "Config reads inside the session and dispatch hot path (dependency inversion)",
+     "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._background_idle_timeout_s",
+     "description": "`SDKExecutionSession._background_idle_timeout_s` and `open_pipeline_session` call `get_typed_config` directly. `one_shot_dispatch_with_telemetry` in `pipeline/actions/dispatch.py` does the same. These are low-level classes and functions that reach into the global config store, so their tests must `patch(f\"{_MOD}.get_typed_config\", ...)`. The review rules treat that kind of monkeypatching as a sign of inverted dependencies. The timeout reads from `base_options.cwd or Path.cwd()` on every dispatch with a waiting agent. Resolve the three pipeline settings once at the composition root (executor or `open_pipeline_session`). Pass them into the session as constructor fields, for example `idle_timeout_s`. Pass `auto_memory` and `user_settings` into `one_shot_dispatch_with_telemetry` the same way. This also lets one place validate the timeout value."
+    }
+   ]
+  },
+  {
+   "id": "225-I17",
+   "case": "225",
+   "members": [
+    {
+     "ref": "sonnet/1/2",
+     "severity": "CONCERN",
+     "title": "Long functions and mixed responsibilities in the status builder and renderer",
+     "location": "src/manta_trading/data/tick/tick_status_build.py:_product_status",
+     "description": "`_product_status` is about 45 lines. It builds the wanted range, verdicts, contract lines, buckets and the DTO in one body. `_product_lines` in `tick_status_render.py` is about 60 lines, over the ~50-line guideline. `tick_status_build.py` is also about 245 lines and defines a generic `jsonable` helper. `tick_coverage.py` imports `jsonable` and other shared helpers from this module, so those helpers belong in a smaller shared module. This isn't blocking."
+    }
+   ]
+  },
+  {
+   "id": "175-I15",
+   "case": "175",
+   "members": [
+    {
+     "ref": "haiku-xhigh/2/8",
+     "severity": "CONCERN",
+     "title": "The subscription tier string is defined in several places",
+     "location": "src/squadron/cli/stats_views.py:29",
+     "description": "`SUBSCRIPTION_TIER = \"subscription\"` is defined here, but the same tier value also appears as a rank key in `pipeline/intelligence/pools/strategies.py:39` and as a label key in `cli/commands/models.py:33`. CLAUDE.md asks for comparison values to be defined once and referenced everywhere. Fix: define the cost-tier values beside `ModelAlias` in `models/aliases.py` and reference them from all three places."
+    },
+    {
+     "ref": "sonnet-high/1/3",
+     "severity": "CONCERN",
+     "title": "The `\"subscription\"` cost-tier literal is redefined in the stats views",
+     "location": "src/squadron/cli/stats_views.py:29",
+     "description": "`SUBSCRIPTION_TIER = \"subscription\"` is a new constant that decides whether a cost is labelled \"api-rate equiv.\" (money or not). The same literal appears in `src/squadron/pipeline/intelligence/pools/strategies.py:39` and `src/squadron/cli/commands/models.py:33`, and `cost_tier` has no shared enum or constant. This breaks the project rule that a comparison value is defined once. Move the tier values to a single definition in `squadron.models.aliases` and import it."
+    }
+   ]
+  },
+  {
+   "id": "175-I1",
+   "case": "175",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/0",
+     "severity": "FAIL",
+     "title": "Multi-part review usage is dropped when parts fold",
+     "location": "src/squadron/pipeline/actions/review_fold.py:85",
+     "description": "`_metadata()` keeps only `parts[0].metadata` and sums only `TOOL_CALLS_MADE_KEY`. Each part now stamps its own usage record in `_run_part` (`src/squadron/pipeline/actions/review.py:506`), and `_review` folds all parts (`review.py:293-294`). The folded result therefore carries only part 1's `USAGE_KEY`, so turns, tokens, and cost for parts 2..N never reach run state or `sq stats run`. This hits every review the action splits, such as a split tasks breakdown. The existing parity test checks summed `tool_calls_made` after the fold (`tests/pipeline/actions/test_review_action_parts.py:286`), but nothing checks usage. Fix: sum the per-part `UsageRecord`s in `_metadata`, and add a two-part test asserting the folded record equals the sum."
+    },
+    {
+     "ref": "sol/1/1",
+     "severity": "FAIL",
+     "title": "Split reviews retain only the first part\u2019s usage",
+     "location": "src/squadron/pipeline/actions/review.py:505-506",
+     "description": "Usage is stamped separately on each part, but `fold_review_parts()` copies the first part\u2019s metadata without aggregating usage. Reproducing two $0.10 parts produces a $0.10 combined record instead of $0.20. Aggregate all parts\u2019 tokens, turns, duration, and cost before persisting the combined action."
+    },
+    {
+     "ref": "sol/2/1",
+     "severity": "FAIL",
+     "title": "Split reviews retain only the first part\u2019s usage",
+     "location": "src/squadron/pipeline/actions/review.py:505-506",
+     "description": "Each part receives a usage record, but `fold_review_parts` copies the first part\u2019s metadata without summing usage. Two $1 parts consequently report $1 rather than $2. Their pipeline artifacts are also excluded from standalone review statistics, so the missing spend appears nowhere. Aggregate every part\u2019s usage before returning the folded result."
+    },
+    {
+     "ref": "sol/3/1",
+     "severity": "FAIL",
+     "title": "Split reviews retain only the first part\u2019s usage",
+     "location": "src/squadron/pipeline/actions/review.py:505-506",
+     "description": "Each part receives a usage record, but `fold_review_parts()` copies only the first part\u2019s metadata. A verified $1 plus $2 split review reports $1. Because pipeline artifacts are excluded from standalone review statistics, the remaining spend disappears from both views. Aggregate all parts\u2019 usage before persistence."
+    },
+    {
+     "ref": "sonnet-high/3/1",
+     "severity": "CONCERN",
+     "title": "Split reviews record usage for part 1 only",
+     "location": "src/squadron/pipeline/actions/review_fold.py:85-91",
+     "description": "`_metadata` copies `parts[0].metadata` and sums only `TOOL_CALLS_MADE_KEY`. Each part now carries its own `USAGE_KEY` record (review.py:506), so the folded result keeps only part 1's record.\n\n`sq stats run` therefore under-reports tokens, turns, cost and time for any split review. That undercounting is the thing slice 175 exists to prevent. Sum the records across parts, or emit one record per part."
+    }
+   ]
+  },
+  {
+   "id": "197-I5",
+   "case": "197",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/3",
+     "severity": "CONCERN",
+     "title": "`list_tasks` now requires `completed` and `total`, and the TaskEntry defaults report zero silently",
+     "location": "src/squadron/integrations/context_forge.py:183-184",
+     "description": "`list_tasks` parses `int(e[\"completed\"])` and `int(e[\"total\"])`. A cf response without those keys raises `KeyError`, which is not a `ContextForgeError`. Existing callers that catch only `ContextForgeError` would let it through, for example `src/squadron/pipeline/actions/commit.py:97`. I could not confirm that cf emits these fields. The updated fixtures assume it does. The dataclass defaults at context_forge.py:58-59 set both fields to `0`. A TaskEntry built without counts reads as \"no tasks\", which silently disables the \"all tasks checked\" check in `_not_ready_reason`. That is the silent-default pattern the project rules forbid.\n\nSuggested fix: wrap `KeyError` and `ValueError` from the parse in `ContextForgeError` with the command name, as `_run_json` does for bad JSON. Remove the zero defaults, or make `total` optional so the check cannot misfire. Add a test for a response missing these keys."
+    },
+    {
+     "ref": "haiku-xhigh/2/10",
+     "severity": "CONCERN",
+     "title": "cf `list_tasks` now requires two keys that were optional",
+     "location": "src/squadron/integrations/context_forge.py:183",
+     "description": "`list_tasks` now reads `int(e[\"completed\"])` and `int(e[\"total\"])` with no default. Output without those keys raises a bare `KeyError` from `_cf_slices_ready_to_implement` and `_cf_slices_needing_tasks`, which also breaks the existing `tasks-plan` source. The `TaskEntry` dataclass defaults both to 0 (`context_forge.py:57-58`), so a hand-built entry silently reads as \"no task items\". The existing test fixture needed the keys added, which shows the contract tightened. I could not check which cf versions emit these keys. Either require them and wrap the `KeyError` in `ContextForgeError` naming the key, or allow absence explicitly. Remove the silent dataclass defaults either way."
+    },
+    {
+     "ref": "haiku-xhigh/3/8",
+     "severity": "CONCERN",
+     "title": "`list_tasks` now hard-requires `completed` and `total`",
+     "location": "src/squadron/integrations/context_forge.py:183",
+     "description": "`int(e[\"completed\"])` and `int(e[\"total\"])` are hard key lookups. A missing key raises a bare `KeyError`, not `ContextForgeError`, which the rest of the client uses for bad output (`_run_json`, line 145). `list_tasks` also feeds the pre-existing `slices_needing_tasks` source (`sources.py:202`) and `review/persistence.py:144`, so a cf that omits these keys breaks those callers too. Nothing in the diff shows which cf version emits them. Validate the keys, raise `ContextForgeError` naming the missing key, and document the minimum cf version."
+    },
+    {
+     "ref": "sonnet-high/1/1",
+     "severity": "CONCERN",
+     "title": "`list_tasks` now crashes with a bare `KeyError` on a `cf` that lacks the new fields",
+     "location": "src/squadron/integrations/context_forge.py:183-184",
+     "description": "`int(e[\"completed\"])` and `int(e[\"total\"])` are now mandatory for every `TaskEntry`. Failing explicitly is the right policy. But an older `cf` that doesn't emit these keys produces `KeyError: 'completed'`, with no mention of `cf` or its version. This breaks every consumer of `list_tasks`, including the existing `slices_needing_tasks` source, not only the new `slices_ready_to_implement`. `_run_json` already wraps bad JSON in `ContextForgeError`; do the same here with a message naming the cf command and the missing key. The dataclass defaults `completed: int = 0` and `total: int = 0` on `TaskEntry` also invite the silent-placeholder behaviour the project rules forbid. A `total` of 0 quietly disables the \"all tasks checked\" flag."
+    }
+   ]
+  },
+  {
+   "id": "u103-I21",
+   "case": "u103",
+   "members": [
+    {
+     "ref": "sonnet/2/3",
+     "severity": "CONCERN",
+     "title": "Imports are placed after a constant declaration in the translation test",
+     "location": "src/test/use-chart-provider.translation.test.tsx:14-24",
+     "description": "`LINE_SERIES` is declared between import statements, and `chart-provider-spy` and `render-with-contexts` are imported after it. This breaks the \"sort imports\" convention. Move the constant below all imports."
+    }
+   ]
+  },
+  {
+   "id": "a122-I21",
+   "case": "a122",
+   "members": [
+    {
+     "ref": "sonnet/3/2",
+     "severity": "CONCERN",
+     "title": "Tests import private helpers from other test modules",
+     "location": "tests/runner/test_budget_coverage.py:20",
+     "description": "`test_budget_coverage.py` imports `_link` from `runner.test_probes` and needs a `pyright: ignore[reportPrivateUsage]` to do so. `_link` should move to `tick_support.py` or a conftest, so that one test module does not depend on another test module's private helper. `test_tenant.py` and `test_factory.py` also reach into private attributes (`_tracker`, `_planners`) with ignores. That couples those tests to the implementation rather than to behavior."
+    }
+   ]
+  },
+  {
+   "id": "932-I1",
+   "case": "932",
+   "members": [
+    {
+     "ref": "sol/1/0",
+     "severity": "FAIL",
+     "title": "Task completion before the original result drops the continuation",
+     "location": "src/squadron/pipeline/sdk_session.py:252-253",
+     "description": "A task can finish before the original turn\u2019s result while its notification still triggers a subsequent parent continuation. The empty ledger then causes dispatch to return prematurely. Reproduced with the project\u2019s scripted client: start \u2192 notification \u2192 original result returned `\"Waiting\"` without reading the queued `\"Artifact written\"` continuation. Track pending continuations or authoritative session-idle state, and add this ordering as a regression test."
+    },
+    {
+     "ref": "sol/2/0",
+     "severity": "FAIL",
+     "title": "Completed tasks can still have an unread continuation turn",
+     "location": "src/squadron/pipeline/sdk_session.py:252-253",
+     "description": "An empty task ledger does not prove the dispatch is finished. A task notification can arrive before the human-origin result, while its parent continuation remains pending. This branch returns prematurely; the next dispatch then discards that continuation as leftover text. Reproduced with the existing scripted client: dispatch returned `\"Waiting.\"` without reading the queued final answer. Track pending continuations or authoritative session-idle state, and add this ordering as a regression test."
+    },
+    {
+     "ref": "sol/3/1",
+     "severity": "FAIL",
+     "title": "Completed tasks can still owe a continuation turn",
+     "location": "src/squadron/pipeline/sdk_session.py:251-252",
+     "description": "An empty active-task ledger does not establish that the response is complete. If a task notification arrives before the dispatch\u2019s own result, this branch returns without consuming the parent\u2019s pending continuation. Reproduced with the scripted client: only \u201cWaiting\u201d was returned; the subsequent \u201cWrote design\u201d turn remained unread. Track pending continuations or authoritative session-idle state, and cover this ordering."
+    }
+   ]
+  }
+ ]
+}

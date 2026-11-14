@@ -254,9 +254,9 @@
       "members": [
         "haiku-xhigh/3/2"
       ],
-      "grade": "UNSURE",
-      "confidence": "low",
-      "why": "Confirmed in code: _run_pipeline skips init_run for a given run_id but still calls state_mgr.finalize(run_id, result), and the step callback appends the each step's StepState, so first_unfinished_step can return None after a halted batch while not_run items remain. Whether run state is meant to track item resumes is not specified in D8, and at head a plain resume of a halted each step reruns the whole source anyway. Settled by the PM stating the intended run-state semantics after item resume, or by an end-to-end run: halt a batch, item-resume one item, then plain --resume.",
+      "grade": "MINOR",
+      "confidence": "high",
+      "why": "Confirmed in code: _run_pipeline skips init_run for a given run_id but still calls state_mgr.finalize(run_id, result), and the step callback appends the each step's StepState, so first_unfinished_step can return None after a halted batch while not_run items remain. Whether run state is meant to track item resumes is not specified in D8, and at head a plain resume of a halted each step reruns the whole source anyway. Settled by the PM: plain --resume after a halted batch is not a supported recovery (item resume is), so the defect only shows on an unsupported path. Graded MINOR.",
       "evidence": [
         "src/squadron/cli/commands/run.py:238",
         "src/squadron/cli/commands/run.py:279",

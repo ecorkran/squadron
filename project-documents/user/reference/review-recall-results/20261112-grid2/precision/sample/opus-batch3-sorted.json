@@ -1,0 +1,132 @@
+[
+  {
+    "id": "197-I15",
+    "settled": true,
+    "grade": "PREEXISTING",
+    "evidence": [
+      "src/squadron/pipeline/executor.py:1490 (head) halted record still built from [] results; the diff only adds flag_kind=STEP_FAILED to a call that already passed [] at base",
+      "src/squadron/pipeline/batch_report.py:76,116 (base) branch field and _slice_branch derivation already existed at base",
+      "src/squadron/pipeline/item_resume.py:317 (head) _reconcile copies record.branch only into an informational field; _git_precondition (item_resume.py:230-242) reads the live branch, not record.branch"
+    ],
+    "escalation_question": null,
+    "reason": "True that a halted item's record lacks the branch it entered, but the empty-results record for a halted item and the branch field both predate base; the diff touches the line only to add a flag kind, and no new logic depends on the missing value."
+  },
+  {
+    "id": "197-I16",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/squadron/pipeline/executor.py:1617 (head) FlagKind(item.get(FLAG_KIND_KEY, FlagKind.NOT_READY)) defaults the kind",
+      "src/squadron/pipeline/sources.py:211-213 (head) _cf_slices_needing_tasks sets flag_reason without a kind; its flags are design-review not-ready flags, so NOT_READY is correct",
+      "src/squadron/pipeline/sources.py:237-239,265,280 (head) every other producer sets the kind via _flag"
+    ],
+    "escalation_question": null,
+    "reason": "The default exists, but it gives the correct kind for its one internal producer and sources are a closed internal registry; this is a project-rule/style point with no wrong behavior."
+  },
+  {
+    "id": "a122-I2",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/amoeba/runner/observe.py:140-145 (head) _confirmed replays _faulted between polls",
+      "src/amoeba/runner/observe.py:186-187 (head) _unconfirmed calls _still_overdue between polls without reading _faulted",
+      "src/amoeba/runner/observe.py:233-234,307-318 (head) a PollFailure on the unconfirmed path stores the fault in _faulted but never adds the entry to _overdue",
+      "src/amoeba/runner/observe.py:260-271 (head) _still_overdue adds nothing unless the entry is in _overdue, returns LAUNCHING",
+      "src/amoeba/runner/tick.py:194-200 (head) _close_recovered closes any open escalation whose kind did not recur this tick"
+    ],
+    "escalation_question": null,
+    "reason": "New code: after a poll failure on an unconfirmed launch (exited or past grace), the next tick before the poll interval reports LAUNCHING with no fault, so the run_observation_failed escalation closes and reopens each poll interval, contrary to the stated intent at observe.py:92-94."
+  },
+  {
+    "id": "307-I1",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/manta_trading/data/tick/pass_contract.py:119-135 (head and base) --json payload nests each phase summary under phases[i].summary",
+      "src/manta_trading/cli/commands/tick_pass_render.py:146-148,285-287 (head) print_pass emits PassResult.to_dict() plus exit_code",
+      "scripts/cutover_304_first_purchase.py:152-163 (head) fetch_estimate returns the parsed stdout unchanged",
+      "scripts/cutover_304_first_purchase.py:172,270-275 (head, added in diff) judge and _estimate_only read summary['requests'], ['planned_usd'], ['verdict'], ['trailing_30d_usd'] at top level",
+      "scripts/cutover_304_checks.py:196-199,223 (head) _check_scope/judge_estimate read top-level wanted_days/requests/verdict",
+      "scripts/cutover_234_checks.py:145 (head) the sibling script reads phases[name=='purchase']",
+      "scripts/cutover_304_first_purchase.py:249-252 (head) KeyError caught as 'unexpected payload', exit 1"
+    ],
+    "escalation_question": null,
+    "reason": "The CLI payload nests the purchase summary under phases, but the new --estimate path and the reworked judge read top-level keys, so both modes stop with KeyError before printing the ceiling command; the old full-run read predates the diff, but the diff adds new code with the same wrong shape."
+  },
+  {
+    "id": "227-I4",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "deploy/setup-backup.sh:125-127 (head, added in diff) dies in --check mode when a table cluster is missing from pg_lsclusters",
+      "scripts/cutover_227_tick_backup.py:87-92,236-240 (head) step_check runs setup-backup --check before step_provision",
+      "scripts/cutover_227_tick_backup.py:2 (head) the script is the one-time enrolment 'on manta9000', where 17/tick already exists",
+      "project-documents/user/runbooks/200-backup-and-restore.md:529-534 (head) enrolment is one command run once by the PM",
+      "project-documents/user/runbooks/210-host-bootstrap.md:133-138 (head) a rebuilt host runs provision_tick_cluster.sh before setup-backup"
+    ],
+    "escalation_question": null,
+    "reason": "The ordering would fail on a host without 17/tick, but the script is a one-time manta9000 cutover where the cluster exists, and fresh hosts follow runbook 210's provision-first order; the scenario cannot arise in the script's stated use."
+  },
+  {
+    "id": "921-I10",
+    "settled": true,
+    "grade": "FALSE",
+    "evidence": [
+      "src/manta_trading/data/gaps/repair_921.py:200-210 (head) filters jobs.hypertable_name = cagg view name",
+      "src/manta_trading/market/maintenance/cagg_freshness.py:275-276 (head) existing, prod-verified slice-168 guard documents that jobs.hypertable_name carries the view name for a cagg refresh policy and filters the same way at :81-82",
+      "src/manta_trading/cli/commands/data.py:3101-3116 (head) existing status query joins jobs.hypertable_name = continuous_aggregates.view_name, with the same comment",
+      "src/manta_trading/market/maintenance/cagg_repair.py:136 (head) same precedent"
+    ],
+    "escalation_question": null,
+    "reason": "The repo's existing, production-exercised cagg freshness and status code relies on jobs.hypertable_name holding the view name for refresh policies, so the lookup does match and verify does not wait forever; treating a missing job row as stale is fail-safe, not a defect."
+  },
+  {
+    "id": "a122-I6",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/amoeba/runner/faults.py:120-143 (head) raise_expected_faults calls raise_project_escalation per fault; the docstring states dedup on (project, kind)",
+      "src/amoeba/store/project_escalations.py:55-59 (head, unchanged in diff) an open row for (project, kind) is returned unchanged"
+    ],
+    "escalation_question": null,
+    "reason": "True that the escalation keeps the first fault's payload and later same-kind details are not stored, but per-kind dedup is the documented design and the store behavior predates the diff; the escalation stays correctly open, so this is a detail-quality and minor write-cost point."
+  },
+  {
+    "id": "225-I19",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/manta_trading/cli/commands/tick_store_cmds.py:156-158 (head) _read types the callback as Callable[[Any, str], ...]",
+      "src/manta_trading/cli/commands/tick_store_cmds.py:170-173 (head) _read_storage wraps one lazy import",
+      "src/manta_trading/data/tick/manifest_reads.py:29 (head) Conn alias exists"
+    ],
+    "escalation_question": null,
+    "reason": "Accurate typing and indirection observations with no behavioral effect."
+  },
+  {
+    "id": "932-I5",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/squadron/config/keys.py:118-127 (head, added in diff) new int key with default 1800 and no range rule",
+      "src/squadron/config/manager.py:75-76,134-137 (head) int coercion and the int isinstance check have no range check; the int branch is unchanged from base, so bool acceptance predates the diff",
+      "src/squadron/pipeline/sdk_session.py:224-228,300,323-327 (head) the value goes straight to asyncio.timeout(idle_s)"
+    ],
+    "escalation_question": null,
+    "reason": "True that 0 or a negative value would stop background agents at once, but it only happens when a user deliberately configures such a value, which the key's description gives no reason to do; this is input-validation hardening, consistent with other int keys having no range checks."
+  },
+  {
+    "id": "175-I4",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/squadron/pipeline/actions/compact.py:82-89 (head) failure branch returns ActionResult with no metadata, never reads exc.telemetry",
+      "src/squadron/pipeline/sdk_session.py:232-235 (head) dispatch attaches spent telemetry to ProviderError",
+      "src/squadron/pipeline/sdk_session.py:492-499 (head) compact captures the summary, then _reconnect can raise and the captured reply.telemetry is discarded",
+      "src/squadron/pipeline/actions/dispatch.py:579-582 (head) dispatch stamps exc.telemetry on failure",
+      "project-documents/user/slices/175-slice.usage-and-cost-tracking.md:155 (head) D5: failed actions record what they spent"
+    ],
+    "escalation_question": null,
+    "reason": "The diff adds usage stamping to compact only on success; a failed capture's ProviderError telemetry and a successful capture's spend before a failed reconnect are both dropped, violating the slice's D5 and leaving spend unrecorded."
+  }
+]

@@ -1,0 +1,127 @@
+[
+  {
+    "id": "175-I17",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/squadron/stats/reviews_report.py:155 `value in {basis.value ...}` raises TypeError for an unhashable list/mapping value",
+      "src/squadron/review/run_cost.py:61 the only writer emits costBasis as a CostBasis enum string",
+      "src/squadron/documents/frontmatter.py:66 read_text without OSError/UnicodeDecodeError handling is not in base..head (preexisting)"
+    ],
+    "escalation_question": null,
+    "reason": "The crash is real for a list or mapping costBasis, but the only writer always emits a scalar enum string, so it needs a hand-corrupted artifact; that is hardening against input the system does not produce. The read_text half is preexisting code."
+  },
+  {
+    "id": "197-I18",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/squadron/data/pipelines/slices-plan.yaml:15 source is cf.undesigned_slices",
+      "src/squadron/pipeline/sources.py:132-143 undesigned_slices drops any slice with a design_file",
+      "src/squadron/pipeline/item_resume.py:286-305 an item missing from the re-evaluated source is reconciled only if COMPLETE and merged; otherwise REJECTED",
+      "src/squadron/pipeline/item_resume.py:217 accept requires review_unresolved, which a slices-plan item only gets after its design exists",
+      "tests/pipeline/test_item_resume_plan_batches.py:35-39 mock cf keeps returning no design whenever the plan is passed, hiding the case"
+    ],
+    "escalation_question": null,
+    "reason": "A slices-plan item flagged review_unresolved already has a design file, so undesigned_slices no longer selects it. _select_item then rejects both retry and accept, even though the module and test claim planning batches resume."
+  },
+  {
+    "id": "921-I9",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/manta_trading/data/gaps/repair_921.py:179 stale = last_refresh < newest_bar_written",
+      "src/manta_trading/data/gaps/repair_921.py:201 compares against job_stats.last_successful_finish, not the run's start",
+      "scripts/repair_921_minute_sessions.py:280-295 a non-stale probe goes straight to the mass read that decides PASS/FAIL",
+      "scripts/cutover_921_minute_sessions.py:264-273 cutover acceptance depends on that verify output"
+    ],
+    "escalation_question": null,
+    "reason": "A refresh only materializes rows visible when it starts. A bar written during the refresh has created_at earlier than last_successful_finish, so the probe reports fresh while the cagg lacks it. That brings back the misread #22 was meant to stop, in new code that gates acceptance."
+  },
+  {
+    "id": "921-I18",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "scripts/cutover_common.py:341-363 fire_unit_until repeats cursor/start/print/mt-run/sudo -v",
+      "scripts/cutover_common.py:366-383 fire_unit has the same sequence",
+      "scripts/cutover_common.py:318-332 wait_for_unit_or_line repeats the poll loop of wait_for_unit_to_end (290-295)"
+    ],
+    "escalation_question": null,
+    "reason": "The duplication is real but has no effect on behavior; it is a DRY and style point."
+  },
+  {
+    "id": "307-I13",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "scripts/cutover_304_evidence.py:72-91 coverage_reads iterates only entry.history, never the entry's tbbo tier range",
+      "scripts/cutover_304_evidence.py:217-234 _family_evidence runs not_caught_up_report only over coverage_reads",
+      "src/manta_trading/data/tick/universe.py:94-111 ES and GC each configure tier=TBBO over 2024-11-02..2025-01-01",
+      "project-documents/user/slices/307-slice.futures-history-acquisition.md:229-235 D6 names tbbo as a family and the exit criterion covers each family"
+    ],
+    "escalation_question": null,
+    "reason": "The tbbo families are narrated but never checked for not-caught-up sessions. If tbbo is not caught up, the exit rule passes without naming those sessions, which contradicts D6's every-family criterion."
+  },
+  {
+    "id": "307-I19",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "scripts/purchase_verdicts.py:238-241 _label compares ISO strings request.start <= day < request.end",
+      "src/manta_trading/data/tick/manifest_repo.py:58 range_start is a date column",
+      "src/manta_trading/cli/commands/tick_debug_cmds.py:103-104 _cell renders date via isoformat, giving YYYY-MM-DD"
+    ],
+    "escalation_question": null,
+    "reason": "Both sides are date isoformat strings, so the lexicographic comparison is correct today. Parsing to date is robustness against a format change that cannot happen now."
+  },
+  {
+    "id": "a122-I20",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "tests/runner/test_tenant.py:190-196 counts the substring 'except Exception' in source text",
+      "tests/runner/test_tenant.py:180 reads tenant._tracker with a pyright suppression",
+      "tests/runner/test_factory.py:88 reads tenant._planners with a pyright suppression"
+    ],
+    "escalation_question": null,
+    "reason": "The claims are accurate, but they concern brittleness in tests and private-attribute access, not a product defect."
+  },
+  {
+    "id": "188-I9",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/manta_trading/api_server/routes/kalshi_timeseries.py:112-120 candle count and fetch are separate statements under default READ COMMITTED",
+      "src/manta_trading/api_server/routes/kalshi_timeseries.py:160-163 same for trades",
+      "src/manta_trading/data/kalshi/serve_timeseries.py:6-11 docstring promises 'one row over'"
+    ],
+    "escalation_question": null,
+    "reason": "Each statement takes its own snapshot, so the overage can be a whole write batch rather than one row. The design accepts the overage and never truncates, so the defect is an inaccurate docstring and 422 wording."
+  },
+  {
+    "id": "307-I17",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "scripts/cutover_304_checks.py:158 requested_at parsed with fromisoformat and no tz check",
+      "scripts/cutover_304_checks.py:182 made < since would raise TypeError if made were naive",
+      "src/manta_trading/market/schema/migrations/tick.py:146 requested_at is TIMESTAMPTZ NOT NULL",
+      "src/manta_trading/cli/commands/tick_debug_cmds.py:103-104 _cell renders the aware datetime via isoformat, which includes the offset"
+    ],
+    "escalation_question": null,
+    "reason": "requested_at is a TIMESTAMPTZ column rendered with its offset, so a naive value cannot reach the comparison. The guard is hardening against input that cannot arrive."
+  },
+  {
+    "id": "175-I7",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/squadron/review/run_cost.py:53-61 writer spells the frontmatter keys as literals",
+      "src/squadron/stats/reviews_report.py:26-32 reader repeats them in _INT_KEYS",
+      "src/squadron/stats/reviews_report.py:118-121,152 reader repeats turns/durationSeconds/costUsd/costBasis literals"
+    ],
+    "escalation_question": null,
+    "reason": "The keys really are duplicated, and a rename on one side would blank a column without a warning. It is a one-value-one-source maintainability point with no current wrong behavior."
+  }
+]

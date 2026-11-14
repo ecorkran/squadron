@@ -1,0 +1,128 @@
+[
+  {
+    "id": "a122-I15",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/amoeba/runner/observe.py:243-247 (head) classifies USAGE_ERROR on exit_code == 2 alone, no stderr check",
+      "src/amoeba/runner/tick.py:132-140,103-104 (head) turns any USAGE_ERROR into UpstreamShapeError naming a missing --run-id shape",
+      "src/amoeba/runner/tenant.py:142-144 (head) re-raises UpstreamShapeError, so the resident process exits for all projects",
+      "squadron src/squadron/cli/commands/run.py _take_run_lock/_locked (commit 75e05f84, 2026-10-05, before a122 head 2026-10-23): a held project run lock exits 2 before the run coroutine starts, so no run state exists",
+      "squadron src/squadron/cli/commands/run.py:121-127 BadParameter (exit 2) when a pipeline's required param is missing"
+    ],
+    "escalation_question": null,
+    "reason": "At head, sq run already exited 2 with no run state for non-shape causes such as a held project run lock, and the Runner treats every such exit as a missing upstream shape and stops the whole process with a misleading message. The design assumed exit 2 only means a missing shape, which the sq code contradicts."
+  },
+  {
+    "id": "188-I4",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/manta_trading/data/kalshi/serve_timeseries.py:150-152 (head) docstring says the membership test is not re-spelled",
+      "src/manta_trading/data/kalshi/serve_timeseries.py:159,166 (head) reads params[\"trades_excluded_categories\"] by literal and re-implements COALESCE(...) = ANY as (category or \"\") in bound",
+      "src/manta_trading/data/kalshi/selection.py:168-170 (head) the SQL spelling and the key",
+      "test/integration/test_kalshi_serving.py:447,461 (head) TestTapeFiltered.test_agrees_with_the_sql_predicate guards parity"
+    ],
+    "escalation_question": null,
+    "reason": "The duplication and the inaccurate docstring are real, but the two spellings agree today and a parity test guards them, so there is no wrong behavior; this is a DRY/docs point."
+  },
+  {
+    "id": "932-I6",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/squadron/pipeline/actions/dispatch.py diff (head ~143-153): get_typed_config called twice inside async one_shot_dispatch_with_telemetry",
+      "src/squadron/pipeline/sdk_session.py:323-327 (head) _background_idle_timeout_s reads config synchronously, called from async _collect_turns",
+      "src/squadron/config/manager.py:20-34,82 (head) load_config reads TOML files; copytree only on one-time migration",
+      ".claude/rules/python.md:91 (head) the <1ms async rule"
+    ],
+    "escalation_question": null,
+    "reason": "The new call sites do read small TOML files synchronously on the loop, contrary to the letter of the project rule, but the cost is negligible next to an LLM dispatch and the same pattern exists elsewhere; the DIP variant is a design-style point."
+  },
+  {
+    "id": "225-I17",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/manta_trading/data/tick/tick_status_build.py:179-229 (head) _product_status about 50 non-blank lines; file 245 lines",
+      "src/manta_trading/cli/commands/tick_status_render.py:57-112 (head) _product_lines about 56 lines",
+      "src/manta_trading/data/tick/tick_coverage.py:23-25 (head) imports jsonable from tick_status_build"
+    ],
+    "escalation_question": null,
+    "reason": "Function length and module placement claims are roughly accurate but are style and structure points with no behavioral effect."
+  },
+  {
+    "id": "175-I15",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/squadron/cli/stats_views.py:29,179 (head) new SUBSCRIPTION_TIER = \"subscription\" compared to cost_tier",
+      "src/squadron/pipeline/intelligence/pools/strategies.py:34-40 (head) COST_TIER_RANK keys the same literal",
+      "src/squadron/cli/commands/models.py:33 (head) label map keys the same literal"
+    ],
+    "escalation_question": null,
+    "reason": "The tier literal is indeed defined in three places with no shared constant, against the project rule, but all spellings agree and nothing behaves wrongly."
+  },
+  {
+    "id": "175-I1",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/squadron/pipeline/actions/review.py:505-506 (head) each part stamps its own UsageRecord under USAGE_KEY",
+      "src/squadron/pipeline/actions/review.py:282,294 (head) multi-part results go through fold_review_parts",
+      "src/squadron/pipeline/actions/review_fold.py:85-91 (head) _metadata copies parts[0].metadata and sums only TOOL_CALLS_MADE_KEY",
+      "src/squadron/pipeline/usage_capture.py:230-233 (head) stamp writes metadata[USAGE_KEY]",
+      "src/squadron/stats/usage_report.py:134 (head) the report reads USAGE_KEY from the step result metadata"
+    ],
+    "escalation_question": null,
+    "reason": "For a split review the folded result keeps only part 1's usage record, so tokens, turns and cost for parts 2..N are lost from run stats, which is the undercount slice 175 was meant to fix."
+  },
+  {
+    "id": "197-I5",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/squadron/integrations/context_forge.py:183-184 (head) int(e[\"completed\"]), int(e[\"total\"]) hard lookups; int(e[\"index\"]) at 181 was already hard",
+      "src/squadron/integrations/context_forge.py:58-59 (head) dataclass defaults 0; list_tasks at 180 is the only TaskEntry constructor in src",
+      "context-forge packages/cli/src/commands/task.ts listTaskFiles (as of 2026-10-06) always emits completed and total for every entry, including the parse-failure branch; present since commit 8d67963c (2026-03-07)"
+    ],
+    "escalation_question": null,
+    "reason": "cf has emitted completed and total on every entry since March 2026, so the bare KeyError path is hardening against input that does not arrive, and the zero defaults are never used by production code."
+  },
+  {
+    "id": "u103-I21",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/test/use-chart-provider.translation.test.tsx:15-23 (head) LINE_SERIES declared between import blocks; two imports follow it"
+    ],
+    "escalation_question": null,
+    "reason": "True, but ES imports are hoisted so behavior is unaffected; import ordering is style."
+  },
+  {
+    "id": "a122-I21",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "tests/runner/test_budget_coverage.py:18 (head) imports _link from runner.test_probes with pyright ignore",
+      "tests/runner/test_factory.py:88 (head) asserts on tenant._planners",
+      "tests/runner/test_tenant.py:180 (head) calls rig.tenant._tracker.confirm"
+    ],
+    "escalation_question": null,
+    "reason": "The test coupling to private helpers and attributes is real but is a test-structure style point with no effect on behavior."
+  },
+  {
+    "id": "932-I1",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/squadron/pipeline/sdk_session.py:251-252 (head) returns as soon as own result is seen and the ledger is empty",
+      "src/squadron/pipeline/sdk_turns.py:61-65 (head) a TaskNotificationMessage clears the task, so a task finishing before our result leaves the ledger empty",
+      "src/squadron/pipeline/sdk_session.py:242-250 (head) the owed follow-up is discarded with a WARNING at the start of the next dispatch",
+      "claude_agent_sdk/_internal/query.py _track_task_lifecycle docstring (#1190): a task settling before the result frame leaves the set empty while the completion may still wake the parent for a continuation turn",
+      "project-documents/user/slices/932-slice...md:166-172 (head) D6 acknowledges this race and accepts the misleading flag"
+    ],
+    "escalation_question": null,
+    "reason": "The code does return before the owed continuation turn when a background agent finishes before the dispatch's own result, a race the SDK documents, so the step's response and flag can be wrong. The design acknowledges and accepts the race, but it is still wrong behavior in new code."
+  }
+]

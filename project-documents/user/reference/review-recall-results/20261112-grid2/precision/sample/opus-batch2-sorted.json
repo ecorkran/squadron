@@ -1,0 +1,137 @@
+[
+  {
+    "id": "225-I11",
+    "settled": true,
+    "grade": "FALSE",
+    "evidence": [
+      "src/manta_trading/data/tick/status_reads.py:50-59 (head) _UNITS, _LEDGER_UNITS, _SHAPE_WHERE are unannotated string literals; _SHAPE_WHERE interpolates the LiteralString COVERAGE_PREDICATE",
+      "src/manta_trading/data/tick/manifest_reads.py:36,84-91 (head) siblings annotate LiteralString explicitly, but that is style, not a requirement",
+      "pyproject.toml:68-75 (head) the project's type checker is mypy, not strict pyright; mypy treats LiteralString as str",
+      "scratch repro with pyright 1.1.414: an unannotated module-level literal (including an f-string of LiteralString parts) interpolated into an f-string passed to a LiteralString parameter gives 0 errors"
+    ],
+    "escalation_question": null,
+    "reason": "Pyright infers unannotated module-level string literals as literal-compatible, so passing them to psycopg's LiteralString query does not error, which I reproduced. The project also type-checks with mypy, which does not enforce LiteralString."
+  },
+  {
+    "id": "175-I8",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "tests/stats/test_reviews_report.py:15-20 (head) _artifact hand-writes the frontmatter",
+      "src/squadron/stats/reviews_report.py:26-32,96-123 (head) the reader's keys: promptTokens, cachedTokens, cacheWriteTokens, completionTokens, reasoningTokens, turns, durationSeconds, costUsd, costBasis, aiModel, requestedModel, aiProfile, effort, verdict, reviewType, slice, dateCreated, runId",
+      "src/squadron/review/run_cost.py:51-63 (head) the writer emits the same cost keys",
+      "src/squadron/review/persistence.py:424-493 (head) the writer emits reviewType, verdict, aiModel, requestedModel, aiProfile, dateCreated, effort, runId"
+    ],
+    "escalation_question": null,
+    "reason": "The fixtures are hand-written, but every key the reader uses matches what the real writer emits, so nothing has drifted. This is a test-fidelity point on a correct path."
+  },
+  {
+    "id": "307-I16",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "scripts/cutover_304_first_purchase.py:112-116,286-288 (head) the baseline records come from production `mt data accounting` before install_release()",
+      "src/manta_trading/data/tick/universe.py:84,108 (base) GC history is definition+statistics only, with no ohlcv-1m want",
+      "src/manta_trading/data/tick/universe.py:88-91,110 (head) GC gains an OHLCV_1M want in this diff",
+      "src/manta_trading/data/tick/family_report.py:249 and tick_status_scope.py:74-87 (head) accounting reports only the families family_wants() lists, plus the tick tier",
+      "src/manta_trading/cli/commands/accounting.py:128-136 (head) accounting iterates the installed TICK_UNIVERSE",
+      "scripts/cutover_304_evidence.py:268-270 (head) totals_delta(baseline records, post-purchase records)",
+      "scripts/purchase_accounting.py:136-144 (head) totals_delta raises CutoverError when after has a key missing from before",
+      "scripts/cutover_304_first_purchase.py:110-111 (head) a re-run reuses the saved baseline"
+    ],
+    "escalation_question": null,
+    "reason": "The pre-install accounting, under the old universe, has no GC bar family, and after install and purchase accounting reports it. totals_delta then raises CutoverError in step 5, after the money is spent, and every re-run hits the same incomplete baseline. The 307 cutover can never pass."
+  },
+  {
+    "id": "a122-I13",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/amoeba/runner/observe.py:127-129 (head) rejects a missing or empty run_id",
+      "src/amoeba/runner/finish.py:141-145 (head) rejects only a non-string run_id",
+      "src/amoeba/runner/launch.py:166-170 (head) _text_parameter rejects a missing or empty value",
+      "src/amoeba/runner/faults.py:194-199 (head) indexes entry.parameters[PARAM_RUN_ID] directly",
+      "src/amoeba/store/journal_models.py:77-80 (head) REQUIRED_PARAMETER_KEYS makes run_id mandatory for SQ_RUN at journal_issue time",
+      "src/amoeba/runner/tick.py:178-182 (head) the only SQ_RUN writer always sets a generated run_id"
+    ],
+    "escalation_question": null,
+    "reason": "The duplication and the uneven strictness are real. But the store requires run_id on every sq_run entry and the only writer always sets one, so the KeyError and empty-id paths cannot arrive. What is left is a DRY point."
+  },
+  {
+    "id": "u103-I8",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/chart/use-chart-provider.ts:358-363 (head) the indicator effect returns early and makes no call",
+      "src/chart/use-chart-provider.ts:347-357 (head) it is documented as a deliberate placeholder for initiative 120",
+      "src/chart/use-chart-provider.ts:24 (head) useIndicators is imported for the effect's dependency"
+    ],
+    "escalation_question": null,
+    "reason": "The effect is indeed a no-op, but it is a documented placeholder with no wrong behavior. The objection is about complexity and a weak test, not a defect."
+  },
+  {
+    "id": "a122-I17",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/amoeba/runner/observe.py:1-326 (head) the new file is 326 lines",
+      "src/amoeba/runner/observe.py:223-232 (head) _after_launch_poll takes seven arguments including self"
+    ],
+    "escalation_question": null,
+    "reason": "The file is slightly over the ~300-line guideline and mixes the confirmed and unconfirmed paths. That is a structure and style point with no behavioral effect."
+  },
+  {
+    "id": "a122-I3",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/amoeba/runner/tenant.py:145-149 (head) the broad catch escalates, then returns (TickResult.COMPLETE, True) unconditionally",
+      "src/amoeba/runner/tenant.py:96-99 (head) the docstring says True only if something was written, so an idle-only tick must return False",
+      "src/amoeba/runner/faults.py:171-182 (head) escalate writes nothing for an already-blocked node",
+      "src/amoeba/store/project_escalations.py:51-59 (head) BEGIN IMMEDIATE, then returns the existing open row without writing",
+      "src/amoeba/process/host.py:251-254,275 (head) the loop skips the idle wait whenever a tenant reports work",
+      "src/amoeba/runner/observe.py:287-291 (head) one reachable recurring raise: a bad issued_at on an in-flight entry raises ValueError every tick (project path, deduplicated)"
+    ],
+    "escalation_question": null,
+    "reason": "A fault that recurs every tick is deduplicated by escalate, yet the tenant still reports work. The resident loop then never idles: it logs a traceback and takes the SQLite write lock on every pass, which breaks the tick contract."
+  },
+  {
+    "id": "932-I7",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      ".claude/rules/python.md:64 (head) the load-test-tier rule exists",
+      "src/squadron/pipeline/sdk_session.py:215-260 (head) the new idle-timeout background-wait loop; no tests/load file is in base..head"
+    ],
+    "escalation_question": null,
+    "reason": "The missing load test is a process and coverage gap against a project rule. It is not a defect causing wrong behavior, and the reviewers themselves frame it as possibly waivable."
+  },
+  {
+    "id": "197-I1",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/squadron/pipeline/item_resume.py:124-135 (head) catches only _Stop, GitEnvironmentError and OSError",
+      "src/squadron/pipeline/item_resume.py:287,292,333 (head) evaluate_each_source and cf_client.list_slices call cf with no wrapping",
+      "src/squadron/integrations/context_forge.py:29-34 (head) ContextForgeNotAvailable and ContextForgeError are plain Exceptions",
+      "src/squadron/pipeline/executor.py:1441-1451 (head) evaluate_each_source catches nothing",
+      "src/squadron/cli/commands/run_item.py:89-105 (head) handle_item_resume catches only typer.Exit",
+      "pyproject.toml:42 (head) the entry point is the typer app, which has no top-level handler, so an uncaught exception exits 1",
+      "src/squadron/pipeline/item_resume.py:67-69 (head) ResumeExit.FLAGGED = 1 and HALTED = 3",
+      "src/squadron/pipeline/item_resume.py:133-135 (head) any OSError is reported as a batch-report write failure"
+    ],
+    "escalation_question": null,
+    "reason": "A cf failure during item resume escapes as a traceback with exit 1, the code the resume contract reserves for FLAGGED. An automated caller would misread an environment fault as the item flagging again. All three members describe this defect."
+  },
+  {
+    "id": "227-I5",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "scripts/cutover_227_host.py:90-96 (head) the f-string SQL interpolates only the two integer lock-key constants",
+      "scripts/cutover_227_host.py:72-76 (head) the library path is quoted into the bash -c string; only a checkout path containing a double quote breaks it"
+    ],
+    "escalation_question": null,
+    "reason": "No injection path exists, since the SQL values are integer constants, and a checkout path containing a double quote is speculative. This is rule-conformance hardening."
+  }
+]
