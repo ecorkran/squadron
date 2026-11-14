@@ -24,6 +24,7 @@ GRID = HERE.parent / "20261112-grid2"
 REPOS = Path.home() / "source/repos/manta"
 REVIEWERS = ("haiku-xhigh", "sol", "sonnet-high", "sonnet")
 DECISION = re.compile(r"\b(F\d+)\b\W{0,6}(KEEP|DROP)\b\W*(.*)", re.IGNORECASE)
+NO_VERDICT_REASON = "no verdict from comb; default DROP"
 
 
 def load_cases() -> dict[str, tuple[str, str, str]]:
@@ -109,6 +110,10 @@ async def comb_one(
         for line in result.raw_output.splitlines():
             if (m := DECISION.search(line)) and m.group(1).upper() not in decisions:
                 decisions[m.group(1).upper()] = (m.group(2).upper(), m.group(3).strip())
+    # comb.yaml's rule: anything not KEEP is DROP. A finding with no parseable verdict is DROP.
+    defaulted = [fid for fid in refs if fid not in decisions]
+    for fid in defaulted:
+        decisions[fid] = ("DROP", NO_VERDICT_REASON)
     for n, ref in enumerate(screened_out, 1):
         refs[f"P{n}"] = ref
         decisions[f"P{n}"] = ("DROP", f"dropped by {prefilter}")
@@ -126,7 +131,8 @@ async def comb_one(
         "usage": str(result.usage) if result else None,
         "raw_output": result.raw_output if result else "",
     }, indent=1))
-    print(f"{alias} {case} {reviewer} {run}: {len(decisions)}/{len(findings)} decided", flush=True)
+    print(f"{alias} {case} {reviewer} {run}: {len(findings) - len(defaulted)}/{len(findings)} parsed, "
+          f"{len(defaulted)} defaulted to DROP", flush=True)
 
 
 async def run_all(
