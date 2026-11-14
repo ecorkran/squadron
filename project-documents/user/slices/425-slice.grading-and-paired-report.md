@@ -6,7 +6,7 @@ parent: user/architecture/420-slices.model-benchmark.md
 dependencies: [421, 422, 424]
 interfaces: [426, 427]
 dateCreated: 20261104
-dateUpdated: 20261105
+dateUpdated: 20261114
 status: not_started
 ---
 
@@ -77,16 +77,22 @@ src/squadron/
   benchmark/
     grading_adapter.py        GradingAdapter protocol, InjectionResult, RestorationResult
     python_grading.py         PythonGradingAdapter: inject, restore, deps_changed, edits, suppressions
+    tree_reader.py            GitTreeReader (TreeReader over `git show` / `git ls-tree`)
     grade_one.py              one subject: sandbox -> apply -> review -> restore -> tests -> snapshot
-    grade_review.py           grading review call, normalization, review floor
-    grade_runner.py           plan, bound, cap, resume, reference-first ordering
+    grade_review.py           reviewer resolution, grading review call, normalization, review floor
+    grade_budget.py           ReviewBudget: the run-level cap, shared by every grade_one call
+    grade_plan.py             plan, refusals, the stated bound
+    grade_runner.py           bound, cap, lock, resume, reference-first ordering, the estimate
     paired_stats.py           per-case reduction, paired bootstrap, sample-count estimate
-    bench_report.py           BenchmarkReport model assembled from records
+    bench_report.py           BenchmarkReport model assembled from records, review_flag
+    report_tables.py          CaseKindTable protocol and registry (426 registers its table)
     registry.py               + grading adapters
   metrology/
-    benchmark_models.py       + GraderIdentity, ReviewerRef, GradeAbsence, GradeResult,
-                                ReferenceGrade, ImplementationGrade, SampleSizeEstimate
-    benchmark_store.py        + grade and estimate records; ContentSidecars
+    grade_models.py           GradeSubject, GradeAbsence, PairVerdict, ReviewerRef, GraderIdentity,
+                                ReviewOutcome, ReviewSummary, GradeResult, ReferenceGrade,
+                                ImplementationGrade, PairEstimate, SampleSizeEstimate
+    grade_store.py            GradeRecordStore: grade and estimate records, record ids
+    benchmark_store.py        ContentSidecars (shared with 421/424, so only the sidecar kinds change)
     snapshot/take.py          + measure_snapshot (extracted, no store write)
     audit_delta.py            is_within_floor accepts float deltas
   cli/commands/
@@ -94,7 +100,7 @@ src/squadron/
 commands/sq/benchmark.md      + grade, report
 ```
 
-`grade_runner` reaches language details only through the `GradingAdapter` registry and reaches the reviewer only through `grade_review`. `paired_stats` is pure: no I/O, no store, no model. Each module stays under 300 lines.
+`benchmark_models.py` and `benchmark_store.py` are shared with 421 and 424 and sit near the line limit, so the grade models and the grade record methods live in `grade_models.py` and `grade_store.py`. `grade_runner` reaches language details only through the `GradingAdapter` registry and reaches the reviewer only through `grade_review`. `paired_stats` is pure: no I/O, no store, no model. Each module stays under 300 lines.
 
 ### Data Flow
 
@@ -105,8 +111,8 @@ sq benchmark grade bench-3f9c… --max-cost 15
   load BenchmarkRun, its case set version, its replays (424)
   resolve reviewer (benchmark.grading_review_model or --review-model) → ReviewerRef
   refuse: missing run cap | no reviewer | case project without a --repo | no per-review cost figure
-  plan: references to grade = cases with no ReferenceGrade under this grader identity
-                              and the environment digest on the case's replays (424)
+  plan: references to grade = one per case and distinct environment digest among the case's
+                              gradable replays, with no ReferenceGrade under this grader identity
         replays to grade    = committed, non-harness-absent replays with no ImplementationGrade
   print bound (D9) ─── nothing dispatched before this line
   for case in set:
@@ -124,14 +130,16 @@ sq benchmark grade bench-3f9c… --max-cost 15
 ```
 BenchmarkSandbox(start_sha) → EnvironmentIdentity
    digest ≠ replay's environment digest → absence environment_changed
-[reference only] collect start node ids → sidecar; measure start snapshot → sidecar
+[reference only] baseline step: collect start node ids → sidecar; measure start snapshot → sidecar
+                 (a named step before the apply, empty for replays)
 git apply --binary <diff> ; commit as the benchmark identity          (diff: sidecar, or start..reference)
    apply fails → absence diff_apply_failed
 grading review of start..HEAD (no tools, diff injected)               (reference: R runs → floor)
 restore tool config by section from start_sha → config_edits
 deps_changed? → uv sync --locked (harness env) → reinstalled=true
-   reinstall fails → absence producer_env_unresolvable (config)
-collect node ids; producer-new = collected − start ids → run_suite(nodes(producer-new))
+   lock stale, missing or unsupported, or producer pyproject.toml unparseable
+      → absence producer_env_unresolvable (config); install timeout or missing uv → environment_failed
+collect node ids; producer-new = collected − start ids → run_suite(nodes(producer-new))   (never an empty list)
 measure snapshot → sidecar; lint and type totals
 restore existing test-side files the producer changed or deleted → test_edits
 run_suite(nodes(start ids − superseded − excluded))                    regression
@@ -142,8 +150,8 @@ write ReferenceGrade | ImplementationGrade
 
 ### State Management
 
-- **Store records** (persistent): one `reference_grade` per (case, grader identity), one `implementation_grade` per (replay, grader identity), and one `sample_size_estimate` per benchmark (overwritten at each grade run). All are optional sibling payloads on `MetrologyRecord`. No migration.
-- **Sidecars** (persistent, content-addressed): `<store>/sidecars/snapshots/<sha256>.json` for snapshots and `<store>/sidecars/nodes/<sha256>.json` for the start tree's node id list. Diffs stay in `sidecars/diffs/` (424).
+- **Store records** (persistent): one `reference_grade` per (case, grader identity, environment digest), one `implementation_grade` per (replay, grader identity), and one `sample_size_estimate` per benchmark (overwritten at each grade run). All are optional sibling payloads on `MetrologyRecord`. No migration.
+- **Sidecars** (persistent, content-addressed): `<store>/sidecars/snapshots/<sha256>.json` for snapshots and `<store>/sidecars/nodes/<sha256>.json` for the start tree's node id list and the hidden id map, and `<store>/sidecars/reviews/<sha256>.json` for the review findings of one grade. Diffs stay in `sidecars/diffs/` (424).
 - **Sandboxes** (transient): 421's directories, one per subject, removed after each grade unless `--keep` is given.
 - **Grade lock:** `<benchmark root>/<benchmark_id>.grade.lock`, the same process lock 424 uses. It is separate from the run lock, so grading can follow a partial run while nothing else grades the same benchmark.
 
@@ -158,14 +166,17 @@ Status: decided
   - **Snapshot before test restoration**, so it measures the producer's tree, test code included, under the start tool config.
   - **Regression run after test restoration.** It runs the start commit's existing tests, not the producer's edited versions, so editing a test cannot change the grade.
   - **Hidden set last**, injected into the restored tree.
+  - **An empty selection never reaches `run_suite`.** pytest given no node ids runs every test, so `grade_one` skips the producer-new, regression and hidden steps when their id list is empty (the slice-case shape in 426 has an empty hidden set).
 - The tree is rebuilt from `start_sha` plus the stored diff, as 424 states. The replay sandbox is never kept alive for grading.
-- The grade sandbox's environment digest must equal the replay's, and for a reference, the digest on the case's replays. Each grade record stores it. A mismatch (a lockfile that resolved differently, a new uv or interpreter) is the harness absence `environment_changed`, because the replay and its grade would not share an environment.
+- The grade sandbox's environment digest must equal the replay's, and for a reference, the environment digest it was planned for (one reference per case and distinct digest among its replays, D8). Each grade record stores it. A mismatch (a lockfile that resolved differently, a new uv or interpreter) is the harness absence `environment_changed`, because the replay and its grade would not share an environment.
 
 ### D2 — Pass, and what counts as a regression
 Status: decided
 - A subject **passes** when every hidden test passes and the regression run has no failing node. A regression is any selected node whose outcome is `failed`, `error` or `not_run`. `skipped` and `xfailed` are not regressions, because the start tree gives the same answer.
 - The regression selection is the start tree's collected node ids minus `superseded_tests` minus `excluded_tests`. It is selected with `nodes(ids)`, never `all_tests()` plus deselect, so producer-added tests never enter it.
 - The producer-new signal (passed, failed, count) is reported and never enters the pass.
+- Zero hidden tests and zero regressions pass (the 426 slice-case shape). A hidden test whose outcome is `skipped` or `not_run` is not a pass.
+- `GradeResult` stores `hidden_total`, `hidden_passed` and the non-passing hidden nodes, not every hidden node, and caps each listing (Database Schema).
 - `passed` is computed from stored fields by a property, never stored on its own.
 - Rejected: weighting hidden and regression results. That is a composite.
 
@@ -193,8 +204,9 @@ Status: decided
 ### D5 — Reinstall on dependency change
 Status: decided
 - `deps_changed` is true when `uv.lock` differs from the start, or when `pyproject.toml` with the restored tool tables removed differs from the start's in content.
-- Then the grader runs 421's `uv sync --locked --all-extras --dev` under the harness environment and records `reinstalled=true` and the producer's lockfile hash. The grader identity still names the start environment, as the architecture requires.
-- A reinstall that fails is `producer_env_unresolvable`. It is a **config** absence: the producer left a lock that does not resolve, so it counts as a fail for that config.
+- Then the grader runs 421's `uv sync --locked --all-extras --dev` under the harness environment and records `reinstalled=true`. The producer's `uv.lock` hash (`None` when the tree has none) is recorded for every grade. The grader identity still names the start environment, as the architecture requires.
+- A stale, missing or unsupported lock (421's `lock_stale_or_unresolvable`, `no_lockfile`, `lockfile_unsupported`) and a producer `pyproject.toml` that does not parse are `producer_env_unresolvable`. It is a **config** absence: the producer left a tree that does not resolve, so it counts as a fail for that config.
+- An install timeout (`benchmark.install_timeout_s`, 421) and a missing `uv` are `environment_failed`, a harness absence.
 
 ### D6 — Edits and suppressions are counted, never honored
 Status: decided
@@ -204,22 +216,23 @@ Status: decided
 
 ### D7 — The grading review
 Status: decided
-- **Reviewer:** the alias in `benchmark.grading_review_model`, declared in `config/keys.py` with no default, or `--review-model`. With neither, `grade` refuses and names both. The alias resolves to a `ReviewerRef(alias, model, profile, effort, template_hash, rules_hash)`.
+- **Reviewer:** the alias in `benchmark.grading_review_model`, declared in `config/keys.py` with no default, or `--review-model`. With neither, `grade` refuses and names both. The alias resolves to a `ReviewerRef(alias, model, profile, effort, template_hash)` with a derived `reviewer_key`. It has no rules hash: the rules directory is the start commit's and differs per case, while the grader identity is one value per benchmark (D10). Each `ReviewOutcome` and `ReviewSummary` carries the sha256 of the rules the reviewed tree supplied instead (`None` when it had none).
 - **Call:** `review_tree_diff(tree, base_sha, reviewer) -> ReviewOutcome` in `grade_review.py`, which 427 imports. It calls `run_review_with_profile` with the `code` template, `inputs={"diff": start_sha, "cwd": tree}`, `no_tools=True`, the alias's effort, and rules from the sandbox tree's own rules directory (the start commit's). With no tools the diff and file contents are injected into the prompt, so the reviewer cannot read outside the sandbox, including the user's checkout, where the reference fix lives.
 - **Normalization:** `normalize_result_categories(result)`, then each finding becomes a `CodeReviewFinding` (severity, category, raw category, location, summary from the title). That is the write-side mapping 400's ingest reads back. Findings with a severity outside the review scale are dropped and counted in `unnormalized_count`, as ingest does.
-- `run_review_with_profile` has no timeout, so the call runs under `asyncio.wait_for` with `benchmark.review_timeout_s` (declared in `config/keys.py`).
+- `run_review_with_profile` has no timeout, so the call runs under `asyncio.wait_for` with `benchmark.review_timeout_s` (declared in `config/keys.py` with no default, like `grading_review_model`; `grade` refuses naming it when it is unset, and no value is invented).
 - A review call that raises, times out, or returns verdict `UNKNOWN` with no findings, is the harness absence `review_failed`, logged at ERROR with the error text. A review that ran but found nothing is recorded with zero findings.
 
 ### D8 — Reference grade, baseline and review noise floor
 Status: decided
-- Each case's reference is graded once per grader identity, before any of its replays. The subject is `start..reference_sha`, built with `git diff --binary` in the user's checkout.
-- The reference sandbox also records the **baseline**: the start tree's collected node ids (a sidecar) and the start tree's snapshot (a sidecar), both taken before the reference diff is applied. Replay grades read the baseline from the reference grade, so every replay of a case is compared to the same start measurement.
+- Each case's reference is graded once per grader identity and environment digest, before any of its replays. A case's replays can carry different environment digests, so one reference is graded per (case, digest) and each replay is graded against the reference of its own digest. The subject is `start..reference_sha`, built with `git diff --binary` in the user's checkout.
+- The reference sandbox also records the **baseline**: the start tree's collected node ids (a sidecar) and the start tree's snapshot (a sidecar), both taken before the reference diff is applied. Replay grades read the baseline from the reference grade, found with `get_reference_grade(case_id, grader digest, replay environment digest)`, so every replay of a case and digest is compared to the same start measurement. A reference grade belongs to the case, not to a benchmark: it carries no benchmark id and every benchmark of the case shares it. A replay with no such reference raises `MissingReferenceGrade`, because the runner grades a reference before its replays.
 - **Review floor:** the reference review runs `benchmark.review_floor_runs` times (default 3, minimum 2, declared in `config/keys.py`). Its `FloorStat` over total findings uses the same reduction as 320's `_stat`. Any failed floor run fails the reference with `review_failed`, so a floor never comes from fewer runs. A cap hit between floor runs writes no reference record, and a rerun grades it again. That is 320's method applied to this instrument. 320's stored floors measure the audit prompt, not this reviewer, so they are not reused.
-- A reference that does not pass its own grade means the grade environment no longer matches qualification. The case is dropped from every config with the harness reason `reference_failed_grade`, and its replays are not graded.
+- A reference that does not pass its own grade means the grade environment no longer matches qualification. The case is dropped from every config with the harness reason `reference_failed_grade`, and its replays are not graded. A failed reference is a `ReferenceGrade` with an absence or a result that does not pass; `--retry-harness` also deletes harness-absent reference records.
 
 ### D9 — Caps, bound and resume for grading
 Status: decided
 - `grade` requires `--max-cost USD`, a run-level cap for this invocation, refused when missing (as 424 D8 does).
+- **Refusals:** no `--max-cost`; no reviewer (names `--review-model` and `benchmark.grading_review_model`); `benchmark.review_timeout_s` unset; a case's `project_id` with no `--repo` matching `derive_project_id` (names the project); no per-review figure (names `--review-cost`).
 - **Per-review figure** for the bound: the largest observed `review.cost_usd` among stored grades with the same `reviewer_key`, or `--review-cost USD` when the store has none. With neither, `grade` refuses and names the flag. The figure is an estimate. No per-review cap exists, and the bound says so.
 - **Bound**, printed before the first review:
 
@@ -233,11 +246,12 @@ bound: 84 × $0.18 (max observed) = $15.12, capped at run cap $15.00
 - The cap is checked before each review. A review with `cost_usd=None` counts at the per-review figure, and the summary reports how many were unpriced. Hitting it stops grading and keeps every record already written, and the CLI exits 2.
 - **Resume** is a lookup by record id (D10). A grade with a harness absence is skipped on rerun unless `--retry-harness` is given, which deletes those grade records first and reports how many, as 424 does.
 - Grading is a separate command, not part of `sq benchmark run`. It can run after a partial run, again under a new reviewer, and with its own cap. Rejected: grading inside the replay loop, which would mix two caps and two lock scopes.
-- This departs from the architecture, whose run-level cap covers grading. A benchmark's total spend is bounded by the run's cap plus each grade invocation's cap. The architecture's cost section should say so.
+- Grading is its own command with its own cap and bound, as the architecture's "Spend is visible before it happens" and Cost sections state. A benchmark's total spend is bounded by the run's cap plus each grade invocation's cap.
+- One `ReviewBudget` instance is shared by every `grade_one` call in an invocation. `before_review()` raises `GradeCapReached` at or above the cap and is called before every review, including each floor run. A cap hit propagates out of `grade_one` and writes no record for the subject in progress.
 
 ### D10 — Grader identity and record ids
 Status: decided
-- `GraderIdentity` holds `grader_version` (`GRADER_VERSION`, an int constant in `grade_one.py`, bumped whenever any grading step changes), the `ReviewerRef` and `review_floor_runs`. Its `digest` is the sha256 of the canonical JSON of those fields, and it is one value for the whole benchmark. The case's grader commands and test sets are already part of the case id.
+- `GraderIdentity` holds `grader_version` (`GRADER_VERSION`, an int constant in `grade_one.py`, bumped whenever any grading step changes), the `ReviewerRef` (without a rules hash, D7) and `review_floor_runs`. Its `digest` is the sha256 of the canonical JSON of those fields, and it is one value for the whole benchmark. The case's grader commands and test sets are already part of the case id.
 - The environment differs per case, so it is not in `GraderIdentity`. Each grade record stores its `environment_digest`, and D1's equality check ties it to the replay's. Together they are the grader identity the architecture names, start environment included.
 - Record ids:
   - `refgrade-<case_id[5:17]>-<grader digest[:12]>-<environment digest[:8]>`
@@ -246,12 +260,12 @@ Status: decided
 
 ### D11 — Content sidecars, generalized
 Status: decided
-- 424's `DiffSidecars` becomes `ContentSidecars(kind)`, with kinds `diffs` (`.diff`), `snapshots` (`.json`) and `nodes` (`.json`), each under `<store>/sidecars/<kind>/`. `put` and `get` behave as 424 D11 describes: write-once, hash-verified on read, `MetrologyStoreError` on a mismatch. `store.diffs` keeps its name, so 424's call sites do not change.
+- 424's `DiffSidecars` becomes `ContentSidecars(kind)`, with kinds `diffs` (`.diff`), `snapshots` (`.json`), `nodes` (`.json`) and `reviews` (`.json`, the review findings of one grade), kept in one `StrEnum` and each under `<store>/sidecars/<kind>/`. `put` and `get` behave as 424 D11 describes: write-once, hash-verified on read, `MetrologyStoreError` on a mismatch. `store.diffs` keeps its name, so 424's call sites do not change.
 - Snapshots are sidecars because a `CodeSnapshot` holds per-file maps and can run to hundreds of KB. A grade record keeps only a `SnapshotRef(sha256)` and the totals the report needs.
 
 ### D12 — Snapshot of a sandbox tree
 Status: decided
-- `measure_snapshot(root, environment_root, config, registry, runner, project_id, commit_sha) -> CodeSnapshot` is extracted from `take_snapshot_at`, which then calls it and writes the record as before. The grader calls it with `root = environment_root = tree`, the snapshot config read from the tree, and the case's `project_id`.
+- `measure_snapshot(root, environment_root, config, registry, runner, project_id, commit_sha, files) -> CodeSnapshot` is extracted from `take_snapshot_at`, which measures `exported.files` from `export_commit`. The `files: list[str]` parameter is the file list to measure; the grader passes `resolve_files(tree, exclusions)` (`snapshot/files.py`) over the sandbox tree whose grade commit exists. The function is which then calls it and writes the record as before. The grader calls it with `root = environment_root = tree`, the snapshot config read from the tree, the file list for the tree and the case's `project_id`.
 - It writes no `code_snapshot` record. A sandbox commit is not in the project's history, and a record keyed on it would show up in 400's project rollups.
 - **Check totals** come from the snapshot's lint and type measurements: the sum of `per_file` for each. A check is reported only when the case's `grader_commands` include it (422 D11). If the snapshot's tool identity for that measurement does not name the command's tool (`ruff`, `pyright`), the grade is the harness absence `check_tool_mismatch`. The tools are not run a second time.
 - A measurement the snapshot marks absent gives `None` for that total, and the report shows "not measured", never zero.
@@ -260,8 +274,9 @@ Status: decided
 ### D13 — Report contents and order
 Status: decided
 - **Scope:** one benchmark and its latest grader identity. Grades under older identities are counted in one line and not shown.
-- **Rows** are configs keyed by `(alias, model, profile, effort_sent)` (420). An alias whose replays span more than one prompt identity is split into one row per identity, with a warning line. Rows are never silently merged.
+- **Rows** are configs keyed by 420's D6 identity: model, profile, effort sent, `tool_use` and `max_output_tokens`. The alias is the label shown, never a key. An alias whose replays span more than one prompt identity is split into one row per identity, with a warning line. Rows are never silently merged.
 - **Case inclusion:** a case enters the comparison only if every config has all k samples recorded and none of them is a harness absence, from the replay (424 D10) or from grading. Each excluded case is counted under its reason. A case still pending is counted as `incomplete`.
+- **Case-kind tables:** sections 1–3 are built by a table registered per `CaseKind` (`report_tables.py`). `BenchmarkReport` holds one table per kind present among the included cases, and a kind with no registered table raises a named error, never a silent omission. 426 registers its slice-case table without editing report code.
 - **Sections, in order:**
   1. **Objective grade.** Per config: mean per-case pass fraction, hidden tests passed, regressions, producer-new tests passed and failed, config-caused absences by kind, with n cases and k samples. The reference line shows the reference's pass and is never ranked.
   2. **Paired comparison.** Per pair of configs: mean paired difference, the 95% paired bootstrap interval, and `A ahead`, `B ahead` or `not distinguishable` (D14).
@@ -275,7 +290,7 @@ Status: decided
 ### D14 — Paired bootstrap
 Status: decided
 - Per case c and config A: `p_A(c)` is passes over k, with config absences counted as fails. Per pair: `d(c) = p_A(c) − p_B(c)`.
-- The interval comes from `bootstrap_mean_interval(values, seed)` in `paired_stats.py`, which 427 imports for its recall intervals. It is the percentile 95% interval of the mean of `values` (here `d`) over `BOOTSTRAP_RESAMPLES = 10_000` resamples of cases with replacement. The seed is derived from the benchmark id and the pair, so a report is reproducible. Constants live in `paired_stats.py`.
+- The interval comes from `bootstrap_mean_interval(values, seed)` in `paired_stats.py`, which 427 imports for its recall intervals. It is the percentile 95% interval of the mean of `values` (here `d`) over `BOOTSTRAP_RESAMPLES = 10_000` resamples of cases with replacement. The seed is `pair_seed(benchmark_id, key_a, key_b)`: the first 8 bytes of the sha256 of the benchmark id and the two configs' identity strings in sorted order (never `hash()`, which is salted per process), so a report is reproducible and the same for (A, B) and (B, A). The pair is reported in that sorted order, cases are processed sorted by case id, and the resampling uses its own `random.Random(seed)`. Constants live in `paired_stats.py`.
 - An interval that contains zero is `not distinguishable`. With fewer than `MIN_PAIRED_CASES = 5` cases, no interval is computed and the pair shows `too few cases (n)`.
 - Rejected: per-sample pooling across cases. Cases differ in difficulty, and the case is the unit of difficulty (architecture design goal).
 
@@ -285,7 +300,8 @@ Status: decided
   - within-case variance `σ²_w`: the pooled sample variance of per-sample pass outcomes within (case, config), summed over the two configs;
   - between-case variance `σ²_b = max(0, Var_c(d(c)) − σ²_w / k)`;
   - projected `MDD(n, k) = (z₀.₉₇₅ + z₀.₈₀) · √((σ²_b + σ²_w / k) / n)`, using 422's constants;
-  - cases needed for `benchmark.target_pass_rate_difference` at each k in `PROJECTED_SAMPLE_COUNTS = (1, 2, 3, 5)`.
+  - cases needed for `benchmark.target_pass_rate_difference` at each k in `PROJECTED_SAMPLE_COUNTS = (1, 2, 3, 5)`: `max(MIN_PAIRED_CASES, ceil((z₀.₉₇₅ + z₀.₈₀)² · (σ²_b + σ²_w / k) / target²))`, so zero total variance gives MDD 0 and `MIN_PAIRED_CASES` cases. `z₀.₉₇₅ = NormalDist().inv_cdf(1 − SIGNIFICANCE / 2)` and `z₀.₈₀ = NormalDist().inv_cdf(POWER)`, with `SIGNIFICANCE` and `POWER` imported from 422's `benchmark/separability.py`.
+  - Fewer included cases, or k below 2, gives no estimate. An estimate with no pairs is never written, and the grade summary says why (one config, k below 2, or too few included cases).
 - `grade` writes the result as one `SampleSizeEstimate` per benchmark at the end of each grade run. It is a pure function of the grades, so it is recomputed, not appended.
 - `sq benchmark yield` (422) shows the latest estimate for a case set beside its analytic bound, labelled `measured (bench-…, n=…, k=…)`. 422's bound stays when no estimate exists.
 - The walkthrough's small run is the measurement the architecture asks for before any large run.
@@ -295,8 +311,8 @@ Status: decided
 
 | `GradeAbsence` | When | `AbsenceClass` |
 |---|---|---|
-| `producer_env_unresolvable` | reinstall after a dependency change failed | config |
-| `environment_failed` | the grade sandbox's environment did not resolve | harness |
+| `producer_env_unresolvable` | stale, missing or unsupported lock after a dependency change, or an unparseable producer `pyproject.toml` (D5) | config |
+| `environment_failed` | the grade sandbox's environment did not resolve, an install timed out, or `uv` is missing | harness |
 | `environment_changed` | its digest differs from the replay's | harness |
 | `diff_apply_failed` | the stored diff did not apply to `start_sha` | harness |
 | `grader_timeout` | a suite run hit `benchmark.suite_timeout_s` | harness |
@@ -317,7 +333,7 @@ Status: decided
 
 ### Patterns and Conventions
 
-- `GradeAbsence`, `GradeSubject` (`reference`, `replay`) and `PairVerdict` (`a_ahead`, `b_ahead`, `not_distinguishable`, `too_few_cases`) are `StrEnum`s in `benchmark_models.py`. The report groups by enum values, never by message text.
+- `GradeAbsence`, `GradeSubject` (`reference`, `replay`) and `PairVerdict` (`a_ahead`, `b_ahead`, `not_distinguishable`, `too_few_cases`) are `StrEnum`s in `grade_models.py`. The report groups by enum values, never by message text.
 - Every collaborator of `grade_runner` and `grade_one` is injected (sandbox factory, adapter registry, reviewer, snapshot measurer, store, clock). Tests run no model and no git outside fixtures.
 - `GradingAdapter` is its own protocol, registered by `SourceLanguage`, separate from 421's `BenchmarkAdapter` and 422's `FixCaseAdapter`. Slice cases (426) use it without fairness methods.
 
@@ -332,11 +348,12 @@ class GradingAdapter(Protocol):
     def deps_changed(self, tree: Path, start: TreeReader) -> bool: ...
     def test_side_edits(self, tree: Path, start: TreeReader) -> tuple[str, ...]: ...
     def restore_test_files(self, tree: Path, start: TreeReader, paths: Sequence[str]) -> None: ...
-    def inject_hidden(self, tree: Path, case: BenchmarkCase, reference: TreeReader) -> InjectionResult: ...
+    def inject_hidden(self, tree: Path, case: BenchmarkCase, start: TreeReader,
+                      reference: TreeReader) -> InjectionResult: ...   # start: the conftest import difference
     def count_suppressions(self, diff: bytes) -> SuppressionCounts: ...
 ```
 
-`TreeReader` reads a file at a commit (`git show <sha>:<path>` in the user's checkout) and lists paths. `InjectionResult` holds the id mapping, the files written and the clashes.
+`TreeReader` (`read(path) -> bytes`, `list_paths() -> tuple[str, ...]`) reads a file at a commit and lists paths; `GitTreeReader(runner, repo_root, sha)` does so through `git show <sha>:<path>` and `git ls-tree -r --name-only` in the user's checkout and raises `TreeReadError` with the stderr tail on failure. `InjectionResult` holds the id mapping, the files written and the clashes.
 
 **`sq benchmark grade BENCHMARK_ID --max-cost USD [--review-model ALIAS] [--review-cost USD] [--repo PATH …] [--case CASE_ID …] [--retry-harness] [--keep]`**
 
@@ -381,7 +398,6 @@ class ReviewerRef(BaseModel, frozen=True):
     profile: str
     effort: str | None
     template_hash: str
-    rules_hash: str | None
     reviewer_key: str                          # derived: sha256 of model, profile, effort, template_hash
 
 class GraderIdentity(BaseModel, frozen=True):
@@ -394,25 +410,40 @@ class ReviewOutcome(BaseModel, frozen=True):
     findings: tuple[CodeReviewFinding, ...]
     unnormalized_count: int
     cost_usd: float | None
+    rules_hash: str | None                     # sha256 of the rules the reviewed tree supplied
+
+class ReviewSummary(BaseModel, frozen=True):   # what a record keeps of one review
+    severity_counts: dict[str, int]            # counts by review severity
+    total: int
+    unnormalized_count: int
+    cost_usd: float | None
+    rules_hash: str | None
+    findings_sha256: str                       # `reviews` sidecar
 
 class GradeResult(BaseModel, frozen=True):
-    hidden: tuple[NodeResult, ...]             # by injected id
-    hidden_id_map: tuple[tuple[str, str], ...]
+    hidden_total: int
+    hidden_passed: int
+    hidden_failures: tuple[NodeResult, ...]    # every hidden node whose outcome is not `passed`
+    hidden_id_map_sha256: str                  # `nodes` sidecar
     injection_clashes: tuple[str, ...]
+    injection_clash_count: int
     regression_selected: int
-    regression_failures: tuple[str, ...]       # ≤ 50 node ids
+    regression_failures: tuple[str, ...]       # ≤ MAX_LISTED_ITEMS node ids
     regression_failure_count: int
     producer_new_passed: int
     producer_new_failed: int
     config_edits: tuple[str, ...]
+    config_edit_count: int
     test_edits: tuple[str, ...]
+    test_edit_count: int
     suppressions: SuppressionCounts            # noqa / type_ignore × source / test
     reinstalled: bool
-    lockfile_sha256: str
+    lockfile_sha256: str | None                # producer's uv.lock hash; None when the tree has none
     snapshot: SnapshotRef
     lint_total: int | None
     type_total: int | None
-    reviews: tuple[ReviewOutcome, ...]         # 1 for a replay, review_floor_runs for a reference
+    reviews: tuple[ReviewSummary, ...]         # 1 for a replay, review_floor_runs for a reference
+    # passed: property, never stored: hidden_passed == hidden_total and regression_failure_count == 0
 
 class ReferenceGrade(BaseModel, frozen=True):
     case_id: str
@@ -455,13 +486,13 @@ class SampleSizeEstimate(BaseModel, frozen=True):
     created_at: datetime
 ```
 
-`MetrologyRecord` gains `reference_grade`, `implementation_grade` and `sample_size_estimate`, with `RECORD_TYPE_*` constants. `BenchmarkRecordStore` gains `write_reference_grade`, `get_reference_grade(case_id, grader_digest, environment_digest)`, `write_grade`, `grades_for(benchmark_id)`, `delete_grades(ids)` (for `--retry-harness` only), `write_estimate`, `latest_estimate(case_set)`, and `snapshots` and `nodes` sidecar attributes. A grade record stays under 16 KB: node lists and snapshots are sidecars, failures are capped at 50 ids.
+`MetrologyRecord` gains `reference_grade`, `implementation_grade` and `sample_size_estimate`, with `RECORD_TYPE_*` constants. `GradeRecordStore(records: BenchmarkRecordStore)` in `grade_store.py` has `write_reference_grade`, `get_reference_grade(case_id, grader_digest, environment_digest)`, `write_grade`, `grades_for(benchmark_id)` (implementation grades only), `delete_grades(ids)` (reference and implementation ids, for `--retry-harness` only), `write_estimate` (overwrites the benchmark's one record) and `latest_estimate(case_set)`; `BenchmarkRecordStore` gains the `snapshots`, `nodes` and `reviews` sidecar attributes. A grade record stays under `MAX_GRADE_RECORD_BYTES = 16 * 1024`: node lists, the hidden id map, snapshots and review findings are sidecars, every remaining listing is capped at `MAX_LISTED_ITEMS = 50` (`grade_models.py`) with its true count beside it, and `detail` at `DETAIL_MAX_CHARS`. A record over the bound is refused: ERROR naming the record id and its largest field, then `MetrologyStoreError`.
 
 ## Integration Points
 
 ### Provides to Other Slices
 
-- **426:** `grade_one` and `GradingAdapter` for slice cases, which have an empty hidden set (the hidden step selects nothing and the pass reduces to no regressions). The report's case-kind tables: 426 adds a slice-case table beside the fix-case one.
+- **426:** `grade_one` and `GradingAdapter` for slice cases, which have an empty hidden set (the hidden step selects nothing and the pass reduces to no regressions). The report's case-kind table registry (`report_tables.py`): 426 registers a slice-case table beside the fix-case one.
 - **427:** `ReviewerRef` with `reviewer_key`, `review_tree_diff` (D7), `bootstrap_mean_interval` (D14), and the single function `review_flag(reviewer) -> str` in `bench_report.py`, which 427 changes to return the recall line from its `latest_recall_for(reviewer_key)`. 427 imports these and defines no copies.
 - **422:** `latest_estimate(case_set)` for the yield report's measured line.
 
@@ -469,7 +500,7 @@ class SampleSizeEstimate(BaseModel, frozen=True):
 
 - **421:** sandbox, environment identity and suite runner, used as specified. Suite runs use `CredentialGrant.none()`.
 - **422:** case test sets and grader commands, `collect` and `is_test_side`, and the target difference. The yield report's rendering gains one line (D15). No 422 decision changes.
-- **424:** replay records and diff sidecars. `DiffSidecars` is generalized without changing 424's call sites (D11). 424 says "425 extends the bound with grading costs". Grading is a separate command with its own bound instead (D9), so that sentence in 424 should change.
+- **424:** replay records and diff sidecars. `DiffSidecars` is generalized without changing 424's call sites (D11). Grading has its own bound (D9), separate from 424's `bench_plan` arithmetic.
 - **400:** `take_snapshot_at` keeps its behavior after `measure_snapshot` is extracted, and its tests pass unchanged.
 - **320:** `is_within_floor` takes `float`. Existing int callers are unaffected.
 
@@ -525,7 +556,7 @@ These are draft commands. `sq benchmark grade` and `sq benchmark report` do not 
    ```
    The separability line shows the analytic bound and, beside it, `measured (bench-…, n=5, k=3)`.
 
-4. **Edits are counted, not honored.** Run `uv run pytest tests/benchmark/test_grade_one.py -k edits -v`. Its fixtures replay a diff that weakens an existing assertion, adds `# type: ignore` and loosens `[tool.pyright]`. The grade shows each count, and the pass equals the unedited diff's.
+4. **Edits are counted, not honored.** Run `uv run pytest tests/benchmark/test_grade_one_edits.py -k edits -v`. Its fixtures replay a diff that weakens an existing assertion, adds `# type: ignore` and loosens `[tool.pyright]`. The grade shows each count, and the pass equals the unedited diff's.
 
 5. **Reference grade.** `sq benchmark replay-show <record-id> --diff` for one graded replay. Then compare its grade with the reference line in the report: the reference passes every hidden test with zero regressions.
 

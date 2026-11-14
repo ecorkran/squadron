@@ -417,7 +417,7 @@ class BenchmarkRun(BaseModel, frozen=True):
   - `ImplementationReplay` records with outcome, absence class, leak verdict, environment identity, prompt identity and usage
   - `DiffSidecars.get` for the producer's diff
   - `benchmark_id` for grouping
-  - `bench_plan` arithmetic, which 425 extends with grading terms
+  - `bench_plan` arithmetic, which stays the replay bound; grading has its own bound (425 D9)
   - the rule that a harness absence drops the case from every config
   425 grades in the same kind of sandbox. It rebuilds the tree from `start_sha` plus the diff. It does not keep the replay sandbox alive. This departs from the architecture's "in the same sandbox" wording, on purpose: keeping every replay's sandbox until grading would hold cases × configs × samples environments on disk. `git diff --binary` keeps mode bits, and the producer's result is its commit, so the rebuilt tree is the graded subject. 425 D1 takes the cost: a reinstall per grade, and the `environment_changed` absence when the rebuilt environment differs.
 - **426:** the `CaseKindRunner` seam for a slice-case runner, and producer-only `P6` (D1–D3) for that runner to invoke, plus the cf sandbox registration it adds.
