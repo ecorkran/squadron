@@ -12,4 +12,4 @@ base=$(awk -v c="$case" '$1==c{print $3}' "$here/../20261112-grid2/cases.txt" "$
 cd "$WT/$case"
 sq review code --diff "$base" --model "$alias" --no-save -v --output file --output-path "$out" \
   > "$here/logs/$case-$alias-$n.log" 2>&1 || true  # sq exits non-zero on a FAIL verdict
-[ -s "$out" ] || echo "NO OUTPUT $case $alias $n"
+[ -s "$out" ] || echo "NO OUTPUT $case $alias $n: $(grep -m1 '^Error' "$here/logs/$case-$alias-$n.log" || echo 'no Error line in log')"
