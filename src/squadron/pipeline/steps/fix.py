@@ -19,6 +19,7 @@ from squadron.pipeline.fix_keys import (
     ISSUE_PARAM,
 )
 from squadron.pipeline.models import StepConfig, ValidationError
+from squadron.pipeline.producer_only import config_without_keys
 from squadron.pipeline.steps import StepTypeName, register_step_type
 
 MODEL_KEY = "model"
@@ -97,6 +98,10 @@ class FixStepType:
             (ActionType.DISPATCH, {MODEL_KEY: cfg.get(MODEL_KEY)}),
             (ActionType.COMMIT, {SUBJECT_PARAM: CommitSubject.FIX}),
         ]
+
+    def producer_only_config(self, config: StepConfig) -> StepConfig:
+        """A copy of *config*: ``fix`` has no embedded review to strip (slice 423 D1)."""
+        return config_without_keys(config, ())
 
     def _error(self, field: str, message: str) -> ValidationError:
         return ValidationError(field=field, message=message, action_type=self.step_type)

@@ -24,6 +24,9 @@ RUN_IO_DIR = "run_io_dir"
 # Set by the executor at the start of each invocation (fresh run or resume): the HEAD a
 # guarded ``commit`` step requires to be unchanged (#292).
 RUN_START_HEAD = "run_start_head"
+# Set by ``sq run --producer-only`` (slice 424). Kept in the run's params so a resume
+# re-applies the producer-only transform and never grows the other steps back.
+RUN_PRODUCER_ONLY = "run_producer_only"
 
 # Each reserved key and the CLI flag that sets it, for the rejection message.
 RESERVED_PARAMS: dict[str, str] = {
@@ -33,6 +36,7 @@ RESERVED_PARAMS: dict[str, str] = {
     RUN_MAX_COST: "--max-cost",
     RUN_IO_DIR: "--io-dir",
     RUN_START_HEAD: "nothing (sq run records it when the run starts)",
+    RUN_PRODUCER_ONLY: "--producer-only",
 }
 
 

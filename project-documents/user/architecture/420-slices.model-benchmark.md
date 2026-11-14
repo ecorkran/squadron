@@ -90,7 +90,7 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
    - **Risk Level:** Medium
    - **Relative Effort:** 3/5
 
-5. [ ] **(424) Producer-Only Replay Runner** — A new `sq run` producer-only mode that runs only a pipeline's producer step (`implement` from `P6`, the `fix` pipeline's step) with its embedded review stripped: same prompt, same dispatch, same commit, no review action and no verdict, then stop. On top of that, the benchmark runner takes a case set × configs × sample count and, for each run:
+5. [x] **(424) Producer-Only Replay Runner** — A new `sq run` producer-only mode that runs only a pipeline's producer step (`implement` from `P6`, the `fix` pipeline's step) with its embedded review stripped: same prompt, same dispatch, same commit, no review action and no verdict, then stop. On top of that, the benchmark runner takes a case set × configs × sample count and, for each run:
    - opens a sandbox at the start commit;
    - runs the producer in the scrubbed environment;
    - scans the transcript for leak paths and for `git`/`gh` calls against other repos;

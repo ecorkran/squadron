@@ -110,12 +110,12 @@ def _orphan_loops(steps: list[StepState]) -> int:
 
 def _unit(state: RunState, steps: list[StepState], position: int) -> ProducerUnit | None:
     step = steps[position]
-    dispatch = _first_action(step, ActionType.DISPATCH)
+    dispatch = first_action(step, ActionType.DISPATCH)
     if dispatch is None:
         return None
     usage = action_usage_row(state.run_id, step.step_name, dispatch).record
-    review = _first_action(step, ActionType.REVIEW)
-    metadata = _metadata(dispatch)
+    review = first_action(step, ActionType.REVIEW)
+    metadata = action_metadata(dispatch)
     key = ProducerKey(
         model=_text(metadata.get("model")) or _text(metadata.get("requested_model")),
         profile=_text(metadata.get("profile")),
@@ -145,16 +145,20 @@ def _loop_after(steps: list[StepState], position: int) -> StepState | None:
 def _reviewer(review: Mapping[str, object]) -> str | None:
     """The configured reviewer model. The mechanical task gate reports itself as ``model``;
     ``requested_model`` is the reviewer the run asked for, which also drives the loop."""
-    metadata = _metadata(review)
+    metadata = action_metadata(review)
     return _text(metadata.get("requested_model")) or _text(metadata.get("model"))
 
 
-def _first_action(step: StepState, action_type: ActionType) -> Mapping[str, object] | None:
+def first_action(step: StepState | None, action_type: ActionType) -> Mapping[str, object] | None:
+    """The step's first action of *action_type*, ``None`` when there is none (or no step)."""
+    if step is None:
+        return None
     return next((a for a in step.action_results if a.get("action_type") == action_type), None)
 
 
-def _metadata(action: Mapping[str, object]) -> Mapping[str, object]:
-    raw = action.get("metadata")
+def action_metadata(action: Mapping[str, object] | None) -> Mapping[str, object]:
+    """The action's ``metadata`` mapping, empty when it has none (or there is no action)."""
+    raw = None if action is None else action.get("metadata")
     return cast("Mapping[str, object]", raw) if isinstance(raw, Mapping) else {}
 
 

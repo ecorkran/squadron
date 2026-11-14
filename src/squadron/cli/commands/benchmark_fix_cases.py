@@ -19,7 +19,7 @@ from squadron.benchmark.sandbox import (
     sweep_benchmark_orphans,
 )
 from squadron.benchmark.yield_report import build_yield, render_json, render_text
-from squadron.cli.commands.benchmark_common import git_output, stderr_exit
+from squadron.cli.commands.benchmark_common import open_store, repo_root_for, stderr_exit
 from squadron.codehost.git_refs import GIT_QUERY_TIMEOUT_SECONDS
 from squadron.codehost.github_cli import build_github_host
 from squadron.config.keys import (
@@ -37,7 +37,6 @@ from squadron.metrology.errors import MetrologyIdentityError, MetrologyStoreErro
 from squadron.metrology.identity import derive_project_id
 from squadron.metrology.project_id import ProjectId
 from squadron.metrology.snapshot_models import SourceLanguage
-from squadron.metrology.store import MetrologyStore, resolve_store_dir
 
 fix_cases_app = typer.Typer(
     name="fix-cases",
@@ -73,18 +72,6 @@ def make_sandbox_factory(
     return factory
 
 
-def _repo_root(runner: ProcessRunner, repo: Path | None) -> Path:
-    start = str(repo if repo is not None else Path.cwd())
-    return Path(git_output(runner, start, "rev-parse", "--show-toplevel"))
-
-
-def _open_store(repo_root: Path) -> BenchmarkRecordStore:
-    try:
-        return BenchmarkRecordStore(MetrologyStore(store_dir=resolve_store_dir(cwd=str(repo_root))))
-    except MetrologyStoreError as exc:
-        raise stderr_exit(str(exc)) from exc
-
-
 def _project(repo_root: Path) -> ProjectId:
     try:
         return derive_project_id(str(repo_root))
@@ -115,7 +102,7 @@ def build_command(
 ) -> None:
     """Discover closing commits, qualify each as a fix case and write the case set."""
     runner = SubprocessRunner()
-    repo_root = _repo_root(runner, repo)
+    repo_root = repo_root_for(runner, repo)
     sweep_benchmark_orphans(runner)
     try:
         install_s = get_positive_int_config(BENCHMARK_INSTALL_TIMEOUT_KEY, cwd=str(repo_root))
@@ -126,7 +113,7 @@ def build_command(
     # Validated with the other settings: a bad report setting must not surface after the
     # build has already stored its results.
     samples, target = _report_inputs(repo_root)
-    store = _open_store(repo_root)
+    store = open_store(repo_root)
     deps = BuildDeps(
         host=build_github_host(runner),
         store=store,
@@ -209,8 +196,8 @@ def show_command(
 ) -> None:
     """Print the latest qualification record for a commit or case."""
     runner = SubprocessRunner()
-    repo_root = _repo_root(runner, repo)
-    store = _open_store(repo_root)
+    repo_root = repo_root_for(runner, repo)
+    store = open_store(repo_root)
     try:
         records = _match_records(store.list_fix_qualifications(_project(repo_root)), target)
     except MetrologyStoreError as exc:
@@ -234,12 +221,12 @@ def yield_command(
     """Qualified and rejected counts per project, and whether the cases can separate two configs."""
     runner = SubprocessRunner()
     # Without --repo the report covers every stored project, so no git checkout is needed.
-    anchor = _repo_root(runner, repo[0]) if repo else Path.cwd()
-    store = _open_store(anchor)
+    anchor = repo_root_for(runner, repo[0]) if repo else Path.cwd()
+    store = open_store(anchor)
     samples, target = _report_inputs(anchor)
     try:
         if repo:
-            wanted = {_project(_repo_root(runner, path)).value for path in repo}
+            wanted = {_project(repo_root_for(runner, path)).value for path in repo}
             records = [r for r in store.list_fix_qualifications() if r.project_id.value in wanted]
         else:
             records = store.list_fix_qualifications()

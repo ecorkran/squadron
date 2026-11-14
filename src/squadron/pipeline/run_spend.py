@@ -17,8 +17,9 @@ from typing import cast
 from squadron.config.keys import COST_CAP_KEY
 from squadron.config.manager import get_config
 from squadron.core.usage import UsageRecord
+from squadron.providers.errors import BudgetExhaustedError
 
-__all__ = ["CostCap", "RunSpend", "read_cost_cap"]
+__all__ = ["CostCap", "RunSpend", "read_cost_cap", "remaining_budget"]
 
 _logger = logging.getLogger(__name__)
 
@@ -47,22 +48,39 @@ def read_cost_cap(
     so a mistyped cap fails the run at start.
     """
     if run_override is not None:
-        return CostCap(_positive_usd(run_override, RUN_FLAG_SOURCE), RUN_FLAG_SOURCE)
+        return CostCap(positive_usd(run_override, RUN_FLAG_SOURCE), RUN_FLAG_SOURCE)
     if pipeline_cap is not None:
-        return CostCap(_positive_usd(pipeline_cap, PIPELINE_SOURCE), PIPELINE_SOURCE)
+        return CostCap(positive_usd(pipeline_cap, PIPELINE_SOURCE), PIPELINE_SOURCE)
     value = get_config(COST_CAP_KEY, cwd=cwd)
     if value is None:
         return None
-    return CostCap(_positive_usd(value, COST_CAP_KEY), COST_CAP_KEY)
+    return CostCap(positive_usd(value, COST_CAP_KEY), COST_CAP_KEY)
 
 
-def _positive_usd(value: object, source: str) -> float:
+def positive_usd(value: object, source: str) -> float:
     # bool is an int subclass; True is not a dollar amount.
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{source} must be a positive number, got {value!r}")
     if not math.isfinite(value) or value <= 0:
         raise ValueError(f"{source} must be a positive number, got {value!r}")
     return float(value)
+
+
+def remaining_budget(cap: CostCap | None, spent_usd: float) -> float | None:
+    """The dollar budget left under *cap* for a session opening now, or ``None`` when uncapped.
+
+    Raises ``BudgetExhaustedError`` naming the cap and the spend when nothing is left;
+    no budget is ever substituted for a remainder that is not positive (slice 424 D9).
+    """
+    if cap is None:
+        return None
+    remainder = cap.usd - spent_usd
+    if remainder <= 0:
+        raise BudgetExhaustedError(
+            f"run spent ${spent_usd:.2f} this invocation, at or over {cap.source} "
+            f"${cap.usd:.2f}; raise the cap and resume to continue"
+        )
+    return remainder
 
 
 class RunSpend:

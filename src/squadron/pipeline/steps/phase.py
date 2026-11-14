@@ -8,6 +8,7 @@ from typing import cast
 from squadron.pipeline.actions.checkpoint import CheckpointTrigger
 from squadron.pipeline.commit_plan import REVIEW_TEMPLATE_PARAM, SUBJECT_PARAM, CommitSubject
 from squadron.pipeline.models import StepConfig, ValidationError
+from squadron.pipeline.producer_only import config_without_keys
 from squadron.pipeline.steps import StepTypeName, register_step_type
 from squadron.pipeline.steps.utils import validate_allowed_tools
 
@@ -54,6 +55,9 @@ _KNOWN_KEYS = frozenset(
         EXISTING_PARAM,
     }
 )
+
+# The keys a producer-only run removes: the step's embedded review and its checkpoint.
+_PRODUCER_ONLY_DROPPED_KEYS = ("review", "checkpoint")
 
 _KEEP_CHECK: dict[str, KeepCheck] = {
     StepTypeName.DESIGN: KeepCheck.ARTIFACT,
@@ -308,6 +312,14 @@ class PhaseStepType:
         actions.append(("commit", commit_config))
 
         return actions
+
+    def producer_only_config(self, config: StepConfig) -> StepConfig:
+        """The config without its embedded review and checkpoint (slice 424 D2).
+
+        The expansion adds review, checkpoint and the commit's review template only
+        when ``review`` is set, so dropping these two keys is the whole change.
+        """
+        return config_without_keys(config, _PRODUCER_ONLY_DROPPED_KEYS)
 
 
 def _review_template(review: object) -> str | None:

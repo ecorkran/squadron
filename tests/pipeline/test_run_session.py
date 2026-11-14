@@ -72,4 +72,4 @@ async def test_session_opens_at_the_classifications_effort() -> None:
     ) as opener:
         async with pipeline_session(classification):
             pass
-    opener.assert_awaited_once_with(effort=Effort.high)
+    opener.assert_awaited_once_with(effort=Effort.high, max_budget_usd=None)

@@ -137,6 +137,15 @@ class ScrubbedEnvironment:
         self._link_tools()
         self._link_carryover(real_home)
 
+    def grant_carryover_into_home(self) -> None:
+        """Link this grant's carried files into an already prepared home.
+
+        For a producer whose profile needs its login inside the home a suite-only sandbox
+        already built. Every other ``prepare()`` step is skipped, and a carried file that is
+        already there is left alone (a tool may have refreshed it since).
+        """
+        self._link_carryover(self._real_home(), skip_existing=True)
+
     def cleanup(self) -> None:
         """Remove the home directory if it exists."""
         shutil.rmtree(self.home, ignore_errors=True)
@@ -201,12 +210,14 @@ class ScrubbedEnvironment:
                 raise MissingHarnessToolError(tool)
             (bin_dir / tool).symlink_to(found)
 
-    def _link_carryover(self, real_home: Path) -> None:
+    def _link_carryover(self, real_home: Path, *, skip_existing: bool = False) -> None:
         for rel in self._grant.carryover_files:
             source = real_home / rel
             if not source.exists():
                 continue
             target = self.home / rel
+            if skip_existing and target.exists():
+                continue
             target.parent.mkdir(parents=True, exist_ok=True)
             # A copy, not a symlink: a tool that opens the file for writing must not
             # modify the real login (#301). copy2 keeps the file's mode (0600).

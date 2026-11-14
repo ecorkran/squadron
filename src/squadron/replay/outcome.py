@@ -23,7 +23,9 @@ from squadron.pipeline.state import RunState, StepState
 from squadron.pipeline.steps import StepTypeName
 from squadron.stats.producer_units import (
     PHASE_TYPES,
+    action_metadata,
     effort_sent_value,
+    first_action,
     loop_rounds,
     phase_accepted,
     unit_usage,
@@ -135,14 +137,14 @@ def _failure_of(steps: list[StepState], fallback: str) -> tuple[FailureClass | N
             for action in actions:
                 if action.get("success") is not False:
                     continue
-                kind = _kind(action)
+                kind = action_failure_kind(action)
                 if kind is not None:
                     return _CLASS_OF_KIND[kind], _text(action.get("error"))
                 return FailureClass.OTHER, _text(action.get("error")) or fallback
     return FailureClass.OTHER, fallback
 
 
-def _kind(action: Mapping[str, object]) -> FailureKind | None:
+def action_failure_kind(action: Mapping[str, object]) -> FailureKind | None:
     metadata = action.get("metadata")
     if not isinstance(metadata, Mapping):
         return None
@@ -175,7 +177,7 @@ def _reading(
     failure_class: FailureClass | None,
     failure_detail: str | None,
 ) -> OutcomeReading:
-    dispatch = _first_action(phase, ActionType.DISPATCH)
+    dispatch = first_action(phase, ActionType.DISPATCH)
     usage = (
         None
         if dispatch is None or phase is None
@@ -183,7 +185,7 @@ def _reading(
     )
     spent = None if phase is None else unit_usage(state.run_id, phase, loop)
     totals = None if spent is None else usage_totals(spent.records)
-    metadata = _metadata(dispatch)
+    metadata = action_metadata(dispatch)
     return OutcomeReading(
         outcome=outcome,
         rounds=rounds,
@@ -192,7 +194,7 @@ def _reading(
         first_verdict=None if phase is None else phase.verdict,
         cost_usd=None if totals is None else totals.cost_usd,
         priced=(0, 0) if spent is None or totals is None else (totals.priced, spent.llm_actions),
-        prompt=_prompt_identity(metadata),
+        prompt=prompt_identity(metadata),
         task_prompt=_build_context_text(phase),
         effort_sent=effort_sent_value(metadata, usage),
         producer_model=_text(metadata.get("model")) or _text(metadata.get("requested_model")),
@@ -200,18 +202,7 @@ def _reading(
     )
 
 
-def _first_action(step: StepState | None, action_type: ActionType) -> Mapping[str, object] | None:
-    if step is None:
-        return None
-    return next((a for a in step.action_results if a.get("action_type") == action_type), None)
-
-
-def _metadata(action: Mapping[str, object] | None) -> Mapping[str, object]:
-    raw = None if action is None else action.get("metadata")
-    return cast("Mapping[str, object]", raw) if isinstance(raw, Mapping) else {}
-
-
-def _prompt_identity(metadata: Mapping[str, object]) -> PromptIdentity | None:
+def prompt_identity(metadata: Mapping[str, object]) -> PromptIdentity | None:
     raw = metadata.get("prompt")
     if not isinstance(raw, Mapping):
         return None
