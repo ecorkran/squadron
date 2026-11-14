@@ -24,6 +24,14 @@ class BuiltinReviewTemplate(StrEnum):
     ARCH = "arch"
 
 
+class TemplateOutput(StrEnum):
+    """What a template's reply must contain. A review needs a verdict and findings; a
+    decisions template (e.g. the comb) writes its own line format, so no review recovery."""
+
+    REVIEW = "review"
+    DECISIONS = "decisions"
+
+
 @dataclass
 class InputDef:
     """Definition of a template input (CLI argument)."""
@@ -59,6 +67,7 @@ class ReviewTemplate:
     judge: dict[str, object] | None = None
     # Opt-in write-time category normalization (402 D3). Only the code template sets it.
     normalize_categories: bool = False
+    output: TemplateOutput = TemplateOutput.REVIEW
 
     # Prompt construction — exactly one of these is set (validated at load time)
     prompt_template: str | None = None
@@ -128,6 +137,17 @@ def _resolve_normalize_categories(raw: object) -> bool:
     return raw
 
 
+def _resolve_output(raw: object) -> TemplateOutput:
+    """Absent or null → review; any other value must name a TemplateOutput."""
+    if raw is None:
+        return TemplateOutput.REVIEW
+    try:
+        return TemplateOutput(raw)
+    except ValueError as exc:
+        valid = ", ".join(output.value for output in TemplateOutput)
+        raise TemplateValidationError(f"output must be one of {valid}, got {raw!r}") from exc
+
+
 def load_template(path: Path) -> ReviewTemplate:
     """Load a ReviewTemplate from a YAML file."""
     with open(path, encoding="utf-8") as f:
@@ -191,6 +211,7 @@ def load_template(path: Path) -> ReviewTemplate:
         ),
         judge=dict(judge_raw) if isinstance(judge_raw, dict) else None,  # type: ignore[arg-type]
         normalize_categories=_resolve_normalize_categories(data.get("normalize_categories")),
+        output=_resolve_output(data.get("output")),
         prompt_template=(str(data["prompt_template"]) if "prompt_template" in data else None),
         prompt_builder=builder,
     )

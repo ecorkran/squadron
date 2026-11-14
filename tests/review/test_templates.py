@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pytest
 
+from squadron.providers.sdk.settings import REVIEW_SETTING_SOURCES
 from squadron.review.models import TemplateValidationError
 from squadron.review.templates import (
     InputDef,
     ReviewTemplate,
+    TemplateOutput,
     clear_registry,
     get_template,
     list_templates,
@@ -183,7 +186,7 @@ class TestLoadTemplate:
             system_prompt="s",
             allowed_tools=[],
             permission_mode="bypassPermissions",
-            setting_sources=None,
+            setting_sources=list(REVIEW_SETTING_SOURCES),
             required_inputs=[],
             optional_inputs=[],
             prompt_template="hello",
@@ -277,6 +280,21 @@ prompt_builder: nonexistent.module.func
         with pytest.raises(TemplateValidationError, match="normalize_categories"):
             load_template(path)
 
+    def test_output_defaults_to_review(self, tmp_path: Path) -> None:
+        assert load_template(_write_yaml(tmp_path, VALID_YAML)).output is TemplateOutput.REVIEW
+
+    def test_output_decisions_is_read(self, tmp_path: Path) -> None:
+        path = _write_yaml(tmp_path, VALID_YAML + "output: decisions\n")
+
+        assert load_template(path).output is TemplateOutput.DECISIONS
+
+    @pytest.mark.parametrize("value", ['"verdict"', "1", "[decisions]"])
+    def test_unknown_output_fails_to_load(self, tmp_path: Path, value: str) -> None:
+        path = _write_yaml(tmp_path, VALID_YAML + f"output: {value}\n")
+
+        with pytest.raises(TemplateValidationError, match="output must be one of"):
+            load_template(path)
+
 
 class TestBuildPrompt:
     """Test ReviewTemplate.build_prompt edge cases."""
@@ -288,7 +306,7 @@ class TestBuildPrompt:
             system_prompt="x",
             allowed_tools=[],
             permission_mode="bypassPermissions",
-            setting_sources=None,
+            setting_sources=list(REVIEW_SETTING_SOURCES),
             required_inputs=[],
             optional_inputs=[],
         )
@@ -306,7 +324,7 @@ class TestIsJudge:
             system_prompt="s",
             allowed_tools=[],
             permission_mode="bypassPermissions",
-            setting_sources=None,
+            setting_sources=list(REVIEW_SETTING_SOURCES),
             required_inputs=[],
             optional_inputs=[],
             prompt_template="hello",
@@ -320,7 +338,7 @@ class TestIsJudge:
             system_prompt="s",
             allowed_tools=[],
             permission_mode="bypassPermissions",
-            setting_sources=None,
+            setting_sources=list(REVIEW_SETTING_SOURCES),
             required_inputs=[],
             optional_inputs=[],
             prompt_template="hello",
@@ -343,7 +361,7 @@ class TestRegistry:
             system_prompt="x",
             allowed_tools=[],
             permission_mode="bypassPermissions",
-            setting_sources=None,
+            setting_sources=list(REVIEW_SETTING_SOURCES),
             required_inputs=[],
             optional_inputs=[],
             prompt_template="hello",
@@ -363,7 +381,7 @@ class TestRegistry:
                     system_prompt="x",
                     allowed_tools=[],
                     permission_mode="bypassPermissions",
-                    setting_sources=None,
+                    setting_sources=list(REVIEW_SETTING_SOURCES),
                     required_inputs=[],
                     optional_inputs=[],
                     prompt_template="hello",
@@ -489,7 +507,9 @@ def test_judge_template_default_thresholds_differ_by_ground_truth_strength() -> 
         tasks_vs_slice.judge["pass_floor"]
         == JUDGE_TEMPLATE_THRESHOLDS["judge.tasks-vs-slice"]["pass_floor"]
     )
-    assert slice_vs_arch.judge["pass_floor"] > tasks_vs_slice.judge["pass_floor"]
+    assert cast(float, slice_vs_arch.judge["pass_floor"]) > cast(
+        float, tasks_vs_slice.judge["pass_floor"]
+    )
 
 
 # ---------------------------------------------------------------------------

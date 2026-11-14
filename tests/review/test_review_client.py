@@ -14,12 +14,24 @@ from squadron.core.models import AgentConfig, AgentState, Effort, Message, Messa
 from squadron.project_rules.conventions import ConventionsSource
 from squadron.providers.base import ProviderCapabilities
 from squadron.providers.errors import EmptyFinalTurnError
+from squadron.providers.sdk.settings import REVIEW_SETTING_SOURCES
 from squadron.review.git_utils import EmptyDiffError
 from squadron.review.models import ReviewResult, Verdict, VerdictSource
-from squadron.review.review_client import InjectedPrompt, _write_prompt_log, run_review_with_profile
+
+# The log writer's format is asserted directly, so the test reaches the private helper.
+from squadron.review.review_client import (
+    InjectedPrompt,
+    _write_prompt_log,  # pyright: ignore[reportPrivateUsage]
+    run_review_with_profile,
+)
 from squadron.review.templates import ReviewTemplate
 
 _P = "squadron.review.review_client"
+
+
+def _fake_injection(prompt: str, *args: object, **kwargs: object) -> InjectedPrompt:
+    """Stand-in for _inject_file_contents: no conventions, the prompt unchanged."""
+    return InjectedPrompt(prompt, None, ConventionsSource.NONE)
 
 
 def _make_template(
@@ -33,7 +45,7 @@ def _make_template(
         system_prompt="You are a reviewer.",
         allowed_tools=[],
         permission_mode="bypassPermissions",
-        setting_sources=None,
+        setting_sources=list(REVIEW_SETTING_SOURCES),
         required_inputs=[],
         optional_inputs=[],
         prompt_template="Review: {input}",
@@ -225,7 +237,7 @@ class TestFileInjection:
             patch(f"{_P}.ensure_provider_loaded"),
             patch(
                 f"{_P}._inject_file_contents",
-                side_effect=lambda p, *a, **k: InjectedPrompt(p, None, ConventionsSource.NONE),
+                side_effect=_fake_injection,
             ) as mock_inject,
         ):
             from squadron.providers.base import AuthType, ProviderType
@@ -801,7 +813,7 @@ class TestDiffCoverageCap:
 
     @pytest.mark.asyncio
     async def test_truncated_diff_zero_tool_calls_pass_becomes_concerns(
-        self, patch_config_paths
+        self, patch_config_paths: dict[str, Path]
     ) -> None:
         from squadron.config.manager import set_config
         from squadron.review.models import Verdict, VerdictSource
@@ -1207,7 +1219,12 @@ class TestRecoveryTurn:
         provider.create_agent = AsyncMock(return_value=agent)
         return provider, sent
 
-    async def _run(self, provider: MagicMock, max_output_tokens: int | None = None) -> ReviewResult:
+    async def _run(
+        self,
+        provider: MagicMock,
+        max_output_tokens: int | None = None,
+        template: ReviewTemplate | None = None,
+    ) -> ReviewResult:
         from squadron.providers.profiles import ProviderProfile
 
         with (
@@ -1219,11 +1236,28 @@ class TestRecoveryTurn:
                 name="openai", provider="openai", api_key_env="OPENAI_API_KEY"
             )
             return await run_review_with_profile(
-                _make_template(),
+                template or _make_template(),
                 {"input": "file.md"},
                 profile="openai",
                 max_output_tokens=max_output_tokens,
             )
+
+    @pytest.mark.asyncio
+    async def test_decisions_reply_gets_no_review_recovery(self) -> None:
+        from dataclasses import replace
+
+        from squadron.review.templates import TemplateOutput
+
+        provider, sent = self._scripted_provider(
+            ["F1: KEEP — the guard is missing on the failure path\nF2: DROP — style only\n"]
+        )
+        decisions_template = replace(_make_template(), output=TemplateOutput.DECISIONS)
+
+        result = await self._run(provider, template=decisions_template)
+
+        assert len(sent) == 1
+        assert result.recovery_turn_used is False
+        assert "F1: KEEP" in result.raw_output
 
     @pytest.mark.asyncio
     async def test_text_tool_call_reply_is_recovered(self, caplog: pytest.LogCaptureFixture) -> None:
@@ -1490,7 +1524,7 @@ class TestRunCost:
     async def test_duration_is_stamped_for_every_provider(self, provider_type: str) -> None:
         result = await self._run(provider_type, _make_mock_agent(), clock=[100.0, 103.5])
 
-        assert result.duration_seconds == pytest.approx(3.5)
+        assert result.duration_seconds == 3.5
 
     @pytest.mark.asyncio
     async def test_stamped_turns_and_usage_land_on_result(self) -> None:
@@ -1533,7 +1567,7 @@ class TestRunCost:
             await self._run("openai", agent, clock=[10.0, 12.25])
 
         assert exc_info.value is raised
-        assert raised.duration_seconds == pytest.approx(2.25)
+        assert raised.duration_seconds == 2.25
         agent.shutdown.assert_awaited_once()
 
     @pytest.mark.asyncio

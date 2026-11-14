@@ -45,7 +45,7 @@ from squadron.review.git_utils import EmptyDiffError
 from squadron.review.models import DiffInjection, ReviewResult
 from squadron.review.parsers import parse_review_output
 from squadron.review.template_inputs import FILE_INPUT_KEYS
-from squadron.review.templates import ReviewTemplate
+from squadron.review.templates import ReviewTemplate, TemplateOutput
 from squadron.review.tool_support import should_inject_file_bodies
 from squadron.review.turn_capture import (
     FINISH_REVIEW_PROMPT,
@@ -348,6 +348,7 @@ async def run_review_with_profile(
                 recipient=config.name,
                 capture=capture,
                 parse=parse,
+                recover=template.output is TemplateOutput.REVIEW,
                 template_name=template.name,
                 model=resolved_model,
                 max_output_tokens=sent_budget,
@@ -443,6 +444,7 @@ async def _collect_review(
     recipient: str,
     capture: TurnCapture,
     parse: Callable[[str], ReviewResult],
+    recover: bool,
     template_name: str,
     model: str | None,
     max_output_tokens: int | None,
@@ -468,7 +470,8 @@ async def _collect_review(
         )
     else:
         result = parse(capture.raw_output)
-        if not ended_mid_task(result):
+        # Decisions output is not a review, so a missing verdict is not a stop mid-task.
+        if not recover or not ended_mid_task(result):
             return result, False
         # D2: a turn that ran out of output budget would run out again when asked for
         # the whole review a second time.
