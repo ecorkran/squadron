@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq run fix <issue>` reads the issue from GitHub (every comment included) and fixes it the way the fix rule says: a test that fails for the reported reason, the change, the project's own format, lint, typecheck and test gates, and one `fix:` commit with `Fixes #<issue>`. `-p issue-file=PATH` uses frozen issue text instead. It refuses a dirty tree up front, never pushes or posts, and works from `/sq:run fix` too.
+- `-p commit-to=current` makes the fix commit on the checked-out branch instead of the integration target, so a fix can run in a repository that Context Forge does not know.
+
+### Fixed
+- A pipeline with no step that uses Context Forge no longer calls `cf` when it starts.
+
 ## [0.24.28] - 20261112
 
 ### Fixed

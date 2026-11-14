@@ -36,6 +36,9 @@ class _FakeStepType:
     def expand(self, config):  # type: ignore[no-untyped-def]
         return [("dispatch", {})]
 
+    def needs_context_forge(self, config):  # type: ignore[no-untyped-def]
+        return False
+
 
 register_step_type("fake-dispatch", _FakeStepType())
 

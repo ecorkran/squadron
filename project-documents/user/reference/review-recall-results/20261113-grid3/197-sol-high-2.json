@@ -1,0 +1,129 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Design-batch items cannot resume after creating their design",
+      "description": "A `slices-plan` item that exhausts its review loop already has a committed design. Re-evaluating `cf.undesigned_slices` therefore excludes it, and this code rejects both retry and accept unless the slice is complete and merged. Select resumable planning items using their current artifacts rather than requiring original source eligibility. Add a regression test where plan-scoped `list_slices` returns the existing design; the current integration fixture incorrectly hides it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:286-304"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Completed task checklists prevent unresolved code reviews from resuming",
+      "description": "All tasks can be checked while code review remains unresolved and the branch remains unmerged. On item resume, this condition marks that item `not_ready`; the executor then skips its body and replaces its `review_unresolved` record. Consequently, neither retry nor accept reaches the review/merge path, and subsequent accept requests are rejected. Distinguish fresh implementation eligibility from resuming existing branch work.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sources.py:231-233"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Planning resumes incorrectly require dependencies to be implemented",
+      "description": "The unconditional `_open_dependencies` check requires every in-plan dependency to have status `complete`, including for `tasks-plan`. A dependency whose design and tasks are finished but whose implementation has not started therefore blocks retrying or accepting another tasks review. Ordinary planning-batch execution does not impose this requirement. Apply stage-appropriate dependency checks and test planning resumes with real dependency relationships.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:153-156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Resume preflight blocks the event loop with synchronous I/O",
+      "description": "This async path directly performs state-file reads, git subprocesses, CF subprocesses, and report writes. Git calls can block for 30 seconds, and `ContextForgeClient._run` has no timeout. This violates the required event-loop discipline and can retain the project lock indefinitely on a hung CF command. Move blocking work off-loop, bound subprocess execution, and test timeout observability.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:146-155"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Design-batch items cannot resume after creating their design",
+      "location": "src/squadron/pipeline/item_resume.py:286-304",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Completed task checklists prevent unresolved code reviews from resuming",
+      "location": "src/squadron/pipeline/sources.py:231-233",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Planning resumes incorrectly require dependencies to be implemented",
+      "location": "src/squadron/pipeline/item_resume.py:153-156",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Resume preflight blocks the event loop with synchronous I/O",
+      "location": "src/squadron/pipeline/item_resume.py:146-155",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T22:24:23.575244",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 117964,
+  "cached_tokens": 116864,
+  "cache_write_tokens": null,
+  "completion_tokens": 479,
+  "reasoning_tokens": 0,
+  "duration_seconds": 104.01855087513104,
+  "cost_usd": null,
+  "cost_basis": null
+}

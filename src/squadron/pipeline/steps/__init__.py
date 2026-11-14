@@ -38,6 +38,7 @@ class StepTypeName(StrEnum):
     GATE = "gate"
     BRANCH = "branch"
     COMMIT = "commit"
+    FIX = "fix"
 
 
 # Module-level registry: step type name -> StepType instance
@@ -88,6 +89,7 @@ def bootstrap_step_types() -> None:
     import squadron.pipeline.steps.devlog  # noqa: F401  # pyright: ignore[reportUnusedImport]
     import squadron.pipeline.steps.dispatch  # noqa: F401  # pyright: ignore[reportUnusedImport]
     import squadron.pipeline.steps.fan_out  # noqa: F401  # pyright: ignore[reportUnusedImport]
+    import squadron.pipeline.steps.fix  # noqa: F401  # pyright: ignore[reportUnusedImport]
     import squadron.pipeline.steps.gate  # noqa: F401  # pyright: ignore[reportUnusedImport]
     import squadron.pipeline.steps.loop  # noqa: F401  # pyright: ignore[reportUnusedImport]
     import squadron.pipeline.steps.phase  # noqa: F401  # pyright: ignore[reportUnusedImport]

@@ -1,0 +1,84 @@
+{
+ "case": "cfafd8f7",
+ "matched": {
+  "sol/2/1": "cfafd8f7-N2",
+  "sol-high/2/1": "cfafd8f7-N2",
+  "sol/3/1": "cfafd8f7-N6"
+ },
+ "new_issues": [
+  {
+   "id": "cfafd8f7-S1",
+   "title": "Subject-index extraction for fix ownership splits paths only on '/', so Windows paths yield a null index and route to the primary checkout.",
+   "members": [
+    "sol/1/0"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "The new subjectIndex at ConsistencyChecker.ts:1244 calls the existing extractFileIndex, which does split('/'). On a backslash path the index is null and resolveFixOwner falls to the primary view, as claimed. But the same helper and string-based path comparisons are used throughout the checker, nothing in the repo (CI, docs) claims Windows support for this path, and the effect is a misrouted deferral rather than corrupted data.",
+   "evidence": [
+    "packages/core/src/introspection/ConsistencyChecker.ts:1244",
+    "packages/core/src/introspection/ConsistencyChecker.ts:1318-1322",
+    "packages/core/src/introspection/fixOwnership.ts:35-53"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "cfafd8f7-S2",
+   "title": "Apply-time readiness does not detect changes committed between the dry run and the write, so stale line indices or values can be applied and committed.",
+   "members": [
+    "sol/1/1",
+    "sol/2/0",
+    "sol/3/0",
+    "sol-high/1/0",
+    "sol-high/2/0"
+   ],
+   "grade": "PREEXISTING",
+   "confidence": "medium",
+   "why": "The claim is true: the second gateByReadiness checks cleanliness only, and applyFixes passes the saved lineIndex to updateCheckbox, which checks only that the line has a checkbox. But at base the all-slices fix path already did dry run, prompt, then applyFixes(dryRunResult) on the same stale findings through the same updateCheckbox, writing into every worktree with no readiness check at all. The diff adds a re-check that narrows the window (uncommitted edits), it does not introduce the staleness. The race needs another agent to commit a reorder of the same plan file during the prompt.",
+   "evidence": [
+    "packages/core/src/introspection/routedFixes.ts:255-263",
+    "packages/core/src/introspection/ConsistencyChecker.ts:226-246",
+    "packages/core/src/introspection/writers/markdownWriter.ts:8-30",
+    "packages/cli/src/commands/check.ts:260-272 at base a72ec96d"
+   ],
+   "known": null,
+   "fail_justified": false
+  },
+  {
+   "id": "cfafd8f7-S3",
+   "title": "A commit whose git process times out after HEAD has advanced is treated as a failed commit: restore is a no-op, fix logs are cleared, and the fixes are reported as COMMIT_FAILED though committed.",
+   "members": [
+    "sol-high/1/1",
+    "sol-high/3/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "commitPathsIfChanged runs git commit then rev-parse HEAD, and commitViewWrites treats any throw as a failed commit, so a post-commit hook that outlasts the 60s timeout (or a timeout on the rev-parse) gives the described misreport; restorePathsToHead from the new HEAD changes nothing. The effect is a wrong report and dropped log entries on a rare path; no content is lost and the committed state is the intended one.",
+   "evidence": [
+    "packages/core/src/guides/gitExec.ts:157-171",
+    "packages/core/src/introspection/routedFixes.ts:223-244",
+    "packages/core/src/introspection/routedFixes.ts:268-274"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "cfafd8f7-S4",
+   "title": "A gitignored document passes the porcelain-status readiness check, is rewritten in another checkout, and is then silently left uncommitted.",
+   "members": [
+    "sol-high/3/0"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "git status --porcelain omits ignored files, so readiness reports them clean, and commitPathsIfChanged returns null for them, so the write is neither committed nor reported. The commitPathsIfChanged doc comment states this null return for gitignored paths deliberately. The edit is a small field or checkbox change to a file git does not track, so nothing tracked is overwritten; the gap is a missing deferral notice for an uncommon setup.",
+   "evidence": [
+    "packages/core/src/git/checkoutReadiness.ts:63-67",
+    "packages/core/src/guides/gitExec.ts:133-171"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
+ ],
+ "disputes": []
+}

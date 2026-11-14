@@ -1,0 +1,86 @@
+[
+ {
+  "ref": "sol/1/0",
+  "severity": "CONCERN",
+  "title": "Integer coercion silently rounds fractional inputs",
+  "location": "src/manta_trading_engine/core_model/value_checks.py:65-70",
+  "description": "Converting a `Real` to float before checking integrality loses precision. Reproduced: `as_integer(Fraction(2**54 + 1, 2**54))` returns `1`, accepting a non-integral parameter and silently changing its value. Restrict accepted types to the intended contract or check integrality without lossy conversion; add regression coverage."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "CONCERN",
+  "title": "Invalid timestamp meaning escapes signal validation",
+  "location": "src/manta_trading_engine/core_model/signals.py:76-79",
+  "description": "`Timestamp` does not validate its meaning field. Passing `Timestamp(1, \"available_at\")` into `SignalEvent` therefore raises `AttributeError` while formatting `.value`, rather than the promised `InvalidSignalError`. Validate the meaning type or report its raw representation, and test string and `None` meanings."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "CONCERN",
+  "title": "Integer coercion silently rounds higher-precision numbers",
+  "location": "src/manta_trading_engine/core_model/value_checks.py:66-70",
+  "description": "Converting to float before checking integrality loses information. Verified: `as_integer(Fraction(9007199254740993, 1))` returns `9007199254740992`, while `Fraction(18014398509481985, 18014398509481984)` incorrectly becomes `1`. This can silently change bound parameters and their canonical keys. Validate integrality against the original value or reject unsupported numeric types, and add regression tests."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "CONCERN",
+  "title": "Invalid timestamp meaning escapes the validation error contract",
+  "location": "src/manta_trading_engine/core_model/signals.py:76-79",
+  "description": "`Timestamp` does not validate its meaning\u2019s runtime type. Passing `Timestamp(100, \"available_at\")` into `SignalEvent` therefore raises `AttributeError` while formatting `.value`, rather than `InvalidSignalError`. Validate the meaning before dereferencing it, or format the rejected value with `repr`; add coverage for string and `None` meanings."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "CONCERN",
+  "title": "Integer coercion silently rounds before validation",
+  "location": "src/manta_trading_engine/core_model/value_checks.py:65-70",
+  "description": "`as_integer` converts non-integral `Real` inputs to float before checking integrality. Reproduced: `Fraction(9007199254740993)` becomes `9007199254740992`, and fractional `Fraction(18014398509481985, 2)` is accepted as that same integer. Parameter binding consequently can silently change supplied values. Restrict accepted types or verify exact integrality before conversion, and add regression tests."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "CONCERN",
+  "title": "Invalid timestamp meanings escape the typed error contract",
+  "location": "src/manta_trading_engine/core_model/signals.py:76-79",
+  "description": "`Timestamp` does not validate its `meaning` field. Passing `Timestamp(1, \"available_at\")` into `SignalEvent` therefore raises `AttributeError` while formatting `.meaning.value`, rather than `InvalidSignalError`. Validate the meaning\u2019s type before accessing `.value`, or report its `repr`; add tests for string and `None` meanings."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "CONCERN",
+  "title": "Integer coercion silently rounds real inputs",
+  "location": "src/manta_trading_engine/core_model/value_checks.py:65-70",
+  "description": "Converting to float before checking integrality loses precision. Verified that `Fraction(9007199254740993, 9007199254740992)` binds as integer `1`, despite being fractional, and `Fraction(9007199254740993, 1)` becomes `9007199254740992`. Reject unsupported real types or check integrality and convert without a lossy float intermediate. Add regression tests for both cases."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "CONCERN",
+  "title": "Invalid timestamp meanings escape the signal error contract",
+  "location": "src/manta_trading_engine/core_model/signals.py:76-79",
+  "description": "`Timestamp` does not validate its meaning. Passing `Timestamp(100, \"available_at\")` to `SignalEvent` raises `AttributeError` while formatting `.value`, rather than the promised `InvalidSignalError`. Validate the meaning\u2019s type or report its `repr` without assuming enum membership; cover string and `None` meanings in tests."
+ },
+ {
+  "ref": "sol-high/2/0",
+  "severity": "CONCERN",
+  "title": "Integer coercion silently rounds before validation",
+  "location": "src/manta_trading_engine/core_model/value_checks.py:66-70",
+  "description": "Converting a `Real` to `float` before testing integrality loses precision. Reproduced: both `Fraction(9007199254740993)` and fractional `Fraction(18014398509481985, 2)` return `9007199254740992`. Consequently, parameter binding can accept fractional inputs and store incorrect values. Validate integrality and convert without an intermediate float, or reject unsupported numeric types. Add regression tests."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "CONCERN",
+  "title": "Invalid timestamp meaning breaks the error contract",
+  "location": "src/manta_trading_engine/core_model/signals.py:76-79",
+  "description": "`Timestamp` does not validate its meaning field. Passing `Timestamp(100, \"available_at\")` into `SignalEvent` therefore raises `AttributeError` while formatting `.value`, rather than `InvalidSignalError`. Validate the enum before accessing `.value`, or format the rejected value with `repr`. Add tests for string and `None` meanings."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "CONCERN",
+  "title": "Integer coercion silently rounds supported real values",
+  "location": "src/manta_trading_engine/core_model/value_checks.py:66-70",
+  "description": "Converting through `float` before checking integrality loses precision. Reproduced:\n- `as_integer(Fraction(9007199254740993))` returns `9007199254740992`.\n- `as_integer(Fraction(18014398509481985, 2))` accepts a fractional value as that same integer.\n\nBoth inputs satisfy `numbers.Real`, which this function explicitly supports. Consequently, parameter binding can silently change values and produce incorrect canonical keys. Check integrality and convert without a lossy float intermediate; add regression tests."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "CONCERN",
+  "title": "Invalid timestamp meanings bypass the signal error contract",
+  "location": "src/manta_trading_engine/core_model/signals.py:76-79",
+  "description": "`Timestamp` validates only its numeric range, not its meaning. Passing `Timestamp(1, \"event_time\")` into `SignalEvent` therefore raises `AttributeError` while formatting `.meaning.value`, rather than the promised `InvalidSignalError`.\n\nValidate the meaning\u2019s type before accessing `.value`, or format the rejected value with `repr`. Add tests for string and `None` meanings."
+ }
+]

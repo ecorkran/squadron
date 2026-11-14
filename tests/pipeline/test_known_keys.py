@@ -23,6 +23,7 @@ _VALID_CONFIGS: dict[str, dict[str, object]] = {
     "compact": {},
     "devlog": {"mode": "auto"},
     "branch": {"op": "enter"},
+    "fix": {"issue": "301", "commit-to": "target"},
     "loop": {"max": 2, "steps": [_DISPATCH_BODY]},
     "each": {"source": "cf.slices()", "as": "s", "steps": [_DISPATCH_BODY]},
     "fan_out": {"models": ["sonnet"], "inner": {"dispatch": {"prompt": "hello"}}},

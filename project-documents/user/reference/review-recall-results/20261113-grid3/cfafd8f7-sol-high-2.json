@@ -1,0 +1,93 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Revalidate the checked snapshot before writing into another checkout",
+      "description": "The apply-time guard checks current git cleanliness but applies findings computed before the confirmation prompt. Another agent can commit changes or switch branches during that wait, leaving a clean checkout that passes readiness. The old fixes then overwrite newer statuses or toggle the wrong plan entry: `ConsistencyChecker.applyFixes` passes the saved line number directly to `updateCheckbox`, which does not verify the subject index.\n\nRecord and validate the checked revision/content before applying, deferring or replanning when it changes. Add coverage for a clean, committed change between planning and application.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:255-263"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Readiness probes disguise unexpected git failures",
+      "description": "Both catches translate every failure into an expected checkout state. A timeout, permission error, or git execution failure becomes `NOT_A_CHECKOUT` or `DETACHED_HEAD`, discarding the actual diagnostic. The comments explain expected exit conditions but do not restrict handling to them.\n\nPreserve typed git failure information, classify only the expected exit conditions, and propagate unexpected failures with their diagnostics.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/git/checkoutReadiness.ts:39-53"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Revalidate the checked snapshot before writing into another checkout",
+      "location": "packages/core/src/introspection/routedFixes.ts:255-263",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Readiness probes disguise unexpected git failures",
+      "location": "packages/core/src/git/checkoutReadiness.ts:39-53",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T22:26:56.993181",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 99104,
+  "cached_tokens": 93952,
+  "cache_write_tokens": null,
+  "completion_tokens": 836,
+  "reasoning_tokens": 468,
+  "duration_seconds": 81.54809104208834,
+  "cost_usd": null,
+  "cost_basis": null
+}

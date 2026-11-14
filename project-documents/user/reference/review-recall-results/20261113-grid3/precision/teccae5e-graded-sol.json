@@ -1,0 +1,15 @@
+{
+ "case": "teccae5e",
+ "matched": {
+  "sol/2/0": "teccae5e-N2",
+  "sol/3/1": "teccae5e-N2",
+  "sol-high/2/0": "teccae5e-N2",
+  "sol-high/3/1": "teccae5e-N2",
+  "sol/2/1": "teccae5e-N3",
+  "sol/3/0": "teccae5e-N3",
+  "sol-high/2/1": "teccae5e-N3",
+  "sol-high/3/0": "teccae5e-N3"
+ },
+ "new_issues": [],
+ "disputes": []
+}

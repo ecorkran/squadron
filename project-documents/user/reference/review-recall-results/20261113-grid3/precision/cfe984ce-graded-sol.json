@@ -1,0 +1,48 @@
+{
+ "case": "cfe984ce",
+ "matched": {
+  "sol/2/1": "cfe984ce-N7",
+  "sol/3/1": "cfe984ce-N7",
+  "sol-high/2/1": "cfe984ce-N7"
+ },
+ "new_issues": [
+  {
+   "id": "cfe984ce-S1",
+   "title": "Fence tracking in documentHeadingKeys toggles only on column-zero triple-backtick lines, so headings inside tilde, indented or longer fences count as present and a shorter backtick run inside a longer fence flips state, hiding real headings.",
+   "members": [
+    "sol/1/0",
+    "sol/2/0",
+    "sol/3/0",
+    "sol-high/2/0",
+    "sol-high/3/0"
+   ],
+   "grade": "REAL",
+   "confidence": "high",
+   "why": "FENCE_PREFIX is '```' and documentHeadingKeys does inFence = !inFence on any line starting with it, with no fence character, length or indentation tracking. A '## Value' inside a ~~~ block, an indented fence, or a ``` line nested in a four-backtick fence is therefore treated as a heading (false PASS), and a nested shorter run inverts state so later real headings are skipped. This is the case's known bug and the code is new in base..head.",
+   "evidence": [
+    "packages/core/src/schema/sliceDesignValidator.ts:24",
+    "packages/core/src/schema/sliceDesignValidator.ts:57-72"
+   ],
+   "known": "B1",
+   "fail_justified": null
+  },
+  {
+   "id": "cfe984ce-S2",
+   "title": "An unregistered git worktree resolves to the primary project with no worktreeId, so cf validate design reads the primary checkout's slice-design template rather than the invoking checkout's.",
+   "members": [
+    "sol-high/3/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "resolveProjectWorktree step 2b returns {id, source:'cwd'} without worktreeId for an unregistered git worktree, and resolveOperationPath then returns project.projectPath, so the template comes from the primary checkout. The claim is true, but that resolution is pre-existing shared behavior used by every command, and the only effect is a different guide version's template when the two checkouts' guides differ; the registered-worktree case, which the command's comment targets, works.",
+   "evidence": [
+    "packages/cli/src/utils/project.ts:119-133",
+    "packages/cli/src/utils/worktree-overlay.ts:16-25",
+    "packages/cli/src/commands/validateDesign.ts:34-46"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
+ ],
+ "disputes": []
+}

@@ -1,0 +1,65 @@
+[
+ {
+  "ref": "sol/1/0",
+  "severity": "CONCERN",
+  "title": "Code examples can satisfy required headings",
+  "location": "packages/core/src/schema/sliceDesignValidator.ts:62-67",
+  "description": "Fence detection only toggles on lines beginning with three backticks. Headings inside tilde fences are counted, and triple backticks incorrectly close four-backtick fences. Both cases were reproduced: `## Value` inside a code example satisfies the required section despite no actual section existing. Track fence character and opening length, and add regression tests."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "CONCERN",
+  "title": "Code examples can satisfy required headings",
+  "location": "packages/core/src/schema/sliceDesignValidator.ts:62-67",
+  "description": "Fence detection only toggles on backtick prefixes, ignoring tilde fences and delimiter length. Verified that `## Value` inside a tilde-fenced block\u2014or inside four backticks containing a three-backtick line\u2014satisfies the required section. Track fence character and opening length, and add regression tests so example content cannot produce a false PASS."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "CONCERN",
+  "title": "Valid YAML comments cause docType rejection",
+  "location": "packages/core/src/schema/sliceDesignFiles.ts:95-97",
+  "description": "The reused parser preserves inline comments: verified that `docType: slice-design # document kind` becomes the literal value `slice-design # document kind`. Consequently, this valid declaration fails the equality check. Parse YAML scalar comments correctly, preserving quoted content, and add coverage alongside the quoted-docType test."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "CONCERN",
+  "title": "Code examples can satisfy required sections",
+  "location": "packages/core/src/schema/sliceDesignValidator.ts:62-67",
+  "description": "Fence detection recognizes only backticks at column zero. Verified that `~~~markdown\\n## Value\\n~~~` satisfies the required `## Value` section despite containing only example code. Track fence character, length, and allowed indentation; add regression tests for alternate fences."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "CONCERN",
+  "title": "Valid frontmatter comments cause docType rejection",
+  "location": "packages/core/src/schema/sliceDesignFiles.ts:95-97",
+  "description": "The reused parser retains inline YAML comments: `docType: slice-design # design document` becomes the literal value `slice-design # design document`, causing rejection of a valid declaration. Parse comments correctly without stripping hashes inside quoted strings, and cover both cases in tests."
+ },
+ {
+  "ref": "sol-high/2/0",
+  "severity": "CONCERN",
+  "title": "Fence detection can produce false passes and failures",
+  "location": "packages/core/src/schema/sliceDesignValidator.ts:62-67",
+  "description": "Only column-zero backtick prefixes toggle fence state. Reproduced: headings inside tilde fences or indented backtick fences satisfy required sections; a shorter backtick sequence inside a longer fence causes subsequent real headings to be ignored. Track fence character, indentation and opening length, and add regression tests."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "CONCERN",
+  "title": "Valid YAML comments cause docType rejection",
+  "location": "packages/core/src/schema/sliceDesignFiles.ts:95-97",
+  "description": "The reused parser retains inline comments, so `docType: slice-design # phase 4` fails the equality check despite declaring the correct YAML value. Handle commented values semantically and test both quoted and unquoted forms."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "CONCERN",
+  "title": "Code-block headings can satisfy required sections",
+  "location": "packages/core/src/schema/sliceDesignValidator.ts:62-67",
+  "description": "The fence toggle recognizes only unindented triple-backtick prefixes and does not track fence length. Probes using tilde fences, indented fences, and four-backtick fences containing triple backticks all incorrectly returned `## Value` as a document heading. Consequently, code examples can satisfy missing sections. Track fence character and length, support valid indentation, and add regression tests."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "CONCERN",
+  "title": "Unregistered worktrees silently use the primary checkout\u2019s template",
+  "location": "packages/cli/src/commands/validateDesign.ts:36-45",
+  "description": "`resolveProjectWorktree` discovers an unregistered Git worktree\u2019s parent project but returns no `worktreeId`. `resolveOperationPath` then selects `project.projectPath`, so this command checks against the primary checkout\u2019s template rather than the invoking checkout\u2019s guide. Different guide versions can produce incorrect results. Resolve the actual checkout or explicitly reject unregistered worktrees; add coverage beyond the registered-worktree case."
+ }
+]

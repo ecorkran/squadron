@@ -45,7 +45,7 @@ Parse the JSON output. The structure is:
   "total_steps": 6,
   "actions": [
     {
-      "action_type": "cf-op|dispatch|review|checkpoint|commit|summary|devlog",
+      "action_type": "cf-op|fix-context|dispatch|review|checkpoint|commit|summary|devlog",
       "instruction": "Human-readable description",
       "command": "shell command to run (if applicable)",
       "model": "model alias (if applicable)",
@@ -62,6 +62,10 @@ For each action in the step's `actions` list, execute based on `action_type`:
 
 ### cf-op
 Run the `command` field via Bash. Example: `cf set phase 4`, `cf build`.
+
+### fix-context
+Run the `command` field via Bash (`sq _fix-prompt …`). Its stdout is the assembled context for the next dispatch: keep it and do that work from it, as you would from `cf build` output for a phase step.
+If the command exits 1, show its error output and stop; do not continue to the dispatch.
 
 ### dispatch
 If the `command` field is present:
@@ -92,6 +96,12 @@ Wait for the user's response before proceeding. This is not optional.
 
 ### commit
 Run the `command` field via Bash. Example: `git add -A && git commit -m 'phase-4: ...'`.
+
+If the `command` contains `{tmp_path}` (a fix commit, `sq _commit --subject fix …`):
+  Write your final JSON report from the preceding dispatch to a temp file via Bash (`mktemp`).
+  Replace `{tmp_path}` in the `command` field with the temp file path.
+  Run the command via Bash, then remove the temp file (`rm -f <path>`).
+  If the command exits 1, show its refusal and stop; the changes stay in the working tree.
 
 ### summary
 Generate a summary of the current session following the `resolved_instructions`.

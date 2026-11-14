@@ -6,8 +6,8 @@ parent: user/architecture/420-slices.model-benchmark.md
 dependencies: [422]
 interfaces: [424]
 dateCreated: 20261104
-dateUpdated: 20261105
-status: not_started
+dateUpdated: 20261113
+status: complete
 ---
 
 # Slice Design: Fix Pipeline
@@ -146,7 +146,7 @@ Status: decided
 ### D4 — The agent runs the gates and reports them; the pipeline checks the report
 Status: decided
 - Squadron does not know a project's gate commands. They come from the project's conventions and rules, which SDK dispatches load natively and other dispatches get injected. The prompt tells the agent to run the format, lint, typecheck and touched-area test commands its project rules name.
-- The agent ends its reply with one JSON object. Fields:
+- The agent ends its reply with one JSON object and writes no other. `parse_fix_report` reads the first JSON object it finds (`extract_json_object`, the helper every JSON reply uses), so a second object earlier in the reply would be read instead; the prompt forbids it. Fields:
   - `summary`: imperative one-line commit summary, without the `fix:` prefix.
   - `failing_tests`: test ids added or changed to reproduce the issue.
   - `failed_before_change`: whether those tests were run and failed before the change.
@@ -272,59 +272,72 @@ sq run fix <issue> [--model ALIAS] [-p issue-file=PATH] [-p commit-to=target|cur
 
 ### Verification Walkthrough
 
-Commands below exist only after implementation.
+Verified 20261113 on the slice branch. `SQ` is the build of this branch: `$PWD/.venv/bin/sq` from the repository root (an installed `sq` older than the branch has no `fix` pipeline; `sq run fix --validate` must print `Pipeline 'fix' is valid.`). Steps 3 to 5 call a real model (a run costs well under $1 on `sonnet`); scratch work goes in new `/tmp` directories.
 
 1. **The pipeline is listed and valid.**
    ```bash
-   sq pipelines list -v | grep -A4 '^ *fix'
-   sq run fix --validate
-   sq run fix 301 --dry-run
+   $SQ pipelines list -v | grep -E '^ *fix\b'
+   $SQ run fix --validate
+   $SQ run fix 301 --dry-run
    ```
-   Expect the `fix` pipeline with params `issue`, `model`, `issue-file`, `commit-to`. The dry run shows `fix-context → dispatch → commit`.
+   Expect a `fix` row ending `issue=required model=sonnet issue-file= +1` (the list shows three params and counts the rest; `commit-to` is the one counted), then `Pipeline 'fix' is valid.`, then a dry run listing the one step as `fix-0 (fix)`. `--dry-run` prints steps, not actions, for every non-container step type; the three actions show under `--prompt-only` (step 6). All three commands also work with `cf` off `PATH`.
 
-2. **Preconditions refuse before spending.** On the target with an untracked scratch file:
+2. **Preconditions refuse before spending.** On the slice branch, which is not the target:
    ```bash
-   touch scratch.txt && sq run fix 301; rm scratch.txt
-   git checkout -b tmp-not-target && sq run fix 301; git checkout main && git branch -D tmp-not-target
+   touch scratch.txt && $SQ run fix 301; rm scratch.txt
+   $SQ run fix 301
    ```
-   Expect a refusal listing `scratch.txt`, then a refusal naming the target. Neither runs a dispatch (check with `sq runs`).
+   Expect first `fix-context refused: the working tree has uncommitted changes: scratch.txt`, then (tree clean) `commit-to target requires branch 'main', but '<current branch>' is checked out`. Both end `Pipeline 'fix' — failed` with `fix-0: failed`. Neither dispatches: `$SQ runs list` shows both runs `failed` at `fix-0`, and the run's state file (`~/.config/squadron/runs/<run-id>.json`) lists only a failed `fix-context` action. (There is no `sq runs show`.)
 
-3. **A real fix.** Pick a small open issue in squadron. Start from a clean tree on the target:
+3. **A real fix, fetched issue, target mode.** A walkthrough must not commit to squadron's own `main`, so use a cf-registered scratch clone whose current branch is its integration target:
    ```bash
-   sq run fix <n> --max-cost 3
-   git log -1 --format='%s%n%n%b'
-   git show --stat HEAD
+   URL=$(git remote get-url origin)                    # the real URL, so a bare #n resolves
+   git clone --no-hardlinks . /tmp/fixtarget && cd /tmp/fixtarget
+   git remote set-url origin "$URL"
+   git switch -c fix-target-check
+   cf init --lite --no-ide --name fixtarget-check
+   cf config set git.integration_branch fix-target-check
+   uv sync -q
+   $SQ run fix <n> --max-cost 3        # <n>: a small open issue from `gh issue list`
+   git log -1 --format='%s%n%n%b'; git show --stat HEAD
    ```
-   Expect `fix: …` and `Fixes #<n>`, with one test file and the change in the stat. Then confirm the test is real and the gates pass:
+   Expect `Pipeline 'fix' — completed` and one commit on `fix-target-check` with subject `fix: …` and body `Fixes #<n>`, a test file and the change in the stat. The run state shows `issue_source: github`, the parsed report under the commit action's `fix_report`, and the issue text's sha256. Then confirm the test is real and the reported gates pass:
    ```bash
    git worktree add /tmp/fixparent HEAD~1
-   cp <test file from the commit> /tmp/fixparent/<same path>
-   (cd /tmp/fixparent && uv sync -q && uv run pytest <failing test id>)   # fails
-   uv run pytest <failing test id>                                         # passes
+   cp tests/<test file from the commit> /tmp/fixparent/tests/<same path>
+   (cd /tmp/fixparent && uv sync -q && uv run pytest "<failing test id>")   # fails
+   uv run pytest "<failing test id>"                                         # passes
    git worktree remove --force /tmp/fixparent
-   ruff format --check && ruff check && pyright
+   uv run ruff format --check src tests && uv run ruff check src tests && uv run pyright
    ```
-   The run state (`sq runs show <run-id>`) shows `issue_source: github` and the parsed report.
+   Afterwards: `cf project rm fixtarget-check --yes` and remove `/tmp/fixtarget`. Caveat: a test written to the agent's new signature fails at the parent with a `TypeError`, which proves it fails there but not that it shows the reported symptom; read the test.
 
-4. **Frozen text, no GitHub, no cf.** In a scratch clone that is not cf-registered:
+4. **Frozen text, no GitHub, no cf.** In a scratch clone, with stand-in `gh` and `cf` first on `PATH` that record their arguments and exit 127 (so any call is logged whether or not a real one exists):
    ```bash
-   git clone --no-hardlinks . /tmp/fixcheck && cd /tmp/fixcheck && git checkout -b sandbox
+   git clone --no-hardlinks . /tmp/fixcheck && cd /tmp/fixcheck && git checkout -b sandbox && uv sync -q
+   mkdir /tmp/fixbin /tmp/fixsq && ln -s "$SQ" /tmp/fixsq/sq
+   for n in gh cf; do printf '#!/bin/sh\necho "%s $@" >> /tmp/fixbin/calls.log\nexit 127\n' $n > /tmp/fixbin/$n; chmod +x /tmp/fixbin/$n; done
    gh issue view <n> --json title,body --jq '.title + "\n\n" + .body' > /tmp/issue.md
-   env PATH="$(dirname "$(command -v sq)"):/usr/bin:/bin" GH_TOKEN= \
+   env PATH="/tmp/fixbin:/tmp/fixsq:$(dirname "$(command -v uv)"):/usr/bin:/bin" GH_TOKEN= \
      sq run fix <n> -p issue-file=issue.md -p commit-to=current --io-dir /tmp --max-cost 3
-   git log -1 --format='%D %s'
+   git log -1 --format='%D %s'; cat /tmp/fixbin/calls.log
    ```
-   Expect the commit on `sandbox`. The run state shows `issue_source: file` and the sha256 of `/tmp/issue.md`. No `gh` or `cf` process was needed (neither is on `PATH`).
+   Expect `Pipeline 'fix' — completed`, the commit on `sandbox`, the run state's `issue_source: file` and `issue_text_sha256` equal to `shasum -a 256 /tmp/issue.md`, and no `calls.log`. The first run of this step logged `cf get --json`: `execute_pipeline` read the project name from cf at start even when no step needs cf. It now does that only for a pipeline with a cf-using step (`any_step_needs_context_forge`), and `test_the_pipeline_invokes_neither_gh_nor_cf` covers it. (`uv` stays on `PATH` so the agent can run the clone's gates; `$SQ` is a symlink so the clone's own venv, not the repository's, is what its tests import.)
 
-5. **Cost cap.** `sq run fix <n> --max-cost 0.01` fails with `failure_kind: cost_cap` after the dispatch, and commits nothing.
+5. **Cost cap.** In the same clone, tree clean:
+   ```bash
+   env PATH=… GH_TOKEN= sq run fix <n> -p issue-file=issue.md -p commit-to=current --io-dir /tmp --max-cost 0.01
+   ```
+   Expect `Error: run spent $… this invocation, over --max-cost $0.01; raise the cap and resume to continue`, `git log` unchanged, and `failure_kind: cost_cap` on the dispatch action in the run's state file.
 
-6. **Slash-command parity.** In Claude Code, on a clean target: `/sq:run fix <n>`. Expect the same refusals as step 2 for the same conditions. On success, a commit with the same message format, made through `sq _commit --subject fix`.
+6. **Slash-command parity.** Automated: `$SQ run fix <n> --prompt-only 2>/dev/null` prints one step with three actions: `fix-context` (`sq _fix-prompt --issue <n> --commit-to target`), `dispatch` (no command: in-session work) and `commit` (`sq _commit --subject fix --issue <n> --commit-to target --start-head <sha> --start-branch <branch> --report-file '{tmp_path}'`). `tests/pipeline/test_fix_prompt_parity.py` shows the hidden commands give the same prompt, message and refusals as the SDK actions. Manual (needs an interactive Claude Code session): `/sq:run fix <n>` on a clean target, expecting the step 2 refusals under the same conditions and, on success, a commit through `sq _commit --subject fix`.
 
 ## Risk Assessment
 
 ### Technical Risks
 
 - **Report honesty.** An agent can report gates it did not run. Production accepts the same trust an interactive fix does. The benchmark does not depend on it, because 425 re-grades objectively.
+- **Untrusted issue text steers what is committed.** The fetched text includes every comment, so anyone who can comment influences the agent, and the commit stages every changed path (D5). The prompt marks the text as data and the clean-tree check bounds the starting state, but nothing limits or reports the paths. Deferred to #328.
 
 ### Mitigation Strategies
 

@@ -1,0 +1,129 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Blocking launcher prevents early termination",
+      "description": "`run()` uses synchronous `subprocess.run()`, while `deploy/mt-run` waits until the service finishes before exiting. Consequently, journal polling cannot begin when the trailing-completion marker appears; it starts only after backfill ends. Launch the service non-blockingly and monitor its journal concurrently. Add a test covering the launcher's actual blocking behavior rather than mocking `run()` as immediately returning.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:356-357"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Root execution trusts an operator-controlled checkout",
+      "description": "`MT_INSTALL` authorizes passwordless root execution of a script in the operator's checkout. Modifying or replacing that script permits arbitrary root commands, defeating the claimed limited-root boundary. Install the privileged entry point into a root-owned location with non-writable parent directories and constrain its inputs.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:9"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Unit wildcard permits operations on unrelated services",
+      "description": "The sudoers argument wildcard can match whitespace and additional arguments. An invocation such as `systemctl stop mt-minute-pass.timer ssh.service` therefore matches the allowed pattern while also stopping an unrelated service. Enumerate exact unit-and-verb combinations, or use a root-owned wrapper that validates argument count and unit names.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "deploy/sudoers.d/manta-ops:7"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Saved narration omits the acceptance evidence",
+      "description": "Only `say()` output reaches the new log. Repair reports are emitted through `print(output)` in `scripts/cutover_921_minute_sessions.py:102`, and streamed subprocess output bypasses it entirely. The advertised \u201cfull narration\u201d therefore omits acceptance measurements and diagnostic output\u2014the evidence this change intends to preserve. Route those outputs through the same recording mechanism and test that an actual verification report is retained.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/cutover_common.py:59-65"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Blocking launcher prevents early termination",
+      "location": "scripts/cutover_common.py:356-357",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Root execution trusts an operator-controlled checkout",
+      "location": "deploy/sudoers.d/manta-ops:9",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Unit wildcard permits operations on unrelated services",
+      "location": "deploy/sudoers.d/manta-ops:7",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Saved narration omits the acceptance evidence",
+      "location": "scripts/cutover_common.py:59-65",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/921",
+    "diff": "eaf1ab4e5913465369ad916785cce5974eaab08c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T22:09:13.886336",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74193,
+  "diff_chars_injected": 74193,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 93253,
+  "cached_tokens": 92416,
+  "cache_write_tokens": null,
+  "completion_tokens": 919,
+  "reasoning_tokens": 459,
+  "duration_seconds": 88.61267987499014,
+  "cost_usd": null,
+  "cost_basis": null
+}

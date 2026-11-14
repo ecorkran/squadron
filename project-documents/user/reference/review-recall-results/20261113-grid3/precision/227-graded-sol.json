@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "matched": {
+  "sol-high/2/0": "227-I12",
+  "sol-high/3/0": "227-I12",
+  "sol-high/2/1": "227-I15",
+  "sol-high/2/2": "227-I13",
+  "sol-high/3/2": "227-I13",
+  "sol-high/3/3": "227-I1"
+ },
+ "new_issues": [
+  {
+   "id": "227-S1",
+   "title": "step_weekly arms reconciliation after an \"(unarmed)\" weekly run, which exits before the offsite mirror and final checksum check, so the arm file is created without the final check the design requires.",
+   "members": [
+    "sol-high/3/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "WEEKLY_DONE is the prefix '=== weekly backup done', which matches both '(unarmed)' and the armed completion line. With no arm file, cron_weekly_backup.sh exits 0 at the unarmed line before steps 5-6, and step_weekly then touches the arm file; the test deliberately uses the unarmed line as success. TD7 says to arm only if the run's final check passed, so code and spec diverge, and the next cron run performs its first mirror and prune unsupervised. The risk is bounded: the pre-prune offsite check (step 2) ran, steps 10-12 verify offsite after arming, and TD7 notes the offsite prefix starts empty, so this is a safety-gate weakening rather than a failure.",
+   "evidence": [
+    "scripts/cutover_227_tick_backup.py:70",
+    "scripts/cutover_227_tick_backup.py:173-189",
+    "scripts/cron_weekly_backup.sh:152-155",
+    "test/unit/test_cutover_227.py:236-247",
+    "project-documents/user/slices/227-slice.backup-coverage-for-tick-archive-and-database.md:209-216"
+   ],
+   "known": null,
+   "fail_justified": false
+  }
+ ],
+ "disputes": []
+}

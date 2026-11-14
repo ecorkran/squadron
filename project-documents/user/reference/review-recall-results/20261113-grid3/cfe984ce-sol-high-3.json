@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Code-block headings can satisfy required sections",
+      "description": "The fence toggle recognizes only unindented triple-backtick prefixes and does not track fence length. Probes using tilde fences, indented fences, and four-backtick fences containing triple backticks all incorrectly returned `## Value` as a document heading. Consequently, code examples can satisfy missing sections. Track fence character and length, support valid indentation, and add regression tests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:62-67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unregistered worktrees silently use the primary checkout\u2019s template",
+      "description": "`resolveProjectWorktree` discovers an unregistered Git worktree\u2019s parent project but returns no `worktreeId`. `resolveOperationPath` then selects `project.projectPath`, so this command checks against the primary checkout\u2019s template rather than the invoking checkout\u2019s guide. Different guide versions can produce incorrect results. Resolve the actual checkout or explicitly reject unregistered worktrees; add coverage beyond the registered-worktree case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validateDesign.ts:36-45"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Code-block headings can satisfy required sections",
+      "location": "packages/core/src/schema/sliceDesignValidator.ts:62-67",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Unregistered worktrees silently use the primary checkout\u2019s template",
+      "location": "packages/cli/src/commands/validateDesign.ts:36-45",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe984ce",
+    "diff": "1702358b5364fd8f6c485e2f6d63d2bbaea1c638...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-14T03:41:45.763875",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33034,
+  "diff_chars_injected": 33034,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 86213,
+  "cached_tokens": 85888,
+  "cache_write_tokens": null,
+  "completion_tokens": 524,
+  "reasoning_tokens": 174,
+  "duration_seconds": 67.36070162500255,
+  "cost_usd": null,
+  "cost_basis": null
+}

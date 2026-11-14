@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 # Output of ``git branch --show-current`` is empty when HEAD is detached.
-_DETACHED_HEAD = "(detached HEAD)"
+DETACHED_HEAD = "(detached HEAD)"
 
 
 class ConfigReader(Protocol):
@@ -92,7 +92,7 @@ def current_branch(cwd: str) -> str:
     result = run_git(["branch", "--show-current"], cwd=cwd)
     if result is None or result.returncode != 0:
         raise GitEnvironmentError(f"cannot read the current branch: {_failure_text(result)}")
-    return result.stdout.strip() or _DETACHED_HEAD
+    return result.stdout.strip() or DETACHED_HEAD
 
 
 def verify_git_state(expected_branch: str, *, cwd: str) -> None:
@@ -116,7 +116,7 @@ def verify_git_state(expected_branch: str, *, cwd: str) -> None:
     if branch is None or branch.returncode != 0:
         problems.append(f"current branch read failed: {_failure_text(branch)}")
     else:
-        current = branch.stdout.strip() or _DETACHED_HEAD
+        current = branch.stdout.strip() or DETACHED_HEAD
         if current != expected_branch:
             problems.append(f"on {current}, expected {expected_branch}")
 

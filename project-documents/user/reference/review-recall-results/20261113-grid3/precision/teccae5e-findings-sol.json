@@ -1,0 +1,58 @@
+[
+ {
+  "ref": "sol/2/0",
+  "severity": "CONCERN",
+  "title": "Stamping validation accepts plain strings",
+  "location": "src/manta_trading_engine/core_model/markets.py:94",
+  "description": "Because `TimeMeaning` is a `StrEnum`, `\"period_start\"` passes membership validation and remains a plain string. This violates the declared field type; consumers accessing `.value` would fail. Validate the `TimeMeaning` type before checking supported values, and add string-rejection tests."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "CONCERN",
+  "title": "Deduplication makes adjustment validation order-dependent",
+  "location": "src/manta_trading_engine/core_model/markets.py:160-165",
+  "description": "`frozenset` removes equal elements before their types are validated. Verified that `[AdjustmentBasis.RAW, \"raw\"]` is accepted, while reversing the list raises `InvalidMarketError`. Validate every input element before deduplicating, and test both orders."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "CONCERN",
+  "title": "Validate adjustment bases before deduplication",
+  "location": "src/manta_trading_engine/core_model/markets.py:160-165",
+  "description": "Converting to `frozenset` before validation hides invalid elements because `StrEnum` members equal their strings. `[AdjustmentBasis.RAW, \"raw\"]` passes, while the reverse order raises `InvalidMarketError`. Validate every input element before deduplicating, and test both orders."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "CONCERN",
+  "title": "Source stamping accepts strings instead of TimeMeaning",
+  "location": "src/manta_trading_engine/core_model/markets.py:94-98",
+  "description": "The membership check accepts `\"period_start\"` and `\"period_end\"` because they equal the corresponding `StrEnum` members. These strings remain stored despite the declared `TimeMeaning` contract, potentially breaking consumers using enum attributes or identity checks. Require a `TimeMeaning` instance before checking supported values, and add string-rejection tests."
+ },
+ {
+  "ref": "sol-high/2/0",
+  "severity": "CONCERN",
+  "title": "Source stamping accepts strings instead of enum members",
+  "location": "src/manta_trading_engine/core_model/markets.py:94-98",
+  "description": "Because `TimeMeaning` is a `StrEnum`, `\"period_start\"` passes the membership check and remains stored as a plain string. This violates the declared field type and permits failures when consumers access `.value`. Validate `TimeMeaning` membership by type before checking allowed values, and add string-rejection tests."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "CONCERN",
+  "title": "Deduplication hides invalid adjustment bases",
+  "location": "src/manta_trading_engine/core_model/markets.py:160-165",
+  "description": "Validation occurs after conversion to `frozenset`. Reproduced: `[AdjustmentBasis.RAW, \"raw\"]` is accepted, while reversing those elements raises `InvalidMarketError`. The enum and string compare equal, so deduplication can discard the invalid input before validation. Validate each original element before building the frozenset; test both orders."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "CONCERN",
+  "title": "Validate adjustment bases before deduplication",
+  "location": "src/manta_trading_engine/core_model/markets.py:160-165",
+  "description": "`frozenset(bases)` runs before element validation. Because `AdjustmentBasis.RAW == \"raw\"`, `[AdjustmentBasis.RAW, \"raw\"]` silently passes, while the reversed list raises `InvalidMarketError`. Reproduced both outcomes. Validate each input element before constructing the frozenset, and test both orders."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "CONCERN",
+  "title": "Source stamping accepts strings instead of TimeMeaning",
+  "location": "src/manta_trading_engine/core_model/markets.py:94-98",
+  "description": "Membership alone does not enforce the enum type: `\"period_start\"` compares equal to `TimeMeaning.PERIOD_START`. Reproduced construction retaining a plain string, violating the declared field contract. Require a `TimeMeaning` instance before checking supported values, and add rejection tests for raw strings."
+ }
+]

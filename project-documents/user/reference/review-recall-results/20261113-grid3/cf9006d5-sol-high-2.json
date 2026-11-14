@@ -1,0 +1,129 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Dry runs can modify real files through copied symlinks",
+      "description": "`verbatimSymlinks` preserves links pointing outside the sandbox. For example, an absolute `.claude/rules` directory symlink remains connected to its real destination, and `InstallManifest.installFile()` follows it when writing rules. A preview can therefore update or prune real files. Reject escaping links or materialize isolated copies, and add symlink safety tests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:42-45"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Native worktree installation loses pruning containment guards",
+      "description": "Replacing the older-guide propagation path removes its lexical and realpath containment checks. The invoked `InstallManifest.finish()` joins manifest paths directly to the root and deletes checksum-matching files. A stale entry containing `../outside-file`, or traversing a symlinked directory, can delete outside the worktree. Restore containment validation before enabling this replacement.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/setup-ide.ts:190"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Sandbox paths produce false AGENTS.md changes",
+      "description": "The sandbox replaces `targetRoot`, but `scopedRuleIndex()` uses that root to calculate guide references. A normal agents install writes project-relative references; its dry run generates absolute references because the guide is outside the sandbox. Consequently, an unchanged installation reports `AGENTS.md` as modified. Preserve the logical destination root separately and test no-change previews for agents.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:114"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failed previews discard their diagnostic output",
+      "description": "The buffered output is replayed only after `install()` returns. Missing rule directories or broken managed markers print diagnostics to stdout and then throw `InstallAbort`; the replay is skipped, and `installIde()` returns failure without printing the exception. Replay failure diagnostics before propagating the abort, and assert their presence in the existing abort test.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:113-118"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Dry runs can modify real files through copied symlinks",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:42-45",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Native worktree installation loses pruning containment guards",
+      "location": "packages/cli/src/commands/setup-ide.ts:190",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Sandbox paths produce false AGENTS.md changes",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:114",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Failed previews discard their diagnostic output",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:113-118",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T22:32:33.318631",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 138551,
+  "cached_tokens": 136832,
+  "cache_write_tokens": null,
+  "completion_tokens": 846,
+  "reasoning_tokens": 310,
+  "duration_seconds": 99.37896158290096,
+  "cost_usd": null,
+  "cost_basis": null
+}

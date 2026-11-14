@@ -1,0 +1,37 @@
+[
+ {
+  "ref": "sol-high/2/0",
+  "severity": "FAIL",
+  "title": "Midnight timestamps are expanded into whole-day bounds",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+  "description": "Pydantic parses `\"2026-06-01T00:00:00Z\"` as a `date` in this date-first union, verified with `TypeAdapter`. Consequently, `resolve_window` expands an explicit midnight `end` to 23:59:59.999999, returning almost an extra day of data. Both endpoints are affected. Distinguish bare dates from timestamps before union coercion, and add regression tests for explicit midnight bounds."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "FAIL",
+  "title": "Response construction blocks the event loop",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:123-126",
+  "description": "Only database work runs in the executor; model construction and serialization run synchronously on the event loop. An isolated benchmark of the actual candle-model code at 75,000 rows took approximately 591 ms to build and 470 ms to dump, excluding encoding. This substantially exceeds the required sub-millisecond synchronous budget and stalls unrelated requests. Offload construction and serialization after releasing the connection, including the equivalent trades path. Add a load test measuring unrelated-request responsiveness during large responses."
+ },
+ {
+  "ref": "sol-high/2/2",
+  "severity": "CONCERN",
+  "title": "Concurrent ingestion can bypass the row ceiling",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:160-167",
+  "description": "Count and fetch are separate statements without a stable snapshot. The pool configuration does not establish repeatable-read isolation, so ingestion committed between them can increase the fetched result beyond `max_rows`. Admission subsequently checks the old count, not the fetched length. The candle path has the same race; batch ingestion means the excess need not be just one row. Use a consistent snapshot or reject oversized fetched results, and test an insert committed between count and fetch."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "FAIL",
+  "title": "Midnight timestamps silently become whole-day bounds",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+  "description": "The `date | datetime` union parses midnight timestamp strings as dates. Reproduced through the endpoint: `end=2026-06-01T00:00:00Z` reaches the reader as `2026-06-01 23:59:59.999999+00:00`, returning almost an extra day. Midnight timestamps with offsets also lose their offset. The trades route has the same declarations at lines 139\u2013140.\n\nPreserve the distinction between bare dates and explicit timestamps during validation. Add endpoint tests for midnight timestamps, including non-UTC offsets."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "FAIL",
+  "title": "Response construction blocks the event loop",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:125-126",
+  "description": "Only database reads run in the executor; model construction and serialization execute synchronously inside the async handler. Using the actual models with 75,000 candle rows, construction took approximately 683 ms and serialization another 277 ms\u2014far beyond the required 1 ms bound. During this work, unrelated requests on the same event loop cannot progress. The trades handler repeats this pattern at lines 168\u2013174.\n\nOffload model construction and serialization too, while retaining connection release before that work. Add a load test measuring lightweight-request responsiveness during a ceiling-sized time-series response; the current concurrency test exercises market details only."
+ }
+]

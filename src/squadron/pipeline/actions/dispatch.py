@@ -28,6 +28,7 @@ from squadron.core.usage import UsageRecord
 from squadron.integrations.context_forge import ContextForgeError
 from squadron.metrology.preemption import read_fragment_body, read_fragment_header
 from squadron.pipeline.actions import ActionType, register_action
+from squadron.pipeline.actions.cf_op import CfOperation
 from squadron.pipeline.actions.dispatch_io import (
     DispatchInputError,
     OutputWriteError,
@@ -807,9 +808,11 @@ class DispatchAction:
         """Return the delivered prompt for this dispatch, with its source (D8).
 
         Checks ``context.params["prompt"]`` first.  If absent, scans
-        ``prior_outputs`` for the most recent ``build_context`` cf-op
-        result and uses its ``stdout``.  This is the normal phase-step
-        flow where cf-op(build_context) precedes dispatch.
+        ``prior_outputs`` for the most recent result carrying
+        ``operation: build_context`` and a ``stdout``, and uses that
+        ``stdout``.  This is the normal phase-step flow where
+        cf-op(build_context) precedes dispatch; ``fix-context`` supplies
+        the same outputs for the fix step (slice 423).
 
         If neither is present, falls back to the most recent ``review``
         action's findings (the judge-gated fix/review loop flow —
@@ -834,14 +837,13 @@ class DispatchAction:
         elif explicit is not None:
             prompt = str(explicit)
         else:
-            # Search prior outputs for a build_context cf-op result (reverse
-            # order so the most recent one wins).
+            # Search prior outputs for a build_context result from any action
+            # (reverse order so the most recent one wins).
             prompt = None
             for key in reversed(list(context.prior_outputs)):
                 result = context.prior_outputs[key]
                 if (
-                    result.action_type == ActionType.CF_OP
-                    and result.outputs.get("operation") == "build_context"
+                    result.outputs.get("operation") == CfOperation.BUILD_CONTEXT
                     and result.outputs.get("stdout") is not None
                 ):
                     _logger.debug("dispatch: using build_context output as prompt")

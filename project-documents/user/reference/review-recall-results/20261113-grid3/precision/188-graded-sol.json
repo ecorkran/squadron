@@ -1,0 +1,12 @@
+{
+ "case": "188",
+ "matched": {
+  "sol-high/2/0": "188-I1",
+  "sol-high/3/0": "188-I1",
+  "sol-high/2/1": "188-I2",
+  "sol-high/3/1": "188-I2",
+  "sol-high/2/2": "188-I9"
+ },
+ "new_issues": [],
+ "disputes": []
+}

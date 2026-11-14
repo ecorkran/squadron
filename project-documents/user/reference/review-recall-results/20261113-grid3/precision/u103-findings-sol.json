@@ -1,0 +1,30 @@
+[
+ {
+  "ref": "sol-high/2/0",
+  "severity": "CONCERN",
+  "title": "Adding the first series does not apply the pending range",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "Adding a series only mutates `seriesCountRef`; it does not change any effect dependency. Consequently, populating an already-ready chart leaves the Context\u2019s current range unapplied until the range changes again. The translation test masks this by calling `setRange` immediately after `addSeries`. Make data availability reactive or explicitly apply the pending range when data becomes available, and test adding data without changing Context."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "CONCERN",
+  "title": "Series count does not establish that chart data exists",
+  "location": "src/chart/chart-facade.ts:49-64",
+  "description": "Every successful `addSeries` increments the counter, including valid configurations with `data: []`. Likewise, `updateSeries` can clear all data without updating the counter. The range effect therefore passes its guard even when the time scale remains empty\u2014the condition it explicitly intends to prevent. Track populated data rather than allocated series, including updates and removals, and cover empty-series and cleared-data cases."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "CONCERN",
+  "title": "Adding data does not apply the pending range",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "Adding a populated series only changes `seriesCountRef`; it neither triggers a render nor changes this effect\u2019s dependencies. Consequently, the existing Context range remains unapplied until the range changes again. The translation test masks this by calling `setRange` after `addSeries`. Trigger synchronization when data becomes available, and test adding data without changing the range."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "CONCERN",
+  "title": "Series count does not establish data availability",
+  "location": "src/chart/chart-facade.ts:49-64",
+  "description": "`addSeries` increments the count even for empty data, while `updateSeries` can clear data without adjusting it. Both cases leave the range effect\u2019s guard open on an empty time scale\u2014the condition it explicitly aims to avoid. Track actual data availability across add/update/remove operations and cover empty-series and cleared-data range changes."
+ }
+]

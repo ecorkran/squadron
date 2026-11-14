@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -30,6 +31,7 @@ from squadron.pipeline.prompt_renderer import (
     render_step_instructions,
 )
 from squadron.pipeline.resolver import ResolvedModel
+from tests.conftest import run_test_git
 
 # ---------------------------------------------------------------------------
 # T2: Data model tests
@@ -828,3 +830,87 @@ def test_other_empty_step_does_not_warn(caplog: pytest.LogCaptureFixture) -> Non
         )
 
     assert not caplog.records
+
+
+# ---------------------------------------------------------------------------
+# Fix step (slice 423 D9)
+# ---------------------------------------------------------------------------
+
+
+def _render_fix(
+    cwd: str | None, *, issue_file: str = "", commit_to: str = "target"
+) -> list[ActionInstruction]:
+    step = StepConfig(
+        step_type="fix",
+        name="fix-0",
+        config={
+            "issue": "{issue}",
+            "model": "{model}",
+            "issue-file": "{issue-file}",
+            "commit-to": "{commit-to}",
+        },
+    )
+    return render_step_instructions(
+        step,
+        step_index=0,
+        total_steps=1,
+        params={
+            "issue": "#301",
+            "model": "sonnet",
+            "issue-file": issue_file,
+            "commit-to": commit_to,
+        },
+        resolver=_make_resolver(),
+        run_id="run-test",
+        cwd=cwd,
+    ).actions
+
+
+class TestRenderFix:
+    def test_the_three_actions_render_the_exact_commands(self, temp_git_repo: Path) -> None:
+        head = run_test_git(temp_git_repo, "rev-parse", "HEAD").strip()
+
+        context, dispatch, commit = _render_fix(str(temp_git_repo))
+
+        assert [a.action_type for a in (context, dispatch, commit)] == [
+            ActionType.FIX_CONTEXT,
+            ActionType.DISPATCH,
+            ActionType.COMMIT,
+        ]
+        assert context.command == "sq _fix-prompt --issue '#301' --commit-to target"
+        assert dispatch.command is None
+        assert commit.command == (
+            "sq _commit --subject fix --issue '#301' --commit-to target "
+            f"--start-head {head} --start-branch main --report-file '{{tmp_path}}'"
+        )
+
+    def test_issue_file_is_passed_and_io_dir_never_is(self, temp_git_repo: Path) -> None:
+        context, _, _ = _render_fix(str(temp_git_repo), issue_file="issue.md", commit_to="current")
+
+        assert context.command == (
+            "sq _fix-prompt --issue '#301' --issue-file issue.md --commit-to current"
+        )
+        assert "--io-dir" not in (context.command or "")
+
+    def test_head_and_branch_are_the_repos_at_render_time(self, temp_git_repo: Path) -> None:
+        run_test_git(temp_git_repo, "checkout", "-q", "-b", "work")
+        run_test_git(temp_git_repo, "commit", "-q", "--allow-empty", "-m", "second")
+        head = run_test_git(temp_git_repo, "rev-parse", "HEAD").strip()
+
+        *_, commit = _render_fix(str(temp_git_repo))
+
+        assert f"--start-head {head} --start-branch work " in (commit.command or "")
+
+    def test_missing_cwd_is_unsupported(self) -> None:
+        with pytest.raises(PromptOnlyUnsupportedError, match="working directory"):
+            _render_fix(None)
+
+    def test_detached_head_is_unsupported(self, temp_git_repo: Path) -> None:
+        run_test_git(temp_git_repo, "checkout", "-q", "--detach")
+        with pytest.raises(PromptOnlyUnsupportedError, match="detached"):
+            _render_fix(str(temp_git_repo))
+
+    def test_unreadable_head_is_unsupported(self, tmp_path: Path) -> None:
+        run_test_git(tmp_path, "init", "-q", "-b", "main")  # no commits: HEAD cannot be read
+        with pytest.raises(PromptOnlyUnsupportedError, match="cannot read HEAD"):
+            _render_fix(str(tmp_path))

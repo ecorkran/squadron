@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+import pytest
+
 import squadron
 from squadron.pipeline.actions.dispatch import DispatchAction
 from squadron.pipeline.actions.prompt_identity import PromptSource
@@ -59,6 +61,40 @@ def test_build_context_source_carries_versions() -> None:
     assert identity["squadron_version"] == squadron.__version__
     assert identity["cf_version"] == "0.19.13"
     assert identity["guide_version"] == "v0.21.1"
+
+
+def test_any_action_type_may_supply_the_build_context_prompt() -> None:
+    """``fix-context`` is not a cf-op; its ``stdout`` still becomes the prompt (slice 423)."""
+    supplied = ActionResult(
+        success=True,
+        action_type="fix-context",
+        outputs={"operation": "build_context", "stdout": "Fix issue 301"},
+    )
+
+    resolved = _resolve(params={}, prior_outputs={"fix:fix-context-0": supplied})
+
+    assert resolved.source is PromptSource.BUILD_CONTEXT
+    assert resolved.text == "Fix issue 301"
+
+
+def test_result_with_stdout_but_no_operation_is_not_a_prompt() -> None:
+    stray = ActionResult(success=True, action_type="fix-context", outputs={"stdout": "not a prompt"})
+
+    with pytest.raises(KeyError, match="no prior build_context"):
+        _resolve(params={}, prior_outputs={"fix:fix-context-0": stray})
+
+
+def test_most_recent_build_context_result_wins_across_action_types() -> None:
+    older = _build_context_result("older", cf=None, guide=None)
+    newer = ActionResult(
+        success=True,
+        action_type="fix-context",
+        outputs={"operation": "build_context", "stdout": "newer"},
+    )
+
+    resolved = _resolve(params={}, prior_outputs={"a-cf-op-0": older, "b-fix-context-0": newer})
+
+    assert resolved.text == "newer"
 
 
 def test_build_context_without_guide_file_records_none() -> None:

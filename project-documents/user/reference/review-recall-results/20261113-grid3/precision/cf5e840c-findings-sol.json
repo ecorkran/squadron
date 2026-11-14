@@ -1,0 +1,86 @@
+[
+ {
+  "ref": "sol/1/0",
+  "severity": "CONCERN",
+  "title": "Adoption eligibility disagrees with prompt selection",
+  "location": "packages/core/src/adoption/adoptionResolver.ts:120-121",
+  "description": "The resolver\u2019s eligibility checks are narrower than `SystemPromptParser`\u2019s matching. Verified against the actual parser and fixture:\n- `Brownfield-Adoption` selects the brownfield prompt but bypasses the resolver, so required Adoption Facts are missing.\n- `concept-phase-0` selects the concept prompt but bypasses brownfield detection and adoption resumption.\n\nUse consistent instruction normalization across selection and rendering, with regression tests for both inputs."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "CONCERN",
+  "title": "Remove the committed test backup",
+  "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+  "description": "This duplicates the previous test file and retains obsolete one-argument `createContextPipeline` calls. Its extension excludes it from the configured Vitest discovery pattern, leaving stale, unexecuted test code in the repository. Delete the backup; retain the updated `.test.ts` file.\n\nFull test suites were not run: dependencies are absent from this checkout."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "CONCERN",
+  "title": "Adoption failures can be reported as successful builds",
+  "location": "packages/core/src/adoption/adoptionResolver.ts:128-134",
+  "description": "`renderFacts()` can throw ordinary filesystem errors through `presentPaths()` or `recognizeCi()`. For example, a `.github/workflows` path that is a file causes `ENOTDIR`. `ContextIntegrator` only rethrows `AdoptionError`, so this becomes an error-stub string returned as a successful CLI/MCP build, after adoption state has already been persisted. Wrap adoption-operation failures in `AdoptionError` and add a regression test verifying failure propagation."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "CONCERN",
+  "title": "Remove the accidentally committed test backup",
+  "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+  "description": "This duplicates the previous factory tests, including obsolete single-argument `createContextPipeline()` calls. The configured Vitest pattern excludes `.ts-E`, so it provides no coverage and leaves a misleading, stale copy beside the maintained suite. Delete the backup file."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "CONCERN",
+  "title": "Adoption fact errors become successful error-stub responses",
+  "location": "packages/core/src/adoption/adoptionResolver.ts:128-134",
+  "description": "`presentPaths` and `recognizeCi` can throw ordinary filesystem errors\u2014for example, for a dangling `README.md` symlink. These escape after adoption state is persisted, but `ContextIntegrator.generateContextFromProject` only rethrows `AdoptionError`; other errors become stub context returned as success. Wrap these failures in `AdoptionError` and add a pipeline regression test verifying rejection rather than successful stub output."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "CONCERN",
+  "title": "Remove the accidentally committed test backup",
+  "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+  "description": "This duplicates the previous factory test suite, including obsolete one-argument `createContextPipeline` calls. Its `.ts-E` extension excludes it from Vitest discovery and TypeScript checking, leaving stale, unvalidated code in the repository. Delete the backup and retain the updated `.test.ts` file."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "CONCERN",
+  "title": "Adoption fact failures are returned as successful builds",
+  "location": "packages/core/src/adoption/adoptionResolver.ts:134",
+  "description": "`renderFacts()` can throw ordinary filesystem errors\u2014for example, when README.md is a broken symlink. `ContextIntegrator` only rethrows `AdoptionError`, so these failures become error-context strings, and MCP returns them without `isError`. Adoption state may already have been persisted. Wrap resolver failures in `AdoptionError` and add a regression test asserting that the build rejects."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "CONCERN",
+  "title": "Remove the accidentally committed test backup",
+  "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+  "description": "This duplicates the original factory tests and retains obsolete one-argument `createContextPipeline()` calls. Its `.ts-E` extension excludes it from the configured Vitest discovery pattern, leaving stale, unexecuted code in the repository. Delete the backup; keep the updated `.test.ts` file."
+ },
+ {
+  "ref": "sol-high/2/0",
+  "severity": "CONCERN",
+  "title": "Valid CRLF guides fail adoption validation",
+  "location": "packages/core/src/adoption/adoptionResolver.ts:76-77",
+  "description": "The new mandatory check uses `ContextProfileParser`, which searches for the literal `context_profiles:\\n`. Verified against the committed brownfield fixture: LF finds the profile; converting it to CRLF does not. Consequently, valid Windows-style guides produce a misleading missing-profile error and block adoption builds. Normalize line endings and add a CRLF regression test."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "CONCERN",
+  "title": "Remove the accidentally committed test backup",
+  "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+  "description": "This file duplicates the previous test suite, including obsolete single-argument pipeline calls. Its `.ts-E` extension excludes it from Vitest discovery and TypeScript checking, leaving stale, unmaintained code. Delete the backup."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "FAIL",
+  "title": "Valid CRLF guides fail the adoption capability check",
+  "location": "packages/core/src/adoption/adoptionResolver.ts:76-77",
+  "description": "The new mandatory check uses `ContextProfileParser`, which searches for the literal `context_profiles:\\n`. Running the actual parser against the brownfield fixture succeeds with LF but returns `{}` with CRLF. Consequently, a valid Windows checkout throws \u201cmissing brownfield-adoption profile,\u201d blocking automatic and explicit adoption builds. Normalize line endings in the shared parser and add a CRLF regression test."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "CONCERN",
+  "title": "Remove the accidentally committed test backup",
+  "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+  "description": "This file duplicates the factory tests but retains obsolete one-argument `createContextPipeline` calls. Its `.ts-E` extension excludes it from Vitest discovery and TypeScript checking, leaving stale, unvalidated code in the repository. Delete the backup."
+ }
+]

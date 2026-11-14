@@ -1,0 +1,135 @@
+[
+ {
+  "ref": "sol/1/0",
+  "severity": "FAIL",
+  "title": "New exit-code parameter breaks process error listeners",
+  "location": "packages/cli/src/utils/errors.ts:46",
+  "description": "`src/index.ts` registers `handleError` directly for `uncaughtException` and `unhandledRejection`. Those events supply an origin string or Promise as the second argument, now interpreted as an exit code. Verified locally: the origin string causes `process.exit()` to throw `ERR_INVALID_ARG_TYPE`. Wrap both listeners so they pass only the error."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "FAIL",
+  "title": "Fixing an inferred docType can falsely report success",
+  "location": "packages/cli/src/commands/validate.ts:113-133",
+  "description": "`validateFrontmatter()` returns immediately when `docType` is missing. After fixing that field, this command removes the finding without revalidating. A slice document missing `docType` and other required fields therefore exits successfully despite remaining invalid. Revalidate modified documents before determining the exit status, and add a regression test using the real validator."
+ },
+ {
+  "ref": "sol/1/2",
+  "severity": "CONCERN",
+  "title": "Worktree invocation validates or modifies the main checkout",
+  "location": "packages/cli/src/commands/validate.ts:89-100",
+  "description": "The resolver detects worktree context, but the command discards it and always uses `project.projectPath`. From a registered worktree, a no-path run checks\u2014and with `--fix`, edits\u2014the main checkout. Explicit worktree paths are instead silently excluded by the service\u2019s main-root containment check. Resolve the active checkout root and test both invocation modes."
+ },
+ {
+  "ref": "sol/1/3",
+  "severity": "CONCERN",
+  "title": "Date backfill can overwrite the actual fix timestamp",
+  "location": "packages/cli/src/commands/validate.ts:119-124",
+  "description": "For a document missing both `status` and `dateUpdated`, the validator emits fixes in that order. Fixing `status` stamps today, but the subsequent `dateUpdated` fix writes the original `dateCreated` value. The writer intentionally ignores its timestamp argument when updating `dateUpdated` itself. Ensure the final timestamp reflects this run\u2019s actual edit.\n\nTests could not run: dependencies are absent (`vitest: command not found`)."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "FAIL",
+  "title": "Error-handler parameter conflicts with process event arguments",
+  "location": "packages/cli/src/utils/errors.ts:46",
+  "description": "`src/index.ts:171-172` registers `handleError` directly as both process event listeners. Their second arguments are an origin string and a Promise\u2014not exit codes. The new parameter forwards these to `process.exit`, causing another exception instead of clean termination. Reproduced on Node 22. Wrap listeners with `(err) => handleError(err)` and add regression tests."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "FAIL",
+  "title": "Fix mode can report success while validation errors remain",
+  "location": "packages/cli/src/commands/validate.ts:133",
+  "description": "`remaining` contains only original findings whose fixes failed or were unavailable. However, `validateFrontmatter` returns immediately when `docType` is missing. Fixing an inferred `docType` therefore reveals previously unchecked required fields, yet this command exits successfully without checking them. Revalidate modified files before determining the exit status; test a document missing both `docType` and `dateCreated`."
+ },
+ {
+  "ref": "sol/2/2",
+  "severity": "CONCERN",
+  "title": "Missing dateUpdated is backfilled with the creation date",
+  "location": "packages/cli/src/commands/validate.ts:119-124",
+  "description": "The schema generates a missing-`dateUpdated` fix using `dateCreated`. The writer explicitly preserves the supplied value when updating `dateUpdated`, ignoring the fourth-argument stamp. Consequently, this command can write an old creation date despite modifying the file today\u2014and overwrite today\u2019s stamp from an earlier fix. Use the run date for this field and test the resulting file contents."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "FAIL",
+  "title": "Exit-code parameter breaks process error listeners",
+  "location": "packages/cli/src/utils/errors.ts:46",
+  "description": "`src/index.ts` registers `handleError` directly for `uncaughtException` and `unhandledRejection`. Those events supply a second argument\u2014an origin string or Promise\u2014which now becomes `exitCode`. Consequently, `process.exit(exitCode)` throws instead of terminating cleanly. Wrap both listeners with `(err) => handleError(err)` and add regression tests."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "FAIL",
+  "title": "Fix mode can report success while required fields remain missing",
+  "location": "packages/cli/src/commands/validate.ts:133",
+  "description": "`remaining` only tracks original findings whose fixes failed. However, `validateFrontmatter` returns immediately when `docType` is missing. Fixing an inferred `docType` can therefore reveal additional missing fields, yet this command exits successfully without checking them. Revalidate after applying fixes and derive the exit status from the resulting findings. Add a real-service regression test."
+ },
+ {
+  "ref": "sol/3/2",
+  "severity": "CONCERN",
+  "title": "Validation ignores the resolved worktree",
+  "location": "packages/cli/src/commands/validate.ts:89-100",
+  "description": "The command discards `worktreeId` and always validates `project.projectPath`. From a registered worktree, a default run therefore checks\u2014and `--fix` modifies\u2014the main project checkout. Explicit worktree paths are instead filtered out as outside that root. Use the existing `resolveOperationPath` helper and test worktree-local validation."
+ },
+ {
+  "ref": "sol/3/3",
+  "severity": "CONCERN",
+  "title": "Value-constraint test never exercises rejection",
+  "location": "packages/core/tests/schema/frontmatterSchema.test.ts:371-395",
+  "description": "The test claims to catch a wrong `docType`, but every assertion expects zero findings. Its inputs exercise valid schema lookup and intentional unknown-type passthrough, not rejection. Rename it to describe those behaviors and remove the contradictory comments, or add a test that actually exercises a violated constraint."
+ },
+ {
+  "ref": "sol-high/2/0",
+  "severity": "FAIL",
+  "title": "Error-handler signature breaks process event listeners",
+  "location": "packages/cli/src/utils/errors.ts:46",
+  "description": "`index.ts:171-172` registers `handleError` directly as both process listeners. Node supplies an origin string or Promise as the second argument, which now becomes `exitCode`. Both paths reproduce `ERR_INVALID_ARG_TYPE` instead of exiting cleanly. Wrap listeners with `(err) => handleError(err)` and add regression tests."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "FAIL",
+  "title": "Validation ignores the resolved worktree",
+  "location": "packages/cli/src/commands/validate.ts:89-100",
+  "description": "The command discards `worktreeId` and always validates `project.projectPath`. From a registered worktree, explicit local paths are consequently filtered out as outside the document root; without paths, `--fix` modifies the main checkout instead. Resolve the operation path using the existing worktree-aware helper and test both modes."
+ },
+ {
+  "ref": "sol-high/2/2",
+  "severity": "FAIL",
+  "title": "Successful writes are mistaken for successful validation",
+  "location": "packages/cli/src/commands/validate.ts:133",
+  "description": "`remaining` contains only original findings whose writes failed or lacked fixes. However, `validateFrontmatter` returns immediately when `docType` is missing. Fixing an inferred `docType` therefore exits successfully even when the newly selected schema exposes missing required fields. Revalidate affected files before determining the exit code, with a regression test for missing `docType`."
+ },
+ {
+  "ref": "sol-high/2/3",
+  "severity": "CONCERN",
+  "title": "Date backfill can overwrite the actual modification date",
+  "location": "packages/cli/src/commands/validate.ts:119-124",
+  "description": "For a document with an invalid status and missing `dateUpdated`, validation supplies a date fix copied from `dateCreated`. The status fix stamps today, but the subsequent date fix overwrites it with the old creation date: `updateFrontmatterField` explicitly skips stamping when updating `dateUpdated` itself. Ensure the final date reflects this run\u2019s modification and test combined fixes against real file contents."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "FAIL",
+  "title": "Route validation to the resolved worktree",
+  "location": "packages/cli/src/commands/validate.ts:89-100",
+  "description": "The command discards `worktreeId` and always validates `project.projectPath`. From a registered worktree, no-path validation checks\u2014and `--fix` modifies\u2014the main checkout instead. Explicit worktree paths are rejected by the service\u2019s containment filter, potentially reporting zero files checked. Use `resolveOperationPath(project, worktreeId)` and add worktree-routing tests."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "FAIL",
+  "title": "Revalidate before declaring fixes successful",
+  "location": "packages/cli/src/commands/validate.ts:133",
+  "description": "`remaining` contains only initially unfixable or failed findings, not the document\u2019s actual post-fix findings. The schema validator returns immediately when `docType` is missing. Consequently, fixing an inferred `docType` exits successfully even when required fields remain missing. Revalidate modified files before determining the exit code; test a document initially missing `docType` and other required fields."
+ },
+ {
+  "ref": "sol-high/3/2",
+  "severity": "CONCERN",
+  "title": "Preserve process-event handler compatibility",
+  "location": "packages/cli/src/utils/errors.ts:46",
+  "description": "`index.ts` registers `handleError` directly for `uncaughtException` and `unhandledRejection`. Those events supply an origin string or Promise as their second argument, which now becomes `exitCode`. Reproduced both paths on Node 22: `process.exit()` throws `ERR_INVALID_ARG_TYPE`, adding a secondary crash to error reporting. Wrap the listeners with single-argument callbacks and test both event paths."
+ },
+ {
+  "ref": "sol-high/3/3",
+  "severity": "CONCERN",
+  "title": "Do not overwrite the write-date stamp with a stale backfill",
+  "location": "packages/cli/src/commands/validate.ts:119-123",
+  "description": "For a document missing both `status` and `dateUpdated`, validation generates a status fix followed by a `dateUpdated = dateCreated` fix. The first write stamps today, but the second overwrites it with the historical creation date because the writer treats an explicit `dateUpdated` value as authoritative. Use the run\u2019s date for that fix and add a multi-finding test."
+ }
+]

@@ -1,0 +1,13 @@
+name: fix
+description: Fix an issue - failing test, change, gates, one fix commit
+params:
+  issue: required
+  model: sonnet
+  issue-file: ""
+  commit-to: target
+steps:
+  - fix:
+      issue: "{issue}"
+      model: "{model}"
+      issue-file: "{issue-file}"
+      commit-to: "{commit-to}"

@@ -78,7 +78,7 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
    - **Risk Level:** High (the fairness rule's boundary trace, and yield that may be low)
    - **Relative Effort:** 4/5
 
-4. [ ] **(423) Fix Pipeline** — `sq run fix <issue>` as a production pipeline that follows the guide's fix rule: a failing test, the change, the gates, a commit to the target. It can run in a sandbox with frozen issue text passed in instead of fetched, needs no GitHub access there, and commits to the sandbox's branch.
+4. [x] **(423) Fix Pipeline** — `sq run fix <issue>` as a production pipeline that follows the guide's fix rule: a failing test, the change, the gates, a commit to the target. It can run in a sandbox with frozen issue text passed in instead of fetched, needs no GitHub access there, and commits to the sandbox's branch.
    - **Value:** User value on its own, since fixes are done interactively today. It is also what fix cases replay.
    - **Success Criteria:**
      - `sq run fix <issue>` on a real issue produces a failing test, a change that makes it pass, passing gates and one commit on the target.

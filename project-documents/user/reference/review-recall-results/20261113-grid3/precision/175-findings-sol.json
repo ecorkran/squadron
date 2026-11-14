@@ -1,0 +1,79 @@
+[
+ {
+  "ref": "sol-high/2/0",
+  "severity": "FAIL",
+  "title": "Split reviews record only the first part\u2019s spend",
+  "location": "src/squadron/pipeline/actions/review.py:505-506",
+  "description": "Each part receives usage, but `fold_review_parts()` copies only the first part\u2019s metadata. Subsequent parts\u2019 tokens, turns, duration, and cost disappear before persistence. Reproduced with two parts costing $1 and $2: the folded record reports $1. Aggregate all parts\u2019 usage and add a split-review accounting test."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "FAIL",
+  "title": "Run totals omit earlier loop iterations",
+  "location": "src/squadron/stats/usage_report.py:112-116",
+  "description": "The report reads only persisted `action_results`. The executor keeps earlier iterations in `StepResult.prior_rounds`, but `StateManager._append_step()` serializes only the final iteration\u2019s `action_results`; the round observer records nothing. Consequently, retry/revision loops report only their last round\u2019s spend. Preserve earlier rounds durably and test totals across multiple iterations."
+ },
+ {
+  "ref": "sol-high/2/2",
+  "severity": "FAIL",
+  "title": "Fan-out usage is discarded during reduction",
+  "location": "src/squadron/pipeline/executor.py#_execute_fan_out_step",
+  "description": "Capture reaches each branch, but the persisted result contains only the reducer output. `CollectReducer` drops branch metadata, `FirstPassReducer` also omits usage, and failed branches produce an empty action list. Reproduced a successful collect reduction returning empty metadata despite priced branch records. Preserve every branch\u2019s spend independently of which output wins reduction."
+ },
+ {
+  "ref": "sol-high/2/3",
+  "severity": "CONCERN",
+  "title": "Standalone subscription reviews lose their cost classification",
+  "location": "src/squadron/stats/reviews_report.py:111-115",
+  "description": "`requestedModel` is not an alias field: persistence emits it only on model substitution, and its value is the resolved model ID. Normal reviews therefore load with `alias=None`, preventing `cost_cell()` from identifying subscription costs as API-rate equivalents. Reproduced a subscription review displaying `$1.00 prov`. Persist and read the actual selected alias rather than repurposing `requestedModel`."
+ },
+ {
+  "ref": "sol-high/2/4",
+  "severity": "CONCERN",
+  "title": "Malformed cost basis crashes the entire reviews report",
+  "location": "src/squadron/stats/reviews_report.py:151-157",
+  "description": "The set-membership check assumes `costBasis` is hashable. Valid YAML such as `costBasis: [provider]` raises `TypeError`, aborting the report instead of warning and retaining the row with an unknown basis. Validate that the value is a string before membership testing, and cover list and mapping values in tests."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "FAIL",
+  "title": "Loop totals omit earlier iterations",
+  "location": "src/squadron/stats/usage_report.py:112-116",
+  "description": "The report reads only persisted `action_results`. Loop execution stores earlier iterations in `StepResult.prior_rounds`, which `StateManager._append_step()` does not persist. A two-round reproduction costing $1 and $2 reported only $2. Persist and include every round\u2019s usage, with regression coverage."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "FAIL",
+  "title": "Split reviews count only the first part",
+  "location": "src/squadron/pipeline/actions/review.py:505-506",
+  "description": "Each part receives usage, but `fold_review_parts()` copies only the first part\u2019s metadata without summing usage. Two parts costing $1 and $2 produced a $1 record. Their artifacts are also excluded from standalone statistics by `runId`, so the omitted spend appears nowhere. Aggregate all parts before persistence."
+ },
+ {
+  "ref": "sol-high/3/2",
+  "severity": "FAIL",
+  "title": "Failed split-review parts violate the folding contract",
+  "location": "src/squadron/pipeline/actions/review.py:493",
+  "description": "The newly returned failure result has empty outputs and, for ordinary reviews, no verdict. Multi-part folding requires an input file, response, and verdict for every part. Reproduction raised `TypeError: review part must name exactly one input file, got []`, replacing the provider failure and discarding captured usage. Handle failed parts explicitly and test a mixed successful/failed review."
+ },
+ {
+  "ref": "sol-high/3/3",
+  "severity": "FAIL",
+  "title": "Fan-out reduction discards captured branch usage",
+  "location": "src/squadron/pipeline/executor.py#_execute_fan_out_step",
+  "description": "Passing capture into branches is insufficient: only the reducer\u2019s result is persisted. `CollectReducer` strips branch metadata, while `FirstPassReducer` also returns no usage metadata. Consequently, statistics omit branch spend without even counting those calls as unrecorded LLM actions. Preserve branch usage independently of the selected reduction."
+ },
+ {
+  "ref": "sol-high/3/4",
+  "severity": "CONCERN",
+  "title": "Failed compaction drops available telemetry",
+  "location": "src/squadron/pipeline/actions/compact.py:75-98",
+  "description": "Usage is stamped only after successful compaction. A `ProviderError` carrying completed-turn telemetry returns empty metadata instead; a reproduction confirmed this. Capture error telemetry before returning failure, and preserve summary spend if subsequent reconnection fails."
+ },
+ {
+  "ref": "sol-high/3/5",
+  "severity": "CONCERN",
+  "title": "Malformed cost basis crashes the entire review report",
+  "location": "src/squadron/stats/reviews_report.py:151-158",
+  "description": "A YAML list or mapping in `costBasis` reaches set membership and raises `TypeError` because it is unhashable. This bypasses the documented warning-and-`None` behavior. Validate that the value is a string before membership testing; cover list and mapping inputs."
+ }
+]

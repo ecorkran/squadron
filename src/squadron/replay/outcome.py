@@ -42,6 +42,7 @@ class FailureClass(StrEnum):
     AGENT_QUESTION = "agent_question"
     TOOL_ISOLATION = "tool_isolation"
     UNFINISHED_TASKS = "unfinished_tasks"
+    FIX_REPORT = "fix_report"
     OTHER = "other"
     NO_RUN_STATE = "no_run_state"
 
@@ -55,6 +56,7 @@ _CLASS_OF_KIND: dict[FailureKind, FailureClass] = {
     FailureKind.AGENT_QUESTION: FailureClass.AGENT_QUESTION,
     FailureKind.TOOL_ISOLATION: FailureClass.TOOL_ISOLATION,
     FailureKind.UNFINISHED_TASKS: FailureClass.UNFINISHED_TASKS,
+    FailureKind.FIX_REPORT: FailureClass.FIX_REPORT,
 }
 
 

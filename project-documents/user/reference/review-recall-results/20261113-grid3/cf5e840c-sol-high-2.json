@@ -1,0 +1,111 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Valid CRLF guides fail adoption validation",
+      "description": "The new mandatory check uses `ContextProfileParser`, which searches for the literal `context_profiles:\\n`. Verified against the committed brownfield fixture: LF finds the profile; converting it to CRLF does not. Consequently, valid Windows-style guides produce a misleading missing-profile error and block adoption builds. Normalize line endings and add a CRLF regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:76-77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Remove the accidentally committed test backup",
+      "description": "This file duplicates the previous test suite, including obsolete single-argument pipeline calls. Its `.ts-E` extension excludes it from Vitest discovery and TypeScript checking, leaving stale, unmaintained code. Delete the backup.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Full test suites were not executed",
+      "description": "Dependencies are absent in this checkout. Validation was limited to source inspection and the direct parser reproduction above.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Valid CRLF guides fail adoption validation",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:76-77",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Remove the accidentally committed test backup",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Full test suites were not executed",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T22:30:52.893834",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 93824,
+  "cached_tokens": 93312,
+  "cache_write_tokens": null,
+  "completion_tokens": 286,
+  "reasoning_tokens": 0,
+  "duration_seconds": 72.61344425007701,
+  "cost_usd": null,
+  "cost_basis": null
+}
