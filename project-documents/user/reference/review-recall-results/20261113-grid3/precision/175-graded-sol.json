@@ -1,0 +1,18 @@
+{
+ "case": "175",
+ "matched": {
+  "sol-high/2/0": "175-I1",
+  "sol-high/3/1": "175-I1",
+  "sol-high/2/1": "175-I19",
+  "sol-high/3/0": "175-I19",
+  "sol-high/2/2": "175-I20",
+  "sol-high/3/3": "175-I20",
+  "sol-high/2/3": "175-N2",
+  "sol-high/2/4": "175-I17",
+  "sol-high/3/5": "175-I17",
+  "sol-high/3/2": "175-I2",
+  "sol-high/3/4": "175-I4"
+ },
+ "new_issues": [],
+ "disputes": []
+}

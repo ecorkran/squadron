@@ -1,0 +1,65 @@
+[
+ {
+  "ref": "sol-high/2/0",
+  "severity": "FAIL",
+  "title": "Design-batch items cannot resume after creating their design",
+  "location": "src/squadron/pipeline/item_resume.py:286-304",
+  "description": "A `slices-plan` item that exhausts its review loop already has a committed design. Re-evaluating `cf.undesigned_slices` therefore excludes it, and this code rejects both retry and accept unless the slice is complete and merged. Select resumable planning items using their current artifacts rather than requiring original source eligibility. Add a regression test where plan-scoped `list_slices` returns the existing design; the current integration fixture incorrectly hides it."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "FAIL",
+  "title": "Completed task checklists prevent unresolved code reviews from resuming",
+  "location": "src/squadron/pipeline/sources.py:231-233",
+  "description": "All tasks can be checked while code review remains unresolved and the branch remains unmerged. On item resume, this condition marks that item `not_ready`; the executor then skips its body and replaces its `review_unresolved` record. Consequently, neither retry nor accept reaches the review/merge path, and subsequent accept requests are rejected. Distinguish fresh implementation eligibility from resuming existing branch work."
+ },
+ {
+  "ref": "sol-high/2/2",
+  "severity": "FAIL",
+  "title": "Planning resumes incorrectly require dependencies to be implemented",
+  "location": "src/squadron/pipeline/item_resume.py:153-156",
+  "description": "The unconditional `_open_dependencies` check requires every in-plan dependency to have status `complete`, including for `tasks-plan`. A dependency whose design and tasks are finished but whose implementation has not started therefore blocks retrying or accepting another tasks review. Ordinary planning-batch execution does not impose this requirement. Apply stage-appropriate dependency checks and test planning resumes with real dependency relationships."
+ },
+ {
+  "ref": "sol-high/2/3",
+  "severity": "CONCERN",
+  "title": "Resume preflight blocks the event loop with synchronous I/O",
+  "location": "src/squadron/pipeline/item_resume.py:146-155",
+  "description": "This async path directly performs state-file reads, git subprocesses, CF subprocesses, and report writes. Git calls can block for 30 seconds, and `ContextForgeClient._run` has no timeout. This violates the required event-loop discipline and can retain the project lock indefinitely on a hung CF command. Move blocking work off-loop, bound subprocess execution, and test timeout observability."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "FAIL",
+  "title": "Item resume bypasses the worktree registration guard",
+  "location": "src/squadron/pipeline/item_resume.py:230-235",
+  "description": "Unlike `enter_slice_branch`, `_git_precondition` never calls `_require_registered_worktree`. In an unregistered linked worktree, CF can supply the primary checkout\u2019s target, and `restore_target` can commit leftovers and switch branches before any later guard runs. Validate registration before mutating Git state; test that refusal leaves branches and files unchanged."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "FAIL",
+  "title": "Unresolved slice designs cannot resume after creation",
+  "location": "src/squadron/pipeline/item_resume.py:286-303",
+  "description": "`slices-plan` uses `cf.undesigned_slices`, which stops selecting a slice once its design exists. Consequently, a successfully created design whose review exhausted its rounds cannot be retried or accepted: re-selection omits it, and reconciliation only permits completed, merged slices. The planning-batch test masks this by continually reporting no design for plan-scoped queries. Add coverage using the actual post-design lifecycle and allow unresolved artifacts to resume."
+ },
+ {
+  "ref": "sol-high/3/2",
+  "severity": "CONCERN",
+  "title": "Malformed report items escape schema-error handling",
+  "location": "src/squadron/pipeline/batch_report.py:330-340",
+  "description": "`cast` does not validate the loaded JSON. A report with otherwise valid metadata and `\"items\": [null]` reaches `BatchItemRecord.from_json(None)`, raising `AttributeError`, which is not converted into `BatchReportLoadError`. Validate the complete report with a Pydantic schema and test malformed item shapes so item resume returns REJECTED rather than crashing."
+ },
+ {
+  "ref": "sol-high/3/3",
+  "severity": "CONCERN",
+  "title": "Resume preparation blocks the event loop",
+  "location": "src/squadron/pipeline/item_resume.py:146-155",
+  "description": "The async path directly performs state/report file I/O, synchronous Git commands, and CF subprocess calls. Git commands can take 30 seconds; CF calls have no timeout. This violates the explicit sub-millisecond synchronous-work rule and prevents timely cancellation or concurrent async work. Offload blocking preparation and report writes, bound subprocess execution, and add a responsiveness test."
+ },
+ {
+  "ref": "sol-high/3/4",
+  "severity": "CONCERN",
+  "title": "Expected preparation failures violate the exit-code contract",
+  "location": "src/squadron/pipeline/item_resume.py:124-135",
+  "description": "CF failures during source selection or dependency checks raise `ContextForgeError`/`ContextForgeNotAvailable`, neither of which this boundary handles. A missing pipeline instead reaches the broad `OSError` handler and is misleadingly reported as a batch-report write failure. Handle these failures at their actual boundaries, log the cause, and return the appropriate REJECTED or HALTED outcome with regression tests."
+ }
+]

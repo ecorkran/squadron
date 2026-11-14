@@ -1,0 +1,44 @@
+[
+ {
+  "ref": "sol-high/2/0",
+  "severity": "FAIL",
+  "title": "Observing one project erases other projects\u2019 poll state",
+  "location": "src/amoeba/runner/observe.py:108-111",
+  "description": "`RunnerTenant` shares one observer across all projects, but these lines discard every entry outside the current project. Even an empty second project clears the first project\u2019s polling timestamps, overdue flags, and standing faults. Consequently, runs are polled every tick instead of respecting `run_poll_interval_seconds`.\n\nScope observer state and cleanup per project. Add a regression covering alternating projects, including an empty project."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "CONCERN",
+  "title": "Launches can start after the budget expires",
+  "location": "src/amoeba/runner/tick.py:176-187",
+  "description": "The budget check occurs before `_launch`, which then commits a journal entry and opens log files before calling `Popen`. If that work crosses the deadline\u2014or shutdown is requested meanwhile\u2014the subprocess still starts, violating the documented budget contract.\n\nRecheck immediately before spawning and explicitly reconcile any journaled-but-unlaunched entry. Test deadline expiry and stop requests during journal issuance."
+ },
+ {
+  "ref": "sol-high/2/2",
+  "severity": "CONCERN",
+  "title": "Unconfirmed launch faults disappear between polls",
+  "location": "src/amoeba/runner/observe.py:186-187",
+  "description": "A failed launch poll stores its fault in `_faulted`, but the next tick takes `_still_overdue` without replaying that fault. Unlike the confirmed-run path, it reports no standing observation failure. `ProjectTick._close_recovered` therefore closes the escalation despite no successful observation.\n\nReplay the cached fault until a later observation establishes recovery. Add a test using fresh `TickFaults` on consecutive ticks within the polling interval."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "FAIL",
+  "title": "Observer cleanup discards other projects\u2019 polling state",
+  "location": "src/amoeba/runner/observe.py:108-111",
+  "description": "`RunnerTenant` shares one observer across projects, but each `observe()` deletes cached state for every entry outside the current project. Reproduced A \u2192 B \u2192 A at an unchanged clock: A was polled twice despite the 15-second interval. This also destroys overdue/fault tracking and least-recently-polled ordering. Scope cleanup per project or maintain separate observers."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "FAIL",
+  "title": "Launch can begin after the budget expires",
+  "location": "src/amoeba/runner/tick.py:176-187",
+  "description": "The budget check precedes journal creation and commit; `launch()` then starts the child without rechecking. Reproduced a journal operation advancing time beyond the deadline: launch still began and returned `COMPLETE`. A stop arriving during journaling has the same problem. Recheck immediately before spawning, with explicit handling of the journaled-but-not-launched entry."
+ },
+ {
+  "ref": "sol-high/3/2",
+  "severity": "CONCERN",
+  "title": "Unconfirmed launch faults disappear between polls",
+  "location": "src/amoeba/runner/observe.py:186-187",
+  "description": "After a poll failure, `_fault()` caches the fault, but the unconfirmed path never replays it while waiting for the next poll. Reproduced consecutive ticks changing from `FAULT` with one fault to `LAUNCHING` with none, without a successful observation. `ProjectTick._close_recovered()` consequently closes the escalation prematurely. Preserve the standing fault until a subsequent observation clears it."
+ }
+]

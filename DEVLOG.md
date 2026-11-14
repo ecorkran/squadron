@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261112
+dateUpdated: 20261113
 ---
 
 # Development Log
@@ -10,6 +10,44 @@ dateUpdated: 20261112
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261113
+
+
+**p6: devlog-4**
+- branch-0:branch-0: PASS
+- implement-1:cf-op-0: PASS
+- implement-1:cf-op-1: PASS
+- implement-1:cf-op-2: PASS
+- implement-1:cf-op-3: PASS
+- implement-1:dispatch-4: PASS
+- implement-1:review-5: PASS (verdict: CONCERNS)
+- implement-1:checkpoint-6: PASS
+- implement-1:commit-7: PASS
+- close-out:dispatch-0: PASS
+- revise-code:dispatch-0: PASS
+- revise-code:review-1: PASS (verdict: CONCERNS)
+- revise-code:commit-2: PASS
+- revise-code:dispatch-3: PASS
+- revise-code:review-4: PASS (verdict: CONCERNS)
+- revise-code:commit-5: PASS
+
+### Slice 423: Fix Pipeline — Complete
+
+- **Commits** (branch `423-slice.fix-pipeline`): e80c22bb issue ref and frozen-file source; dd4a065c fix report checks; 5968ba6e fix commit plan and `CommitAction` for `fix`; fbb10293 dispatch prompt fallback accepts any `build_context` result; 400851dd fix prompt; 40468fab `fix-context` action and load test; da620cc7 `fix` step and `fix.yaml`, executor-level tests; 71b28ccf hidden `sq _fix-prompt` and `sq _commit --subject fix`; 6b65a83b prompt-only rendering, `run.md`, parity tests; 839adf57 docs and CHANGELOG; 64a2ef03 fetched issue source; then the verification fix and closing commit.
+- **Delivered:** `sq run fix <issue>`: `fix-context → dispatch → commit`; issue from the code host (every comment, no cutoff) or a frozen `issue-file`; `commit-to: target|current`; the agent's JSON report is checked before anything is staged; refusals are `fix_report` failures or run-ending git errors. Full suite, pyright (0 errors) and ruff on `src`/`tests` pass.
+- **Walkthrough (real runs, issue #316 in scratch clones):** frozen text, `commit-to: current`, `gh`/`cf` stand-ins on `PATH`: one `fix:` commit, state shows `issue_source: file` and the file's sha256. Cost cap: `failure_kind: cost_cap`, no commit. Fetched, target mode, cf-registered clone: one `fix:` commit with `Fixes #316`, `issue_source: github`; the new test fails at the parent and passes at the commit; the reported gates pass. The clones and the cf project are removed.
+- **Surprises:**
+  - The walkthrough caught squadron calling `cf get --json` at the start of every run (`execute_pipeline` read the project name even with no cf-using step), so the fix pipeline was not cf-free. Fixed: it reads it only when a step needs cf. The first tripwire test missed it because it passed `_project` itself.
+  - A step's earlier results are keyed `{action_type}-{index}` while it runs and `{step}:{action_type}-{index}` after it completes; `results_for_step` only sees the second form. New `results_in_current_step` reads the first (`fix_commit`).
+  - The design said `fix-context` outputs `context` for the dispatch; the dispatch fallback needs `operation: build_context` and `stdout`, from any action type (`_resolve_prompt` no longer requires `cf-op`).
+  - `StepTypeName.FIX` was added with `FixStepType` (Task 10), not in Task 2: the registry-drift test fails while a name has no step type.
+  - `sq run --dry-run` prints `fix-0 (fix)` only, as for every non-container step; the three actions show under `--prompt-only`. The design and tasks also named `sq runs show`, which does not exist (`sq runs list`, `sq run --status`, the state file).
+  - The #316 fix's new test fails at the parent through a `TypeError` on a new keyword argument rather than through the symptom, so the pipeline's "failed before the change" check proves the test fails, not why.
+  - `ruff check`/`ruff format --check` with no path flag 32 lint errors and 122 unformatted files in `project-documents/.../review-recall-results/` scripts, which are on `main`; `src` and `tests` are clean.
+  - `.github/workflows/ci.yml` runs plain `uv run pytest` on push and PR to `main` with no exclusion, so `tests/load` is gated.
+- **Pending:** manual check for the Project Manager: `/sq:run fix <n>` in an interactive Claude Code session on a clean target (expects the step 2 refusals under the same conditions, and on success a commit through `sq _commit --subject fix`). Running `fix` under 421's `ScrubbedEnvironment` waits on slice 421 (issue #296). `blocked` has no resume path by design.
+- **Issues filed:** none.
 
 ## 20261112
 

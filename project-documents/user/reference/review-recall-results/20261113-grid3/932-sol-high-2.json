@@ -1,0 +1,111 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task completion can prematurely end dispatch",
+      "description": "An empty task ledger does not mean the parent\u2019s follow-up turn has finished. If a task notification arrives before the original result, this branch returns immediately, leaving the injected continuation unread. I reproduced this: the first dispatch returned \u201cWaiting for report.\u201d; the next dispatch discarded \u201cWrote artifact.\u201d as leftover text. Artifact validation can therefore run before the artifact is written. Track pending continuations/session completion separately and test this message ordering.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:252-253"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Model switching bypasses the unusable-session guard",
+      "description": "DispatchAction calls `set_model()` before `dispatch()`, but only the latter checks `unusable_reason`. After a failed reconnect, a subsequent step with a concrete model reaches the disconnected client instead of reporting the recorded failure. I verified it raises `CLIConnectionError: Not connected. Call connect() first.`, losing the original reconnect diagnosis. Guard `set_model()` too, and cover this through the real action path.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:168-179"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Background-session changes lack required load coverage",
+      "description": "The new tests exercise short scripted streams, but no load test covers sustained background notifications, concurrent activity, or bounded cleanup latency. The existing `tests/load/` tests cover grep and worktrees only. Add a realistic session-stream load test asserting latency or resource bounds, as required for changes on network/concurrency paths.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/test_sdk_session.py#TestBackgroundIdleTimeout"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task completion can prematurely end dispatch",
+      "location": "src/squadron/pipeline/sdk_session.py:252-253",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Model switching bypasses the unusable-session guard",
+      "location": "src/squadron/pipeline/sdk_session.py:168-179",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Background-session changes lack required load coverage",
+      "location": "tests/pipeline/test_sdk_session.py#TestBackgroundIdleTimeout",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932",
+    "diff": "262d0ba064dcc6fa09efb5908eecc1447fd0582b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T22:22:38.277451",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 143088,
+  "diff_chars_injected": 143088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 108564,
+  "cached_tokens": 106496,
+  "cache_write_tokens": null,
+  "completion_tokens": 545,
+  "reasoning_tokens": 188,
+  "duration_seconds": 114.37276183301583,
+  "cost_usd": null,
+  "cost_basis": null
+}

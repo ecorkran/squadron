@@ -1,0 +1,51 @@
+[
+ {
+  "ref": "sol-high/2/0",
+  "severity": "FAIL",
+  "title": "Task completion can prematurely end dispatch",
+  "location": "src/squadron/pipeline/sdk_session.py:252-253",
+  "description": "An empty task ledger does not mean the parent\u2019s follow-up turn has finished. If a task notification arrives before the original result, this branch returns immediately, leaving the injected continuation unread. I reproduced this: the first dispatch returned \u201cWaiting for report.\u201d; the next dispatch discarded \u201cWrote artifact.\u201d as leftover text. Artifact validation can therefore run before the artifact is written. Track pending continuations/session completion separately and test this message ordering."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "CONCERN",
+  "title": "Model switching bypasses the unusable-session guard",
+  "location": "src/squadron/pipeline/sdk_session.py:168-179",
+  "description": "DispatchAction calls `set_model()` before `dispatch()`, but only the latter checks `unusable_reason`. After a failed reconnect, a subsequent step with a concrete model reaches the disconnected client instead of reporting the recorded failure. I verified it raises `CLIConnectionError: Not connected. Call connect() first.`, losing the original reconnect diagnosis. Guard `set_model()` too, and cover this through the real action path."
+ },
+ {
+  "ref": "sol-high/2/2",
+  "severity": "CONCERN",
+  "title": "Background-session changes lack required load coverage",
+  "location": "tests/pipeline/test_sdk_session.py#TestBackgroundIdleTimeout",
+  "description": "The new tests exercise short scripted streams, but no load test covers sustained background notifications, concurrent activity, or bounded cleanup latency. The existing `tests/load/` tests cover grep and worktrees only. Add a realistic session-stream load test asserting latency or resource bounds, as required for changes on network/concurrency paths."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "FAIL",
+  "title": "Task completion can return before the parent continuation",
+  "location": "src/squadron/pipeline/sdk_session.py:252-253",
+  "description": "A task notification arriving before the original result clears the active ledger, causing dispatch to return without reading the parent\u2019s queued continuation. Reproduced with `ScriptedClient`: dispatch returned `\"Waiting\"` after one receive call, leaving `\"Finished artifact\"` unread. Track pending continuations separately from running tasks and add this ordering as a regression test."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "FAIL",
+  "title": "Background timeout interrupts active foreground continuations",
+  "location": "src/squadron/pipeline/sdk_session.py:299-301",
+  "description": "The timeout selected before reading a continuation remains active throughout that turn, even after its task-completion notification clears the ledger. Reproduced a continuation that emitted `\"Working\"` then paused: dispatch returned partial text without its final result, logging a timeout with no tasks to stop. Disable the background-only timer when foreground continuation begins."
+ },
+ {
+  "ref": "sol-high/3/2",
+  "severity": "CONCERN",
+  "title": "Settings lookup and SDK execution target different directories",
+  "location": "src/squadron/pipeline/actions/dispatch.py:143-164",
+  "description": "Configuration is resolved against the supplied `cwd`, but SDK agents receive `cwd=None` and execute in the process directory. When these differ, one project\u2019s memory/user-settings policy controls a session loading another project\u2019s settings and memory. Use one effective directory for configuration and SDK execution, or reject mismatched directories explicitly."
+ },
+ {
+  "ref": "sol-high/3/3",
+  "severity": "CONCERN",
+  "title": "Background timeout accepts invalid durations",
+  "location": "src/squadron/pipeline/sdk_session.py:323-327",
+  "description": "The timeout is not validated as a positive, non-boolean integer. Verified that `0`, `-1`, `False`, and `True` all pass the current read path. Nonpositive values can immediately cancel waiting and stop healthy agents; booleans become zero/one-second limits. Reject these values at the configuration boundary and test both CLI and TOML inputs."
+ }
+]

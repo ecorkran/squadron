@@ -1,0 +1,51 @@
+[
+ {
+  "ref": "sol-high/2/0",
+  "severity": "FAIL",
+  "title": "Unchanged installed cron fails every cutover rerun",
+  "location": "scripts/cutover_227_helpers.py:95-99",
+  "description": "`production_changes()` strips the new arguments from `new` but not `old`. After the first apply, both contain the new arguments, so even identical cron files produce differences. Verified by calling the helper with identical post-cutover input. Any recovery rerun therefore stops in `step_apply`, before reaching unfinished steps. Normalize both sides and add a post-cutover rerun regression test."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "CONCERN",
+  "title": "Weekly backup cannot resume after a downstream failure",
+  "location": "scripts/cutover_227_tick_backup.py:176-179",
+  "description": "The skip condition requires both today's base backup and the arm file. If the backup succeeds but its upload, catch-up push, or reconcile guards fail, today's backup remains while the arm file is absent. Rerunning invokes the full weekly command again, but `scripts/backup_prod.sh` explicitly rejects an existing destination. Implement a verified resume path that retries unfinished stages without recreating the backup, and test this partial-success case."
+ },
+ {
+  "ref": "sol-high/2/2",
+  "severity": "CONCERN",
+  "title": "Failed health invocation can pass using an old log entry",
+  "location": "scripts/cutover_227_tick_backup.py:157-165",
+  "description": "`run_health()` ignores the subprocess result and reads the last existing log entry without verifying that this invocation appended it. If the command fails before writing\u2014for example, because the script cannot execute\u2014an earlier `FLAGS archive=0 stale=0` entry still passes both health gates. Require fresh output from the current invocation and validate its execution status while preserving the first check's intentional tolerance of stale-backup alarms. Add a regression test with a failed command and an existing clean log."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "FAIL",
+  "title": "Unchanged post-cutover cron fails on every rerun",
+  "location": "scripts/cutover_227_helpers.py:95-99",
+  "description": "`production_changes()` strips new arguments from `new` but not `old`. After cron installation, rerunning the cutover compares identical post-cutover files asymmetrically and fails step 4. This also blocks recovery from later failures. Reproduced with identical inputs. Normalize both sides and add a post-install rerun test."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "FAIL",
+  "title": "Reconcile is armed without running its final verification",
+  "location": "scripts/cutover_227_tick_backup.py:179-188",
+  "description": "The accepted prefix also matches `=== weekly backup done (unarmed)`. In `scripts/cron_weekly_backup.sh:152-155`, that outcome exits **before** the offsite mirror and final checksum check. The cutover nevertheless creates the arm file, enabling subsequent destructive reconciliation without exercising the promised verification. Execute and verify the initial reconciliation before retaining the arm file; update the test that currently treats the unarmed outcome as sufficient."
+ },
+ {
+  "ref": "sol-high/3/2",
+  "severity": "CONCERN",
+  "title": "Failed health commands can pass using stale logs",
+  "location": "scripts/cutover_227_tick_backup.py:157-165",
+  "description": "`run_health()` ignores the command result and reads the existing log\u2019s last line without checking that this invocation appended it. A failed command can therefore pass both health gates using an earlier clean summary. Reproduced with exit 127 and an unchanged clean log. Require fresh output while preserving the first check\u2019s intentionally tolerated stale-backup state."
+ },
+ {
+  "ref": "sol-high/3/3",
+  "severity": "CONCERN",
+  "title": "File failures bypass the promised failure report",
+  "location": "scripts/cutover_227_tick_backup.py:269-281",
+  "description": "`run_steps()` catches only `StepFailed` and `CalledProcessError`. Missing/unreadable logs and failed filesystem operations raise uncaught exceptions, preventing `main()` from reaching report generation. Reproduced with `FileNotFoundError`. Record filesystem failures at the process boundary and ensure report generation runs after step failures."
+ }
+]

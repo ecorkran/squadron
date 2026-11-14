@@ -1,0 +1,13 @@
+{
+ "case": "a122",
+ "matched": {
+  "sol-high/2/0": "a122-I1",
+  "sol-high/3/0": "a122-I1",
+  "sol-high/2/1": "a122-I4",
+  "sol-high/3/1": "a122-I4",
+  "sol-high/2/2": "a122-I2",
+  "sol-high/3/2": "a122-I2"
+ },
+ "new_issues": [],
+ "disputes": []
+}

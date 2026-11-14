@@ -29,6 +29,8 @@ from squadron.pipeline.commit_plan import (
     build_commit_plan,
 )
 from squadron.pipeline.control_params import RUN_START_HEAD
+from squadron.pipeline.failure_kind import FAILURE_KIND_KEY
+from squadron.pipeline.fix_commit import FixCommitRefusal, fix_plan_from_context
 from squadron.pipeline.git_ops import (
     ConfigReader,
     GitEnvironmentError,
@@ -94,6 +96,8 @@ class CommitAction:
             target = commit_target_from_params(context.params, context.iteration)
         except ValueError as exc:
             return self._failure(str(exc))
+        if target is not None and target.subject is CommitSubject.FIX:
+            return self._fix_commit(context, cwd)
         explicit_paths = _explicit_paths(context.params)
 
         if context.params.get(GUARDED_PARAM):
@@ -125,6 +129,19 @@ class CommitAction:
             )
         return self._stage_and_commit(plan, cwd, target)
 
+    def _fix_commit(self, context: ActionContext, cwd: Path) -> ActionResult:
+        """A fix commit: the plan and every refusal come from ``fix_commit`` (slice 423)."""
+        planned = fix_plan_from_context(context)
+        if isinstance(planned, FixCommitRefusal):
+            metadata: dict[str, object] | None = (
+                {FAILURE_KIND_KEY: planned.failure_kind.value} if planned.failure_kind else None
+            )
+            return self._failure(planned.message, metadata)
+        result = self._stage_and_commit(planned.plan, cwd, None, literal_paths=True)
+        if result.success:
+            result.metadata["fix_report"] = planned.report.model_dump()
+        return result
+
     def _planned(self, target: CommitTarget, cwd: Path, context: ActionContext) -> CommitPlan | str:
         """The plan for a scoped commit, or the refusal text when its placement is wrong."""
         refusal = _check_placement(target, str(cwd), context.cf_client)
@@ -144,17 +161,28 @@ class CommitAction:
         return plan
 
     def _stage_and_commit(
-        self, plan: CommitPlan, cwd: Path, target: CommitTarget | None
+        self,
+        plan: CommitPlan,
+        cwd: Path,
+        target: CommitTarget | None,
+        *,
+        literal_paths: bool = False,
     ) -> ActionResult:
+        """Stage and commit ``plan``. ``literal_paths`` makes git read every path as a file
+        name, not a pathspec: a fix's paths are whatever the agent created, and a name such
+        as ``:(exclude)x.txt`` would otherwise be read as pathspec magic and left out."""
         cwd_text = str(cwd)
-        add_args = ["add", "-A"] if plan.stage_all else ["add", "--", *plan.paths]
+        git_options = ["--literal-pathspecs"] if literal_paths else []
+        add_args = (
+            [*git_options, "add", "-A"] if plan.stage_all else [*git_options, "add", "--", *plan.paths]
+        )
         added = _run_or_unknown(add_args, cwd_text, "git add")
         if added.returncode != 0:
             return self._failure(added.stderr or "git add failed")
 
         # Limiting the commit to the planned paths keeps anything already in the
         # index (a stray `git add` by the operator) out of this commit.
-        commit_args = ["commit", "-m", plan.message]
+        commit_args = [*git_options, "commit", "-m", plan.message]
         if not plan.stage_all:
             commit_args += ["--", *plan.paths]
         committed = _run_or_unknown(commit_args, cwd_text, "git commit")
@@ -187,8 +215,14 @@ class CommitAction:
                 ", ".join(plan.left_out),
             )
 
-    def _failure(self, error: str) -> ActionResult:
-        return ActionResult(success=False, action_type=self.action_type, outputs={}, error=error)
+    def _failure(self, error: str, metadata: dict[str, object] | None = None) -> ActionResult:
+        return ActionResult(
+            success=False,
+            action_type=self.action_type,
+            outputs={},
+            error=error,
+            metadata=metadata or {},
+        )
 
 
 def commit_target_from_params(params: dict[str, object], round_number: int) -> CommitTarget | None:

@@ -1,0 +1,19 @@
+{
+ "case": "te6078e2",
+ "matched": {
+  "sol/1/0": "te6078e2-N2",
+  "sol/1/1": "te6078e2-N1",
+  "sol/2/0": "te6078e2-N2",
+  "sol/2/1": "te6078e2-N1",
+  "sol/3/0": "te6078e2-N2",
+  "sol/3/1": "te6078e2-N1",
+  "sol-high/1/0": "te6078e2-N2",
+  "sol-high/1/1": "te6078e2-N1",
+  "sol-high/2/0": "te6078e2-N2",
+  "sol-high/2/1": "te6078e2-N1",
+  "sol-high/3/0": "te6078e2-N2",
+  "sol-high/3/1": "te6078e2-N1"
+ },
+ "new_issues": [],
+ "disputes": []
+}

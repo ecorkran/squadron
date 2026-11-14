@@ -1,0 +1,72 @@
+[
+ {
+  "ref": "sol-high/2/0",
+  "severity": "FAIL",
+  "title": "Refresh the dataset edge before enforcing the gate",
+  "location": "scripts/cutover_304_first_purchase.py:135-137",
+  "description": "`status` reads the stored `tick_dataset_edge`; it does not query Databento. That edge is refreshed by `AvailabilityPhase` during a tick pass. Both cutover modes run this gate before reaching their estimate/pass, and tick has no timer. Consequently, an edge last observed during November keeps rejecting the December cutover even after the provider publishes the required data; rerunning cannot unblock it. Obtain a fresh edge through a free provider call before comparing it, and test the stale-cache case."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "FAIL",
+  "title": "Include the tick tier in per-family exit checks",
+  "location": "scripts/cutover_304_evidence.py:72-91",
+  "description": "`coverage_reads()` visits only `entry.history`, omitting both products\u2019 configured `tbbo` tiers. `_family_evidence()` therefore never applies the not-caught-up exit rule or ledger/raw comparison to those families, although accounting includes them.\n\nFor example, a verified TBBO unit without a failure reason is accepted by `_unit_is_final()` as awaiting definitions, while its session is `awaiting_ingest`\u2014a bucket the new exit rule explicitly rejects. With unchanged health and a zero second estimate, this omission allows an incorrect PASS. Include each configured tier over its wanted range and add a regression test."
+ },
+ {
+  "ref": "sol-high/2/2",
+  "severity": "CONCERN",
+  "title": "Preserve the family when naming cross-tier failures",
+  "location": "scripts/purchase_accounting.py:105-125",
+  "description": "Statistics coverage includes volume verdicts for multiple families, but `over_sessions()` discards each verdict\u2019s `family`, and the caller groups names only by product. `over_failures()` consequently attaches the same combined session list to every failing family. A TBBO-only volume discrepancy can be reported as an OHLCV discrepancy, including the wrong traded count. Preserve and match `(product, family)` when collecting and reporting these names; test differing verdicts for the same session across families."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "FAIL",
+  "title": "Estimate-only evaluates the installed release, not the requested release",
+  "location": "scripts/cutover_304_first_purchase.py:261-268",
+  "description": "`preflight(ref)` verifies the ref but does not install it. `fetch_estimate()` invokes `mt-run`, which executes `/opt/manta-trading/.venv/bin/mt`. When production still has 304\u2019s universe, `--estimate` therefore prices the old wants, potentially reporting nothing to buy instead of 307\u2019s purchase. Run the free estimate against the requested release\u2019s universe and add a test where installed and requested releases differ."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "FAIL",
+  "title": "Pre-install baseline omits the newly wanted GC bar family",
+  "location": "scripts/cutover_304_first_purchase.py:112-115",
+  "description": "The baseline is collected before `install_release()`, through production\u2019s accounting command. Accounting emits only wanted families; the previous universe has no GC bar want. After installing 307, accounting includes `GC/bar_1m`, and `purchase_accounting.totals_delta()` rejects its missing baseline. This stops evidence collection after spending, and reruns retain the incompatible baseline. Capture explicit pre-purchase totals for every target family, independently of the installed universe\u2019s wants."
+ },
+ {
+  "ref": "sol-high/3/2",
+  "severity": "FAIL",
+  "title": "Cached dataset edge prevents the cutover from refreshing itself",
+  "location": "scripts/cutover_304_first_purchase.py:135-137",
+  "description": "`status` reads `tick_dataset_edge`; it does not query the provider. Both execution modes run this gate before reaching the estimate that could refresh availability. With an edge recorded during November\u2019s earlier purchase, December reruns continue refusing even after the provider publishes the required data. There is no tick timer to refresh it automatically. Refresh through a free metadata operation before checking the edge, and test an initially stale cached edge.\n\nTests could not run: the checkout has no virtual environment, and the available interpreter lacks `psycopg`."
+ },
+ {
+  "ref": "sol-xhigh/1/0",
+  "severity": "FAIL",
+  "title": "Consume the actual estimate CLI contract",
+  "location": "scripts/cutover_304_first_purchase.py:268-270",
+  "description": "`fetch_estimate()` returns the complete pass document, but this path expects a flat purchase summary. The CLI\u2019s `PassResult.to_dict()` nests that summary under `phases[].summary`; isolated execution confirmed `KeyError('wanted_days')`. After unwrapping, the full cutover also rejects the real `estimate_only` verdict because `judge_estimate()` requires `allowed`. Normalize and validate the actual CLI payload, and add a regression test using the real renderer rather than mocked flat summaries."
+ },
+ {
+  "ref": "sol-xhigh/1/1",
+  "severity": "FAIL",
+  "title": "Refresh availability before checking the dataset edge",
+  "location": "scripts/cutover_304_first_purchase.py:135-137",
+  "description": "`status` reads the stored `tick_dataset_edge`; it does not query Databento. Availability capture updates that row during an acquisition pass, but both cutover modes apply this gate before reaching their estimate pass. With November\u2019s observation left by purchase 304 and no automatic tick cadence, a December invocation keeps refusing even after the provider publishes the required data. Refresh availability through a non-spending provider read before evaluating this gate."
+ },
+ {
+  "ref": "sol-xhigh/1/2",
+  "severity": "FAIL",
+  "title": "Do not silently exempt every provider hole",
+  "location": "scripts/purchase_verdicts.py:283-286",
+  "description": "This skips `provider_hole` regardless of its condition. The existing `tick_status.caught_up()` rule exempts holes only on provider-`missing` days, and D6 requires other incomplete sessions to be accounted for. An available-day provider hole currently produces neither narration nor failures\u2014confirmed by isolated execution\u2014even when the family is explicitly not caught up. Check the condition and require an explanation or failure for non-exempt holes; parametrize tests for both cases."
+ },
+ {
+  "ref": "sol-xhigh/1/3",
+  "severity": "CONCERN",
+  "title": "Include tick-tier families in session evidence",
+  "location": "scripts/cutover_304_evidence.py:72-91",
+  "description": "`coverage_reads()` traverses only `entry.history`, so neither product\u2019s configured `tbbo` tier reaches `_family_evidence()` or `not_caught_up_report()`. Accounting narrates those families, but unexplained tick-tier gaps never receive the per-session evidence or failure checks required by D6\u2019s every-family exit criterion. Include each configured tier and its range, with a test covering a not-caught-up `tbbo` family."
+ }
+]

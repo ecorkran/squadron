@@ -1,0 +1,34 @@
+{
+ "case": "197",
+ "matched": {
+  "sol-high/2/0": "197-I18",
+  "sol-high/3/1": "197-I18",
+  "sol-high/2/2": "197-N1",
+  "sol-high/2/3": "197-I20",
+  "sol-high/3/3": "197-I20",
+  "sol-high/3/0": "197-I19",
+  "sol-high/3/2": "197-I3",
+  "sol-high/3/4": "197-I1"
+ },
+ "new_issues": [
+  {
+   "id": "197-S1",
+   "title": "On item resume the source re-evaluates 'all tasks checked but slice not marked complete' and so marks a review_unresolved item not_ready, skipping its body.",
+   "members": [
+    "sol-high/2/1"
+   ],
+   "grade": "FALSE",
+   "confidence": "medium",
+   "why": "The finding assumes the task checkboxes are all checked on the tree the source reads. Item resume first calls _git_precondition, which restore_target's to the integration target (committing leftovers on the slice branch) and requires the target checked out before _select_item evaluates the source. The Phase 6 agent's checkmarks live on the slice branch and reach the target only at merge, so an unmerged review_unresolved branch does not trip the check; slice 197 D2 states exactly this ('An unmerged flagged branch doesn't trip this check, because its checkmarks aren't on the target yet'). The check fires only for slices merged but not closed out, which is its purpose.",
+   "evidence": [
+    "src/squadron/pipeline/sources.py:231-233",
+    "src/squadron/pipeline/item_resume.py:100-110 (_resume_locked order)",
+    "src/squadron/pipeline/item_resume.py:230-243 (_git_precondition)",
+    "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:209-211,335"
+   ],
+   "known": null,
+   "fail_justified": false
+  }
+ ],
+ "disputes": []
+}

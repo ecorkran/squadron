@@ -1,0 +1,86 @@
+[
+ {
+  "ref": "sol/1/0",
+  "severity": "CONCERN",
+  "title": "Windows paths lose the subject index used for ownership",
+  "location": "packages/core/src/introspection/ConsistencyChecker.ts:1244",
+  "description": "The newly added ownership metadata calls `extractFileIndex()`, which splits paths only on `/`. Document discovery uses platform-native `join()`, so Windows paths yield `null` instead of their filename index. I verified this using the actual extractor: a POSIX path returned `950`; its Windows equivalent returned `null`.\n\n`resolveFixOwner()` then selects the primary checkout rather than the indexed owner, potentially fixing the wrong copy and deferring the correct one. Use platform-aware basename extraction and add Windows-path regression coverage."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "CONCERN",
+  "title": "Apply-time readiness accepts stale fix plans",
+  "location": "packages/core/src/introspection/routedFixes.ts:255-263",
+  "description": "The second readiness check verifies checkout state and target-file dirtiness, but never verifies that the dry-run inputs remain unchanged. While confirmation waits, another agent can commit changes to task completion or reorder a plan, leaving a clean checkout that passes this gate.\n\nThe code then applies stale status values or line indices and automatically commits them. The inspected checkbox writer checks only that the saved line contains a checkbox\u2014not that it belongs to the intended subject. Recompute findings after confirmation or validate captured input revisions before applying; add a regression covering committed changes between planning and application."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "CONCERN",
+  "title": "Revalidate planned fixes when the target checkout changes",
+  "location": "packages/core/src/introspection/routedFixes.ts:254-263",
+  "description": "The second readiness check verifies cleanliness, not that files or HEAD still match the dry run. During the confirmation prompt, another agent can commit changes or switch branches, leaving a clean checkout. The old findings are then applied and committed automatically. Because `updateCheckbox` uses the saved line number without verifying the entry identity, this can update the wrong checkbox. Record and validate the checked snapshot, or regenerate findings before applying. Add coverage for a clean committed change between planning and application."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "CONCERN",
+  "title": "Git probe failures are misreported as checkout states",
+  "location": "packages/core/src/git/checkoutReadiness.ts:40-53",
+  "description": "Both catches classify every failure as an expected state. A timeout, permission error, or unavailable Git executable becomes `NOT_A_CHECKOUT` or `DETACHED_HEAD`, hiding the actual failure behind misleading deferral text. Preserve structured Git error information, handle only the expected exit statuses, and propagate or explicitly report other failures. Add tests for unexpected probe failures."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "CONCERN",
+  "title": "Revalidate planned fixes after committed changes",
+  "location": "packages/core/src/introspection/routedFixes.ts:255-263",
+  "description": "The apply-time readiness check detects uncommitted edits, but not changes committed while confirmation is pending. Another agent can commit reordered plan entries, leaving a clean checkout; the saved `lineIndex` then updates\u2014and automatically commits\u2014the wrong checkbox. Verify the checked content is unchanged before applying, or regenerate the findings. Add a regression test covering a committed change between planning and application."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "CONCERN",
+  "title": "Preserve JSON output when auto-fix has nothing to apply",
+  "location": "packages/cli/src/commands/check.ts:257-260",
+  "description": "With `workflow.auto_fix = true`, plain `cf check --json` reaches this branch whenever no fixable findings remain. It prints human-readable text and returns before `printJson`, breaking JSON consumers on clean projects and projects containing only non-fixable findings. Return a structured zero-fix result and let the caller select JSON or text output."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "CONCERN",
+  "title": "Revalidate planned fixes after committed checkout changes",
+  "location": "packages/core/src/introspection/routedFixes.ts:255-263",
+  "description": "The apply-time readiness check detects uncommitted edits but not changes committed while confirmation is pending. A reordered plan can therefore pass readiness with a clean tree, after which `applyFixes` uses stale line indices. The inspected checkbox writer only checks for checkbox syntax, so it can update\u2014and automatically commit\u2014the wrong entry. Record and verify the planning revision/content before applying; add a regression test that commits reordered entries between planning and application."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "CONCERN",
+  "title": "Commit timeouts can incorrectly report committed fixes as deferred",
+  "location": "packages/core/src/introspection/routedFixes.ts:223-244",
+  "description": "A commit can update HEAD before a slow post-commit hook causes the git subprocess to time out. This catch treats every failure as an unsuccessful commit and restores paths from the current HEAD, which already contains the fixes. It then clears successful fix logs and reports `COMMIT_FAILED`, despite the changes remaining committed. Capture HEAD before committing and reconcile it after failure before deciding whether rollback or deferral is appropriate. Add coverage for a timeout after HEAD advances."
+ },
+ {
+  "ref": "sol-high/2/0",
+  "severity": "FAIL",
+  "title": "Revalidate the checked snapshot before writing into another checkout",
+  "location": "packages/core/src/introspection/routedFixes.ts:255-263",
+  "description": "The apply-time guard checks current git cleanliness but applies findings computed before the confirmation prompt. Another agent can commit changes or switch branches during that wait, leaving a clean checkout that passes readiness. The old fixes then overwrite newer statuses or toggle the wrong plan entry: `ConsistencyChecker.applyFixes` passes the saved line number directly to `updateCheckbox`, which does not verify the subject index.\n\nRecord and validate the checked revision/content before applying, deferring or replanning when it changes. Add coverage for a clean, committed change between planning and application."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "CONCERN",
+  "title": "Readiness probes disguise unexpected git failures",
+  "location": "packages/core/src/git/checkoutReadiness.ts:39-53",
+  "description": "Both catches translate every failure into an expected checkout state. A timeout, permission error, or git execution failure becomes `NOT_A_CHECKOUT` or `DETACHED_HEAD`, discarding the actual diagnostic. The comments explain expected exit conditions but do not restrict handling to them.\n\nPreserve typed git failure information, classify only the expected exit conditions, and propagate unexpected failures with their diagnostics."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "CONCERN",
+  "title": "Ignored documents bypass cross-checkout write protection",
+  "location": "packages/core/src/git/checkoutReadiness.ts:64-67",
+  "description": "`git status --porcelain` omits ignored, untracked files, but document discovery includes them. Such a document passes readiness and is rewritten in another checkout. `commitPathsIfChanged` then also sees empty status and returns `null`, leaving the write uncommitted without a deferral or error. Explicitly detect and defer ignored targets before writing, and add regression coverage."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "CONCERN",
+  "title": "Commit timeout can report committed fixes as rolled back",
+  "location": "packages/core/src/introspection/routedFixes.ts:228-243",
+  "description": "A slow `post-commit` hook can time out after Git has already advanced HEAD. This handler restores from that new HEAD, then reports `COMMIT_FAILED` and removes successful fix logs, although the fixes remain committed. Capture the original HEAD and reconcile whether the commit landed before declaring rollback. Add a post-commit timeout test alongside the rejecting pre-commit test."
+ }
+]

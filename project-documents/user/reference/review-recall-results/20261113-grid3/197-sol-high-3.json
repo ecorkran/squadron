@@ -1,0 +1,147 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Item resume bypasses the worktree registration guard",
+      "description": "Unlike `enter_slice_branch`, `_git_precondition` never calls `_require_registered_worktree`. In an unregistered linked worktree, CF can supply the primary checkout\u2019s target, and `restore_target` can commit leftovers and switch branches before any later guard runs. Validate registration before mutating Git state; test that refusal leaves branches and files unchanged.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:230-235"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Unresolved slice designs cannot resume after creation",
+      "description": "`slices-plan` uses `cf.undesigned_slices`, which stops selecting a slice once its design exists. Consequently, a successfully created design whose review exhausted its rounds cannot be retried or accepted: re-selection omits it, and reconciliation only permits completed, merged slices. The planning-batch test masks this by continually reporting no design for plan-scoped queries. Add coverage using the actual post-design lifecycle and allow unresolved artifacts to resume.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:286-303"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed report items escape schema-error handling",
+      "description": "`cast` does not validate the loaded JSON. A report with otherwise valid metadata and `\"items\": [null]` reaches `BatchItemRecord.from_json(None)`, raising `AttributeError`, which is not converted into `BatchReportLoadError`. Validate the complete report with a Pydantic schema and test malformed item shapes so item resume returns REJECTED rather than crashing.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py:330-340"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Resume preparation blocks the event loop",
+      "description": "The async path directly performs state/report file I/O, synchronous Git commands, and CF subprocess calls. Git commands can take 30 seconds; CF calls have no timeout. This violates the explicit sub-millisecond synchronous-work rule and prevents timely cancellation or concurrent async work. Offload blocking preparation and report writes, bound subprocess execution, and add a responsiveness test.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:146-155"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Expected preparation failures violate the exit-code contract",
+      "description": "CF failures during source selection or dependency checks raise `ContextForgeError`/`ContextForgeNotAvailable`, neither of which this boundary handles. A missing pipeline instead reaches the broad `OSError` handler and is misleadingly reported as a batch-report write failure. Handle these failures at their actual boundaries, log the cause, and return the appropriate REJECTED or HALTED outcome with regression tests.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/item_resume.py:124-135"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Item resume bypasses the worktree registration guard",
+      "location": "src/squadron/pipeline/item_resume.py:230-235",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Unresolved slice designs cannot resume after creation",
+      "location": "src/squadron/pipeline/item_resume.py:286-303",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Malformed report items escape schema-error handling",
+      "location": "src/squadron/pipeline/batch_report.py:330-340",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Resume preparation blocks the event loop",
+      "location": "src/squadron/pipeline/item_resume.py:146-155",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Expected preparation failures violate the exit-code contract",
+      "location": "src/squadron/pipeline/item_resume.py:124-135",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197",
+    "diff": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-14T03:40:37.225379",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 181789,
+  "diff_chars_injected": 181789,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 123527,
+  "cached_tokens": 121216,
+  "cache_write_tokens": null,
+  "completion_tokens": 913,
+  "reasoning_tokens": 182,
+  "duration_seconds": 91.52823708299547,
+  "cost_usd": null,
+  "cost_basis": null
+}

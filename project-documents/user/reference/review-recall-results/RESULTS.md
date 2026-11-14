@@ -2,7 +2,7 @@
 docType: reference
 project: squadron
 dateCreated: 20261113
-dateUpdated: 20261113
+dateUpdated: 20261114
 status: draft
 ---
 
@@ -74,34 +74,36 @@ Precision is agent-graded; known bugs are fix-commit graded. Cost column is per 
 | luna-xhigh (codex) | 15 | 33% | 5 | 2 | n/a | Codex plan |
 | deepseek4-flash | 24 | 38% | 9 | 1 | $0.12 | alias_pricing |
 | sonnet | 39 | 10% | 4 | 1 | $0.50 | sub |
+| sol-xhigh (codex) | 4 | 100% | 4 | 1 | n/a | Codex plan |
 
 Notes:
 - sol-r (OpenRouter, same model as Codex sol) came in well below Codex sol on this run: 53% vs 81% precision, 3 vs 5 known bugs. One run; provenance or effort may explain it, not checked.
 - luna at xhigh is not haiku-xhigh (3 vs 6 known bugs in grid 2). luna-r-high beats luna-r-xhigh. Effort high did not help sol (2 vs 5 known).
+- sol-xhigh has one review (307, run 1). Too few to rank.
 - minimax31-flash has the highest FALSE rate: 21% of its findings.
 - The cost column is recomputed from saved outputs for rows marked alias_pricing, and from the earlier notes for sub rows.
 
 ## 4. Grid 3, new 7 cases, run 1 (7 known bugs)
 
-Context-forge and trading-engine cases; Codex configs missing most cases.
+Context-forge and trading-engine cases. sol and sol-high now cover all 7 cases (graded 2026-11-14, section 13); luna and luna-xhigh are still partial.
 
 | Config | Cases with findings | Findings | Precision | Distinct REAL | Known bugs hit |
 |---|---|---|---|---|---|
+| sol (codex) | 7 | 15 | 53% | 8 | 2 |
 | minimax31-flash | 7 | 24 | 29% | 7 | 2 |
 | haiku-xhigh | 7 | 31 | 19% | 6 | 2 |
+| sol-high (codex) | 7 | 15 | 53% | 8 | 1 |
 | hy4 | 7 | 33 | 24% | 7 | 1 |
 | sonnet-high | 7 | 16 | 12% | 2 | 1 |
 | luna (codex) | 1 | 1 | 100% | 1 | 1 |
 | luna-r-xhigh | 6 | 11 | 36% | 4 | 0 |
 | luna-r-high | 6 | 10 | 40% | 4 | 0 |
 | luna-r | 6 | 6 | 50% | 3 | 0 |
-| sol-high (codex) | 3 | 6 | 50% | 3 | 0 |
 | luna-xhigh (codex) | 3 | 3 | 67% | 2 | 0 |
 | qwen38-27b | 5 | 7 | 14% | 1 | 0 |
-| sol (codex) | 1 | 2 | 50% | 1 | 0 |
 | sonnet | 5 | 14 | 0% | 0 | 0 |
 
-Only 3 of 7 known bugs were found by anyone. qwen38-27b finds about one finding per review and is weak as a reviewer.
+5 of 7 known bugs were found by someone. sol found context-forge-e984cea3's fence bug, and the sol family got a partial hit on cf5e840c B1, counted (see section 13). qwen38-27b finds about one finding per review and is weak as a reviewer.
 
 ## 5. Comb test (run 1 of 4 reviewers, 40 reviews, 54 REAL, 14 known bugs)
 
@@ -173,7 +175,7 @@ Best pipeline so far (both single runs): haiku-xhigh review, then opus-high comb
 - Precision is agent-graded. Two findings have been checked by hand.
 - One run per config for most rows. Runs 2 and 3 exist only for grid 2 precision and the grid 3 original cases in part.
 - The comb test uses run 1 of each reviewer.
-- Codex rows are incomplete; Codex credits ran out.
+- Codex rows are incomplete except the sol family (runs 1 to 3, section 13); luna Codex rows are partial. Codex credits ran out.
 - Squadron's review recovery misfires on comb output (section 9). The fix is uncommitted.
 - Two costs do not add up and are unexplained: the two-stage comb row above, and the ~$0.03 vs $0.04 difference for luna-r-high between the earlier notes and the recomputed cost.
 
@@ -192,7 +194,7 @@ Best pipeline so far (both single runs): haiku-xhigh review, then opus-high comb
 
 ## 10. Open items
 
-- Grid 3 original cases: runs 2 and 3 for the configs in section 3. The grading step needs an agent, so pass several cases per agent.
+- Grid 3 original cases: runs 2 and 3 for the configs in section 3, except the sol family (graded, section 13). The grading step needs an agent, so pass several cases per agent.
 - Codex runs when a window is fresh. Most of `jobs-codex.txt` is unfinished.
 - Qwen as a reviewer is weak. Qwen as a comb is credible on haiku's output (6 of 6 known bugs kept) but slow.
 - Check the two-stage cost row before quoting it.
@@ -244,3 +246,27 @@ Best pipeline so far (both single runs): haiku-xhigh review, then opus-high comb
 **Batches 5 and 6 (added 2026-11-13):** two more seeded batches of ten, same method (Sonnet high, finding text only, no earlier grade). All 20 settled, none escalated. 19 agree with the original pass. The one disagreement is 307-I4: the original says REAL, the sorter says MINOR (loose attribution in a failure message; the failure itself fires correctly). Decided REAL: the over-session listing is wrong data, not a message. Subagent cost: batch 5 115,688 tokens, batch 6 122,632. Across all six batches: 53 settled, 49 agree (92%). **Opus, same 60 items** (batches 1–6, same brief, no earlier grades): 60 of 60 settled. Opus agrees with the original on 56 of 60 (93%). Opus and Sonnet high agree on 49 of 53 items both settled. Opus disagrees with the original on 921-I9 (Opus REAL), a122-I13 (Opus MINOR), a122-I15 (Opus REAL), and 197-I14 (Opus REAL, against the decision above).
 
 **Decided since:** 197-I14 (plain resume after a halt is not a supported recovery; graded MINOR, `197-graded.json` updated). 225-I11 checked: `mypy` passes on `status_reads.py` at head, and the project has no pyright config, so the original FALSE holds.
+
+## 13. Sol family, all runs (2026-11-14)
+
+**Method:** 160 CONCERN/FAIL findings from `sol`, `sol-high` and `sol-xhigh` reviews that no earlier grading covered (runs 2 and 3 of the original cases, plus all runs of the 7 new cases). Six Sonnet agents (about 540k subagent tokens in all), finding text only, each matching findings to existing issues or grading new ones. Brief: `20261113-grid3/precision/BRIEF-SOL.md`. Output: `precision/{case}-graded-sol.json`. Table: `20261113-grid3/precision/score.py`. Agent grades, not hand-checked.
+
+**Result:** 136 of 160 findings matched issues already graded. 24 findings fell into 11 new issues: 3 REAL, 6 MINOR, 1 PREEXISTING, 1 FALSE. Repeat runs found almost nothing new.
+
+All runs, per config:
+
+| Config | Case set | Reviews | Findings | REAL | MINOR | FALSE | PREEXISTING | Precision | Distinct REAL | Known bugs hit |
+|---|---|---|---|---|---|---|---|---|---|---|
+| sol | original (14 known) | 30 | 91 | 72 | 18 | 0 | 1 | 79% | 31 | 5 |
+| sol-high | original (14 known) | 30 | 100 | 73 | 25 | 2 | 0 | 73% | 33 | 4 |
+| sol-xhigh | original (14 known) | 1 | 4 | 4 | 0 | 0 | 0 | 100% | 4 | 1 |
+| sol | new (7 known) | 21 | 46 | 25 | 17 | 0 | 4 | 54% | 10 | 3 |
+| sol-high | new (7 known) | 21 | 50 | 27 | 19 | 0 | 4 | 54% | 11 | 3 |
+
+Notes:
+- sol finds the same 5 known bugs on the original cases in run 1 and across all 3 runs. sol-high goes from 2 (run 1) to 4 across 3 runs, so repeats help sol-high and not sol.
+- Precision on the new cases (54%) is well below the original cases (73 to 79%). Four PREEXISTING findings per config on the new cases, at most one on the original.
+- Known bugs on the new cases: both configs hit 3 of 7 (cf5e840c B1 partial, below), including context-forge-e984cea3 (fence detection; sol 3 of 3 runs, sol-high 2 of 3) and cfe9597a B1. Both miss cfafd8f7 B1 (`gateByReadiness` throw) and teccae5e B1.
+- cf5e840c B1 (state persisted `in_progress` before `renderFacts` throws): partial hit, **counted** (PM decision 2026-11-14, may be tightened later). sol runs 2 and 3 and sol-high run 1 point at the exact lines and say the failure comes after state was persisted, but propose only wrapping the error in `AdoptionError`, which leaves `in_progress` on disk. Graded as `cf5e840c-S2` (REAL, low confidence, known B1). The other N2 findings from other configs are about malformed TOML or guide reads and are not hits.
+- New REAL issues: cfe984ce-S1 (the fence bug, known), cf5e840c-S2 (the counted partial B1 hit) and 307-S1 (stale stored dataset edge refuses the cutover with a misleading message; low confidence, not verified).
+- sol-xhigh is one review. Not ranked.

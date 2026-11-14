@@ -55,6 +55,31 @@ def prior_output_key(step_name: str, action_type: str, index: int) -> str:
     return f"{step_name}:{action_type}-{index}"
 
 
+def local_output_key(action_type: str, index: int) -> str:
+    """The key an action's result has in ``prior_outputs`` while its own step still runs.
+
+    The executor re-keys a step's results with :func:`prior_output_key` once the step
+    completes; until then an action sees the step's earlier results under these keys.
+    """
+    return f"{action_type}-{index}"
+
+
+def results_in_current_step(prior_outputs: Mapping[str, ActionResult]) -> list[ActionResult]:
+    """The results the running step's earlier actions left, in action order.
+
+    The inverse of :func:`local_output_key`: a key counts only when it is exactly the
+    local key of its own result. Keys of earlier steps (``step:type-n``) and of earlier
+    inner steps of a loop or ``each`` body (``i-type-n``) have another prefix and are
+    skipped, so a result from another step is never taken for this step's own.
+    """
+    indexed: list[tuple[int, ActionResult]] = []
+    for key, result in prior_outputs.items():
+        prefix, _, index = key.rpartition("-")
+        if index.isdecimal() and prefix == result.action_type:
+            indexed.append((int(index), result))
+    return [result for _, result in sorted(indexed, key=lambda pair: pair[0])]
+
+
 def results_for_step(prior_outputs: Mapping[str, ActionResult], step_name: str) -> list[ActionResult]:
     """The results *step_name* left in *prior_outputs*, in action order.
 

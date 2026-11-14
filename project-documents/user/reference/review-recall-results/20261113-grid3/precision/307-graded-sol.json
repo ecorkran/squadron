@@ -1,0 +1,42 @@
+{
+ "case": "307",
+ "matched": {
+  "sol-high/2/1": "307-I13",
+  "sol-xhigh/1/3": "307-I13",
+  "sol-high/2/2": "307-I4",
+  "sol-high/3/0": "307-I15",
+  "sol-high/3/1": "307-I16",
+  "sol-xhigh/1/0": "307-I1",
+  "sol-xhigh/1/2": "307-I14"
+ },
+ "new_issues": [
+  {
+   "id": "307-S1",
+   "title": "The dataset-edge gate reads the stored tick_dataset_edge, which only a tick pass refreshes, and runs before any pass, so a stale edge refuses the cutover with a misleading message.",
+   "members": [
+    "sol-high/2/0",
+    "sol-high/3/2",
+    "sol-xhigh/1/1"
+   ],
+   "grade": "REAL",
+   "confidence": "low",
+   "why": "run_gates calls `mt data tick status --json`, whose edge comes from status_reads.dataset_edge (a SELECT on tick_dataset_edge). The row is written only by AvailabilityPhase.capture_dataset inside a tick pass, and mt-tick-pass has no timer. Both _estimate_only and _steps call run_gates before any pass, so an edge last observed before 2026-12-01 keeps check_dataset_edge refusing with 'the provider has not published it yet' even when it has. It fails closed (no spend), and an operator could unblock it by running `pass --estimate-only` by hand (that pass runs AvailabilityPhase), which the script does not say; whether the real operator flow does so before the cutover cannot be settled from code.",
+   "evidence": [
+    "scripts/cutover_304_first_purchase.py:129-137",
+    "scripts/cutover_304_first_purchase.py:258-267",
+    "src/manta_trading/data/tick/status_reads.py:208-216",
+    "src/manta_trading/data/tick/availability.py:127-150",
+    "src/manta_trading/data/tick/acquisition_pass.py:211-220",
+    "deploy/systemd/mt-tick-pass.service:2"
+   ],
+   "known": null,
+   "fail_justified": false
+  }
+ ],
+ "disputes": [],
+ "also_matches": {
+  "sol-xhigh/1/0": [
+   "307-I2"
+  ]
+ }
+}

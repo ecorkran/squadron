@@ -16,6 +16,7 @@ from squadron.cli.commands.config import config_app
 from squadron.cli.commands.dispatch_run import dispatch_run
 from squadron.cli.commands.doctor import doctor
 from squadron.cli.commands.events import events_app
+from squadron.cli.commands.fix_prompt_run import fix_prompt_run
 from squadron.cli.commands.history import history
 from squadron.cli.commands.install import install_commands, uninstall_commands
 from squadron.cli.commands.list import agents_app
@@ -85,6 +86,7 @@ app.command("_summary-instructions", hidden=True)(summary_instructions)
 app.command("_summary-run", hidden=True)(summary_run)
 app.command("_dispatch-run", hidden=True)(dispatch_run)
 app.command("_commit", hidden=True)(commit_run)
+app.command("_fix-prompt", hidden=True)(fix_prompt_run)
 app.command("_branch", hidden=True)(branch_run)
 
 

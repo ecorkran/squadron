@@ -479,6 +479,58 @@ Built-in code pipelines (`P6`, `implement`, `P456`, `P56`) run `branch enter →
 
 ---
 
+### `fix`
+
+**Purpose:** Fix an issue the way the project's fix rule says: a test that fails for the reported reason, the change that makes it pass, the project's gates, and one `fix:` commit. No branch, task file or review.
+
+```yaml
+- fix:
+    issue: "{issue}"
+    model: "{model}"
+    issue-file: "{issue-file}"
+    commit-to: "{commit-to}"
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `issue` | string or int | yes | Issue number, `301` or `#301` |
+| `commit-to` | string | yes | `target`: the integration target (`git.integration_branch`, else `main`), which must be checked out. `current`: the branch checked out when the step starts; Context Forge is not read |
+| `issue-file` | string | no | Frozen issue text, read verbatim as UTF-8; relative to `--io-dir` when one is given, else the working directory; `..` paths are refused. Empty (the default) fetches the issue instead |
+| `model` | string | no | Model alias for the dispatch |
+
+Any other key is rejected under `--strict`. `sq run fix 301 -p issue-file=PATH` binds `301` to `issue`; the built-in `fix` pipeline defaults `commit-to` to `target`.
+
+The step expands to three actions:
+
+1. **`fix-context`** checks the fix may start, reads the issue and assembles the prompt (`src/squadron/data/prompts/fix.md`, with the issue text between explicit markers). It records `issue_number`, `issue_source` (`file` or `github`), `issue_text_sha256`, `start_head`, `start_branch` and `commit_to` in the run state. With an empty `issue-file` it fetches the issue through the code host: the repository comes from the checkout's remotes (as for a bare `#n` pull-request target), and the text is the title, body and every comment as they stand, with no cutoff. A host error (not found, a pull request, authentication, unreachable, timeout, no or ambiguous remote) fails the step here, before any dispatch, with the host's message; there is no retry and no fallback to a file.
+2. **`dispatch`** runs the agent, which writes a failing test, runs it and sees it fail, makes the change, runs the project's format, lint, typecheck and touched-area test commands, and ends its reply with a JSON report. It is told not to commit, push, switch branches or fetch the issue.
+3. **`commit`** (subject `fix`) checks the report and makes one commit: `fix: {summary}`, a blank line, `Fixes #{issue}`. It stages every changed and untracked path (ignored files excluded). A summary over 72 characters is kept as written and logged at WARNING.
+
+**The report.** The first JSON object found in the agent's reply (the prompt tells the agent to end with it, and to put no other JSON object before it), with these fields (others are ignored):
+
+| Field | Meaning |
+|---|---|
+| `summary` | One line, imperative, without a `fix:` prefix |
+| `failing_tests` | Test ids added or changed to reproduce the issue; not empty |
+| `failed_before_change` | `true`: the tests were run and failed before the change |
+| `gates` | One `{command, exit_code}` per gate command run after the change; not empty, every `exit_code` 0 |
+| `blocked` | Present only when the fix cannot proceed without a person; holds the reason. The other fields are then not required |
+
+Gates are run and reported by the agent; squadron checks the report's shape and does not re-run them.
+
+**Refusals.** Each one stops the run with a message naming the cause, and nothing is committed:
+
+| Where | Refusal |
+|---|---|
+| `fix-context`, before any dispatch | invalid issue ref or `commit-to`; a dirty working tree (the paths are listed, because the commit stages everything); a detached HEAD; under `target`, a branch that is not the target, or cf cannot be read; a missing, empty or unreadable `issue-file`, or a host error fetching the issue; HEAD unreadable |
+| `commit` | a report defect, named by field (kind `fix_report`); a valid report with no changes in the tree (kind `fix_report`); a `blocked` report (`fix blocked: …` and the reason, kind `fix_report`); a branch different from where the step started, or not the target under `target`; HEAD not the start HEAD, because the agent committed |
+
+A refused fix leaves the agent's changes in the tree for inspection. `blocked` does not pause the run and has no resume path: `--resume` would re-run `fix-context`, which refuses the dirty tree. Resolve the block, commit or discard the changes by hand, and run `fix` again. A git state that cannot be read (for example cf failing under `commit-to: target`) ends the run with an error rather than failing one action.
+
+With `commit-to: current` and `issue-file` set, the pipeline makes no Context Forge call and no `gh` call, so it runs in any git repository. The pipeline never pushes, never posts to the issue and never closes it; `Fixes #n` closes it when the commit reaches the host's default branch. `--max-cost` and `pipeline.max_cost_usd` apply as for any dispatch (`failure_kind: cost_cap`).
+
+---
+
 ### Commits
 
 Phase steps, `devlog`, and loops with `commit_each_iteration` commit through one plan: only the files that step produced are staged, and the message says what they are.
@@ -498,6 +550,7 @@ Phase steps, `devlog`, and loops with `commit_each_iteration` commit through one
 | `implement` | `feat: implement slice 105 (review: PASS)` |
 | architecture | `docs: revise initiative 180 architecture (review: PASS)` |
 | `devlog` | `docs: add DEVLOG entry for slice 105` |
+| `fix` | `fix: keep the last row when parsing`, then `Fixes #301` (stages every changed path; see [`fix`](#fix)) |
 
 The verdict is read from the review file's frontmatter. The review clause is left out when no review file is committed. Nothing staged means no commit and a WARNING.
 
@@ -762,6 +815,7 @@ Actions are the internal execution units that step types expand into. Pipeline a
 | `checkpoint` | phase steps (when `checkpoint:` is set), `gate` step (when `checkpoint:` is set) | Pauses pipeline; user decides to continue or abort |
 | `commit` | phase steps, `devlog`, loops with `commit_each_iteration` | Stages only the files the step produced and commits them — see [Commits](#commits) |
 | `branch` | `branch` step | Enters or merges a slice's branch |
+| `fix-context` | `fix` step | Checks a fix may start (clean tree, branch), reads the issue text and assembles the fix prompt — see [`fix`](#fix) |
 | `compact` | compact step | Reduces context (session-rotate in true CLI; `/compact` dispatch in prompt-only) |
 | `summary` | summary step | Generates summary text and routes to emit destinations |
 | `devlog` | devlog step | Writes a DEVLOG entry (the step then commits it) |
@@ -923,6 +977,7 @@ sq pipelines list    # shows all available pipelines with descriptions
 | `judge-cycle` | Judge-gated review-fix-review cycle — reference implementation of the [judge-gated cycle convention](#judge-gated-cycles) | `slice`, `model`, `review-model`, `max-revisions` |
 | `compose-gate-example` | Reduces a judge result and a review result into one checkpoint gate — reference implementation of [gate composition](#composing-a-judge-and-a-review-at-one-gate) | `slice`, `model`, `review-model` |
 | `findings-addressed-cycle` | Fix-review cycle that exits only when fresh eyes pass *and* the prior round's findings were accounted for — see [Requiring that findings were addressed](#requiring-that-findings-were-addressed) | `slice`, `model`, `review-model`, `judge-model`, `max-revisions` |
+| `fix` | Fix an issue: failing test, change, gates, one `fix:` commit — see [`fix`](#fix) | `issue`, `model`, `issue-file`, `commit-to` |
 | `example` | Annotated reference — all available options | `slice` |
 
 The `example` pipeline (`src/squadron/data/pipelines/example.yaml`) is the primary authoring reference. It includes inline comments explaining every field and option. Read it before writing a custom pipeline.
@@ -1250,7 +1305,7 @@ The `/sq:run` slash command (installed via `sq install-commands`) wraps this loo
 
 A `dispatch` step that uses `prompt_files`, `reply_from`, `reply_format`, `reply_file` or `delivered_prompt_file` is refused here, with an error naming the key: the session cannot read the files, hand a reply between steps or write the output files. Run it with `sq run`.
 
-Branch and commit steps render as the hidden `sq _branch enter|merge --slice N` and `sq _commit --subject … --slice N` commands, which run the same code the in-process executor does.
+Branch and commit steps render as the hidden `sq _branch enter|merge --slice N` and `sq _commit --subject … --slice N` commands, which run the same code the in-process executor does. A `fix` step renders `sq _fix-prompt --issue N … --commit-to MODE` (the assembled prompt) and `sq _commit --subject fix …` (the session writes its final JSON report to a temp file for `--report-file`); both refuse and word things exactly as the in-process actions do. `sq run --prompt-only` refuses `--io-dir`, so a prompt-only fix reads `issue-file` relative to the working directory.
 
 `--step-done` also runs every bound `post-action` event action (the same
 ones the in-process executor fires after each action) before marking the

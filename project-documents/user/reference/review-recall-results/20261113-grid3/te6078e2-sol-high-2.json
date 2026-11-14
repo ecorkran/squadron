@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Integer coercion silently rounds before validation",
+      "description": "Converting a `Real` to `float` before testing integrality loses precision. Reproduced: both `Fraction(9007199254740993)` and fractional `Fraction(18014398509481985, 2)` return `9007199254740992`. Consequently, parameter binding can accept fractional inputs and store incorrect values. Validate integrality and convert without an intermediate float, or reject unsupported numeric types. Add regression tests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/value_checks.py:66-70"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Invalid timestamp meaning breaks the error contract",
+      "description": "`Timestamp` does not validate its meaning field. Passing `Timestamp(100, \"available_at\")` into `SignalEvent` therefore raises `AttributeError` while formatting `.value`, rather than `InvalidSignalError`. Validate the enum before accessing `.value`, or format the rejected value with `repr`. Add tests for string and `None` meanings.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/manta_trading_engine/core_model/signals.py:76-79"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Integer coercion silently rounds before validation",
+      "location": "src/manta_trading_engine/core_model/value_checks.py:66-70",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Invalid timestamp meaning breaks the error contract",
+      "location": "src/manta_trading_engine/core_model/signals.py:76-79",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/te6078e2",
+    "diff": "967ca41b39d820baa3a212547b5b39cf61282b2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T22:29:39.118025",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 74544,
+  "diff_chars_injected": 74544,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 117421,
+  "cached_tokens": 112384,
+  "cache_write_tokens": null,
+  "completion_tokens": 349,
+  "reasoning_tokens": 0,
+  "duration_seconds": 90.49705291702412,
+  "cost_usd": null,
+  "cost_basis": null
+}

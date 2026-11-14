@@ -1,0 +1,23 @@
+{
+ "case": "cf9006d5",
+ "matched": {
+  "sol/1/0": "cf9006d5-N2",
+  "sol/2/0": "cf9006d5-N2",
+  "sol/3/0": "cf9006d5-N2",
+  "sol-high/1/0": "cf9006d5-N2",
+  "sol-high/2/0": "cf9006d5-N2",
+  "sol-high/3/0": "cf9006d5-N2",
+  "sol/1/1": "cf9006d5-N8",
+  "sol-high/2/3": "cf9006d5-N8",
+  "sol-high/3/2": "cf9006d5-N8",
+  "sol/2/1": "cf9006d5-N1",
+  "sol/3/1": "cf9006d5-N1",
+  "sol-high/1/1": "cf9006d5-N1",
+  "sol-high/2/1": "cf9006d5-N1",
+  "sol-high/3/1": "cf9006d5-N1",
+  "sol-high/1/2": "cf9006d5-N12",
+  "sol-high/2/2": "cf9006d5-N12"
+ },
+ "new_issues": [],
+ "disputes": []
+}

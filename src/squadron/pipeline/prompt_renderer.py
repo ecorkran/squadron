@@ -22,6 +22,7 @@ from squadron.pipeline.commit_plan import (
     REVIEW_TEMPLATE_PARAM,
     SLICE_PARAM,
     SUBJECT_PARAM,
+    CommitSubject,
 )
 from squadron.pipeline.compaction_templates import (
     load_compaction_template,
@@ -34,6 +35,7 @@ from squadron.pipeline.executor import (
     CHECKPOINT_KEY_OVERRIDE,
     resolve_placeholders,
 )
+from squadron.pipeline.fix_prompt_args import FixRenderError, fix_commit_args, fix_context_args
 from squadron.pipeline.guarded_commit import GUARDED_PARAM
 from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
 from squadron.pipeline.loop_commit import round_commit_params
@@ -509,8 +511,38 @@ def _render_compact(
     )
 
 
+def _render_fix_context(
+    config: dict[str, object],
+    params: dict[str, object],
+) -> ActionInstruction:
+    """Build instruction for a fix-context action: ``sq _fix-prompt …`` (slice 423 D9)."""
+    try:
+        args = fix_context_args(config)
+    except FixRenderError as exc:
+        raise PromptOnlyUnsupportedError(str(exc)) from exc
+    return ActionInstruction(
+        action_type=ActionType.FIX_CONTEXT,
+        instruction="Check the fix may start; its stdout is the assembled context for the dispatch",
+        command=shlex.join(args),
+    )
+
+
+def _render_fix_commit(context_config: dict[str, object], cwd: str | None) -> ActionInstruction:
+    """Build instruction for the fix commit: ``sq _commit --subject fix …`` (slice 423 D9)."""
+    try:
+        args = fix_commit_args(context_config, cwd)
+    except FixRenderError as exc:
+        raise PromptOnlyUnsupportedError(str(exc)) from exc
+    return ActionInstruction(
+        action_type=ActionType.COMMIT,
+        instruction="Commit the fix from the final JSON report",
+        command=shlex.join(args),
+    )
+
+
 # Map action type -> builder function signature
 _BUILDERS: dict[str, object] = {
+    ActionType.FIX_CONTEXT: _render_fix_context,
     ActionType.CF_OP: _render_cf_op,
     ActionType.DISPATCH: _render_dispatch,
     ActionType.REVIEW: _render_review,
@@ -563,11 +595,13 @@ def render_step_instructions(
     resolver: ModelResolver,
     run_id: str,
     verbosity: int = 0,
+    cwd: str | None = None,
 ) -> StepInstructions:
     """Expand a step into executable instruction objects.
 
     Uses existing step type ``expand()`` to get the action sequence,
-    then generates an ``ActionInstruction`` for each action.
+    then generates an ``ActionInstruction`` for each action. ``cwd`` is the working
+    directory; a fix step's commit reads HEAD and the branch there.
     """
     from squadron.pipeline.steps import bootstrap_step_types
 
@@ -586,13 +620,25 @@ def render_step_instructions(
     # Inject run_id into params so renderers (e.g. checkpoint) can reference it.
     render_params = {**params, "run_id": run_id}
 
+    resolved: list[tuple[str, dict[str, object]]] = [
+        (action_type, resolve_placeholders(action_config, render_params))
+        for action_type, action_config in actions
+    ]
+    fix_context_config: dict[str, object] = {}
+    for action_type, config in resolved:
+        if action_type == ActionType.FIX_CONTEXT:
+            fix_context_config = config
     instructions: list[ActionInstruction] = []
-    for action_type, action_config in actions:
-        resolved_config = resolve_placeholders(action_config, render_params)
-        instruction = _build_action_instruction(
-            action_type, resolved_config, render_params, resolver, verbosity=verbosity
+    for action_type, resolved_config in resolved:
+        if action_type == ActionType.COMMIT and resolved_config.get(SUBJECT_PARAM) == CommitSubject.FIX:
+            # The fix commit's issue and destination are the fix-context action's.
+            instructions.append(_render_fix_commit(fix_context_config, cwd))
+            continue
+        instructions.append(
+            _build_action_instruction(
+                action_type, resolved_config, render_params, resolver, verbosity=verbosity
+            )
         )
-        instructions.append(instruction)
 
     return StepInstructions(
         run_id=run_id,

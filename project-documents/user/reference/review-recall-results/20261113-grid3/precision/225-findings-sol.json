@@ -1,0 +1,44 @@
+[
+ {
+  "ref": "sol-high/2/0",
+  "severity": "FAIL",
+  "title": "Coverage compares different database snapshots",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:107-113",
+  "description": "The CLI supplies an autocommit connection, so ledger and raw-count queries see separate snapshots. If an ingest commits between these queries, coverage compares old ledger totals with new raw rows and incorrectly reports corruption, exiting 3. Read the manifest, ledger and raw counts within one read-only, repeatable-read transaction. Add a regression test that commits an ingest between reads."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "CONCERN",
+  "title": "An unknown availability edge can report caught up",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:217",
+  "description": "With a configured tier/start, no explicit end and no observed edge, `wanted` becomes `None`. Nevertheless, this call passes `wanted=True`. On an empty manifest, `caught_up([])` returns `True`, despite the wanted horizon being unknown. Explicitly represent that uncertainty rather than declaring success, and test this configuration."
+ },
+ {
+  "ref": "sol-high/2/2",
+  "severity": "CONCERN",
+  "title": "Coverage repeatedly scans all instrument/session totals",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:81-82",
+  "description": "Each session scans and materializes both entire dictionaries, making report construction quadratic in session count. This runs synchronously inside `build_coverage`, blocking the event loop. An isolated check with 50,000 totals took approximately 1.8 ms for just one session, exceeding the required sub-millisecond synchronous-work bound. Group totals by session once, offload substantial processing, and add realistic load coverage."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "FAIL",
+  "title": "Coverage compares different database snapshots",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:109-113",
+  "description": "The ledger and raw counts are separate queries on an autocommit connection. If ingest commits between them, coverage compares the old ledger with newly committed trades and incorrectly reports corruption, exiting 3. Supersession can cause the same race. Run the reads within a read-only, repeatable-read transaction and add a concurrent-ingest regression test."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "CONCERN",
+  "title": "Raw counts include unrelated products",
+  "location": "src/manta_trading/data/tick/status_reads.py:167-173",
+  "description": "`ledger_totals` filters by request shape, but `raw_counts` counts every instrument within the session times. When another product has stored trades in those intervals, its rows appear as mismatches against the selected product\u2019s ledger. Scope raw counts to the product independently of ledger presence, preserving detection of unexpected rows. Add a two-product test."
+ },
+ {
+  "ref": "sol-high/3/2",
+  "severity": "CONCERN",
+  "title": "Calendar pool timeouts bypass storage-error handling",
+  "location": "src/manta_trading/data/tick/tick_status_build.py:67-73",
+  "description": "`TradingCalendar` acquires connections through `ConnectionPool`, which can raise `PoolTimeout` when the calendar database is unavailable. Neither this handler nor `exit_code_for` handles that exception, so the advertised exit 4 and structured JSON error are lost. Translate `PoolTimeout` into `TickCalendarError` and test an unreachable calendar database for both verbs."
+ }
+]

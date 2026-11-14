@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from squadron.pipeline.commit_plan import CommitSubject, CommitTarget
+from squadron.pipeline.commit_plan import CommitSubject, CommitTarget, CommitTargetError
 
 
 class ArtifactChange(StrEnum):
@@ -44,6 +44,8 @@ def compose_message(target: CommitTarget, facts: StagedFacts) -> str:
             return f"docs: add DEVLOG entry{suffix}"
         case CommitSubject.CODE:
             return f"feat: implement slice {target.slice_index}{_review_clause(facts)}"
+        case CommitSubject.FIX:
+            raise CommitTargetError("a fix commit's message comes from its report (fix_commit_plan)")
         case _:
             return _planning_message(target, facts)
 

@@ -1,0 +1,50 @@
+{
+ "case": "cf5e840c",
+ "matched": {
+  "sol/1/1": "cf5e840c-N1",
+  "sol/2/1": "cf5e840c-N1",
+  "sol/3/1": "cf5e840c-N1",
+  "sol-high/1/1": "cf5e840c-N1",
+  "sol-high/2/1": "cf5e840c-N1",
+  "sol-high/3/1": "cf5e840c-N1",
+  "sol-high/2/0": "cf5e840c-N9",
+  "sol-high/3/0": "cf5e840c-N9"
+ },
+ "new_issues": [
+  {
+   "id": "cf5e840c-S1",
+   "title": "Adoption eligibility compares the instruction differently from prompt selection: a differently-cased brownfield instruction or the concept prompt's key skips the resolver.",
+   "members": [
+    "sol/1/0"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "The resolver compares the instruction to 'brownfield-adoption' exactly and otherwise needs resolvePhaseValue to return the concept phase. SystemPromptParser.getPromptForInstruction lowercases and fuzzy-matches section names and keys, so `--it Brownfield-Adoption` or `--it concept-phase-0` (key of 'Concept (Phase 0)') select a prompt without the resolver running. The mismatch is real and in new code, but it needs a hand-typed instruction override in a non-canonical form; the canonical forms (P0, 0, concept, brownfield-adoption) all work.",
+   "evidence": [
+    "packages/core/src/adoption/adoptionResolver.ts:120-121",
+    "packages/core/src/services/SystemPromptParser.ts:186-215",
+    "packages/core/src/schema/projectSchema.ts:160-162"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "cf5e840c-S2",
+   "title": "renderFacts throws after persistInProgress has written, leaving adoption.state in_progress for a build that fails (partial hit on B1: the findings name the sequence and propose a swallowing fix, not the reorder).",
+   "members": [
+    "sol/2/0",
+    "sol/3/0",
+    "sol-high/1/0"
+   ],
+   "grade": "REAL",
+   "confidence": "low",
+   "why": "Counted as a B1 hit by PM decision 2026-11-14. The findings point at adoptionResolver.ts:128-134 and say renderFacts throws after adoption state has been persisted, but their proposed fix wraps the error in AdoptionError and does not address the persisted in_progress. Original grading put them under N2 (MINOR).",
+   "evidence": [
+    "packages/core/src/adoption/adoptionResolver.ts:128-134"
+   ],
+   "known": "B1",
+   "fail_justified": null
+  }
+ ],
+ "disputes": []
+}

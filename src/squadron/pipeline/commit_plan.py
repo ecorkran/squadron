@@ -57,6 +57,7 @@ class CommitSubject(StrEnum):
     ARCHITECTURE = "architecture"
     CODE = "code"
     DEVLOG = "devlog"
+    FIX = "fix"  # slice 423: every changed path, message from the fix report
 
 
 class CommitTargetError(ValueError):
@@ -326,6 +327,9 @@ def _candidates(
             return paths
         case CommitSubject.DESIGN | CommitSubject.TASKS:
             paths = _slice_candidates(target, cwd, root, cf_client)
+        case CommitSubject.FIX:
+            # A fix commit stages the tree's changed paths (fix_commit_plan), never candidates.
+            raise CommitTargetError("a fix commit has no candidate paths; use fix_commit_plan")
     return [*paths, _candidate(DEVLOG_FILE, cwd, root)]
 
 

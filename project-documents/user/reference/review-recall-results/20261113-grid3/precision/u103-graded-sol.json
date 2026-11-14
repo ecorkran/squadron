@@ -1,0 +1,11 @@
+{
+ "case": "u103",
+ "matched": {
+  "sol-high/2/0": "u103-I1",
+  "sol-high/3/0": "u103-I1",
+  "sol-high/2/1": "u103-I2",
+  "sol-high/3/1": "u103-I2"
+ },
+ "new_issues": [],
+ "disputes": []
+}

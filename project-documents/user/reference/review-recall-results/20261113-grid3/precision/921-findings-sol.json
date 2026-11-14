@@ -1,0 +1,51 @@
+[
+ {
+  "ref": "sol-high/2/0",
+  "severity": "FAIL",
+  "title": "Blocking launcher prevents early termination",
+  "location": "scripts/cutover_common.py:356-357",
+  "description": "`run()` uses synchronous `subprocess.run()`, while `deploy/mt-run` waits until the service finishes before exiting. Consequently, journal polling cannot begin when the trailing-completion marker appears; it starts only after backfill ends. Launch the service non-blockingly and monitor its journal concurrently. Add a test covering the launcher's actual blocking behavior rather than mocking `run()` as immediately returning."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "FAIL",
+  "title": "Root execution trusts an operator-controlled checkout",
+  "location": "deploy/sudoers.d/manta-ops:9",
+  "description": "`MT_INSTALL` authorizes passwordless root execution of a script in the operator's checkout. Modifying or replacing that script permits arbitrary root commands, defeating the claimed limited-root boundary. Install the privileged entry point into a root-owned location with non-writable parent directories and constrain its inputs."
+ },
+ {
+  "ref": "sol-high/2/2",
+  "severity": "FAIL",
+  "title": "Unit wildcard permits operations on unrelated services",
+  "location": "deploy/sudoers.d/manta-ops:7",
+  "description": "The sudoers argument wildcard can match whitespace and additional arguments. An invocation such as `systemctl stop mt-minute-pass.timer ssh.service` therefore matches the allowed pattern while also stopping an unrelated service. Enumerate exact unit-and-verb combinations, or use a root-owned wrapper that validates argument count and unit names."
+ },
+ {
+  "ref": "sol-high/2/3",
+  "severity": "CONCERN",
+  "title": "Saved narration omits the acceptance evidence",
+  "location": "scripts/cutover_common.py:59-65",
+  "description": "Only `say()` output reaches the new log. Repair reports are emitted through `print(output)` in `scripts/cutover_921_minute_sessions.py:102`, and streamed subprocess output bypasses it entirely. The advertised \u201cfull narration\u201d therefore omits acceptance measurements and diagnostic output\u2014the evidence this change intends to preserve. Route those outputs through the same recording mechanism and test that an actual verification report is retained."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "FAIL",
+  "title": "Bounded firing still waits for the entire pass",
+  "location": "scripts/cutover_common.py:356-360",
+  "description": "`run()` uses blocking `subprocess.run()`, while `deploy/mt-run:129` waits until the service ends. Consequently, journal polling cannot begin while backfill is running, and the new stop-at-trailing-completion behavior never executes in time. Start the service non-blockingly or supervise the streaming subprocess concurrently. The mocked tests bypass this blocking behavior."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "FAIL",
+  "title": "Sudo policy grants root execution of operator-controlled code",
+  "location": "deploy/sudoers.d/manta-ops:9",
+  "description": "The passwordless rule executes an installer from the operator\u2019s checkout as root. Anyone able to modify that checkout can replace the script and execute arbitrary root commands; restricting its arguments does not protect its contents. Install the privileged entry point in a root-owned location with root-owned parent directories and restrict its accepted operations."
+ },
+ {
+  "ref": "sol-high/3/2",
+  "severity": "FAIL",
+  "title": "New reseeding index cannot detect spillover-only sessions",
+  "location": "src/manta_trading/data/acquisition/daemon/minute.py:365-366",
+  "description": "The newly reused `build_truncated_day_index()` only joins bars inside `[session_open, session_close)` (`repair_921.py:273-289`). A session containing only the previous day\u2019s midnight spillover has no matching bars, so it never enters this index. Meanwhile, the coarse coverage index marks that calendar day covered, preventing reseeding. Thus the historical spillover-only failure described by this change remains unrepaired. Detect covered days with no qualifying in-session bars and add a regression test using the actual spillover timestamp."
+ }
+]

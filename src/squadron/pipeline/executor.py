@@ -78,6 +78,7 @@ from squadron.pipeline.models import (
     ActionResult,
     PipelineDefinition,
     StepConfig,
+    local_output_key,
     prior_output_key,
 )
 from squadron.pipeline.run_spend import RunSpend, read_cost_cap
@@ -90,7 +91,7 @@ from squadron.pipeline.sources import (
 from squadron.pipeline.steps import StepTypeName
 from squadron.pipeline.steps.collection import ItemFailurePolicy
 from squadron.pipeline.steps.dispatch import step_artifact_kind
-from squadron.pipeline.steps.utils import unpack_inner_steps
+from squadron.pipeline.steps.utils import any_step_needs_context_forge, unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
 from squadron.pipeline.usage_capture import UsageCapture
 from squadron.providers.base import (
@@ -535,6 +536,7 @@ async def execute_pipeline(
     import squadron.pipeline.actions.compact as _a_compact  # noqa: F401
     import squadron.pipeline.actions.devlog as _a_devlog  # noqa: F401
     import squadron.pipeline.actions.dispatch as _a_dispatch  # noqa: F401
+    import squadron.pipeline.actions.fix_context as _a_fix_context  # noqa: F401
     import squadron.pipeline.actions.review as _a_review  # noqa: F401
     import squadron.pipeline.actions.summary as _a_summary  # noqa: F401
     import squadron.pipeline.intelligence.fan_in.reducers as _fan_in_reducers  # noqa: F401
@@ -547,6 +549,7 @@ async def execute_pipeline(
         _a_compact,
         _a_devlog,
         _a_dispatch,
+        _a_fix_context,
         _a_review,
         _a_summary,
         _fan_in_reducers,
@@ -577,8 +580,11 @@ async def execute_pipeline(
             merged_params[key] = val
 
     # Inject _project (project name from CF) so emit destinations can key
-    # summary files by project. Only set if not already provided by the caller.
-    if "_project" not in merged_params:
+    # summary files by project. Only set if not already provided by the caller, and
+    # only when a step uses Context Forge: this start-up read makes no cf call for a
+    # cf-free pipeline (#288), and the readers of _project already treat an absent one as
+    # "unknown". (The fix pipeline reads cf later, and only under ``commit-to: target``.)
+    if "_project" not in merged_params and any_step_needs_context_forge(definition.steps):
         cf_params = gather_cf_params(effective_cwd)
         merged_params["_project"] = cf_params.get("project") or "unknown"
 
@@ -1175,8 +1181,7 @@ async def _execute_step_once(
                 result.metadata[FAILURE_KIND_KEY] = FailureKind.COST_CAP.value
 
         # Update step_prior for next action in same step
-        key = f"{action_type}-{action_index}"
-        step_prior[key] = result
+        step_prior[local_output_key(action_type, action_index)] = result
 
         # Checkpoint pause
         if result.outputs.get("checkpoint") == "paused":

@@ -1,0 +1,114 @@
+[
+ {
+  "ref": "sol/1/0",
+  "severity": "FAIL",
+  "title": "Dry-run symlinks can mutate real files",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:42-45",
+  "description": "The sandbox preserves symlinks, but the installer follows them. For example, an absolute `.github/prompts` symlink remains pointed at its original directory; Copilot\u2019s `removeGeneratedPromptFiles()` then deletes marked prompt files there during `--dry-run`. Directory symlinks can likewise redirect writes outside the sandbox. Reject escaping symlinks or copy their contents into isolated sandbox paths, and add regression tests verifying original files remain untouched."
+ },
+ {
+  "ref": "sol/1/1",
+  "severity": "CONCERN",
+  "title": "Aborted dry runs discard the diagnostic explaining failure",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:113-118",
+  "description": "Buffered diagnostics are replayed only after `install()` returns. If it throws `InstallAbort`, such as for missing rules or broken managed markers, its stdout error messages are discarded. `installIde()` then returns exit code 1 without reporting the abort reason, leaving the command\u2019s generic \u201cCheck the output above\u201d message without useful details. Flush buffered diagnostics on failure before propagating the exception; extend the existing abort test to assert the diagnostic appears."
+ },
+ {
+  "ref": "sol/2/0",
+  "severity": "FAIL",
+  "title": "Dry-run symlinks can modify real files",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:42-45",
+  "description": "`verbatimSymlinks: true` preserves links pointing outside the sandbox. For example, an absolute `.claude/rules` directory symlink remains connected to the real directory, where `InstallManifest.installFile()` can write updates and `finish()` can delete stale files during `--dry-run`. Isolate symlink targets or reject escaping links before installing. Add regression tests verifying linked files remain untouched."
+ },
+ {
+  "ref": "sol/2/1",
+  "severity": "FAIL",
+  "title": "Native pruning drops worktree containment protection",
+  "location": "packages/cli/src/ideInstall/manifest.ts:187-193",
+  "description": "Worktrees now use this pruner instead of the deleted containment-checked `pruneStaleFiles()`. A manifest entry containing `../outside.md` and matching CRC/size causes deletion outside the checkout. A symlinked parent directory similarly redirects deletion. Restore lexical containment, resolved-parent containment, and regular-file checks before deletion, and retain the removed safety tests against the native implementation."
+ },
+ {
+  "ref": "sol/3/0",
+  "severity": "FAIL",
+  "title": "Dry runs can write through preserved symlinks",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:42-45",
+  "description": "The sandbox preserves symlinks, then runs the installer against them. For example, an absolute `.claude/rules` symlink still points to the real directory; `InstallManifest.installFile()` writes through it during `--dry-run`. Changes under that symlink are also omitted from the report because `regularFilesUnder()` ignores symlinks. Materialize isolated copies or reject unsafe links, and add a regression test proving external files remain unchanged."
+ },
+ {
+  "ref": "sol/3/1",
+  "severity": "FAIL",
+  "title": "Native worktree pruning drops path-containment protection",
+  "location": "packages/cli/src/commands/setup-ide.ts:190",
+  "description": "The replacement worktree installer invokes `InstallManifest.finish()`, which joins manifest paths to the root and deletes checksum-matching files without checking containment (`packages/cli/src/ideInstall/manifest.ts:187-193`). A manifest entry containing `../outside-file` can therefore delete a file outside the checkout; symlinked parent directories also escape containment. The removed `pruneStaleFiles()` explicitly guarded both cases. Restore those protections in the native manifest pruner and retain equivalent regression tests."
+ },
+ {
+  "ref": "sol-high/1/0",
+  "severity": "FAIL",
+  "title": "Dry runs can write through copied symlinks",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:42-45",
+  "description": "`verbatimSymlinks: true` preserves links into the real filesystem. If `.claude/rules` links to an absolute directory, the sandbox installer follows that link and writes new rules there. A symlinked `.context-forge` can similarly expose real manifests to writes. Reject or safely isolate symlinks before installing, and add regression tests proving dry runs leave linked destinations unchanged."
+ },
+ {
+  "ref": "sol-high/1/1",
+  "severity": "FAIL",
+  "title": "Native worktree pruning lacks containment checks",
+  "location": "packages/cli/src/commands/setup-ide.ts:190",
+  "description": "Worktrees now use `InstallManifest.finish()`, which joins manifest paths directly to the checkout root and deletes matching files (`manifest.ts:188-193`). A manifest entry containing `../outside.md` and its matching checksum can therefore delete a file outside the worktree; symlinked parent directories also escape containment. Restore lexical and real-path containment checks from the removed pruning implementation, with corresponding safety tests."
+ },
+ {
+  "ref": "sol-high/1/2",
+  "severity": "CONCERN",
+  "title": "Agents dry-run previews generate different rule references",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:114",
+  "description": "Changing `targetRoot` to the sandbox while retaining the original guide path changes generated `AGENTS.md` content. `scopedRuleIndex()` computes references relative to `targetRoot`, so a real install emits project-relative references while its preview emits absolute guide paths. Consequently, an unchanged agents installation reports a spurious modification. Separate logical output paths from sandbox write paths, and test agents dry-run idempotency."
+ },
+ {
+  "ref": "sol-high/2/0",
+  "severity": "FAIL",
+  "title": "Dry runs can modify real files through copied symlinks",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:42-45",
+  "description": "`verbatimSymlinks` preserves links pointing outside the sandbox. For example, an absolute `.claude/rules` directory symlink remains connected to its real destination, and `InstallManifest.installFile()` follows it when writing rules. A preview can therefore update or prune real files. Reject escaping links or materialize isolated copies, and add symlink safety tests."
+ },
+ {
+  "ref": "sol-high/2/1",
+  "severity": "FAIL",
+  "title": "Native worktree installation loses pruning containment guards",
+  "location": "packages/cli/src/commands/setup-ide.ts:190",
+  "description": "Replacing the older-guide propagation path removes its lexical and realpath containment checks. The invoked `InstallManifest.finish()` joins manifest paths directly to the root and deletes checksum-matching files. A stale entry containing `../outside-file`, or traversing a symlinked directory, can delete outside the worktree. Restore containment validation before enabling this replacement."
+ },
+ {
+  "ref": "sol-high/2/2",
+  "severity": "CONCERN",
+  "title": "Sandbox paths produce false AGENTS.md changes",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:114",
+  "description": "The sandbox replaces `targetRoot`, but `scopedRuleIndex()` uses that root to calculate guide references. A normal agents install writes project-relative references; its dry run generates absolute references because the guide is outside the sandbox. Consequently, an unchanged installation reports `AGENTS.md` as modified. Preserve the logical destination root separately and test no-change previews for agents."
+ },
+ {
+  "ref": "sol-high/2/3",
+  "severity": "CONCERN",
+  "title": "Failed previews discard their diagnostic output",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:113-118",
+  "description": "The buffered output is replayed only after `install()` returns. Missing rule directories or broken managed markers print diagnostics to stdout and then throw `InstallAbort`; the replay is skipped, and `installIde()` returns failure without printing the exception. Replay failure diagnostics before propagating the abort, and assert their presence in the existing abort test."
+ },
+ {
+  "ref": "sol-high/3/0",
+  "severity": "FAIL",
+  "title": "Dry runs can write through copied symlinks",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:42-45",
+  "description": "`verbatimSymlinks: true` preserves absolute links into the real project or shared directories. The sandbox installer then follows those links through `mkdirSync`, `writeFileSync`, and pruning. For example, an absolute `.claude/rules` symlink lets `--dry-run` create rules outside the sandbox. Materialize isolated copies or reject escaping symlinks, and add a regression test verifying the linked directory remains unchanged."
+ },
+ {
+  "ref": "sol-high/3/1",
+  "severity": "FAIL",
+  "title": "Native pruning lacks the removed containment checks",
+  "location": "packages/cli/src/ideInstall/manifest.ts:187-193",
+  "description": "The newly wired native installer trusts manifest paths and deletes matching files without checking lexical or real-path containment. A checksum-valid `../outside.md` entry\u2014or a stale path beneath a symlinked directory\u2014can delete files outside the checkout. The removed worktree pruner explicitly guarded both cases. Restore those protections in the native manifest implementation and retain corresponding safety tests."
+ },
+ {
+  "ref": "sol-high/3/2",
+  "severity": "CONCERN",
+  "title": "Aborted dry runs discard their diagnostic output",
+  "location": "packages/cli/src/ideInstall/dryRun.ts:113-118",
+  "description": "Buffered output is replayed only after `install()` returns successfully. If it throws `InstallAbort`, diagnostics such as missing rules directories or broken managed markers disappear; `installIde()` returns exit 1 without printing the exception. Replay buffered warnings and errors on failure before cleanup. Extend the existing abort test to assert that the underlying diagnostic reaches the caller."
+ }
+]

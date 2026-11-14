@@ -31,6 +31,7 @@ class ActionType(StrEnum):
     DEVLOG = "devlog"
     GATE = "gate"
     BRANCH = "branch"
+    FIX_CONTEXT = "fix-context"
 
 
 # Module-level registry: action type name -> Action instance

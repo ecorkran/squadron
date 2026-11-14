@@ -821,6 +821,7 @@ def _render_prompt_only_step(
             resolver=resolver,
             run_id=run_id,
             verbosity=verbosity,
+            cwd=os.getcwd(),
         )
     except (ModelResolutionError, ModelPoolNotImplemented, PoolNotFoundError) as exc:
         _logger.exception("prompt-only: model resolution failed for step %r", step.name)
@@ -829,6 +830,11 @@ def _render_prompt_only_step(
     except PromptOnlyUnsupportedError as exc:
         # An expected, named refusal: the message says what to do, so no traceback.
         _logger.warning("prompt-only: step %r: %s", step.name, exc)
+        rprint(f"[red]Error: step '{escape(step.name)}': {escape(str(exc))}[/red]", file=sys.stderr)
+        raise typer.Exit(1) from None
+    except GitEnvironmentError as exc:
+        # A fix step reads HEAD and the branch while rendering; git that cannot say ends it.
+        _logger.exception("prompt-only: git state unreadable for step %r", step.name)
         rprint(f"[red]Error: step '{escape(step.name)}': {escape(str(exc))}[/red]", file=sys.stderr)
         raise typer.Exit(1) from None
 
