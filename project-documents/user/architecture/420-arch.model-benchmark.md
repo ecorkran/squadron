@@ -142,7 +142,7 @@ Exploratory. The fix-case path is the keystone: it is the cheapest objective uni
 ## Non-Goals
 
 - **No public or general-purpose benchmark.** Cases come from the project's own history.
-- **No curated input and expected-output datasets.** 300's non-goal stands.
+- **No curated input and expected-output datasets.** 300's non-goal stands. The exception is planted-defect cases (427, 428, 429): the planted defect is the ground truth, by design.
 - **No slice tests as hidden tests.** They are coupled to the original implementation.
 - **No per-case human review, and no per-project boundary declaration.** Qualification is mechanical and reads only what projects already maintain.
 - **No automatic model selection.** Results inform the PM's alias configuration; nothing reads them at run time.
