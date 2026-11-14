@@ -220,3 +220,23 @@ Best pipeline so far (both single runs): haiku-xhigh review, then opus-high comb
 **Not an accuracy measure.** The ten disputed items were chosen for disagreement, so they can't give overall grader accuracy. Scoring them would show how graders handle contested cases.
 
 **Next, for an accuracy comparison:** a random sample across all graded items, with code-settled answers where the code decides. Compare Sonnet high against Opus and others. Opus needs your go-ahead.
+
+## 12. Random batches of graded issues (2026-11-14 to 2026-11-15)
+
+**Method:** four seeded random batches of ten issues, drawn from the 221 grid 2 graded issues without replacement. Each batch went to one Sonnet high agent with the finding text only, no earlier grade. The agent settled an item from the code and the base-to-head diff, or escalated it. Each batch used about 130k to 150k subagent tokens, roughly 1% of the session meter.
+
+**Settled items:** 33 of 40. Of those, 30 match the original pass.
+- Batch 1: 8 of 10 agree. 175-I17 and 921-I9 differ.
+- Batch 2: 6 of 6 agree.
+- Batch 3: 8 of 9 agree. 197-I15 differs.
+- Batch 4: 8 of 8 agree.
+
+**Escalations resolved:** 197-I1 agrees with the original (REAL). 227-I5 agrees (MINOR). a122-I13 differs: the sorter says MINOR, because `journal_issue` refuses an entry without a `run_id`, so the claimed crash can't happen; the original said REAL.
+
+**Still open, with the grades that depend on them:**
+- **197-I15, ruled REAL:** a changed line with a pre-existing defect is REAL, because the change touched it. The original PREEXISTING grade is wrong under this rule.
+- **307-I1, ruled REAL:** a defect in a new mode is REAL, even when it repeats an existing mismatch. PREEXISTING applies only to code the change neither added nor touched.
+- **197-I14:** after a git-halted batch, is a plain `sq run --resume <run_id>` a supported recovery that must keep working, or is item resume the only intended recovery?
+- **921-I5:** is the 921 cutover meant to run to completion without a password prompt once the sudoers rule is installed, or is an operator at the terminal expected to re-authenticate?
+- **225-I11:** the config says mypy, and CI runs no type checker. Whether the original FALSE holds still needs a mypy run.
+- **921-I9:** the sorter says REAL, the original says MINOR. Not examined yet.

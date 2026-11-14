@@ -1,0 +1,131 @@
+[
+  {
+    "id": "225-I11",
+    "settled": false,
+    "grade": null,
+    "evidence": [
+      "trading-data src/manta_trading/data/tick/status_reads.py:50-61 (file added in 225, 174 insertions): _UNITS, _LEDGER_UNITS, _SHAPE_WHERE are unannotated str constants used in f-string SQL at lines 84-85, 101-103, 133-138",
+      "siblings annotate LiteralString: manifest_reads.py:36,84,90,167; ingest_select.py:63; manifest_repo.py:163,174",
+      "pyproject.toml:69-74: 'this project uses mypy (the python-rules \"or mypy\" alternative to strict pyright)'; no [tool.pyright] section; mypy treats LiteralString as str",
+      "psycopg is not installed in the worktree, so no type check could be run"
+    ],
+    "escalation_question": "Is the type gate that blocks merge in trading-data strict pyright (where an unannotated str passed to conn.execute is an error) or mypy as pyproject.toml says (where it is not)? The inconsistency with siblings is real either way.",
+    "reason": "Code is new in the diff and the sibling inconsistency is true. Whether it is a merge-blocking type error depends on which checker the project gates on (project configuration/intent). Under the configured mypy it cannot fail; under pyright it would be a real error."
+  },
+  {
+    "id": "175-I8",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "squadron tests/stats/test_reviews_report.py:15-21 and tests/cli/test_stats.py:162-165 build frontmatter by hand (new in diff)",
+      "writer keys at src/squadron/review/run_cost.py:52-62 (turns, promptTokens, cachedTokens, cacheWriteTokens, completionTokens, costUsd, costBasis) and src/squadron/review/persistence.py:426-467 (reviewType, verdict, aiModel, dateCreated, runId) match the keys used by the hand-written fixtures and read by src/squadron/stats/reviews_report.py:28-34 and 98-109",
+      "the key: value line format in the fixtures is the format the writer emits"
+    ],
+    "escalation_question": null,
+    "reason": "Claim is literally true (fixtures do not use format_review_markdown), but the hand-written fixtures carry the same keys and line format the writer produces, so nothing is wrong or missed today. A test-construction preference, which BRIEF lists under MINOR."
+  },
+  {
+    "id": "307-I16",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "trading-data scripts/cutover_304_first_purchase.py:87-89: record_start_and_baselines() runs before install_release(); lines 107-122 capture evidence.record_totals() (line 115) and persist it; a rerun reuses the file (110-111)",
+      "scripts/cutover_304_evidence.py:98-101: record_totals() reads `mt data accounting` from the currently installed (old) release",
+      "src/manta_trading/data/tick/tick_status_scope.py:74-87 and family_report.py:249: accounting rows come only from family_wants(entry) of the installed TICK_UNIVERSE",
+      "diff of src/manta_trading/data/tick/universe.py base..head: GC history changed from _DEFINITION_AND_STATISTICS (no OHLCV_1M) to _HISTORY_WANTS, which adds OHLCV_1M, so GC/bar_1m exists only after install",
+      "scripts/cutover_304_evidence.py:268-270 and scripts/purchase_accounting.py:136-143: totals_delta(baseline, after) raises CutoverError for a family in after but not in before"
+    ],
+    "escalation_question": null,
+    "reason": "In the script's own flow the baseline comes from the old release, which has no GC bar want, so the post-purchase totals_delta raises CutoverError after money is spent and evidence collection stops; a rerun keeps the same incomplete baseline. Code added in 307. The cited lines 112-115 are the baseline capture; the failure surfaces in evidence.collect."
+  },
+  {
+    "id": "a122-I13",
+    "settled": false,
+    "grade": null,
+    "evidence": [
+      "amoeba src/amoeba/runner/observe.py:127-129 (raises on missing/empty), finish.py:141-145 (raises only if not str), launch.py:164-169 (raises on missing/empty), faults.py:194-198 (indexes entry.parameters[PARAM_RUN_ID] unguarded); all new in base..head",
+      "src/amoeba/store/journal_models.py:79-82: REQUIRED_PARAMETER_KEYS makes run_id required at journal_issue time, so a missing key needs a row that bypassed issue-time validation"
+    ],
+    "escalation_question": "Can a realistic input reach this: an unresolved SQ_RUN journal entry whose run_id is missing, empty or non-string when escalate() runs?",
+    "reason": "The duplication is true and low value on its own, but the one concrete failure claimed (KeyError inside escalate) needs a journal row that issue-time validation prevents, i.e. a malformed or hand-edited row."
+  },
+  {
+    "id": "u103-I8",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "trading-ui src/chart/use-chart-provider.ts:358-363 (file new in diff): effect body is `if (!mount.ready) return` plus a comment; deps [mount.ready, chart, indicators]",
+      "comment at lines 347-356 labels it a deliberate placeholder seam for initiative 120",
+      "src/test/use-chart-provider.translation.test.tsx:177-188 asserts only no throw, no addSeries, no console.error",
+      "range effect at lines 340-345 is guarded by seriesCountRef.current === 0, inert this slice, as its comment at 325-338 states"
+    ],
+    "escalation_question": null,
+    "reason": "Claim is true: the effect does nothing and its test cannot fail meaningfully. Nothing behaves wrongly; it is a complexity/style point about a documented placeholder, which BRIEF puts under MINOR."
+  },
+  {
+    "id": "a122-I17",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "amoeba src/amoeba/runner/observe.py is 326 lines (wc -l); file added in base..head (326 insertions)",
+      "_after_launch_poll at observe.py:223-232 takes 7 parameters incl. self; _unconfirmed 171-178 and _check_line 195-202 take 6",
+      "state members _last_poll, _overdue, _faulted at observe.py:90-94"
+    ],
+    "escalation_question": null,
+    "reason": "Facts are accurate, but the guideline is '~300 lines ... where practical' and the claim is structural/style only with no wrong behavior; BRIEF puts style under MINOR."
+  },
+  {
+    "id": "a122-I3",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "amoeba src/amoeba/runner/tenant.py:145-149 (file new in diff): broad catch calls escalate() then returns (TickResult.COMPLETE, True) unconditionally",
+      "tenant.py:93-99 docstring: 'True only if something was written ... so the loop idles between ticks instead of spinning'",
+      "src/amoeba/runner/faults.py:172-182: escalate() writes nothing when the node is already blocked; otherwise raise_project_escalation (src/amoeba/store/project_escalations.py:58-59) returns the existing open row without writing",
+      "src/amoeba/process/host.py:253-254, 275: idle wait skipped when tenant.tick returns True; Tenant.tick contract at host.py:79-80 'Returns whether any work was done'",
+      "tests/runner/test_tenant.py:100-118: the only test asserts `wrote` and passes because project b launched, so it does not cover the repeat case",
+      "faults.py:160-166 docstring: 'a fault repeating cannot storm'"
+    ],
+    "escalation_question": null,
+    "reason": "The handler's own contract and docstrings say a repeating fault must not storm, but the return value is True on every pass, so a fault that recurs each tick skips the idle wait and logs a traceback and takes the write lock each pass. Code added in the case; the behavior follows from the code shown regardless of how the fault arises."
+  },
+  {
+    "id": "932-I7",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "squadron: git diff --stat base..head touches src/squadron/pipeline/sdk_session.py (306 lines) and tests/pipeline/test_sdk_session.py, nothing under tests/load/",
+      "tests/load/ holds only test_grep_timeout.py and test_worktree_concurrency.py",
+      "project-documents/ai-project-guide/project-guides/rules/python.md:65 requires a load test for concurrency/network paths",
+      "src/squadron/pipeline/sdk_session.py:215-260 _collect_turns (new): no defect is alleged in it"
+    ],
+    "escalation_question": null,
+    "reason": "The claim is a missing test tier for code that is not claimed to be wrong. BRIEF defines MINOR as 'a missing test for an already-correct path' and REAL as a defect that causes wrong behavior, so a missing load test is MINOR whether or not the rule applies."
+  },
+  {
+    "id": "197-I1",
+    "settled": false,
+    "grade": null,
+    "evidence": [
+      "squadron src/squadron/pipeline/item_resume.py:109-136 (new): resume_item catches only _Stop, GitEnvironmentError, OSError; line 133-135 OSError message says 'cannot write the batch report' for any OSError",
+      "item_resume.py:287 (evaluate_each_source), 291-292 and 333 (cf_client.list_slices) are not wrapped; src/squadron/integrations/context_forge.py:136-146 and 162-174 raise ContextForgeError; src/squadron/cli/commands/run_item.py:89-103 catches only typer.Exit",
+      "item_resume.py:63-69 ResumeExit: FLAGGED=1, HALTED=3 'environment fault'; an uncaught exception exits 1",
+      "item_resume.py:181-186: _validate catches FileNotFoundError and SchemaVersionError only; load_pipeline unwrapped",
+      "contrast: git_ops.py:66-73, branch_ops.py:115,135, commit_run.py:82, run.py:186 do wrap cf errors"
+    ],
+    "escalation_question": "Can a realistic input reach this: a cf failure (non-zero exit, invalid JSON, cf missing) during _select_item/_open_dependencies after _git_precondition succeeded, a corrupt run-state file, or a dependency-cycle ValueError during item resume?",
+    "reason": "The code confirms cf errors, corrupt state and cycle errors escape as exit 1, which the contract reserves for FLAGGED. Whether those failures are realistic or outside normal operation is the open question; the corrupt-state and cycle members are malformed-input cases."
+  },
+  {
+    "id": "227-I5",
+    "settled": false,
+    "grade": null,
+    "evidence": [
+      "trading-data scripts/cutover_227_host.py:90-96 (new): tick_locks_held builds SQL with an f-string from TICK_LOCK_KEYS; src/manta_trading/data/tick/constants.py:172,240 define both keys as integer constants, so no external value reaches the SQL",
+      "scripts/cutover_227_host.py:72-76: env_value interpolates `lib` = SCRIPTS.parent/deploy/lib/env_value.sh into a double-quoted bash -c string; env_file and key are passed as $1/$2",
+      "python.md:102: 'SQL: Always use parameterized queries (never f-string SQL)'"
+    ],
+    "escalation_question": "Can a realistic input reach this: a checkout path containing a double quote (or shell-significant character) when the cutover script runs on the host?",
+    "reason": "The f-string SQL part is settled MINOR (integer constants only, no input can arrive). The shell-interpolation part depends on an unusual checkout path reaching bash -c, which is the can-a-realistic-input-reach-this case, so the item is not settled."
+  }
+]

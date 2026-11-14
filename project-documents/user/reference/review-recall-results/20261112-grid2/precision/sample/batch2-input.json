@@ -1,0 +1,240 @@
+{
+ "cases": {
+  "175": {
+   "repo": "squadron",
+   "base": "3812c815b377eadfd7741ab1734c350c73789e2b",
+   "head": "1cbd6be4317f37498b07a31cd9cb64562fdb9d0a",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175"
+  },
+  "197": {
+   "repo": "squadron",
+   "base": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece",
+   "head": "90a40dbf40289fd46b99e999c957a6e9295545be",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197"
+  },
+  "225": {
+   "repo": "trading-data",
+   "base": "09106ab48bda1b7397cfefa0145928a82e3056ac",
+   "head": "f328230d409b21ef1c9d8f8d96db21a478169076",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225"
+  },
+  "227": {
+   "repo": "trading-data",
+   "base": "11168d5b2ae7805e15a63888eb85ca26b1fdc811",
+   "head": "85fee397cbbe12ca5b74bb38fb77cf1165b5ba1c",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227"
+  },
+  "307": {
+   "repo": "trading-data",
+   "base": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0",
+   "head": "b5c3d781963789cef917771538a0b51a10bab29b",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307"
+  },
+  "932": {
+   "repo": "squadron",
+   "base": "262d0ba064dcc6fa09efb5908eecc1447fd0582b",
+   "head": "d89cc060d2fe3033ed479d7e4eb69aadc779bd97",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932"
+  },
+  "a122": {
+   "repo": "amoeba",
+   "base": "f8097604697cfefb5fb7313d29648a1c6c22b221",
+   "head": "e07f13739a5c7cd88c04fe2dffcc57b2a1eb5793",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122"
+  },
+  "u103": {
+   "repo": "trading-ui",
+   "base": "a4f9b6cf446929d056689df48082a701467d74e7",
+   "head": "d56c493f769d429a40f9e8052eba04ad6254e8c2",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103"
+  }
+ },
+ "items": [
+  {
+   "id": "225-I11",
+   "case": "225",
+   "members": [
+    {
+     "ref": "haiku-xhigh/3/6",
+     "severity": "CONCERN",
+     "title": "Unannotated SQL fragments may fail strict pyright",
+     "location": "src/manta_trading/data/tick/status_reads.py:50",
+     "description": "`_UNITS`, `_LEDGER_UNITS` and `_SHAPE_WHERE` are plain module-level strings, so pyright infers `str`. They are interpolated into `conn.execute(f\"...\")` at lines 84-85, 101-103 and 133-138. Every sibling module annotates this kind of fragment as `LiteralString` (`manifest_reads.py:84-91`, `ingest_select.py:63`, `manifest_repo.py:163`), which is what lets pyright check psycopg's `LiteralString` query argument. Strict pyright is a merge blocker in this project. I could not run pyright, and I did not confirm the installed psycopg signature, so treat this as likely rather than confirmed. Fix: annotate the three constants `LiteralString`."
+    }
+   ]
+  },
+  {
+   "id": "175-I8",
+   "case": "175",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/5",
+     "severity": "CONCERN",
+     "title": "The stats reviews reader is tested only against hand-written frontmatter",
+     "location": "tests/stats/test_reviews_report.py:15",
+     "description": "`_artifact` (`test_reviews_report.py:15`) and `_review` (`tests/cli/test_stats.py:162`) write frontmatter by hand. Neither uses the real writer, `format_review_markdown` (`src/squadron/review/persistence.py:499`). The project rule is that a parser's fixture must match what production writes, and the reader's silent `None` defaults make drift invisible. Fix: generate fixtures with `format_review_markdown` (and `format_provider_failure_markdown` for the failure shape), then parse them with `reviews_usage_report`."
+    }
+   ]
+  },
+  {
+   "id": "307-I16",
+   "case": "307",
+   "members": [
+    {
+     "ref": "sol/3/1",
+     "severity": "FAIL",
+     "title": "Pre-install baseline omits the new GC bar family",
+     "location": "scripts/cutover_304_first_purchase.py:112-115",
+     "description": "The baseline reads production accounting before `install_release()`. The previous universe has no GC bar want, and `family_wants()` only reports configured families, so this baseline lacks `GC/bar_1m`. After installation and purchase, accounting includes that family; `purchase_accounting.totals_delta()` then raises because its baseline is missing. Reruns retain the same incomplete baseline. Capture totals for every target family before spending, independently of the installed universe."
+    }
+   ]
+  },
+  {
+   "id": "a122-I13",
+   "case": "a122",
+   "members": [
+    {
+     "ref": "sonnet-high/3/0",
+     "severity": "CONCERN",
+     "title": "Run-id extraction from a journal entry is duplicated three times, with different strictness",
+     "location": "src/amoeba/runner/observe.py:127-129",
+     "description": "The same rule, that an `sq_run` entry must carry a non-empty string `run_id`, is written separately in three places:\n- `observe.py:127-129` in `_observe_one` raises `ValueError` on a missing or empty id.\n- `finish.py:141-145` in `_run_id` raises `ValueError` only when the id is not a string. An empty string passes.\n- `launch.py:166` `_text_parameter(entry, PARAM_RUN_ID)` raises on a missing or empty id.\n\n`faults.py:194-198` in `_in_flight_run_ids` skips validation and calls `str(entry.parameters[PARAM_RUN_ID])`. That raises `KeyError` for a malformed entry. It does this inside `escalate`, which is the last-resort fault path, so the failure surfaces from the one place that must not raise. The project rules say not to duplicate logic and not to scatter comparison values.\n\nDefine one helper, for example `run_id_of(entry)`, in one module (probably `launch.py`) that raises `ValueError`. Use it in `observe`, `finish` and `faults`. For `escalate`, decide explicitly what a malformed entry means."
+    }
+   ]
+  },
+  {
+   "id": "u103-I8",
+   "case": "u103",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/5",
+     "severity": "CONCERN",
+     "title": "Indicator effect is a no-op",
+     "location": "src/chart/use-chart-provider.ts:358-363",
+     "description": "The effect body is `if (!mount.ready) return;` followed by a comment, and nothing else. It reads `indicators` only to re-run an empty body. The comment calls it \"not a silent empty effect,\" but it is one. Under the rule to resist complexity, it adds a dependency and a context consumer with no behavior. The test at `src/test/use-chart-provider.translation.test.tsx:177` (\"fires the indicator observer without error\") can only pass, since it asserts the absence of errors and calls. Remove the effect and the `useIndicators()` call until initiative 120 needs them, or keep it and drop the test."
+    },
+    {
+     "ref": "haiku-xhigh/2/7",
+     "severity": "CONCERN",
+     "title": "Two effects do nothing in this slice",
+     "location": "src/chart/use-chart-provider.ts:358-363",
+     "description": "The indicator effect has an early return and no body. It exists only to subscribe to `useIndicators()`, which makes the hook throw outside `IndicatorProvider`. The test \"fires the indicator observer without error\" asserts that nothing happens. The range effect (340-345) is also dead on the product path, since nothing adds a series in this slice. CLAUDE.md says \"Always resist adding complexity.\" If the slice spec requires these seams, keep them and document that in one place. If not, remove the no-op effect and the `useIndicators()` coupling until initiative 120."
+    }
+   ]
+  },
+  {
+   "id": "a122-I17",
+   "case": "a122",
+   "members": [
+    {
+     "ref": "sonnet/1/1",
+     "severity": "CONCERN",
+     "title": "`observe.py` exceeds the file-size guideline and mixes several concerns",
+     "location": "src/amoeba/runner/observe.py",
+     "description": "The file is about 326 lines, over the project's ~300-line guideline. It combines poll cadence, confirmed-run classification, unconfirmed-launch handling, overdue and fault replay state (`_overdue`, `_faulted`, `_last_poll`), and log reading. `_after_launch_poll` takes seven arguments. Splitting the unconfirmed-launch path into its own module would improve cohesion and bring the file under the limit."
+    },
+    {
+     "ref": "sonnet/3/0",
+     "severity": "CONCERN",
+     "title": "observe.py exceeds the file-size guideline and mixes two state machines",
+     "location": "src/amoeba/runner/observe.py",
+     "description": "`observe.py` is about 326 lines, over the ~300-line guideline. It carries the confirmed-run poll classifier, the unconfirmed-launch grace and overdue logic, and four per-entry dicts and sets (`_last_poll`, `_overdue`, `_faulted` and the tracker). `_unconfirmed`, `_check_line` and `_after_launch_poll` pass 6\u20137 arguments between them. Splitting the unconfirmed-launch path into its own module or class would shrink the file and make the state easier to reason about."
+    }
+   ]
+  },
+  {
+   "id": "a122-I3",
+   "case": "a122",
+   "members": [
+    {
+     "ref": "haiku-xhigh/2/1",
+     "severity": "CONCERN",
+     "title": "A persistent planner error spins the resident loop",
+     "location": "src/amoeba/runner/tenant.py:145-149",
+     "description": "The broad catch escalates on the project path, where `raise_project_escalation` returns the open row unchanged and writes nothing (project_escalations.py:58-59). It then returns `(TickResult.COMPLETE, True)` unconditionally. `RunnerTenant.tick` returns that `True`, which contradicts its own docstring (tenant.py:96-99). The host runs `worked = tenant.tick(self) or worked` (host.py:275) and skips the idle wait when `worked` is true (host.py:253-254). So a planner that raises every tick causes back-to-back full tracebacks, one `BEGIN IMMEDIATE` per pass, and write-lock churn against the other tenants. Production planners are empty today, so this is dormant, but slice 125 adds them. `tests/runner/test_tenant.py#test_an_unexpected_exception_is_logged_and_the_other_project_still_ticks` asserts `wrote` is true and pins the wrong behavior. Fix: return whether the escalation actually wrote, and consider a backoff."
+    },
+    {
+     "ref": "haiku-xhigh/3/0",
+     "severity": "FAIL",
+     "title": "A caught tick exception reports work done, so the loop never idles under a recurring fault",
+     "location": "src/amoeba/runner/tenant.py:149",
+     "description": "`_tick_project` returns `TickResult.COMPLETE, True` after the broad catch, whether or not `escalate()` wrote anything. `escalate()` writes nothing when the node is already blocked (`faults.py:172-182`), and `raise_project_escalation` returns the open row unchanged on a repeat (`store/project_escalations.py:58-59`). So a fault that recurs every tick reports work every tick. `RunnerTenant.tick` passes that `True` up (`tenant.py:111-116`), and `ResidentProcess._loop` skips its idle wait when a tenant reports work (`process/host.py:252-254, 275`).\n\nThe result is a loop with no pause that logs a full traceback on every pass (`tenant.py:146`) and takes SQLite's write lock on every pass (`BEGIN IMMEDIATE`, `project_escalations.py:54`). This breaks the `Tenant.tick` contract (\"Returns whether any work was done\", `host.py:79-80`) and the `RunnerTenant.tick` docstring (\"True only if something was written\", `tenant.py:96-97`). A planner that raises on each call reproduces it: `decide` runs with the node context cleared, so the escalation is project-scoped and deduplicated.\n\nThe tests miss it. `test_an_unexpected_exception_is_logged_and_the_other_project_still_ticks` asserts `wrote` only because the other project launched. Fix: have `escalate()` report whether it wrote and return that value from the catch. Add a test that ticks a single failing project twice and asserts `tick()` returns `False` on the second call."
+    },
+    {
+     "ref": "sol/1/3",
+     "severity": "CONCERN",
+     "title": "Repeated unexpected faults bypass the idle interval",
+     "location": "src/amoeba/runner/tenant.py:145-149",
+     "description": "The exception handler always reports a write, even when `escalate` deduplicates an existing escalation or finds an already-blocked node. `ResidentProcess._loop` waits only when tenants report no work, so a persistent exception produces a tight retry-and-error-log loop. Have escalation report whether it actually changed the store, and combine that with `tick.wrote` instead of returning unconditional `True`."
+    }
+   ]
+  },
+  {
+   "id": "932-I7",
+   "case": "932",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/3",
+     "severity": "CONCERN",
+     "title": "No load test covers the new background-wait path",
+     "location": "src/squadron/pipeline/sdk_session.py:215-260",
+     "description": "`tests/load/` exists (`test_grep_timeout.py`, `test_worktree_concurrency.py`), and the project rule requires at least one load test for code on network or concurrency paths, asserting on latency, throughput, or resource bounds. `_collect_turns` adds a per-message idle timer, a ledger of concurrent background agents, and a stop fan-out. Every new test runs in-process against `ScriptedClient` with sleeps of 0.05 to 0.15 s, so none of them measures a bound. The slice doc does not mention a load test. Whether this path counts as network or concurrency is a judgment call, and I would treat it as one. Fix: add a load test that drives many background agents through `dispatch()` and asserts both the wall-clock bound and that the idle stop fires within the configured window."
+    },
+    {
+     "ref": "haiku-xhigh/2/6",
+     "severity": "CONCERN",
+     "title": "No load-tier test for the new wait and idle-timeout path",
+     "location": "src/squadron/pipeline/sdk_session.py:215",
+     "description": "`python.md` requires at least one `tests/load/` test for code on concurrency or network paths, asserting latency, throughput, or resource bounds, and requires CI to gate it. The background-wait loop with per-message `asyncio.timeout`, the idle stop, and the leftover-turn discard fit that description. `tests/load/` contains `test_grep_timeout.py` and `test_worktree_concurrency.py`, and nothing for this slice. Earlier reviews under `project-documents/user/reviews/` waived load tests when the design stated no NFR, and this slice's design states none, so the PM may decide this is a waiver. Either add a load test or record the waiver."
+    },
+    {
+     "ref": "haiku-xhigh/3/7",
+     "severity": "CONCERN",
+     "title": "No load test for the new concurrency path",
+     "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession._collect_turns",
+     "description": "The project's Python rules require at least one `tests/load/` test for code on concurrency or network paths, and assert latency or resource bounds there. This change adds an idle-timer read loop with stop and reconnect behavior, and no `tests/load/` file is in the diff. The slice's task review (`project-documents/user/reviews/932-review.tasks.pipeline-sdk-session-\u2026md`, line 109) judged no load test necessary, but on NFR grounds, which is narrower than the rule. Either add a bounded-latency load test with a scripted client, or record an explicit exception against the rule."
+    }
+   ]
+  },
+  {
+   "id": "197-I1",
+   "case": "197",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/0",
+     "severity": "CONCERN",
+     "title": "Item resume lets cf errors escape as tracebacks and mislabels unrelated OSErrors",
+     "location": "src/squadron/pipeline/item_resume.py:130-135",
+     "description": "`resume_item` maps only `_Stop`, `GitEnvironmentError`, and `OSError`. Several calls after the git precondition reach cf directly and raise `ContextForgeError` or `ContextForgeNotAvailable` unwrapped. `_select_item` (item_resume.py:277) calls `evaluate_each_source` (executor.py:1441), which runs the cf source functions. `_open_dependencies` calls `list_slices` directly. The fresh-run path maps these errors to a typed exit (`_check_cf`, run.py:172-188), and `commit_run.py:82` and `branch_run.py:46` catch them. `handle_item_resume` (run_item.py:99-103) catches only `typer.Exit`, so a cf outage during item resume ends in an uncaught exception, which exits 1. Exit 1 means FLAGGED in the handoff contract. The slice design (`project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md`, line 467) reserves exit 3 for environment faults. An automated caller would read a cf outage as \"flagged again\". Separately, `load_pipeline(state.pipeline)` at item_resume.py:186 is unwrapped. The plain resume path handles that `FileNotFoundError` (run.py:1217-1220).\n\nThe `OSError` branch (item_resume.py:133-135) has the opposite problem. It catches any OSError from the whole resume, including source reads and body work, and reports it as \"cannot write the batch report\". It logs nothing at this layer.\n\nSuggested fix: in `resume_item`, catch the cf exceptions and return HALTED with an ERROR log, and map a missing pipeline to REJECTED. Narrow the OSError catch to the report writes, or make its message accurate and log it. Add tests where `list_slices` raises and where the pipeline file is missing. No test covers either path, and the failure-mode rule requires an observable signal for each."
+    },
+    {
+     "ref": "haiku-xhigh/2/1",
+     "severity": "CONCERN",
+     "title": "Exit code 1 is shared by FLAGGED and any uncaught exception",
+     "location": "src/squadron/cli/commands/run_item.py:89",
+     "description": "`ResumeExit` promises automated callers distinct codes: 1 means FLAGGED and 3 means HALTED. `resume_item` catches only `_Stop`, `GitEnvironmentError`, and `OSError`, and `handle_item_resume` catches only `typer.Exit`. Anything else escapes as a traceback, which exits 1. Reachable cases:\n\n- `ContextForgeError` from `cf_client.list_slices` in `_select_item` (`item_resume.py:291`) and `_open_dependencies` (`item_resume.py:333`).\n- A dependency-cycle `ValueError` from `order_by_dependencies`, raised through `evaluate_each_source` in `_select_item`.\n- A corrupt run-state file. `_validate` (`item_resume.py:181-185`) catches only `FileNotFoundError` and `SchemaVersionError`, but `StateManager.load` can raise `JSONDecodeError` or `ValidationError`.\n\nThe fresh-run path has an explicit `except ValueError` that prints `Error:` (`run.py:1339`). The item path has nothing equivalent. Map these to HALTED (environment and cf faults) or REJECTED (state and validation) with a named message, so a crash can't pass as FLAGGED."
+    },
+    {
+     "ref": "haiku-xhigh/3/1",
+     "severity": "CONCERN",
+     "title": "cf failures during item resume escape as uncaught exceptions, and exit 1 reads as FLAGGED",
+     "location": "src/squadron/pipeline/item_resume.py:124",
+     "description": "`resume_item` catches `_Stop`, `GitEnvironmentError` and `OSError`. It does not catch `ContextForgeError` or `ContextForgeNotAvailable` (`integrations/context_forge.py:29-34`). Those can come from `evaluate_each_source` (line 287, which calls the cf source and its `list_tasks`/`list_slices`), from `_select_item` (line 291), and from `_open_dependencies` (line 333). `handle_item_resume` catches only `typer.Exit` (`run_item.py:99`). An uncaught exception exits with status 1, which is `ResumeExit.FLAGGED`, so an automated caller would read a crash as \"flagged again\". D8's table assigns HALTED (3) to environment faults. The target read is wrapped (`read_integration_target`, `git_ops.py:66-73`), but the source reads are not. No test injects a cf failure mid-resume. Catch `ContextForgeError` in `resume_item` as HALTED with an ERROR log, and add a test."
+    }
+   ]
+  },
+  {
+   "id": "227-I5",
+   "case": "227",
+   "members": [
+    {
+     "ref": "haiku-xhigh/2/4",
+     "severity": "CONCERN",
+     "title": "SQL built with an f-string, and shell code built by interpolation",
+     "location": "scripts/cutover_227_host.py:92",
+     "description": "`tick_locks_held` builds its query with an f-string (line 94). The project rule says never f-string SQL. No injection path exists today, because the keys are two integer constants. The same pattern appears at line 75, where `env_value` interpolates the library path into a `bash -c` string. The env-file path and key are passed as positional arguments, but the library path is not, so a checkout path containing a double quote would break the command. Fix: bind the lock keys as psql `-v` variables, as `provision_tick_roles.sql` does with `tick_db`, and pass the library path as `$3`."
+    }
+   ]
+  }
+ ]
+}

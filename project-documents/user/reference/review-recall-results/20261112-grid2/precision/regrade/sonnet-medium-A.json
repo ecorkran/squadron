@@ -1,0 +1,199 @@
+[
+ {
+  "id": "197-I19",
+  "grade": "MINOR",
+  "confidence": "medium",
+  "reason": "_git_precondition omits the registration guard, but restore_target only mutates when already on a slice branch (entered earlier by a registered-worktree run) and enter_slice_branch rejects unregistered worktrees before any item body runs.",
+  "evidence": [
+   "src/squadron/pipeline/item_resume.py:230-241",
+   "src/squadron/pipeline/branch_ops.py:96,123-141"
+  ]
+ },
+ {
+  "id": "175-I17",
+  "grade": "REAL",
+  "confidence": "high",
+  "reason": "_basis does `value in {set of str}`; a YAML list or mapping is unhashable so it raises TypeError and aborts the report, contradicting the malformed-to-None contract, in newly added code.",
+  "evidence": [
+   "src/squadron/stats/reviews_report.py:150-158",
+   "src/squadron/stats/reviews_report.py (new file in base..head)"
+  ]
+ },
+ {
+  "id": "188-I4",
+  "grade": "MINOR",
+  "confidence": "high",
+  "reason": "tape_filtered does re-spell the membership test and read the literal param key against its own docstring, but the parity integration test guards drift; it is a DRY/docstring issue, not a behavior bug.",
+  "evidence": [
+   "src/manta_trading/data/kalshi/serve_timeseries.py:147-166"
+  ]
+ },
+ {
+  "id": "225-I5",
+  "grade": "FALSE",
+  "confidence": "high",
+  "reason": "psycopg_pool.PoolTimeout subclasses psycopg.OperationalError (MRO verified), so the existing except clause already catches it and maps to TickCalendarError (exit 4).",
+  "evidence": [
+   "src/manta_trading/data/tick/tick_status_build.py:57-66",
+   "psycopg_pool.PoolTimeout.__mro__ includes psycopg.OperationalError"
+  ]
+ },
+ {
+  "id": "225-I4",
+  "grade": "MINOR",
+  "confidence": "medium",
+  "reason": "raw_counts bounds the scan by ts_event on a ts_event-chunked hypertable and the range join against an unnest array is speculative cost with no measurement; no demonstrated defect.",
+  "evidence": [
+   "src/manta_trading/data/tick/status_reads.py:154-175",
+   "src/manta_trading/market/schema/migrations/tick.py:248-254"
+  ]
+ },
+ {
+  "id": "175-I24",
+  "grade": "MINOR",
+  "confidence": "medium",
+  "reason": "ProviderError subclasses only Exception (as do ModelResolutionError and ModelPoolNotImplemented), so reordering handlers cannot misroute; the remaining point is a missing usage=None test.",
+  "evidence": [
+   "src/squadron/providers/errors.py:8",
+   "src/squadron/pipeline/resolver.py:93,97",
+   "src/squadron/pipeline/actions/dispatch.py:404-406"
+  ]
+ },
+ {
+  "id": "197-I22",
+  "grade": "MINOR",
+  "confidence": "medium",
+  "reason": "The claim is a function-size/DRY style point about run() duplicating the dispatch match; no behavioral defect.",
+  "evidence": [
+   "src/squadron/cli/commands/run.py:1199-1340"
+  ]
+ },
+ {
+  "id": "225-I1",
+  "grade": "MINOR",
+  "confidence": "medium",
+  "reason": "raw_counts is unscoped by product so a second product's instruments would show as mismatches, but TICK_UNIVERSE holds only ES at head so it cannot occur yet (a later fix scopes it when the universe expands).",
+  "evidence": [
+   "src/manta_trading/data/tick/status_reads.py:154-175",
+   "src/manta_trading/data/tick/tick_coverage.py:71-82",
+   "src/manta_trading/data/tick/universe.py:46"
+  ]
+ },
+ {
+  "id": "188-I13",
+  "grade": "MINOR",
+  "confidence": "high",
+  "reason": "gaps.py still has its own window helpers (with a deliberately different half-open end convention documented there); duplication is a DRY/maintenance point and gaps.py is unchanged by the case.",
+  "evidence": [
+   "src/manta_trading/api_server/routes/gaps.py:54-66",
+   "src/manta_trading/api_server/routes/windows.py:1-35"
+  ]
+ },
+ {
+  "id": "175-I3",
+  "grade": "MINOR",
+  "confidence": "medium",
+  "reason": "The test asserts only success is False; on a 2-part failure the failed part has outputs={} so fold_review_parts raises TypeError, which the test masks, but that is a missing-assertion test weakness around largely pre-existing code.",
+  "evidence": [
+   "tests/pipeline/actions/test_review_action_parts.py:136-148",
+   "src/squadron/pipeline/actions/review_fold.py:23-45,115-120",
+   "src/squadron/pipeline/actions/review.py:185-205"
+  ]
+ },
+ {
+  "id": "227-I7",
+  "grade": "MINOR",
+  "confidence": "high",
+  "reason": "strip_new_args hard-codes the replication host and the cutover scripts redeclare constants also in setup-backup.sh; a one-shot migration script with a define-once style violation, no defect.",
+  "evidence": [
+   "scripts/cutover_227_helpers.py:84-88",
+   "scripts/cutover_227_host.py:23-26",
+   "deploy/setup-backup.sh:80-81"
+  ]
+ },
+ {
+  "id": "175-I1",
+  "grade": "REAL",
+  "confidence": "high",
+  "reason": "Review.py now stamps a usage record per part, but _metadata copies only parts[0].metadata and sums only tool calls, so USAGE_KEY of parts 2..N is dropped and split-review spend is under-reported.",
+  "evidence": [
+   "src/squadron/pipeline/actions/review_fold.py:85-91",
+   "src/squadron/pipeline/actions/review.py:506"
+  ]
+ },
+ {
+  "id": "225-I11",
+  "grade": "FALSE",
+  "confidence": "medium",
+  "reason": "Running pyright on status_reads.py against the project's psycopg environment reports 0 errors, and trading-data's configured type checker is mypy, which does not enforce LiteralString.",
+  "evidence": [
+   "src/manta_trading/data/tick/status_reads.py:50-60",
+   "pyright run: 0 errors",
+   "pyproject.toml:69-75 (mypy)"
+  ]
+ },
+ {
+  "id": "197-I1",
+  "grade": "REAL",
+  "confidence": "medium",
+  "reason": "resume_item catches only _Stop, GitEnvironmentError and OSError, so a ContextForgeError from evaluate_each_source or cf_client.list_slices escapes as a traceback (exit 1 = FLAGGED) instead of HALTED(3), a new failure path with no observable signal or test.",
+  "evidence": [
+   "src/squadron/pipeline/item_resume.py:124-135,277-291,333",
+   "src/squadron/cli/commands/run_item.py:99-103",
+   "src/squadron/pipeline/item_resume.py:63-69"
+  ]
+ },
+ {
+  "id": "197-I23",
+  "grade": "FALSE",
+  "confidence": "high",
+  "reason": "The cited def line is exactly 104 characters, within line-length 104; ruff check and ruff format --check both pass on executor.py.",
+  "evidence": [
+   "src/squadron/pipeline/executor.py:1454",
+   "pyproject.toml:70-71"
+  ]
+ },
+ {
+  "id": "197-I15",
+  "grade": "MINOR",
+  "confidence": "medium",
+  "reason": "The halted-item record is built with empty step results so branch is dropped, which is true, but it only loses a report field for a halted item whose reason already names the fault.",
+  "evidence": [
+   "src/squadron/pipeline/executor.py:1490-1495,1552-1575",
+   "src/squadron/pipeline/batch_report.py:112-142"
+  ]
+ },
+ {
+  "id": "175-I19",
+  "grade": "REAL",
+  "confidence": "high",
+  "reason": "The run usage report iterates only persisted action_results, while _append_step serializes step_result.action_results and omits prior_rounds, and round_completed records nothing, so loop runs under-report totals.",
+  "evidence": [
+   "src/squadron/stats/usage_report.py:112-116",
+   "src/squadron/pipeline/state.py:482-508",
+   "src/squadron/pipeline/run_observer.py:52-53",
+   "src/squadron/pipeline/executor.py:643"
+  ]
+ },
+ {
+  "id": "175-I4",
+  "grade": "REAL",
+  "confidence": "medium",
+  "reason": "compact's failure branch returns no metadata and compact() discards the captured reply telemetry if _reconnect raises, so spend is lost, contrary to D5 which dispatch/summary/review honor.",
+  "evidence": [
+   "src/squadron/pipeline/actions/compact.py:79-90",
+   "src/squadron/pipeline/sdk_session.py:493-499,232-235"
+  ]
+ },
+ {
+  "id": "188-I1",
+  "grade": "REAL",
+  "confidence": "high",
+  "reason": "Pydantic validating `date | datetime` turns midnight datetime strings into date (verified: '2026-06-01T00:00:00Z' -> date(2026,6,1)), so resolve_window expands an explicit end timestamp to 23:59:59.999999 and drops offsets, in the new route.",
+  "evidence": [
+   "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+   "src/manta_trading/api_server/routes/windows.py:35-50",
+   "pydantic TypeAdapter(date|datetime|None) check"
+  ]
+ }
+]

@@ -1,0 +1,134 @@
+[
+  {
+    "id": "197-I19",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/squadron/pipeline/item_resume.py:230-241 (_git_precondition): reads read_integration_target, then restore_target when on a slice branch; no registration check",
+      "src/squadron/pipeline/branch_ops.py:96,123-141: enter_slice_branch calls _require_registered_worktree; it is the only caller (grep over src and tests)",
+      "src/squadron/pipeline/branch_ops.py:183-196 (restore_target): runs git add -A, git commit, git checkout target",
+      "src/squadron/pipeline/run_lock.py: takes the lock from git-dir only, no cf worktree registration check",
+      "item_resume.py is new in base..head (335 insertions); _resume_locked calls _git_precondition at line 147 before any run body"
+    ],
+    "judgement_question": null,
+    "reason": "The claim is a statement about what the code does and it checks out: item resume reads the integration target and can commit leftovers and switch branches in an unregistered linked worktree with no registration guard, in code added by this change."
+  },
+  {
+    "id": "225-I4",
+    "settled": false,
+    "grade": null,
+    "evidence": [
+      "src/manta_trading/data/tick/status_reads.py:154-173 (raw_counts: range join on unnest, plus WHERE ts_event BETWEEN min open AND max close)",
+      "src/manta_trading/market/schema/migrations/tick.py:215-245 (hypertable on ts_event, key only, 7-day chunks)"
+    ],
+    "judgement_question": "What does EXPLAIN ANALYZE show for raw_counts on a realistic multi-month range, and is that cost material? The code cannot answer it: it depends on the planner and data volume, and the finding itself says it is unmeasured.",
+    "reason": "Planner choice and runtime cost are empirical, not readable from the code; a reader cannot reach the same answer by checking the code."
+  },
+  {
+    "id": "175-I24",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "src/squadron/pipeline/actions/dispatch.py:404-406 (except ProviderError moved above the ModelResolutionError/ModelPoolNotImplemented/KeyError clause)",
+      "src/squadron/pipeline/resolver.py:93,97: ModelResolutionError and ModelPoolNotImplemented subclass Exception; KeyError is a builtin; none subclass ProviderError",
+      "src/squadron/project_rules/errors.py:6 (ProjectRulesError is RuntimeError); src/squadron/integrations/context_forge.py:29,33 (ContextForgeError and NotAvailable are Exception); dispatch.py:357 (DispatchFeedbackError is ValueError)",
+      "grep of all class definitions deriving from ProviderError or its subclasses: only DispatchStalledError (sdk_session.py:123) and providers/errors.py classes",
+      "dispatch.py:590 and :858 catch ProviderError with telemetry; test_dispatch_session.py:178 and test_dispatch_usage.py:78 exercise those paths, none drives execute() line 405 directly"
+    ],
+    "judgement_question": null,
+    "reason": "The misrouting worry is false: no listed handler's exception type overlaps ProviderError, so the reorder changes nothing. What remains is a missing test for an already-correct path, which matches the MINOR definition."
+  },
+  {
+    "id": "197-I22",
+    "settled": true,
+    "grade": "PREEXISTING",
+    "evidence": [
+      "git diff base..head -- src/squadron/cli/commands/run.py: the resume and implicit-resume match blocks only change asyncio.run(...) to _locked(definition, ...); no dispatch copy is added",
+      "run.py:1234-1326: the SDK/PROMPT_ONLY match appears in the resume branch, the implicit-resume branch and the fresh run before and after; the diff adds only the _locked wrapper",
+      "the finding itself calls line 1228 (resume_model) pre-existing"
+    ],
+    "judgement_question": null,
+    "reason": "The duplicated dispatch and the oversized run() already existed. The diff wraps existing calls and adds an --item handoff block and three options, so the claim that it adds another copy is false."
+  },
+  {
+    "id": "225-I1",
+    "settled": false,
+    "grade": null,
+    "evidence": [
+      "src/manta_trading/data/tick/status_reads.py:154-173: raw_counts filters only by ts_event; ledger_totals is shaped by _SHAPE_WHERE (lines 55-59)",
+      "src/manta_trading/data/tick/tick_coverage.py:81-90: _session_row unions instrument keys from ledger and raw, so a raw-only instrument becomes a Mismatch and the CLI exits 3",
+      "src/manta_trading/data/tick/universe.py:45-47: TICK_UNIVERSE holds only ES, so the false mismatch cannot occur today",
+      "later trading-data commit 459ac7bd 'fix: count only the product's instruments in tick coverage raw counts' (supporting evidence only)"
+    ],
+    "judgement_question": "Is a defect that appears only once a second product is added to the universe a fix-before-merge defect (REAL) or hardening against inputs that cannot yet arrive (MINOR)?",
+    "reason": "The mechanism is verified and not in dispute (unscoped raw count yields a false mismatch). Which grade it gets turns on how latent weight is treated."
+  },
+  {
+    "id": "188-I13",
+    "settled": true,
+    "grade": "PREEXISTING",
+    "evidence": [
+      "git show base:src/manta_trading/api_server/routes/gaps.py lines 54 and 59: _window_start_utc and _window_end_utc already defined there, and used at lines 92-93",
+      "git diff base..head --stat for routes/ and test/integration/test_gaps_window_sql.py: gaps.py and the test are not touched by the change",
+      "the change moves bars.py's two helpers into the new routes/windows.py (diff of bars.py removes _window_start_utc/_window_end_utc)",
+      "gaps.py _window_end_utc is a deliberately different half-open convention (next midnight), documented at gaps.py:59-70; windows.window_end_utc is the closed time.max variant"
+    ],
+    "judgement_question": null,
+    "reason": "The gaps.py copy existed in base and the change does not touch it. Only the start helper is identical, and the end helper differs on purpose."
+  },
+  {
+    "id": "175-I3",
+    "settled": false,
+    "grade": null,
+    "evidence": [
+      "src/squadron/pipeline/actions/review.py:448-487: a part's ProviderError is now returned as a result (before the change it was re-raised via 'raise'); the part loop at review.py:281-293 does not stop on a failed part",
+      "src/squadron/pipeline/actions/review_fold.py:36-41,100-110: with more than one part, _part_input and _part_verdict raise TypeError for a failed part with no verdict or input_file; review.py:180-182 catches it and returns success=False with the TypeError text as error",
+      "tests/pipeline/actions/test_review_action_parts.py:143-155: asserts success False, saved files and a log line, never result.error, so it passes on the TypeError path; the finding's factual claim holds",
+      "the test file change in base..head is only the usage_capture argument; the test existed before"
+    ],
+    "judgement_question": "Does a test that fails to detect a real regression (a part-N provider failure now surfaces a fold TypeError message and runs later parts) count as REAL, or as a MINOR missing assertion?",
+    "reason": "The claim is checkably true and the masked behavior change is real and introduced here. Whether a weak test assertion is itself fix-before-merge is a severity call."
+  },
+  {
+    "id": "u103-I3",
+    "settled": true,
+    "grade": "FALSE",
+    "evidence": [
+      "src/chart/chart-facade.ts:78-80 and src/chart/providers/lightweight-charts-provider.ts:153-160: removePane does not touch the series count, as stated",
+      "trading-ui node_modules/lightweight-charts 5.2.0 dist/lightweight-charts.development.mjs:6890-6897: model removePane only splices the pane; it does not remove the pane's series from model._private__serieses (series removal is _internal_removeSeries at 7160-7173)",
+      "same file 6430-6436 (recalculateIndicesWithData) iterates model._internal_serieses(), so the time scale is not emptied by a pane removal",
+      "src/chart/use-chart-provider.ts:341: the range guard checks seriesCountRef !== 0; the count stays above zero while the library keeps the series, so both agree",
+      "src/chart/use-chart-provider.ts:150: Math.max floor only matters for a negative drift, which cannot arise from a pane removal that leaves the count unchanged"
+    ],
+    "judgement_question": null,
+    "reason": "The finding is conditional on the library dropping a pane's series on removePane. In the installed 5.2.0 it does not, so the series count and the library's series list stay in step and the described failure does not occur."
+  },
+  {
+    "id": "197-I15",
+    "settled": false,
+    "grade": null,
+    "evidence": [
+      "src/squadron/pipeline/executor.py:1531-1562: item_results is a local assigned from _run_each_item only on return; a GitEnvironmentError escaping mid-body leaves it []",
+      "executor.py:1490 (_finish_each_report): from_item(item, position, [], reason, ...) so branch comes from _slice_branch([]) = None",
+      "src/squadron/pipeline/batch_report.py:207-214: _slice_branch reads the branch action output from step results; batch_report.py:107 documents branch as the slice branch when the item entered one",
+      "branch is consumed only by render_line (batch_report.py:191) and carried by item_resume._reconcile (item_resume.py:317); no logic branches on it"
+    ],
+    "judgement_question": "Is a halted item's record losing its branch field (display and report data only, no control flow reads it) a defect that must be fixed before merge, or a low-value gap?",
+    "reason": "The factual claim is true and the code is new here. Whether losing a report-only field rises above MINOR is a severity call."
+  },
+  {
+    "id": "175-I17",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "src/squadron/stats/reviews_report.py:150-157 (_basis): 'value in {basis.value for basis in CostBasis}' with value from yaml.safe_load",
+      "python check: [1] in {'a'} raises TypeError: unhashable type: 'list'; a mapping fails the same way",
+      "reviews_report.py:80-85 (reviews_usage_report) and _record at 109-123: no try around _row, so the TypeError aborts the whole report",
+      "reviews_report.py:106 docstring and the module contract: bad fields become None with a warning; _int and _float follow it, _basis does not",
+      "src/squadron/stats/reviews_report.py is new in base..head (162 insertions)",
+      "second claim (unreadable file) also holds: documents/frontmatter.py:66 read_text is not guarded and reviews_usage_report catches no OSError or UnicodeDecodeError"
+    ],
+    "judgement_question": null,
+    "reason": "A list or mapping costBasis crashes the report in new code and breaks the module's own malformed-field contract; this is reachable from hand-edited artifact frontmatter and is reproducible by running the expression."
+  }
+]

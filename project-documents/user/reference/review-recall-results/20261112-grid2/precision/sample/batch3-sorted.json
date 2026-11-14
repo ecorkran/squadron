@@ -1,0 +1,134 @@
+[
+ {
+  "id": "197-I15",
+  "settled": true,
+  "grade": "REAL",
+  "evidence": [
+   "src/squadron/pipeline/executor.py:1556,1562 (head): item_results is [] until _run_each_item returns; _run_each_item (1683+) keeps results in a local list lost when GitEnvironmentError escapes",
+   "src/squadron/pipeline/executor.py:1488-1490: halted path builds BatchItemRecord.from_item(item, position, [], reason, flag_kind=STEP_FAILED); branch/verdict/review_file derive from step results (batch_report.py:147 _slice_branch), so all are None",
+   "src/squadron/pipeline/branch_ops.py:277,280: merge raises GitEnvironmentError after the branch step has succeeded, so the halt can occur with a branch entered",
+   "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:489: 'Every flagged record has ... branch (when a branch was entered)' and :465 branch is a routing input for Amoeba",
+   "git diff base head: executor.py halted-record path and BatchItemRecord.branch are added in range"
+  ],
+  "escalation_question": null,
+  "reason": "Reachable through normal operation (merge step halts after branch entry). The slice's own success criterion 6 requires branch on every flagged record; the halted in-flight record loses branch, verdict and review file. Defect is in added code."
+ },
+ {
+  "id": "197-I16",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/squadron/pipeline/executor.py:1616-1618: kind = FlagKind(str(item.get(FLAG_KIND_KEY, FlagKind.NOT_READY))), added in range (FLAG_KIND_KEY added in sources.py diff)",
+   "src/squadron/pipeline/sources.py:209-211: the only producer setting flag_reason without a kind (_cf_slices_needing_tasks, predates base); NOT_READY is the correct classification for it",
+   "sources.py:265,280: the new producers always pass an explicit kind through _flag()"
+  ],
+  "escalation_question": null,
+  "reason": "The default is exercised but yields the correct kind for the only kindless producer; no wrong behavior, crash or data loss. The 'third-party source' case is hypothetical (no source registry beyond the in-repo sources). It is a style/rule point about silent defaults with no incorrect outcome, so MINOR."
+ },
+ {
+  "id": "a122-I2",
+  "settled": true,
+  "grade": "REAL",
+  "evidence": [
+   "src/amoeba/runner/observe.py:140-145: _confirmed replays self._faulted between polls",
+   "observe.py:171-193: _unconfirmed never reads _faulted; when poll not due it returns _still_overdue (186-187)",
+   "observe.py:233-234,330-340: PollFailure -> _fault stores _faulted but does not add to _overdue (only 241 does)",
+   "observe.py:259-271: _still_overdue adds a fault only if entry.id in _overdue, so the next tick returns LAUNCHING with no fault",
+   "src/amoeba/runner/tick.py:194-200: _close_recovered closes any open escalation whose kind is not in this tick's faults",
+   "observe.py:92-94 comment states the replay intent; observe.py, tick.py are new files in base..head"
+  ],
+  "escalation_question": null,
+  "reason": "Poll failures are an external failure that normal operation produces. Between polls the unconfirmed run reports LAUNCHING with no fault, so the run_observation_failed escalation is closed and reopened each poll interval, contradicting the code's own stated intent."
+ },
+ {
+  "id": "307-I1",
+  "settled": false,
+  "grade": null,
+  "evidence": [
+   "real payload nests the plan under phases[].summary: src/manta_trading/data/tick/pass_contract.py:119-135; cutover_234_checks.py:145 reads it that way",
+   "scripts/cutover_304_first_purchase.py:152-163 (fetch_estimate) returns the whole payload; this function is NOT in any base..head hunk",
+   "scripts/cutover_304_checks.py:196 (summary['wanted_days']) and the summary['verdict'] reads existed unchanged at base (git show base: lines 123,126,137,152)",
+   "payload shape unchanged in range (pass_contract.py/tick_pass_render.py not in diff)",
+   "scripts/cutover_304_first_purchase.py:270 and following (added in range, new --estimate mode) read summary['planned_usd'], ['requests'], ['verdict'] flat from the same payload, so the new mode cannot succeed"
+  ],
+  "escalation_question": "Does PREEXISTING apply when the cited lines (fetch_estimate, _check_scope flat reads) are unchanged but the diff adds a new --estimate mode, with its own flat-key reads and flat fixtures, that can never succeed because of the same mismatch (REAL if defect in the added mode counts, PREEXISTING if the cited code governs)?",
+  "reason": "BRIEF says REAL needs a defect 'in code added or changed in base..head' and PREEXISTING covers 'code was not added or changed'. The cited code is unchanged, yet added code fails for the same cause; the BRIEF does not say which governs."
+ },
+ {
+  "id": "227-I4",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "deploy/setup-backup.sh:126: dies when a table cluster is absent from pg_lsclusters, in check mode too (true as claimed)",
+   "scripts/cutover_227_tick_backup.py:2: script is 'on manta9000, in one command'; no other host is a stated target",
+   "test/unit/test_setup_backup.py:138: pg_lsclusters fixture shows 17/tick online (recorded from manta9000); slice 226 proof notes 2026-10-03 prove the production tick cluster exists",
+   "scripts/cutover_227_tick_backup.py:90-92 and CHECK_ALLOWED (line 72) assume 17/tick items exist but are non-OK"
+  ],
+  "escalation_question": null,
+  "reason": "The abort is real only on a host without 17/tick, which is not a target of this one-shot manta9000 cutover; on the declared target the cluster exists and step 2 passes (the finding concedes this). The step's expected-text wording is at most misleading, so true but low value."
+ },
+ {
+  "id": "921-I10",
+  "settled": true,
+  "grade": "FALSE",
+  "evidence": [
+   "src/manta_trading/cli/commands/data.py:3101-3115: comment 'timescaledb_information.jobs.hypertable_name carries the *view* name for cagg refresh policies (not the materialization hypertable name)' and join j.hypertable_name = ca.view_name; file predates base (initial release)",
+   "src/manta_trading/market/maintenance/cagg_freshness.py:82: production probe uses WHERE j.hypertable_name = %s AND j.proc_name = %s with the cagg view name; predates base (2026-07-26), contains live-DB workarounds ('-infinity' DataError)",
+   "src/manta_trading/data/gaps/repair_921.py:200-206: same join key as those probes"
+  ],
+  "escalation_question": null,
+  "reason": "The repo's own production code, written against the live database, keys job lookup on the view name, so the probe does not match nothing. The runbook 300 join through the materialization name is the only contrary hint and is a documentation query. The side point (no job row folds into stale) gives WAIT, an observable fail-safe answer, not a silent failure."
+ },
+ {
+  "id": "a122-I6",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/amoeba/runner/faults.py:120-143: one raise_project_escalation call per fault (new file in range)",
+   "src/amoeba/store/project_escalations.py:51-59: returns the open row unchanged; file is not in the base..head diff",
+   "docs/store-contract.md:702 and docs/process-contract.md:360: contract is one open row per project and kind, returned unchanged",
+   "project-documents/user/architecture/120-arch.runner-routing-engine.md:49: 'at most one open per project and fault kind'"
+  ],
+  "escalation_question": null,
+  "reason": "First-payload-wins is the documented dedupe contract, so the code does what the design says. The loss of later detail and the extra BEGIN IMMEDIATE per recurring fault (a no-op SQLite lock) are real but have no correctness or data consequence beyond a stale operator note."
+ },
+ {
+  "id": "225-I19",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/manta_trading/cli/commands/tick_store_cmds.py:156-166,228: _read callback and inner read typed Any; Conn alias exists at data/tick/manifest_reads.py:29",
+   "pyproject.toml:69-72: project uses mypy with ignore_missing_imports, not strict pyright; explicit Any is accepted",
+   "tick_store_cmds.py:169-173: _read_storage defers the import, a style choice with no behavior effect"
+  ],
+  "escalation_question": null,
+  "reason": "Typing precision and import placement only; no wrong behavior."
+ },
+ {
+  "id": "932-I5",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "src/squadron/config/manager.py:72-74: _coerce_value uses int(raw_value), so the CLI cannot produce a bool; true reaches get_typed_config (134-137) only by hand-editing TOML",
+   "src/squadron/config/keys.py:118-126: plain int key; no CONFIG_KEYS entry has a range validator, including existing int keys (e.g. review.max_file_size_bytes)",
+   "src/squadron/pipeline/sdk_session.py:224,323-327: value passed to asyncio.timeout; 0 or negative only arises when the user sets it",
+   "the key description does not describe 0 as 'disabled'"
+  ],
+  "escalation_question": null,
+  "reason": "The bool path needs a hand-edited file (excluded by the reachability rule). Zero or negative needs a user to type a nonsensical value; the code does what that value says and matches how every other int key is handled. Missing range validation, not a defect on any input the code produces."
+ },
+ {
+  "id": "175-I4",
+  "settled": true,
+  "grade": "REAL",
+  "evidence": [
+   "src/squadron/pipeline/actions/compact.py:82-89 (head): except Exception returns ActionResult(success=False) with no metadata; success-path stamping at 91-101 added in range",
+   "src/squadron/pipeline/sdk_session.py:232-235: dispatch attaches exc.telemetry to ProviderError; capture_summary (459) goes through dispatch, so the telemetry is on the exception compact catches",
+   "src/squadron/pipeline/sdk_session.py:493-499: capture reply (with spend) is held, then _reconnect can raise, discarding reply.telemetry",
+   "src/squadron/pipeline/actions/summary.py:320-335: summary stamps exc.telemetry on failure",
+   "project-documents/user/slices/175-slice.usage-and-cost-tracking.md:157 (D5) and :282 require failed actions, compact included, to record spend carried by the error"
+  ],
+  "escalation_question": null,
+  "reason": "The compact failure path drops spend that the exception already carries, and a reconnect failure after a successful capture drops the summary's spend; both are reachable through normal provider failures. This violates the slice's own D5 and success criterion 2 in code added by the slice, giving wrong usage totals."
+ }
+]

@@ -1,0 +1,214 @@
+[
+ {
+  "id": "197-I19",
+  "grade": "REAL",
+  "confidence": "medium",
+  "reason": "item_resume._git_precondition reads the cf target and calls restore_target (commit leftovers, checkout) with no worktree-registration check, unlike enter_slice_branch which calls _require_registered_worktree first; the mutation only happens when the checkout sits on a slice branch.",
+  "evidence": [
+   "src/squadron/pipeline/item_resume.py:230-241",
+   "src/squadron/pipeline/branch_ops.py:95-103,123-141",
+   "git diff e0dc580..90a40db: item_resume.py is new (335 insertions)"
+  ]
+ },
+ {
+  "id": "175-I17",
+  "grade": "REAL",
+  "confidence": "medium",
+  "reason": "_basis tests `value in {set of str}`; I confirmed a list value raises TypeError: unhashable type, and the caller loop has no guard, so one malformed costBasis aborts the whole report despite the module's 'bad fields become None' contract.",
+  "evidence": [
+   "src/squadron/stats/reviews_report.py:151-159",
+   "src/squadron/stats/reviews_report.py:60-79 (no try/except around _row)"
+  ]
+ },
+ {
+  "id": "188-I4",
+  "grade": "MINOR",
+  "confidence": "high",
+  "reason": "tape_filtered does re-implement the membership test in Python and reads the parameter key by literal, contradicting its docstring, but test_agrees_with_the_sql_predicate guards divergence, so this is a design/duplication nit with no wrong behavior.",
+  "evidence": [
+   "src/manta_trading/data/kalshi/serve_timeseries.py:147-166",
+   "src/manta_trading/data/kalshi/selection.py:~168-185"
+  ]
+ },
+ {
+  "id": "225-I5",
+  "grade": "FALSE",
+  "confidence": "high",
+  "reason": "psycopg_pool.PoolTimeout subclasses psycopg.OperationalError, so the existing `except psycopg.OperationalError` in calendar_sessions already catches it and maps to TickCalendarError (exit 4).",
+  "evidence": [
+   "src/manta_trading/data/tick/tick_status_build.py:70",
+   "trading-data-private/.venv/.../psycopg_pool/errors.py:16 (class PoolTimeout(e.OperationalError))",
+   "src/manta_trading/cli/commands/tick_exit.py exit_code_for maps psycopg.OperationalError and TickCalendarError to EXIT_STORAGE"
+  ]
+ },
+ {
+  "id": "225-I4",
+  "grade": "MINOR",
+  "confidence": "high",
+  "reason": "The range-join cost concern is speculative and unmeasured; tick_trade is a chunked hypertable bounded by a ts_event WHERE, and the slice record shows coverage run successfully over a four-month real range, so there is no demonstrated defect.",
+  "evidence": [
+   "src/manta_trading/data/tick/status_reads.py:154-175",
+   "src/manta_trading/market/schema/migrations/tick.py:~215-250",
+   "project-documents/user/slices/225-slice.ingest-pass-and-proof-parity.md:1120-1128 (coverage over 2024-08-30..2025-01-01 ran)"
+  ]
+ },
+ {
+  "id": "175-I24",
+  "grade": "FALSE",
+  "confidence": "medium",
+  "reason": "ProviderError subclasses (EmptyFinalTurn, Auth, API, RateLimit, Timeout, DispatchStalled) do not overlap ModelResolutionError, ModelPoolNotImplemented or KeyError (plain Exception/KeyError), so the reorder changes nothing; a telemetry-less ProviderError reaching execute is already exercised by test_session_dispatch_failure_returns_action_result_false.",
+  "evidence": [
+   "src/squadron/pipeline/actions/dispatch.py:396-406",
+   "src/squadron/providers/errors.py:8-83",
+   "src/squadron/pipeline/resolver.py:93,97",
+   "src/squadron/pipeline/sdk_session.py:123",
+   "tests/pipeline/actions/test_dispatch_session.py:173-181"
+  ]
+ },
+ {
+  "id": "197-I22",
+  "grade": "PREEXISTING",
+  "confidence": "medium",
+  "reason": "The SDK vs PROMPT_ONLY match blocks and the oversized run() existed before; the diff only wrapped the existing asyncio.run calls in _locked(...) and added a small --item hook, it did not add another dispatch copy.",
+  "evidence": [
+   "git diff e0dc580..90a40db -- src/squadron/cli/commands/run.py (hunks at ~1231-1305 replace asyncio.run with _locked)",
+   "src/squadron/cli/commands/run.py:1199-1340"
+  ]
+ },
+ {
+  "id": "225-I1",
+  "grade": "REAL",
+  "confidence": "medium",
+  "reason": "raw_counts counts every tick_trade row in each session window with no shape/unit scope while ledger_totals is shape-scoped, and _session_row unions both key sets, so any other product's instruments become ledger-0 mismatches (exit 3); latent with the one-entry universe, but the slice design says a second product needs nothing product-specific.",
+  "evidence": [
+   "src/manta_trading/data/tick/status_reads.py:154-175",
+   "src/manta_trading/data/tick/tick_coverage.py:76-93",
+   "src/manta_trading/data/tick/universe.py:45-46 (only ES)",
+   "project-documents/user/slices/225-slice.ingest-pass-and-proof-parity.md:841-842"
+  ]
+ },
+ {
+  "id": "188-I13",
+  "grade": "PREEXISTING",
+  "confidence": "medium",
+  "reason": "gaps.py is not touched by base..head; its two window helpers pre-date the new windows.py, one is deliberately a half-open variant explained in its own docstring, and the other is a trivial one-line duplicate, so this is leftover duplication rather than a defect introduced here.",
+  "evidence": [
+   "src/manta_trading/api_server/routes/gaps.py:54-72 (no diff in base..head)",
+   "src/manta_trading/api_server/routes/windows.py:23-45",
+   "test/integration/test_gaps_window_sql.py:25-26"
+  ]
+ },
+ {
+  "id": "175-I3",
+  "grade": "REAL",
+  "confidence": "medium",
+  "reason": "I ran the test: part-two ProviderError now yields 'review part must name exactly one input file, got []' (fold TypeError) rather than the provider message, so the test passes for the wrong reason; the diff's `raise` -> `return _exception_result` change in _run_part causes it and also lets later parts keep running after a failed part.",
+  "evidence": [
+   "tests/pipeline/actions/test_review_action_parts.py:143-155",
+   "src/squadron/pipeline/actions/review.py:288-294,493",
+   "src/squadron/pipeline/actions/review_fold.py:62-66 (_part_input TypeError)"
+  ]
+ },
+ {
+  "id": "227-I7",
+  "grade": "MINOR",
+  "confidence": "medium",
+  "reason": "The duplicated constants (127.0.0.1 replication host, b2 remote, arm file, backup root, tick unit) are real but sit in a one-shot cutover script spanning shell and Python tiers; a drift would fail the guard loudly rather than silently, so it is a define-once nit.",
+  "evidence": [
+   "scripts/cutover_227_helpers.py:84-88",
+   "scripts/cutover_227_host.py:23-26",
+   "deploy/backup-clusters.conf (17/main replication_host 127.0.0.1)",
+   "deploy/setup-backup.sh:65,80-81"
+  ]
+ },
+ {
+  "id": "175-I1",
+  "grade": "REAL",
+  "confidence": "high",
+  "reason": "Each part now stamps its own USAGE_KEY record but fold_review_parts._metadata copies parts[0].metadata and sums only tool calls, so tokens, turns and cost of parts 2..N are dropped from run state and sq stats run.",
+  "evidence": [
+   "src/squadron/pipeline/actions/review_fold.py:85-91",
+   "src/squadron/pipeline/actions/review.py:293-294,506",
+   "src/squadron/pipeline/usage_capture.py:230-233 (stamp overwrites one key)"
+  ]
+ },
+ {
+  "id": "225-I11",
+  "grade": "FALSE",
+  "confidence": "high",
+  "reason": "The project type-checks with mypy (pyproject [tool.mypy]), and running strict pyright with psycopg 3.3.3 on status_reads.py gives 0 errors, while a control snippet passing a plain str to execute does error, so the unannotated constants do not fail.",
+  "evidence": [
+   "pyproject.toml:69-75 (mypy is the project's type checker)",
+   "src/manta_trading/data/tick/status_reads.py:50-60",
+   "strict pyright run on status_reads.py: 0 errors; control file with str query: reportArgumentType"
+  ]
+ },
+ {
+  "id": "197-I1",
+  "grade": "REAL",
+  "confidence": "high",
+  "reason": "resume_item catches only _Stop, GitEnvironmentError and OSError; ContextForgeError from evaluate_each_source/list_slices and a missing pipeline FileNotFoundError escape, handle_item_resume catches only typer.Exit, so the process exits 1 (FLAGGED) with a traceback instead of HALTED/REJECTED.",
+  "evidence": [
+   "src/squadron/pipeline/item_resume.py:120-136,160-167,273-335",
+   "src/squadron/cli/commands/run_item.py:86-103",
+   "src/squadron/pipeline/item_resume.py:63-69 (ResumeExit contract)",
+   "src/squadron/integrations/context_forge.py:33"
+  ]
+ },
+ {
+  "id": "197-I23",
+  "grade": "FALSE",
+  "confidence": "high",
+  "reason": "The cited signature line is exactly 104 characters, equal to the configured line-length of 104, so it is not over the limit and ruff check on executor.py passes.",
+  "evidence": [
+   "src/squadron/pipeline/executor.py:1454 (length 104)",
+   "pyproject.toml:71 (line-length = 104)",
+   "ruff check src/squadron/pipeline/executor.py: All checks passed"
+  ]
+ },
+ {
+  "id": "197-I15",
+  "grade": "MINOR",
+  "confidence": "medium",
+  "reason": "True that the halted-item record is built with an empty results list so it loses the branch (and verdict/review fields), but the branch is display-only here and resume restores the target from the live checkout, so the impact is lost report detail.",
+  "evidence": [
+   "src/squadron/pipeline/executor.py:1490,~1562",
+   "src/squadron/pipeline/batch_report.py:107,136-157",
+   "src/squadron/pipeline/item_resume.py:230-239 (resume uses current_branch, not the record)"
+  ]
+ },
+ {
+  "id": "175-I19",
+  "grade": "REAL",
+  "confidence": "high",
+  "reason": "The report reads only persisted action_results; loop rounds before the last live in StepResult.prior_rounds, which _append_step does not serialize and RunStateRecorder.round_completed discards, so loop spend is undercounted although the slice states the cost of a loop is the whole loop.",
+  "evidence": [
+   "src/squadron/stats/usage_report.py:112-116",
+   "src/squadron/pipeline/state.py:482-520",
+   "src/squadron/pipeline/run_observer.py:52-53",
+   "project-documents/user/slices/175-slice.usage-and-cost-tracking.md:157"
+  ]
+ },
+ {
+  "id": "175-I4",
+  "grade": "REAL",
+  "confidence": "medium",
+  "reason": "The compact failure branch returns no metadata, so a ProviderError's telemetry is dropped and a summary captured before a failed _reconnect loses its spend, contrary to decision D5 that failed calls record what they spent (dispatch, summary and review do); rare path, but a spend undercount.",
+  "evidence": [
+   "src/squadron/pipeline/actions/compact.py:75-90",
+   "src/squadron/pipeline/sdk_session.py:230-235,493-499",
+   "project-documents/user/slices/175-slice.usage-and-cost-tracking.md:157"
+  ]
+ },
+ {
+  "id": "188-I1",
+  "grade": "REAL",
+  "confidence": "high",
+  "reason": "Pydantic validates `date | datetime | None` so that 2026-06-01T00:00:00Z and the +02:00 form become a bare date (I reproduced with TypeAdapter on pydantic 2.12.5, same as the lock), so resolve_window expands an explicit midnight end to 23:59:59.999999 and drops offsets, silently returning extra data.",
+  "evidence": [
+   "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92,139-140",
+   "src/manta_trading/api_server/routes/windows.py:38-49",
+   "TypeAdapter(date|datetime|None).validate_python('2026-06-01T00:00:00Z') -> date(2026,6,1)"
+  ]
+ }
+]

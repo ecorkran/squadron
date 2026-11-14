@@ -1,0 +1,289 @@
+{
+ "cases": {
+  "175": {
+   "repo": "squadron",
+   "base": "3812c815b377eadfd7741ab1734c350c73789e2b",
+   "head": "1cbd6be4317f37498b07a31cd9cb64562fdb9d0a",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175"
+  },
+  "197": {
+   "repo": "squadron",
+   "base": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece",
+   "head": "90a40dbf40289fd46b99e999c957a6e9295545be",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197"
+  },
+  "225": {
+   "repo": "trading-data",
+   "base": "09106ab48bda1b7397cfefa0145928a82e3056ac",
+   "head": "f328230d409b21ef1c9d8f8d96db21a478169076",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225"
+  },
+  "227": {
+   "repo": "trading-data",
+   "base": "11168d5b2ae7805e15a63888eb85ca26b1fdc811",
+   "head": "85fee397cbbe12ca5b74bb38fb77cf1165b5ba1c",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227"
+  },
+  "307": {
+   "repo": "trading-data",
+   "base": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0",
+   "head": "b5c3d781963789cef917771538a0b51a10bab29b",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307"
+  },
+  "921": {
+   "repo": "trading-data",
+   "base": "eaf1ab4e5913465369ad916785cce5974eaab08c",
+   "head": "9b54f27bdc6b62bca9890bc5006bbac73f2ea6bc",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/921"
+  },
+  "932": {
+   "repo": "squadron",
+   "base": "262d0ba064dcc6fa09efb5908eecc1447fd0582b",
+   "head": "d89cc060d2fe3033ed479d7e4eb69aadc779bd97",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932"
+  },
+  "a122": {
+   "repo": "amoeba",
+   "base": "f8097604697cfefb5fb7313d29648a1c6c22b221",
+   "head": "e07f13739a5c7cd88c04fe2dffcc57b2a1eb5793",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122"
+  }
+ },
+ "items": [
+  {
+   "id": "197-I15",
+   "case": "197",
+   "members": [
+    {
+     "ref": "haiku-xhigh/3/5",
+     "severity": "CONCERN",
+     "title": "A halted item loses its partial results, including the slice branch",
+     "location": "src/squadron/pipeline/executor.py:1490",
+     "description": "`item_results` is assigned only after `_run_each_item` returns (`executor.py:1562`). When a `GitEnvironmentError` escapes mid-item, it is still `[]`. `_finish_each_report` then builds the record with `from_item(item, position, [], \u2026)` (line 1490). The record drops the `branch` the item entered, although `BatchItemRecord.branch` is documented as \"the slice branch, when the item entered one\" (`batch_report.py:107`). Item resume's `_reconcile` copies that `branch` into the reconciled record (`item_resume.py:317`). Have the item's results accumulate in a list that the except path can read. `tests/pipeline/test_each_report_writes.py` asserts outcomes but not `branch`."
+    }
+   ]
+  },
+  {
+   "id": "197-I16",
+   "case": "197",
+   "members": [
+    {
+     "ref": "haiku-xhigh/3/7",
+     "severity": "CONCERN",
+     "title": "A source flag without a kind gets a silent default of NOT_READY",
+     "location": "src/squadron/pipeline/executor.py:1617",
+     "description": "`_pre_flag` defaults a missing `flag_kind` to `NOT_READY`. The one producer that sets `flag_reason` without a kind, `_cf_slices_needing_tasks` (`sources.py:211-213`), relies on that default. `test_a_source_flag_without_a_kind_is_not_ready` in `tests/pipeline/test_executor_each.py` locks it in. The default happens to be right for these flags, but CLAUDE.md forbids silent fallbacks. Set `FLAG_KIND_KEY` explicitly at `sources.py:213` through `_flag`, and make `_pre_flag` fail when the kind is missing."
+    },
+    {
+     "ref": "sonnet/1/3",
+     "severity": "CONCERN",
+     "title": "`_pre_flag` silently defaults a missing flag kind",
+     "location": "src/squadron/pipeline/executor.py#_pre_flag",
+     "description": "`FlagKind(str(item.get(FLAG_KIND_KEY, FlagKind.NOT_READY)))` quietly labels any source-flagged item as `not_ready` when the source set no kind. The project rule forbids silent fallback values. A third-party or custom source that sets only `flag_reason` is therefore misclassified without any signal. The test `test_a_source_flag_without_a_kind_is_not_ready` locks this in. Either require the source to set the kind or log at WARNING when the default applies."
+    }
+   ]
+  },
+  {
+   "id": "a122-I2",
+   "case": "a122",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/2",
+     "severity": "CONCERN",
+     "title": "A poll fault on an unconfirmed launch is not replayed between polls",
+     "location": "src/amoeba/runner/observe.py:171-193",
+     "description": "For a confirmed run, `_confirmed` replays the standing fault from `_faulted` on ticks between polls (lines 140-145). The comment at lines 92-93 says that is so an escalation does not look recovered. The unconfirmed path never reads `_faulted`. `_unconfirmed` returns LAUNCHING (line 185) or calls `_still_overdue` (line 187), which adds a fault only for an entry already in `_overdue`. A poll failure in `_after_launch_poll` (lines 233-234) stores the fault and returns, and the next tick adds nothing. `_close_recovered` then closes the `run_observation_failed` escalation, and it reopens at the next poll. The escalation flaps. The test that covers this, `test_a_failed_poll_after_an_exit_is_a_fault_and_the_entry_stays` in tests/runner/test_observe_launch.py, checks one tick only. Fix: replay `_faulted` in `_unconfirmed` the way `_confirmed` does, and add a second-tick assertion."
+    },
+    {
+     "ref": "haiku-xhigh/2/2",
+     "severity": "CONCERN",
+     "title": "An unconfirmed launch does not replay its standing poll fault",
+     "location": "src/amoeba/runner/observe.py:171-193",
+     "description": "The comment at observe.py:92-94 says a poll fault is replayed between polls so its escalation does not close. Only `_confirmed` reads `_faulted` (lines 137-145). In `_unconfirmed`, when the child has exited and the poll is not yet due, the code calls `_still_overdue`, which adds nothing unless the launch is overdue, and returns LAUNCHING. The next `_close_recovered` (tick.py) then closes the `run_observation_failed` escalation. The following poll reopens it. So the escalation opens and closes once per poll interval. `test_a_failed_poll_after_an_exit_is_a_fault_and_the_entry_stays` checks only one tick. The replay test uses an entry with no tracked child, so it takes the confirmed path. Fix: consult `_faulted` on the unconfirmed path too, and add a multi-tick test."
+    },
+    {
+     "ref": "haiku-xhigh/3/1",
+     "severity": "CONCERN",
+     "title": "Unconfirmed launches lose their poll fault between polls, so the escalation closes and reopens",
+     "location": "src/amoeba/runner/observe.py:183-187",
+     "description": "For a confirmed run, `_confirmed` replays a standing poll fault between polls (`observe.py:140-145`). `_unconfirmed` never reads `_faulted`. If a launch's child has exited or is past grace, and its poll failed (`_after_launch_poll`, lines 233-234), the ticks between polls reach `_still_overdue` (line 187). That raises nothing unless the entry is already in `_overdue` (line 260), and a `PollFailure` never adds it there.\n\nThe run then reports LAUNCHING with no fault. `_close_recovered` (`tick.py:194-200`) closes the `run_observation_failed` escalation, and the next poll reopens it. The state also flips FAULT \u2192 LAUNCHING \u2192 FAULT. The only test of this path observes once (`test_a_failed_poll_after_an_exit_is_a_fault_and_the_entry_stays`, `tests/runner/test_observe_launch.py`). Fix: replay `_faulted` in `_unconfirmed` as `_confirmed` does, and add a test that asserts the fault is present on the tick between polls."
+    },
+    {
+     "ref": "sol/1/2",
+     "severity": "CONCERN",
+     "title": "Unconfirmed launches lose standing poll faults between polls",
+     "location": "src/amoeba/runner/observe.py:186-187",
+     "description": "After an unconfirmed launch receives `PollFailure`, subsequent ticks inside the polling interval call `_still_overdue` without replaying `_faulted`. Reproduced the state changing from `FAULT` to `LAUNCHING` with no reported fault one second later, although no successful poll occurred. Consequently, `_close_recovered` can close the escalation prematurely. Replay standing faults until a usable observation supersedes them."
+    },
+    {
+     "ref": "sol/2/1",
+     "severity": "CONCERN",
+     "title": "Retain unconfirmed-launch faults between polls",
+     "location": "src/amoeba/runner/observe.py:186-187",
+     "description": "After an unconfirmed launch returns `PollFailure`, ticks before the next poll bypass `_faulted` and return `LAUNCHING` without replaying the fault. Reproduced at seconds 0 and 1: `FAULT` becomes `LAUNCHING` with no new evidence. Consequently, `ProjectTick._close_recovered` closes the escalation prematurely. Replay standing observation faults here, as the confirmed path does."
+    },
+    {
+     "ref": "sol/3/2",
+     "severity": "CONCERN",
+     "title": "Unconfirmed launches falsely recover between failed polls",
+     "location": "src/amoeba/runner/observe.py:186-187",
+     "description": "A failed launch poll caches `RUN_OBSERVATION_FAILED` in `_faulted`, but this interval-skipping branch never replays it. The next tick reports `LAUNCHING` without that fault, allowing `ProjectTick._close_recovered()` to close the escalation despite no successful observation. Replay standing poll faults here, as `_confirmed()` does, and test consecutive ticks with fresh fault collections."
+    }
+   ]
+  },
+  {
+   "id": "307-I1",
+   "case": "307",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/0",
+     "severity": "FAIL",
+     "title": "The estimate parser reads top-level keys from a payload that nests the summary under `phases`",
+     "location": "scripts/cutover_304_first_purchase.py:152-163",
+     "description": "`fetch_estimate` returns the parsed stdout of `mt data tick pass --estimate-only --json` unchanged. `judge_estimate` then reads `summary[\"wanted_days\"]`, `summary[\"verdict\"]`, and `summary[\"requests\"]` at the top level (`scripts/cutover_304_checks.py:196`). The real payload has none of those keys. `print_pass` calls `pass_to_dict`, which is `PassResult.to_dict()` plus `exit_code` (`src/manta_trading/cli/commands/tick_pass_render.py:146-148`, `:285-287`). That method places each phase's summary under `phases[i].summary` (`src/manta_trading/data/tick/pass_contract.py:119-135`). The purchase summary is at `phases[name == \"purchase\"].summary`, which `scripts/cutover_234_checks.py:145` already reads that way. Here `_check_scope` raises `KeyError: 'wanted_days'`. `main` catches it as \"unexpected payload\" and exits 1 (`cutover_304_first_purchase.py:249-252`). The full run and the new `--estimate` mode both stop there, before any spend, so the PM never gets the ceiling command.\n\nThe tests miss this because the fixtures are flat. `NOTHING` (`test/unit/scripts/test_cutover_304_first_purchase.py:47-56`) and `_summary()` (`test/unit/scripts/test_cutover_304_checks.py:59-80`) are hand-written. `_summary`'s docstring says it mirrors `plan_summary`, which is the inner summary and not what the CLI prints. The CLAUDE.md parser rule requires fixtures in the production format. Only the coverage, accounting, and debug fixtures use the real builders. This path predates the diff, but the diff adds `--estimate` on top of it, and its tests pin the wrong shape. I could not check history without git to see whether the nesting came after 304."
+    }
+   ]
+  },
+  {
+   "id": "227-I4",
+   "case": "227",
+   "members": [
+    {
+     "ref": "haiku-xhigh/2/0",
+     "severity": "CONCERN",
+     "title": "Step 2 aborts on any host where 17/tick is not yet in pg_lsclusters",
+     "location": "scripts/cutover_227_tick_backup.py:87",
+     "description": "`step_check` runs `setup-backup.sh --check` before `step_provision`, and its expected text (lines 236-237) says \"17/tick not yet set up\". But `deploy/setup-backup.sh:125-127` dies, in check mode too, when any table cluster is missing from `pg_lsclusters` (\"nothing changed\"). `test_cluster_absent_from_pg_lsclusters_is_fatal` in `test/unit/test_setup_backup.py` pins that behavior. On a host without `17/tick`, setup-backup prints no SUMMARY, so `step_check` fails at lines 90-92 and provisioning (step 3) is never reached. On manta9000 the cluster already exists (the fixture in `test/unit/test_setup_backup.py` records `17/tick` online there on 2026-10-04), so the production run is not blocked. The script's own contract still cannot be met on a fresh host, such as the second-host acceptance run in runbook 210. Either run provisioning before the check, or have setup-backup report an absent cluster as MISSING items instead of dying."
+    }
+   ]
+  },
+  {
+   "id": "921-I10",
+   "case": "921",
+   "members": [
+    {
+     "ref": "sonnet-high/2/2",
+     "severity": "CONCERN",
+     "title": "Cagg-freshness probe probably matches nothing, so verify may wait forever",
+     "location": "src/manta_trading/data/gaps/repair_921.py:200-212",
+     "description": "The job lookup filters `job.hypertable_name = %s` with the cagg view name (`minute_4hour_ohlcv`). In TimescaleDB, `timescaledb_information.jobs.hypertable_name` for a continuous-aggregate refresh policy normally holds the internal materialization hypertable (`_materialized_hypertable_N`), not the view name. I couldn't check this against a live database. If it is true, `job_row` is `None`, `last_refresh` is `None`, and `CaggFreshness.stale` is `True` whenever any bar exists. `--verify` would then answer WAIT on every run.\n\nA missing job row is also silently folded into \"stale\". That conflicts with the project rule against silent fallbacks, and it should raise or report that no refresh policy was found. The unit test (`test_the_probe_reads_the_job_stats_and_the_session_chunk`) uses a mock cursor and asserts only that the SQL text contains the proc name, so it can't catch a wrong join key. Run the query against a real TimescaleDB, or join through `continuous_aggregates.materialization_hypertable_name`."
+    }
+   ]
+  },
+  {
+   "id": "a122-I6",
+   "case": "a122",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/3",
+     "severity": "CONCERN",
+     "title": "Expected faults lose detail: first payload wins, and each recurring fault costs a write",
+     "location": "src/amoeba/runner/faults.py:120-143",
+     "description": "`raise_expected_faults` calls `store.raise_project_escalation` once per fault. The store returns an already-open row unchanged (src/amoeba/store/project_escalations.py:58-59), so the escalation keeps the payload of the first fault of that kind ever raised. Two `run_observation_failed` faults for different runs in one tick: the second run's id and detail are dropped. A `launch_overdue` escalation keeps the stderr tail from when it first opened, so an operator sees stale evidence. Each recurring fault also opens a `BEGIN IMMEDIATE` write transaction every tick even when nothing is written. Fix: update the open row's payload, or raise once per kind with the current details, and skip the store call for kinds already open this tick."
+    },
+    {
+     "ref": "haiku-xhigh/2/3",
+     "severity": "CONCERN",
+     "title": "Same-kind faults collapse into one stale detail",
+     "location": "src/amoeba/runner/faults.py:120-143",
+     "description": "`raise_expected_faults` calls `raise_project_escalation` once per fault. The store returns the already-open row unchanged for the same `(project, kind)` (project_escalations.py:58-59). So if two CF links fail in one tick, only the first one's detail is stored. While the kind keeps recurring, the open row keeps naming whichever fault came first, even after that one has recovered. The docstring says only that a repeat writes nothing; it does not mention the loss. `test_a_failed_link_raises_one_escalation...` covers one link only. Fix: either merge the subjects into the payload on recurrence or key the row on the subject, and add a two-subject test."
+    }
+   ]
+  },
+  {
+   "id": "225-I19",
+   "case": "225",
+   "members": [
+    {
+     "ref": "sonnet-high/3/3",
+     "severity": "CONCERN",
+     "title": "Loosened connection types at the read boundary",
+     "location": "src/manta_trading/cli/commands/tick_store_cmds.py:164-176,213-217",
+     "description": "`_read` takes `Callable[[Any, str], ...]`, and the inner `read(conn: Any, ...)` in `tick_coverage` is also `Any`. The project already defines `Conn = psycopg.AsyncConnection[Any]` in `manifest_reads`. Using it here keeps strict pyright able to check the callbacks. `_read_storage()` exists only to lazily import one class, and it adds indirection. The same lazy import could sit inline in `tick_status` and `tick_coverage`, or `TickDatabaseUnreachable` could be passed directly."
+    }
+   ]
+  },
+  {
+   "id": "932-I5",
+   "case": "932",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/1",
+     "severity": "CONCERN",
+     "title": "`pipeline.background_idle_timeout_s` accepts `true`, `0`, and negative values",
+     "location": "src/squadron/config/manager.py:134-137",
+     "description": "The int branch of `get_typed_config` checks `isinstance(value, int)`, which is true for `bool`. The bool branch above it has a \"bool before int\" comment, but the int branch does not exclude bool. A hand-edited `pipeline.background_idle_timeout_s = true` returns `True`, which becomes a one-second idle bound. Zero or negative values also pass, and they make the timer fire at once, so every background agent is stopped immediately. The CLI path cannot produce a bool (`_coerce_value` calls `int()`), but hand-edited TOML can. `tests/config/test_keys.py` (`TestPipelineConfigKeys`) only covers the `\"60\"` coercion. Fix: reject bool explicitly in the int branch, require a positive value, and add tests for `true`, `0`, and `-1`."
+    },
+    {
+     "ref": "haiku-xhigh/3/6",
+     "severity": "CONCERN",
+     "title": "Zero or negative idle timeout is accepted and stops agents immediately",
+     "location": "src/squadron/config/keys.py:118",
+     "description": "`_coerce_value` (`config/manager.py:75\u201376`) does a bare `int(raw_value)`, and `get_typed_config` checks only the type. `pipeline.background_idle_timeout_s = 0` therefore stores and reads back. `asyncio.timeout(0)` expires at once, so every waiting dispatch stops its background agents immediately. A user who reads 0 as \"disabled\" gets that behavior. Validate at the config boundary: reject values below 1, or define an explicit disable value and document it in the key description."
+    },
+    {
+     "ref": "sonnet/3/0",
+     "severity": "CONCERN",
+     "title": "Idle-timeout config accepts zero, negative and boolean values",
+     "location": "src/squadron/config/manager.py:134-137",
+     "description": "`get_typed_config(..., int)` only checks `isinstance(value, int)`. Because `bool` is a subclass of `int`, a TOML `true` passes for `pipeline.background_idle_timeout_s`. `_coerce_value` also accepts `0` or `-5` without a range check. The value goes straight into `asyncio.timeout(idle_s)` in `src/squadron/pipeline/sdk_session.py#_read_turn`. With `0` or a negative value the first wait after the dispatch's own result times out immediately. `_stop_background` then kills every background agent the moment the dispatch starts waiting. That silently defeats the wait-for-agents behavior this slice adds. The project's \"fail explicitly\" rule suggests rejecting non-positive values at `sq config set` and in the typed read. The bool branch is checked before int, so the guard can be added without disturbing it."
+    },
+    {
+     "ref": "sonnet-high/3/0",
+     "severity": "CONCERN",
+     "title": "`pipeline.background_idle_timeout_s` accepts zero or negative values",
+     "location": "src/squadron/config/keys.py:117-125",
+     "description": "The key is a plain `int` with no range check. `set_config` has no validator hook, and `_coerce_value` only runs `int(raw_value)`. A value of `0` or a negative number reaches `asyncio.timeout(idle_s)` in `SDKExecutionSession._read_turn`. The timer then fires immediately once a background agent is running. `_stop_background` kills every agent and `dispatch` returns partial text. The user gets no sign of a bad setting, only agents killed at once. The project's fail-fast rule says to catch this where the value is set or read. Reject values `<= 0` in `_background_idle_timeout_s` (or add a per-key validator) and raise `ValueError`."
+    }
+   ]
+  },
+  {
+   "id": "175-I4",
+   "case": "175",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/1",
+     "severity": "CONCERN",
+     "title": "Compact drops the spend of failed or partly successful calls",
+     "location": "src/squadron/pipeline/actions/compact.py:82",
+     "description": "The failure branch returns an `ActionResult` with no metadata, so any telemetry on the exception is lost. `dispatch()` does attach telemetry to a `ProviderError` (`src/squadron/pipeline/sdk_session.py:232-235`), but the compact action never reads it. Separately, `compact()` captures the summary (`sdk_session.py:493-495`) and then calls `_reconnect` (`sdk_session.py:499`). If the reconnect raises, the captured reply and its spend are discarded. D5 requires failed calls to record what they spent. Fix: stamp `exc.telemetry` in the failure branch, and have `compact()` attach the captured telemetry to any exception raised after the capture."
+    },
+    {
+     "ref": "haiku-xhigh/2/3",
+     "severity": "CONCERN",
+     "title": "Compact loses the summary's spend when reconnect fails",
+     "location": "src/squadron/pipeline/actions/compact.py:82",
+     "description": "`SDKExecutionSession.compact` captures the summary first (its spend is in `reply.telemetry`, `sdk_session.py:493`), then calls `_reconnect` (line 499). If `_reconnect` raises, the exception carries no telemetry, and the action's `except Exception` (line 82) returns a failure with no metadata. The summary action and dispatch both attach what they spent on failure (decision D5), so compact is the outlier. Fix: attach the captured telemetry to the exception in `compact()`, or catch and re-attach it there. Add a test that makes reconnect fail and asserts the usage record."
+    },
+    {
+     "ref": "haiku-xhigh/3/2",
+     "severity": "CONCERN",
+     "title": "A failed compact drops the spend its summary capture already recorded",
+     "location": "src/squadron/pipeline/actions/compact.py:82",
+     "description": "`_execute_sdk_rotate` catches `Exception` and returns a failed result with no `metadata`. Two real cases lose spend. First, `SDKExecutionSession.compact` can raise a `ProviderError` that carries telemetry from `capture_summary`. Second, `_reconnect` (`pipeline/sdk_session.py:499`) can fail after `capture_summary` has already returned its `SessionReply`. In both, the telemetry is dropped. Dispatch (`_provider_failure`) and summary both stamp failed-call usage per D5; compact does not.\n\nFix: when a failure happens after the capture, attach `reply.telemetry` to the exception, and stamp it on the failed result."
+    },
+    {
+     "ref": "sol/2/4",
+     "severity": "CONCERN",
+     "title": "Failed compaction drops available telemetry",
+     "location": "src/squadron/pipeline/actions/compact.py:75-89",
+     "description": "Usage is stamped only after successful compaction. A `ProviderError` carrying completed-turn telemetry is caught and returned without metadata; a probe confirmed that reported spend disappears. Capture exception telemetry before returning failure, and preserve completed summary usage if subsequent session rotation fails."
+    },
+    {
+     "ref": "sol/3/3",
+     "severity": "CONCERN",
+     "title": "Failed compaction discards available usage",
+     "location": "src/squadron/pipeline/actions/compact.py:82-89",
+     "description": "The failure result omits usage even when the provider exception carries telemetry. A successful summary followed by reconnect failure also loses the summary\u2019s spend because `compact()` returns telemetry only after reconnecting. Preserve capture telemetry through both failure paths and test their resulting records."
+    },
+    {
+     "ref": "sonnet/1/2",
+     "severity": "CONCERN",
+     "title": "Compact failure drops the spend that the error carries",
+     "location": "src/squadron/pipeline/actions/compact.py:79-90",
+     "description": "D5 says a failed call still records what it spent. `dispatch`, `summary` and `review` all do this. In `compact`, `SDKExecutionSession.dispatch` attaches `exc.telemetry` to the `ProviderError`, but the failure path returns no `metadata` and never stamps usage. A compact that spent tokens in its capture turn and then failed (for example a reconnect failure after capture) shows up in `sq stats run` as unrecorded. A failure after capture is exactly the case where the spend is already known. Stamp the error's telemetry the same way the other actions do."
+    }
+   ]
+  }
+ ]
+}

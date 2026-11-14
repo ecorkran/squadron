@@ -1,0 +1,521 @@
+{
+ "cases": {
+  "175": {
+   "repo": "squadron",
+   "base": "3812c815b377eadfd7741ab1734c350c73789e2b",
+   "head": "1cbd6be4317f37498b07a31cd9cb64562fdb9d0a",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175"
+  },
+  "188": {
+   "repo": "trading-data",
+   "base": "0c6060f80be38524eb02585c44a481a9b6cdf453",
+   "head": "3e29c2afc500d786b26ee925efd0eb9269e18d52",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188"
+  },
+  "197": {
+   "repo": "squadron",
+   "base": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece",
+   "head": "90a40dbf40289fd46b99e999c957a6e9295545be",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197"
+  },
+  "225": {
+   "repo": "trading-data",
+   "base": "09106ab48bda1b7397cfefa0145928a82e3056ac",
+   "head": "f328230d409b21ef1c9d8f8d96db21a478169076",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225"
+  },
+  "227": {
+   "repo": "trading-data",
+   "base": "11168d5b2ae7805e15a63888eb85ca26b1fdc811",
+   "head": "85fee397cbbe12ca5b74bb38fb77cf1165b5ba1c",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227"
+  }
+ },
+ "items": [
+  {
+   "id": "197-I19",
+   "case": "197",
+   "members": [
+    {
+     "ref": "sol/1/1",
+     "severity": "FAIL",
+     "title": "Item resume mutates unregistered worktrees before checking registration",
+     "location": "src/squadron/pipeline/item_resume.py:230-241",
+     "description": "Unlike `enter_slice_branch`, this precondition never calls the worktree-registration guard. In an unregistered linked worktree, it can use the primary checkout\u2019s integration target, commit leftovers, and switch branches before any later guard rejects execution. Validate registration before reading or acting on that target."
+    },
+    {
+     "ref": "sol/2/1",
+     "severity": "FAIL",
+     "title": "Validate worktree registration before restoring the target",
+     "location": "src/squadron/pipeline/item_resume.py:232-235",
+     "description": "Unlike `enter_slice_branch`, this path never checks worktree registration before using cf\u2019s integration target. In an unregistered linked worktree, that target belongs to the primary checkout. `restore_target` can commit leftovers and attempt checkout before the later branch action rejects the worktree; planning batches have no branch action to perform that check. Enforce registration before any mutation."
+    }
+   ]
+  },
+  {
+   "id": "175-I17",
+   "case": "175",
+   "members": [
+    {
+     "ref": "haiku-xhigh/3/5",
+     "severity": "CONCERN",
+     "title": "`sq stats reviews` aborts on malformed artifacts",
+     "location": "src/squadron/stats/reviews_report.py:155",
+     "description": "`_basis` runs `value in {basis.value for basis in CostBasis}`. `value` is whatever `yaml.safe_load` returned, so `costBasis:` written as a list or mapping raises `TypeError: unhashable type` and the whole report aborts. The module contract says malformed fields become `None` with a warning. Separately, `documents/frontmatter.py:66` calls `path.read_text(encoding=\"utf-8\")` without catching `OSError` or `UnicodeDecodeError`, so one unreadable artifact aborts the report instead of being counted in `skipped`. The tests cover only `costBasis: guess`, a string.\n\nFix: check `isinstance(value, str)` before the membership test. Catch `OSError` and `UnicodeDecodeError` around the read in `reviews_usage_report` so the file is counted as skipped. Add parametrized tests for a list, a mapping and non-UTF-8 content."
+    },
+    {
+     "ref": "sol/3/4",
+     "severity": "CONCERN",
+     "title": "Malformed cost basis crashes the reviews report",
+     "location": "src/squadron/stats/reviews_report.py:155",
+     "description": "Set membership raises `TypeError` when valid YAML supplies a list or mapping for `costBasis`. Verified reproduction with `costBasis: [provider]` crashes instead of warning and retaining the row. Validate that the value is a string before membership testing; add list and mapping cases."
+    }
+   ]
+  },
+  {
+   "id": "188-I4",
+   "case": "188",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/3",
+     "severity": "CONCERN",
+     "title": "`tape_filtered` re-spells the membership test and hard-codes the parameter key, against its own docstring",
+     "location": "src/manta_trading/data/kalshi/serve_timeseries.py:147-166",
+     "description": "The docstring says \"The membership test is not re-spelled here\u2026 so a change to one cannot leave the other behind.\" The function re-implements `COALESCE(s.category, '') = ANY(...)` as `(category or \"\") in bound`, and reads `selection.params[\"trades_excluded_categories\"]`, a literal duplicated from `selection.py:168-170`. The integration test `TestTapeFiltered.test_agrees_with_the_sql_predicate` does catch divergence, so the risk is covered by a test rather than by construction. Either move the membership rule into one helper in `selection.py` that both the SQL and the Python path use, or correct the docstring to name the test as the guard."
+    },
+    {
+     "ref": "haiku-xhigh/2/4",
+     "severity": "CONCERN",
+     "title": "`tape_filtered` re-spells the membership test, and its docstring says it does not",
+     "location": "src/manta_trading/data/kalshi/serve_timeseries.py:147",
+     "description": "The docstring (lines 150\u2013152) says the membership test \"is not re-spelled here\" and that \"a change to one cannot leave the other behind.\" The function then runs the membership test in Python, `(category or \"\") in bound` (line 166). It also reads the parameter through the literal key `\"trades_excluded_categories\"` (line 159). That string is defined in `selection.py` (lines 156 and 170), so it is now duplicated across modules.\n\nThe claim is false. A change to the comparison in `trades_filter_sql`, such as case folding, would not reach `tape_filtered`. The only guard is the five-case `TestTapeFiltered` parametrization. The `isinstance` guard at lines 160\u2013162 exists only to narrow a dict value this function reaches into.\n\nFix: compute the flag in SQL. Compose `trades_filter_sql(excluded).predicate` as a `... AS tape_filtered` column in the `market_context` statement (`_CONTEXT_QUERY`, line 85). Then delete `tape_filtered` and its guards."
+    },
+    {
+     "ref": "haiku-xhigh/3/7",
+     "severity": "CONCERN",
+     "title": "`tape_filtered` re-spells the trades-filter membership test in Python",
+     "location": "src/manta_trading/data/kalshi/serve_timeseries.py:147",
+     "description": "The docstring says \"The membership test is not re-spelled here.\" The function returns `(category or \"\") in bound` (line 166). That is the Python form of the `COALESCE(s.category, '') = ANY(...)` predicate in `trades_filter_sql`. The project rule against duplicated logic points the other way, and the sibling `trade_status.py` says its predicates are \"never re-spelled.\" The parametrized `TestTapeFiltered` keeps the two in agreement, which is real mitigation. The cost is a second spelling, plus a dependence on the internal parameter key `trades_excluded_categories` (line 164).\n\nFix: compute the flag in SQL on the connection that already runs `market_context`, by embedding `trades_filter_sql(excluded).predicate` in that query. SQL then becomes the only spelling."
+    },
+    {
+     "ref": "sonnet/3/4",
+     "severity": "CONCERN",
+     "title": "`tape_filtered` reads a magic parameter key from `trades_filter_sql` and adds a runtime type guard",
+     "location": "src/manta_trading/data/kalshi/serve_timeseries.py:149-165",
+     "description": "The docstring says the membership test is not restated, but the function reads `selection.params[\"trades_excluded_categories\"]` and re-implements the `COALESCE(category, '') = ANY(...)` comparison in Python. The parameter name and the `isinstance` guard couple this code to the internals of `selection.py`. The integration test `test_agrees_with_the_sql_predicate` limits the drift risk. A cleaner design would put an evaluator next to `trades_filter_sql`, so the Python and SQL forms live in one module."
+    },
+    {
+     "ref": "sonnet-high/2/3",
+     "severity": "CONCERN",
+     "title": "`tape_filtered` re-implements the filter's membership test and depends on a parameter-name string",
+     "location": "src/manta_trading/data/kalshi/serve_timeseries.py:#tape_filtered",
+     "description": "The docstring says the membership test \"is not re-spelled here.\" In fact the function reads `selection.params[\"trades_excluded_categories\"]` by string literal, which is defined in `selection.py`. It then re-implements the `COALESCE(s.category,'') = ANY(...)` comparison in Python as `(category or \"\") in bound`. That scatters a magic key and duplicates the logic, which the project rules forbid. Having a `# pragma: no cover` branch raise a `TypeError` on shape is a sign of the awkward coupling. A pure-Python membership predicate lives next to `trades_filter_sql` and is used by both would remove the need to introspect the SQL parameters. The integration test `TestTapeFiltered` does check parity with SQL, which mitigates this."
+    },
+    {
+     "ref": "sonnet-high/3/3",
+     "severity": "CONCERN",
+     "title": "`tape_filtered` re-spells a parameter key it says it doesn't re-spell",
+     "location": "src/manta_trading/data/kalshi/serve_timeseries.py:156-168",
+     "description": "The docstring says the membership test \"is not re-spelled here\". The code still hard-codes `selection.params[\"trades_excluded_categories\"]` and the `COALESCE(..., '')` semantics from `selection.py:168-170`. It also relies on the `list` type of the bound value, with a `# pragma: no cover` guard. Renaming that key in `selection.py` would turn this into a `KeyError` at request time. The parametrized integration test would catch it, but this is still a second spelling. Have `selection.py` expose the evaluator or the key as a named constant, as the project's \"define it once\" rule asks."
+    }
+   ]
+  },
+  {
+   "id": "225-I5",
+   "case": "225",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/0",
+     "severity": "CONCERN",
+     "title": "Calendar outage escapes as an unmapped traceback instead of exit 4",
+     "location": "src/manta_trading/data/tick/tick_status_build.py:63",
+     "description": "`calendar_sessions` catches only `psycopg.OperationalError` and `CalendarNotFoundError` around `sessions_between`. `TradingCalendar` reads through `self._pool.connection()` (`src/manta_trading/data/base/trading_calendar.py:194`). An unreachable server through `psycopg_pool` surfaces as `PoolTimeout`, not `OperationalError`. The codebase already catches it for this reason (`src/manta_trading/cli/commands/data.py:416`, `src/manta_trading/data/acquisition/daemon/daily.py:770`). `PoolTimeout` is not in `exit_code_for` (`src/manta_trading/cli/commands/tick_exit.py:54-57`), so `run_mapped` re-raises it and the user gets a traceback. That contradicts the module docstring (\"a calendar \u2026 outage raises (\u2192 exit 4)\") and `READ_EPILOG`. The only unreachable-database test covers the tick database (`test/integration/data/test_tick_status_cli.py`, `test_an_unreachable_tick_database_exits_4`). Separately, `OutOfPopulatedRangeError` also maps to exit 4 through `TickCalendarError`, which the epilog's \"unreachable\" wording does not describe. I could not reproduce the pool behavior here. The basis is the library's documented behavior plus the codebase's own handlers. Fix: catch `PoolTimeout` alongside `OperationalError`, and add a test with a closed calendar port."
+    }
+   ]
+  },
+  {
+   "id": "225-I4",
+   "case": "225",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/5",
+     "severity": "CONCERN",
+     "title": "The raw-count scan has no supporting index, and its plan is unverified",
+     "location": "src/manta_trading/data/tick/status_reads.py:154",
+     "description": "The `tick_trade` key is `(instrument_id, ts_event, sequence, sequence_ordinal)`, and the migration says \"no index beyond the key\" (`tick.py:215-218`). `raw_counts` joins with a non-equality `ts_event BETWEEN open AND close` against an unnest of sessions. Nothing in the schema supports a `ts_event` range scan, so each session window may read whole chunks. The docstring's \"the one scan\" is therefore unverified. `sql.md` asks for `EXPLAIN ANALYZE` before performance claims. I could not run it here. Run it on a realistic multi-month range and record the result before relying on coverage over long ranges."
+    },
+    {
+     "ref": "haiku-xhigh/2/3",
+     "severity": "CONCERN",
+     "title": "`raw_counts` joins on a range predicate; the cost is unmeasured",
+     "location": "src/manta_trading/data/tick/status_reads.py:166",
+     "description": "`raw_counts` joins `tick_trade` to `unnest(...)` on `t.ts_event BETWEEN s.open_ns AND s.close_ns`. A range predicate cannot drive a hash or merge join, so Postgres will likely run a nested loop that compares each tick row in the range against every session in the array. The cost scales as rows \u00d7 sessions. The `WHERE` bound limits the rows scanned, but not the per-row work. I did not measure this. The project's SQL rules require `EXPLAIN ANALYZE` for tuning, so run it on a realistic multi-month range before relying on `coverage`. A per-session `LATERAL` count over `tick_trade` is one alternative to benchmark."
+    },
+    {
+     "ref": "haiku-xhigh/3/3",
+     "severity": "CONCERN",
+     "title": "Raw scan is likely O(trades \u00d7 sessions) and unmeasured",
+     "location": "src/manta_trading/data/tick/status_reads.py:166",
+     "description": "`raw_counts` joins `tick_trade` to an `unnest` of sessions on `ts_event BETWEEN open AND close`. A range predicate cannot be hashed or merged, so the likely plan is a nested loop that compares each trade row against each session, which is O(rows \u00d7 sessions). For a long range over a dense product, that is expensive. The diff has no EXPLAIN ANALYZE, and `sql.md` asks for one when tuning. I could not measure this, so the finding is unverified. Fix: measure on a realistic range first. If it is confirmed, use a per-session bounded aggregate (chunk exclusion on `ts_event`) or a LATERAL join so each trade row is touched once."
+    }
+   ]
+  },
+  {
+   "id": "175-I24",
+   "case": "175",
+   "members": [
+    {
+     "ref": "sonnet/3/4",
+     "severity": "CONCERN",
+     "title": "Dispatch `except ProviderError` now runs before more specific handlers, and the telemetry-less path is untested",
+     "location": "src/squadron/pipeline/actions/dispatch.py:404-406",
+     "description": "Moving the `ProviderError` clause above `ModelResolutionError`, `ModelPoolNotImplemented`, `KeyError`, and the other handlers changes the matching order. I did not confirm that none of those types subclasses `ProviderError`. If any does, it would now get provider-failure treatment. The tests cover the one-shot and session failure paths that carry telemetry. They do not cover a `ProviderError` that reaches `execute` directly with `usage=None`. Add one test for that path, and verify the class hierarchy."
+    }
+   ]
+  },
+  {
+   "id": "197-I22",
+   "case": "197",
+   "members": [
+    {
+     "ref": "sonnet/2/4",
+     "severity": "CONCERN",
+     "title": "Duplicated step-run dispatch in `run()` and an oversized function",
+     "location": "src/squadron/cli/commands/run.py:1199-1340",
+     "description": "`run()` is now very long, well over the ~50-line guideline. The SDK vs PROMPT_ONLY `match`, wrapped in `_locked(...)`, is copied in the resume and implicit-resume branches. The resume branch also assigns `resume_model` with an operator-precedence-ambiguous conditional (line 1228, pre-existing). This diff adds another copy of the dispatch instead of extracting a helper, which worsens an existing DRY problem."
+    }
+   ]
+  },
+  {
+   "id": "225-I1",
+   "case": "225",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/2",
+     "severity": "CONCERN",
+     "title": "The raw-count proof is not scoped to the product",
+     "location": "src/manta_trading/data/tick/status_reads.py:154",
+     "description": "`raw_counts` counts every `tick_trade` row in each session window, with no filter on instrument or unit. `_session_row` (`src/manta_trading/data/tick/tick_coverage.py:81-90`) builds its instrument list from every key in `raw`, so any instrument with raw rows but no ledger row for this shape is reported as a mismatch, and the verb exits 3. `tick_trade` is one table for all products. It has no product column (`src/manta_trading/market/schema/migrations/tick.py:222-245`), and the universe comment says slice 231 adds GC. Once a second product is ingested, `mt data tick coverage --product ES` will flag that product's instruments. This is not reachable today because only ES is configured, and the single-product tests cannot show it. `tick_trade.unit_id` is `NOT NULL` (`tick.py:244`), so scoping the scan to the shape's current unit ids would also give an exact per-unit match against the ledger. Add a test that inserts a row for another instrument inside a session window and asserts `check == \"ok\"`."
+    },
+    {
+     "ref": "haiku-xhigh/3/1",
+     "severity": "CONCERN",
+     "title": "Raw-count scan is not scoped to the shape's units or instruments",
+     "location": "src/manta_trading/data/tick/status_reads.py:166",
+     "description": "`raw_counts` counts every `tick_trade` row in each session window for any instrument, with no `unit_id` or instrument filter. The ledger side is scoped to the shape (`_SHAPE_WHERE`, lines 55-59). `_session_row` (`tick_coverage.py:81`) builds the instrument set as the union of ledger and raw keys, so a foreign-instrument row in a session window becomes a `Mismatch` with ledger 0, and the CLI exits 3. Foreign rows are possible: ingest selects every verified tier unit when no `--unit-id` is given (`ingest_select.py:84-92`), and `_not_selectable` does not check shape for named units (`ingest_select.py:95-107`). An adopted job for another product can therefore land in `tick_trade`. The universe has one product today, so this is latent. Once a second product shares the database and the GLBX calendar, `coverage --product ES` will report false mismatches. Confidence is medium: I did not trace `adopt`'s shape acceptance end to end. Fix: restrict the raw scan to the shape's current `unit_id`s (`tick_trade` carries `unit_id`, `migrations/tick.py:244`), which mirrors the ledger definition. Add a test with a foreign-shape unit inside the window."
+    },
+    {
+     "ref": "sol/1/1",
+     "severity": "CONCERN",
+     "title": "Raw counts include unrelated request shapes",
+     "location": "src/manta_trading/data/tick/status_reads.py:166-172",
+     "description": "`ledger_totals` filters by dataset, symbols and symbology, but `raw_counts` filters only timestamps. Valid rows belonging to another request shape therefore appear as unexpected records in this product\u2019s coverage. Ingestion supports shapes beyond the configured universe through `planning_product`. Define matching scope for both sides without hiding genuinely unexpected rows, and test multiple shapes sharing a session window."
+    },
+    {
+     "ref": "sol/3/1",
+     "severity": "CONCERN",
+     "title": "Raw counts are not scoped to the selected request shape",
+     "location": "src/manta_trading/data/tick/status_reads.py:166-173",
+     "description": "`ledger_totals` filters by dataset, symbols and symbology, but `raw_counts` counts every instrument in the session windows. Records ingested under another request shape therefore appear as raw-only mismatches for the selected product. Apply equivalent ownership scoping to the raw query while retaining detection of unexpected rows within that scope."
+    },
+    {
+     "ref": "sonnet/2/0",
+     "severity": "CONCERN",
+     "title": "Raw-count scan is not scoped to the product's shape",
+     "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+     "description": "`raw_counts` counts every `tick_trade` row in the session window, grouped by instrument. It has no filter for the product's dataset, symbols or instruments. `ledger_totals` is filtered by `Shape`. `_session_row` in `tick_coverage.py` takes the union of instruments from both maps. Any instrument that belongs to another product therefore shows up with ledger 0 and raw N, and is reported as a mismatch. `build_coverage` would then exit 3 spuriously.\n\n`TICK_UNIVERSE` currently holds only ES (`universe.py:46`), so this does not bite today. It will as soon as a second product is added. Either restrict the raw scan to the product's instruments, or document and test the single-product assumption."
+    },
+    {
+     "ref": "sonnet-high/1/0",
+     "severity": "CONCERN",
+     "title": "Raw-count scan is not scoped to the product's shape, so coverage will false-flag once a second product exists",
+     "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+     "description": "`raw_counts` counts every `tick_trade` row in the session time windows, for all instruments. `ledger_totals` is filtered by the product's shape (dataset, symbols, stype_in, tier units). `build_coverage` runs once per universe entry and compares the two in `_session_row`. Any instrument that belongs to another product, or is not covered by this shape, appears with ledger 0 and raw N. That is reported as a mismatch and exits 3. `TICK_UNIVERSE` currently holds only `ES` (`universe.py:45`), so nothing fails today. Adding a second product would make `coverage` fail for every product with overlapping sessions. Scope the raw scan to the shape's instruments, for example by joining the ledger's instrument ids. Alternatively, assert and document the single-product assumption at the call site."
+    },
+    {
+     "ref": "sonnet-high/2/1",
+     "severity": "CONCERN",
+     "title": "`raw_counts` is not scoped to the product's shape",
+     "location": "src/manta_trading/data/tick/status_reads.py#raw_counts",
+     "description": "`raw_counts` counts every `tick_trade` row in the session windows, grouped by instrument. The ledger side (`ledger_totals`) is filtered to the product's shape. `build_coverage` runs once per universe entry, so a second product would fail the check in the first product's windows:\n- Its instruments have raw rows but no ledger rows.\n- They show up as mismatches (ledger 0, raw n), which makes `coverage` exit 3 falsely.\n\nIt works today only because `TICK_UNIVERSE` has one entry (`ES`). Restrict the raw scan to the product's instruments, for example by joining on the shape's ledger or definition instrument IDs, or document that coverage supports one product."
+    }
+   ]
+  },
+  {
+   "id": "188-I13",
+   "case": "188",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/6",
+     "severity": "CONCERN",
+     "title": "`gaps.py` keeps its own window helpers, which is the duplication the new module warns about",
+     "location": "src/manta_trading/api_server/routes/gaps.py:54",
+     "description": "`windows.py`'s docstring says the day-boundary convention lives there because \"two route families now depend on it,\" and that two derivations of \"the last instant of a day\" is how one ends up exclusive by accident. `gaps.py` still defines `_window_start_utc`, identical to `windows.window_start_utc`, and `_window_end_utc`, which uses a different end convention (next midnight, half-open). `test/integration/test_gaps_window_sql.py:25-26` imports these copies. Either move the shared helpers into `windows.py` and document the half-open variant there, or narrow the docstring's claim."
+    },
+    {
+     "ref": "sonnet/3/1",
+     "severity": "CONCERN",
+     "title": "Duplicate day-boundary helpers remain in `gaps.py`",
+     "location": "src/manta_trading/api_server/routes/gaps.py:54-59",
+     "description": "This change moves `_window_start_utc` and `_window_end_utc` out of `bars.py` into the new `routes/windows.py`. The new module docstring says a second derivation of \"the last instant of a day\" is how a bound ends up exclusive by accident. `gaps.py` still defines its own copies of both helpers, and `test/integration/test_gaps_window_sql.py` imports them from there. That is the duplication the extraction was meant to remove. Make `gaps.py` and its test use `windows.window_start_utc` and `windows.window_end_utc`."
+    }
+   ]
+  },
+  {
+   "id": "175-I3",
+   "case": "175",
+   "members": [
+    {
+     "ref": "haiku-xhigh/3/1",
+     "severity": "CONCERN",
+     "title": "Split-review test passes for the wrong reason",
+     "location": "tests/pipeline/actions/test_review_action_parts.py:143",
+     "description": "`test_provider_failure_on_part_two_keeps_part_one` asserts only `result.success is False`, the saved artifacts and a log line. It never checks `result.error`, so it passes on the `TypeError` above. No test checks that a part-1 provider failure skips the later parts. Add `assert \"model went away\" in result.error` and a `run_review.call_count` check for the part-1 failure case. Both would fail on the current code."
+    }
+   ]
+  },
+  {
+   "id": "227-I7",
+   "case": "227",
+   "members": [
+    {
+     "ref": "sonnet/2/2",
+     "severity": "CONCERN",
+     "title": "Host facts and argument literals are duplicated instead of sourced from the cluster table",
+     "location": "scripts/cutover_227_helpers.py:strip_new_args",
+     "description": "`strip_new_args` hardcodes `--replication-host 127.0.0.1`, while the value belongs to the `deploy/backup-clusters.conf` row. `MAIN`/`TICK`, `HOST_BACKUP_ROOT = /data/backup`, `TICK_UNIT` and `RCLONE_REMOTE` are likewise re-declared in the cutover. `deploy/setup-backup.sh` also defines `RCLONE_REMOTE=b2` itself. This breaks the project's \"define a value once\" rule. If the table changes, the TD3 production-line guard silently diverges, or fails for the wrong reason. Derive the replication host from the production row, and reference the shared constants where possible."
+    },
+    {
+     "ref": "sonnet-high/1/1",
+     "severity": "CONCERN",
+     "title": "A table value and several host facts are hard-coded again in the cutover scripts",
+     "location": "scripts/cutover_227_helpers.py:87",
+     "description": "`strip_new_args` hard-codes `\" --replication-host 127.0.0.1\"`. That value belongs to `deploy/backup-clusters.conf` (the `17/main` row's `replication_host`), which `BackupCluster.replication_host` already exposes. If the row changes, the table, the rendered cron file and this stripping helper drift apart. When that happens the TD3 \"production lines gain only the new arguments\" guard reports a false change and blocks the cutover, or masks a real one. It should take the value from `ctx.main`, as it already does for `url_key`.\n\nOther constants are duplicated between the shell and Python tiers in the same way, against the \"define once\" rule in CLAUDE.md:\n- **`RCLONE_REMOTE = \"b2\"`:** also defined in `setup-backup.sh`.\n- **`CRON_FILE`:** also `CRON_TARGET` in `setup-backup.sh`.\n- **`ARM_FILE = \"RECONCILE-ARMED\"`:** also defined in `setup-backup.sh`.\n- **`HOST_BACKUP_ROOT = Path(\"/data/backup\")`:** the same literal as the `17/main` row's `backup_root`.\n- **`TICK_UNIT = \"postgresql@17-tick\"`:** derivable from `TICK`.\n\nEach one is a single-edit hazard."
+    }
+   ]
+  },
+  {
+   "id": "175-I1",
+   "case": "175",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/0",
+     "severity": "FAIL",
+     "title": "Multi-part review usage is dropped when parts fold",
+     "location": "src/squadron/pipeline/actions/review_fold.py:85",
+     "description": "`_metadata()` keeps only `parts[0].metadata` and sums only `TOOL_CALLS_MADE_KEY`. Each part now stamps its own usage record in `_run_part` (`src/squadron/pipeline/actions/review.py:506`), and `_review` folds all parts (`review.py:293-294`). The folded result therefore carries only part 1's `USAGE_KEY`, so turns, tokens, and cost for parts 2..N never reach run state or `sq stats run`. This hits every review the action splits, such as a split tasks breakdown. The existing parity test checks summed `tool_calls_made` after the fold (`tests/pipeline/actions/test_review_action_parts.py:286`), but nothing checks usage. Fix: sum the per-part `UsageRecord`s in `_metadata`, and add a two-part test asserting the folded record equals the sum."
+    },
+    {
+     "ref": "sol/1/1",
+     "severity": "FAIL",
+     "title": "Split reviews retain only the first part\u2019s usage",
+     "location": "src/squadron/pipeline/actions/review.py:505-506",
+     "description": "Usage is stamped separately on each part, but `fold_review_parts()` copies the first part\u2019s metadata without aggregating usage. Reproducing two $0.10 parts produces a $0.10 combined record instead of $0.20. Aggregate all parts\u2019 tokens, turns, duration, and cost before persisting the combined action."
+    },
+    {
+     "ref": "sol/2/1",
+     "severity": "FAIL",
+     "title": "Split reviews retain only the first part\u2019s usage",
+     "location": "src/squadron/pipeline/actions/review.py:505-506",
+     "description": "Each part receives a usage record, but `fold_review_parts` copies the first part\u2019s metadata without summing usage. Two $1 parts consequently report $1 rather than $2. Their pipeline artifacts are also excluded from standalone review statistics, so the missing spend appears nowhere. Aggregate every part\u2019s usage before returning the folded result."
+    },
+    {
+     "ref": "sol/3/1",
+     "severity": "FAIL",
+     "title": "Split reviews retain only the first part\u2019s usage",
+     "location": "src/squadron/pipeline/actions/review.py:505-506",
+     "description": "Each part receives a usage record, but `fold_review_parts()` copies only the first part\u2019s metadata. A verified $1 plus $2 split review reports $1. Because pipeline artifacts are excluded from standalone review statistics, the remaining spend disappears from both views. Aggregate all parts\u2019 usage before persistence."
+    },
+    {
+     "ref": "sonnet-high/3/1",
+     "severity": "CONCERN",
+     "title": "Split reviews record usage for part 1 only",
+     "location": "src/squadron/pipeline/actions/review_fold.py:85-91",
+     "description": "`_metadata` copies `parts[0].metadata` and sums only `TOOL_CALLS_MADE_KEY`. Each part now carries its own `USAGE_KEY` record (review.py:506), so the folded result keeps only part 1's record.\n\n`sq stats run` therefore under-reports tokens, turns, cost and time for any split review. That undercounting is the thing slice 175 exists to prevent. Sum the records across parts, or emit one record per part."
+    }
+   ]
+  },
+  {
+   "id": "225-I11",
+   "case": "225",
+   "members": [
+    {
+     "ref": "haiku-xhigh/3/6",
+     "severity": "CONCERN",
+     "title": "Unannotated SQL fragments may fail strict pyright",
+     "location": "src/manta_trading/data/tick/status_reads.py:50",
+     "description": "`_UNITS`, `_LEDGER_UNITS` and `_SHAPE_WHERE` are plain module-level strings, so pyright infers `str`. They are interpolated into `conn.execute(f\"...\")` at lines 84-85, 101-103 and 133-138. Every sibling module annotates this kind of fragment as `LiteralString` (`manifest_reads.py:84-91`, `ingest_select.py:63`, `manifest_repo.py:163`), which is what lets pyright check psycopg's `LiteralString` query argument. Strict pyright is a merge blocker in this project. I could not run pyright, and I did not confirm the installed psycopg signature, so treat this as likely rather than confirmed. Fix: annotate the three constants `LiteralString`."
+    }
+   ]
+  },
+  {
+   "id": "197-I1",
+   "case": "197",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/0",
+     "severity": "CONCERN",
+     "title": "Item resume lets cf errors escape as tracebacks and mislabels unrelated OSErrors",
+     "location": "src/squadron/pipeline/item_resume.py:130-135",
+     "description": "`resume_item` maps only `_Stop`, `GitEnvironmentError`, and `OSError`. Several calls after the git precondition reach cf directly and raise `ContextForgeError` or `ContextForgeNotAvailable` unwrapped. `_select_item` (item_resume.py:277) calls `evaluate_each_source` (executor.py:1441), which runs the cf source functions. `_open_dependencies` calls `list_slices` directly. The fresh-run path maps these errors to a typed exit (`_check_cf`, run.py:172-188), and `commit_run.py:82` and `branch_run.py:46` catch them. `handle_item_resume` (run_item.py:99-103) catches only `typer.Exit`, so a cf outage during item resume ends in an uncaught exception, which exits 1. Exit 1 means FLAGGED in the handoff contract. The slice design (`project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md`, line 467) reserves exit 3 for environment faults. An automated caller would read a cf outage as \"flagged again\". Separately, `load_pipeline(state.pipeline)` at item_resume.py:186 is unwrapped. The plain resume path handles that `FileNotFoundError` (run.py:1217-1220).\n\nThe `OSError` branch (item_resume.py:133-135) has the opposite problem. It catches any OSError from the whole resume, including source reads and body work, and reports it as \"cannot write the batch report\". It logs nothing at this layer.\n\nSuggested fix: in `resume_item`, catch the cf exceptions and return HALTED with an ERROR log, and map a missing pipeline to REJECTED. Narrow the OSError catch to the report writes, or make its message accurate and log it. Add tests where `list_slices` raises and where the pipeline file is missing. No test covers either path, and the failure-mode rule requires an observable signal for each."
+    },
+    {
+     "ref": "haiku-xhigh/2/1",
+     "severity": "CONCERN",
+     "title": "Exit code 1 is shared by FLAGGED and any uncaught exception",
+     "location": "src/squadron/cli/commands/run_item.py:89",
+     "description": "`ResumeExit` promises automated callers distinct codes: 1 means FLAGGED and 3 means HALTED. `resume_item` catches only `_Stop`, `GitEnvironmentError`, and `OSError`, and `handle_item_resume` catches only `typer.Exit`. Anything else escapes as a traceback, which exits 1. Reachable cases:\n\n- `ContextForgeError` from `cf_client.list_slices` in `_select_item` (`item_resume.py:291`) and `_open_dependencies` (`item_resume.py:333`).\n- A dependency-cycle `ValueError` from `order_by_dependencies`, raised through `evaluate_each_source` in `_select_item`.\n- A corrupt run-state file. `_validate` (`item_resume.py:181-185`) catches only `FileNotFoundError` and `SchemaVersionError`, but `StateManager.load` can raise `JSONDecodeError` or `ValidationError`.\n\nThe fresh-run path has an explicit `except ValueError` that prints `Error:` (`run.py:1339`). The item path has nothing equivalent. Map these to HALTED (environment and cf faults) or REJECTED (state and validation) with a named message, so a crash can't pass as FLAGGED."
+    },
+    {
+     "ref": "haiku-xhigh/3/1",
+     "severity": "CONCERN",
+     "title": "cf failures during item resume escape as uncaught exceptions, and exit 1 reads as FLAGGED",
+     "location": "src/squadron/pipeline/item_resume.py:124",
+     "description": "`resume_item` catches `_Stop`, `GitEnvironmentError` and `OSError`. It does not catch `ContextForgeError` or `ContextForgeNotAvailable` (`integrations/context_forge.py:29-34`). Those can come from `evaluate_each_source` (line 287, which calls the cf source and its `list_tasks`/`list_slices`), from `_select_item` (line 291), and from `_open_dependencies` (line 333). `handle_item_resume` catches only `typer.Exit` (`run_item.py:99`). An uncaught exception exits with status 1, which is `ResumeExit.FLAGGED`, so an automated caller would read a crash as \"flagged again\". D8's table assigns HALTED (3) to environment faults. The target read is wrapped (`read_integration_target`, `git_ops.py:66-73`), but the source reads are not. No test injects a cf failure mid-resume. Catch `ContextForgeError` in `resume_item` as HALTED with an ERROR log, and add a test."
+    }
+   ]
+  },
+  {
+   "id": "197-I23",
+   "case": "197",
+   "members": [
+    {
+     "ref": "sonnet/3/3",
+     "severity": "CONCERN",
+     "title": "`_write_each_report` breaks the 104-column line limit",
+     "location": "src/squadron/pipeline/executor.py:1454",
+     "description": "`async def _write_each_report(report: BatchReport, runs_dir: Path | None, *, final: bool = True) -> None:` is over the configured `line-length = 104` (pyproject.toml:71), so `ruff check` (E501) or `ruff format --check` will fail. Other new lines are also long, for example in `test_run_lock_cli.py` and `test_item_resume_source.py`. Run `ruff format` on the changed files."
+    }
+   ]
+  },
+  {
+   "id": "197-I15",
+   "case": "197",
+   "members": [
+    {
+     "ref": "haiku-xhigh/3/5",
+     "severity": "CONCERN",
+     "title": "A halted item loses its partial results, including the slice branch",
+     "location": "src/squadron/pipeline/executor.py:1490",
+     "description": "`item_results` is assigned only after `_run_each_item` returns (`executor.py:1562`). When a `GitEnvironmentError` escapes mid-item, it is still `[]`. `_finish_each_report` then builds the record with `from_item(item, position, [], \u2026)` (line 1490). The record drops the `branch` the item entered, although `BatchItemRecord.branch` is documented as \"the slice branch, when the item entered one\" (`batch_report.py:107`). Item resume's `_reconcile` copies that `branch` into the reconciled record (`item_resume.py:317`). Have the item's results accumulate in a list that the except path can read. `tests/pipeline/test_each_report_writes.py` asserts outcomes but not `branch`."
+    }
+   ]
+  },
+  {
+   "id": "175-I19",
+   "case": "175",
+   "members": [
+    {
+     "ref": "sol/1/0",
+     "severity": "FAIL",
+     "title": "Run totals omit earlier loop iterations",
+     "location": "src/squadron/stats/usage_report.py:112-116",
+     "description": "The report reads only persisted `action_results`. However, loop execution keeps earlier iterations in `StepResult.prior_rounds`, which `StateManager._append_step()` does not serialize. A reproduced three-round loop costing $0.30 reports $0.10. Persist and include every iteration\u2019s usage, with a regression test covering multi-round execution."
+    },
+    {
+     "ref": "sol/2/0",
+     "severity": "FAIL",
+     "title": "Run totals omit earlier loop iterations",
+     "location": "src/squadron/stats/usage_report.py:112-115",
+     "description": "The report reads only persisted `action_results`. Loop executors retain earlier iterations in `StepResult.prior_rounds`, but `StateManager._append_step` does not serialize them, and `RunStateRecorder.round_completed` records nothing. A three-call probe persisted only one action. Preserve earlier iterations\u2019 usage and test totals across multiple rounds."
+    },
+    {
+     "ref": "sol/3/0",
+     "severity": "FAIL",
+     "title": "Run totals omit earlier loop iterations",
+     "location": "src/squadron/stats/usage_report.py:112-116",
+     "description": "The report reads only persisted `action_results`. Earlier loop iterations live in `StepResult.prior_rounds`, which `StateManager._append_step()` does not serialize. A verified two-round example costing $1 and $2 reports only $2. Persist every round\u2019s usage and add a multi-iteration report regression test."
+    }
+   ]
+  },
+  {
+   "id": "175-I4",
+   "case": "175",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/1",
+     "severity": "CONCERN",
+     "title": "Compact drops the spend of failed or partly successful calls",
+     "location": "src/squadron/pipeline/actions/compact.py:82",
+     "description": "The failure branch returns an `ActionResult` with no metadata, so any telemetry on the exception is lost. `dispatch()` does attach telemetry to a `ProviderError` (`src/squadron/pipeline/sdk_session.py:232-235`), but the compact action never reads it. Separately, `compact()` captures the summary (`sdk_session.py:493-495`) and then calls `_reconnect` (`sdk_session.py:499`). If the reconnect raises, the captured reply and its spend are discarded. D5 requires failed calls to record what they spent. Fix: stamp `exc.telemetry` in the failure branch, and have `compact()` attach the captured telemetry to any exception raised after the capture."
+    },
+    {
+     "ref": "haiku-xhigh/2/3",
+     "severity": "CONCERN",
+     "title": "Compact loses the summary's spend when reconnect fails",
+     "location": "src/squadron/pipeline/actions/compact.py:82",
+     "description": "`SDKExecutionSession.compact` captures the summary first (its spend is in `reply.telemetry`, `sdk_session.py:493`), then calls `_reconnect` (line 499). If `_reconnect` raises, the exception carries no telemetry, and the action's `except Exception` (line 82) returns a failure with no metadata. The summary action and dispatch both attach what they spent on failure (decision D5), so compact is the outlier. Fix: attach the captured telemetry to the exception in `compact()`, or catch and re-attach it there. Add a test that makes reconnect fail and asserts the usage record."
+    },
+    {
+     "ref": "haiku-xhigh/3/2",
+     "severity": "CONCERN",
+     "title": "A failed compact drops the spend its summary capture already recorded",
+     "location": "src/squadron/pipeline/actions/compact.py:82",
+     "description": "`_execute_sdk_rotate` catches `Exception` and returns a failed result with no `metadata`. Two real cases lose spend. First, `SDKExecutionSession.compact` can raise a `ProviderError` that carries telemetry from `capture_summary`. Second, `_reconnect` (`pipeline/sdk_session.py:499`) can fail after `capture_summary` has already returned its `SessionReply`. In both, the telemetry is dropped. Dispatch (`_provider_failure`) and summary both stamp failed-call usage per D5; compact does not.\n\nFix: when a failure happens after the capture, attach `reply.telemetry` to the exception, and stamp it on the failed result."
+    },
+    {
+     "ref": "sol/2/4",
+     "severity": "CONCERN",
+     "title": "Failed compaction drops available telemetry",
+     "location": "src/squadron/pipeline/actions/compact.py:75-89",
+     "description": "Usage is stamped only after successful compaction. A `ProviderError` carrying completed-turn telemetry is caught and returned without metadata; a probe confirmed that reported spend disappears. Capture exception telemetry before returning failure, and preserve completed summary usage if subsequent session rotation fails."
+    },
+    {
+     "ref": "sol/3/3",
+     "severity": "CONCERN",
+     "title": "Failed compaction discards available usage",
+     "location": "src/squadron/pipeline/actions/compact.py:82-89",
+     "description": "The failure result omits usage even when the provider exception carries telemetry. A successful summary followed by reconnect failure also loses the summary\u2019s spend because `compact()` returns telemetry only after reconnecting. Preserve capture telemetry through both failure paths and test their resulting records."
+    },
+    {
+     "ref": "sonnet/1/2",
+     "severity": "CONCERN",
+     "title": "Compact failure drops the spend that the error carries",
+     "location": "src/squadron/pipeline/actions/compact.py:79-90",
+     "description": "D5 says a failed call still records what it spent. `dispatch`, `summary` and `review` all do this. In `compact`, `SDKExecutionSession.dispatch` attaches `exc.telemetry` to the `ProviderError`, but the failure path returns no `metadata` and never stamps usage. A compact that spent tokens in its capture turn and then failed (for example a reconnect failure after capture) shows up in `sq stats run` as unrecorded. A failure after capture is exactly the case where the spend is already known. Stamp the error's telemetry the same way the other actions do."
+    }
+   ]
+  },
+  {
+   "id": "188-I1",
+   "case": "188",
+   "members": [
+    {
+     "ref": "sol/1/0",
+     "severity": "FAIL",
+     "title": "Midnight timestamps silently expand into whole-day bounds",
+     "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+     "description": "Pydantic tries `date` first and converts midnight datetime strings into dates. Verified through the endpoint: `end=2026-06-01T00:00:00Z` reaches the reader as `23:59:59.999999Z`, returning an extra day's data. Midnight timestamps with offsets also lose their offset. Both routes are affected. Preserve the distinction between date-only inputs and timestamps, and add midnight/offset regression tests."
+    },
+    {
+     "ref": "sol/2/0",
+     "severity": "FAIL",
+     "title": "Midnight timestamps silently become whole-day bounds",
+     "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+     "description": "The `date | datetime` union parses `2026-06-01T00:00:00Z` as a `date`, verified with FastAPI/Pydantic. `resolve_window()` consequently expands this explicit end timestamp to `23:59:59.999999`, returning an extra day of data. Midnight timestamps with offsets also lose their timezone. Both routes are affected. Preserve the distinction between bare dates and timestamps, and add midnight/offset regression tests."
+    },
+    {
+     "ref": "sol/3/0",
+     "severity": "FAIL",
+     "title": "Midnight timestamps are silently expanded into whole-day bounds",
+     "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:92-93",
+     "description": "The `date | datetime` union parses midnight timestamp strings as dates, losing their time and timezone before `resolve_window()` runs. Reproduced through the actual route: `end=2026-06-01T00:00:00Z` reaches the reader as `2026-06-01T23:59:59.999999Z`. Both endpoints therefore return rows outside explicitly requested windows; offset-midnight timestamps also lose their offset.\n\nDistinguish bare dates from timestamps before coercion. Add route tests covering midnight timestamps, timezone offsets, and bare-date expansion."
+    },
+    {
+     "ref": "sonnet-high/1/0",
+     "severity": "CONCERN",
+     "title": "Bound parsing of `date | datetime` may turn a midnight datetime into a whole-day bound",
+     "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+     "description": "`start` and `end` are typed `date | datetime | None`. Pydantic accepts a datetime string whose time is exactly zero as a `date`. In smart-union mode, ties between lax matches go to the leftmost member, which here is `date`. If so, `end=2026-06-01T00:00:00Z` is parsed as a bare date. `_as_utc` then turns it into `23:59:59.999999`, and the client gets a day of extra data without being told.\n\nI could not run this, so the behaviour is unverified. No test pins it down. The reversed-range tests use midnight-`Z` values, but they pass whichever way the union resolves. The load test's `_z(KALSHI_START)` is a midnight start, which is the same instant either way. Add a unit test that sends `end=2026-06-01T00:00:00Z` and asserts the reader receives exactly that instant. If it fails, order the union `datetime | date` or add an explicit validator."
+    },
+    {
+     "ref": "sonnet-high/3/0",
+     "severity": "CONCERN",
+     "title": "`date | datetime` query params may silently turn a midnight datetime into a whole-day bound",
+     "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:91-92",
+     "description": "`start` and `end` are declared `date | datetime | None`, and `resolve_window` (`routes/windows.py:38-49`) treats a `date` as a whole-day bound. This is the only place in `src` that uses this union. I could not run code in this session, so I haven't confirmed the behaviour. From my reading of pydantic v2's smart-union rules, I expect a string such as `end=2026-06-01T00:00:00Z` to validate as a `date` in lax mode. Pydantic accepts datetimes with zero time as dates, and on a tie the first union member wins. If that is right, `end` would resolve to `23:59:59.999999` instead of midnight, and a midnight `start` with a non-UTC offset would lose its offset.\n\nNo test covers this case. Midnight datetimes in `test_kalshi_timeseries.py:239,265,276` only exercise ordering and reversed ranges, and both outcomes pass those. The load test's `_ceiling_window` uses a midnight `start`, where `date` and `datetime` give the same value. Please add a test with `end=\u2026T00:00:00Z` that asserts the reader receives that exact instant. If it fails, parse the bound explicitly instead of relying on the union."
+    }
+   ]
+  }
+ ]
+}

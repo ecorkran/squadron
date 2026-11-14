@@ -1,0 +1,312 @@
+{
+ "cases": {
+  "307": {
+   "repo": "trading-data",
+   "base": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0",
+   "head": "b5c3d781963789cef917771538a0b51a10bab29b",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307"
+  },
+  "921": {
+   "repo": "trading-data",
+   "base": "eaf1ab4e5913465369ad916785cce5974eaab08c",
+   "head": "9b54f27bdc6b62bca9890bc5006bbac73f2ea6bc",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/921"
+  },
+  "932": {
+   "repo": "squadron",
+   "base": "262d0ba064dcc6fa09efb5908eecc1447fd0582b",
+   "head": "d89cc060d2fe3033ed479d7e4eb69aadc779bd97",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/932"
+  },
+  "a122": {
+   "repo": "amoeba",
+   "base": "f8097604697cfefb5fb7313d29648a1c6c22b221",
+   "head": "e07f13739a5c7cd88c04fe2dffcc57b2a1eb5793",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122"
+  },
+  "u103": {
+   "repo": "trading-ui",
+   "base": "a4f9b6cf446929d056689df48082a701467d74e7",
+   "head": "d56c493f769d429a40f9e8052eba04ad6254e8c2",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/u103"
+  }
+ },
+ "items": [
+  {
+   "id": "u103-I1",
+   "case": "u103",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/0",
+     "severity": "CONCERN",
+     "title": "Visible range is not applied after a series is added",
+     "location": "src/chart/use-chart-provider.ts:340-345",
+     "description": "The range effect depends on `[mount.ready, chart, range]`. Adding a series through the facade changes none of these, so the effect does not re-run. The comment at lines 333-338 says the seam activates \"the moment it adds the first series,\" which the code does not do. The test at `src/test/use-chart-provider.translation.test.tsx:135` passes only because it calls `setRange` after `addSeries`. Reverse the order and the range is never applied. This is latent because the chart is empty in this slice, but initiative 120 adds data after mount, so the context range would be silently ignored until the user changes it. Fix: make the series count part of the effect's state so adding a series re-runs it, and add a test that adds a series first."
+    },
+    {
+     "ref": "haiku-xhigh/2/0",
+     "severity": "CONCERN",
+     "title": "Range is not applied when the first series is added",
+     "location": "src/chart/use-chart-provider.ts:340-345",
+     "description": "The translation effect depends on `[mount.ready, chart, range]`. `seriesCountRef` is a ref, so `addSeries` through the facade (chart-facade.ts:49-56) changes no dependency and the effect does not re-run. The comment at lines 333-338 says the effect \"activates the moment it adds the first series.\" That is false. A range set before the first series is never applied until the range changes again. The test \"applies the range once a series exists\" in `src/test/use-chart-provider.translation.test.tsx` adds the series before calling `setRange`, which hides the gap. Fix: make the count observable (state, or a dependency that changes on 0\u21921), and add a test that sets the range first and adds the series second."
+    },
+    {
+     "ref": "haiku-xhigh/3/0",
+     "severity": "CONCERN",
+     "title": "Range translation is not applied when the first series is added after the range is set",
+     "location": "src/chart/use-chart-provider.ts:340-345",
+     "description": "The visible-range effect depends on `[mount.ready, chart, range]`. The series count lives in `seriesCountRef` (line 72), which is a ref. `addSeries` through the facade increments it (`src/chart/chart-facade.ts:49-56`) but triggers no render, so the effect does not re-run. If the Context range is set while the chart is empty, the effect returns early at line 341. When the first series is added later, nothing re-runs the effect, so the current range is not applied until the range changes again.\n\nThe comment at lines 337-338 says the seam \"activates the moment it adds the first series.\" That is not what happens. The test `use-chart-provider.translation.test.tsx:135-145` passes only because it adds the series before calling `setRange`. Its comment at lines 166-167 shows the ordering was chosen on purpose. No test covers \"range set, then first series added,\" which is the case initiative 120 will hit first. Fix: make the \"has series\" fact part of state so the effect depends on it, and add the missing ordering to the tests."
+    },
+    {
+     "ref": "sol/1/0",
+     "severity": "CONCERN",
+     "title": "Adding data does not apply the pending visible range",
+     "location": "src/chart/use-chart-provider.ts:340-345",
+     "description": "Adding the first populated series only updates `seriesCountRef`; it neither triggers a render nor changes this effect\u2019s dependencies. Consequently, an existing Context range remains unapplied until `range` changes again. The translation test masks this by calling `setRange` after adding the series. Trigger synchronization when data becomes available and test adding data without changing the range."
+    },
+    {
+     "ref": "sol/2/0",
+     "severity": "CONCERN",
+     "title": "Adding data does not activate range synchronization",
+     "location": "src/chart/use-chart-provider.ts:340-345",
+     "description": "Adding a series only mutates `seriesCountRef`; it neither triggers rendering nor changes an effect dependency. Consequently, adding the first populated series after readiness never applies the existing Context range. The translation test masks this by also calling `setRange`. Make data availability reactive or explicitly apply the pending range when data becomes available, and test adding data without changing Context."
+    },
+    {
+     "ref": "sol/3/0",
+     "severity": "CONCERN",
+     "title": "Adding the first series does not apply the current range",
+     "location": "src/chart/use-chart-provider.ts:340-345",
+     "description": "Adding a series only mutates `seriesCountRef`; it neither triggers rendering nor changes this effect\u2019s dependencies. Once an empty chart is ready, adding populated data therefore leaves the current Context range unapplied until `range` changes again. The translation test masks this by calling `setRange` after `addSeries`. Trigger synchronization when data becomes available, and test adding data without changing the range."
+    },
+    {
+     "ref": "sonnet/1/2",
+     "severity": "CONCERN",
+     "title": "Range translation gated on a non-reactive ref",
+     "location": "src/chart/use-chart-provider.ts (range-translation `useEffect`)",
+     "description": "The effect reads `seriesCountRef.current === 0`, but its dependencies are `[mount.ready, chart, range]`. A series added after the last range change never triggers the effect. The stored range is therefore not applied when data first arrives, and it only applies on the next range change. The comment calls this \"the seam initiative 120 activates\", but the seam won't work as described without a reactive signal such as state or a counter in state. Also, `seriesCountRef` is updated inside `chart-facade.ts` callbacks, and `buildChartOperations` is only exercised through the mocked provider, so the real throw-on-empty behavior isn't covered by any unit test."
+    },
+    {
+     "ref": "sonnet/2/1",
+     "severity": "CONCERN",
+     "title": "Visible-range translation is not re-applied when the first series is added",
+     "location": "src/chart/use-chart-provider.ts:343-348",
+     "description": "The range effect reads `seriesCountRef.current`, a ref, and depends only on `[mount.ready, chart, range]`. If a consumer adds a series after the range is set, the effect does not re-run. The chart then keeps its default viewport until `range` changes, and the test `applies the range once a series exists` only passes because it calls `setRange` after `addSeries`. The code comment says initiative 120 will \"activate\" this seam. The gap will surface there as a silent mismatch between the Context and the chart. Either track the series count as state (or expose a signal) so the effect re-runs, or document this limitation explicitly at the seam."
+    },
+    {
+     "ref": "sonnet/3/1",
+     "severity": "CONCERN",
+     "title": "The range effect does not re-run when the first series is added",
+     "location": "src/chart/use-chart-provider.ts (visible-range effect, `seriesCountRef.current === 0` guard)",
+     "description": "The effect that applies the visible range reads `seriesCountRef.current`. That is a ref, not state, so it is not in the dependency array. Adding the first series therefore does not apply the `range` the Context already holds. The range reaches the chart only on the next range change. The test `applies the range once a series exists` hides this by calling `setRange(NEXT_RANGE)` after `addSeries`. Initiative 120 will hit this as soon as it adds data. Either track the series count as state, or have the `addSeries` path re-apply the current range. Add a test that adds a series without changing the range afterwards."
+    },
+    {
+     "ref": "sonnet-high/1/5",
+     "severity": "CONCERN",
+     "title": "Range translation is skipped when the first series is added after the range was set",
+     "location": "src/chart/use-chart-provider.ts:334-340",
+     "description": "The range effect checks `seriesCountRef.current === 0`, but the ref is not state, so adding the first series does not re-run the effect. If the range was set while the chart was empty, adding a series does not apply that range. The next `range` change does. The comments describe this as a seam for initiative 120, but the behavior is a latent bug: the viewport stays out of sync with Context until the user changes the range. The test only covers \"add series, then change range\". Track the series count as state, or have `addSeries` re-apply the current range. At minimum, document and test the \"range already set before first series\" case."
+    },
+    {
+     "ref": "sonnet-high/2/0",
+     "severity": "CONCERN",
+     "title": "Visible-range translation never fires when the first series is added",
+     "location": "src/chart/use-chart-provider.ts:237-242",
+     "description": "The range effect is keyed on `[mount.ready, chart, range]` and gated on `seriesCountRef.current === 0`. A ref is not reactive, so adding a series does not re-run the effect. If the range was set while the chart was empty, the call is withheld and then never applied once data arrives. It only runs on the next change to `range`.\n\nThe comment says the seam activates \"the moment [initiative 120] adds the first series\", which overstates what the code does. The translation test sets the range after `addSeries`, so it never covers this ordering. Either re-apply the current range from the facade's `addSeries` path (for example through the `onAdded` callback), or correct the comment and add a test that pins the ordering."
+    },
+    {
+     "ref": "sonnet-high/3/1",
+     "severity": "CONCERN",
+     "title": "Visible-range translation is gated on a ref, so it cannot react to the first series being added",
+     "location": "src/chart/use-chart-provider.ts:340-345",
+     "description": "The effect reads `seriesCountRef.current` but lists only `[mount.ready, chart, range]` as dependencies. A ref change does not re-run the effect. When a series is added to an empty chart, the Context's current range is not applied. It only reaches the chart on the next `range` change. The test \"applies the range once a series exists\" avoids this by calling `setRange` after `addSeries`, so it never covers the case. The comment calls this a seam for initiative 120. Even so, the first add leaves the chart and the Context out of sync. Either apply the range inside the facade's `addSeries` path when the count goes 0\u21921, or track the count as state."
+    }
+   ]
+  },
+  {
+   "id": "a122-I7",
+   "case": "a122",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/4",
+     "severity": "CONCERN",
+     "title": "The tenant's re-raise branch does not log before re-raising",
+     "location": "src/amoeba/runner/tenant.py:142-144",
+     "description": "`except (*STORE_FAILURES, UpstreamShapeError): raise` re-raises without `logger.exception`. The Python rules require re-raise after logging at ERROR via `logger.exception`, and the slice's own task doc says the same (122-tasks line 46). Partial coverage downstream: `sqlite3.Error` reaches the CLI's `logger.exception` (cli/main.py:318-322), but `UpstreamShapeError` is printed as one line with no traceback (cli/main.py:295-297). The codebase's other re-raise handlers log first (recovery.py:226-230, review_scan.py:53-54). Fix: add `logger.exception(\"runner tick aborted for project %s\", project_id)` before the `raise`."
+    },
+    {
+     "ref": "haiku-xhigh/3/5",
+     "severity": "CONCERN",
+     "title": "The tenant's two except clauses do not match the project's exception rule",
+     "location": "src/amoeba/runner/tenant.py:141-149",
+     "description": "Rule (a) requires logging with `logger.exception` before a re-raise. The store and shape re-raise at lines 142-144 logs nothing. At the process boundary, `StoreError` and `UpstreamShapeError` print one line with no traceback (`cli/main.py:295-308`). Only other errors reach the traceback at `cli/main.py:318-322`.\n\nThe broad catch at line 145 neither re-raises nor sits at a process boundary, so it falls outside form (c). It isolates one project and carries on. The `# noqa: BLE001` silences the mechanical check, and the module docstring's \"the Runner's one process boundary\" is inaccurate. Decide whether per-project isolation is an accepted exception. If it is, record it as a waiver in the slice or rules doc and correct the docstring and comment. If not, log store and shape errors with `logger.exception` before re-raising."
+    }
+   ]
+  },
+  {
+   "id": "a122-I19",
+   "case": "a122",
+   "members": [
+    {
+     "ref": "sonnet/2/0",
+     "severity": "CONCERN",
+     "title": "Line exceeds 88 chars; ruff E501 will fail lint",
+     "location": "src/amoeba/runner/tenant.py:145",
+     "description": "The `except Exception as error:  # noqa: BLE001 - the Runner's one process boundary (D8)` line is over 88 characters. The grep confirmed it is the only over-length line in `src/amoeba/runner`. The baseline ruff config selects `E` and sets `line-length = 88`, so E501 should flag it, and `BLE001` is already suppressed on that line. Move the justification onto a separate comment line above the `except`, keeping a short `# noqa: BLE001` on the `except` line. I did not run `ruff check` to confirm the failure."
+    }
+   ]
+  },
+  {
+   "id": "921-I8",
+   "case": "921",
+   "members": [
+    {
+     "ref": "haiku-xhigh/2/7",
+     "severity": "CONCERN",
+     "title": "The truncated-day fix reaches the seed only on some daemon code paths",
+     "location": "src/manta_trading/data/acquisition/daemon/minute.py:752-772",
+     "description": "`uncovered_days` only takes effect inside `if seed_from is not None` (line 752). `seed_from` is set when the symbol has UNKNOWN gap rows (full seed, lines 738-739) or when the gap frontier `MAX(gap_end)` trails `target_end` (lines 740-750). In the frontier case the seed covers only sessions at or after the frontier. A truncated session older than the newest gap row, on a symbol with no UNKNOWN rows, is never passed to the seed. That contradicts the docstring of `_build_truncated_index` (minute.py:355-363), which says truncated sessions are re-seeded. The only forwarding test, `test_do_minute_symbol_forwards_uncovered_days_to_the_seed`, forces `has_unknown_gaps=True`, so it covers only the full-seed branch. Add a frontier-branch test with an older truncated day, then either change the seed decision or document the limit. I did not check this against production data."
+    },
+    {
+     "ref": "sol/1/3",
+     "severity": "CONCERN",
+     "title": "Truncated days do not influence whether or where seeding runs",
+     "location": "src/manta_trading/data/acquisition/daemon/minute.py:765-771",
+     "description": "`uncovered_days` is considered only after the existing seed gate. With stored bars, only terminal gaps, and no unknown gaps, that gate either skips seeding or starts at the gap frontier (`717-750`). Truncated days behind that frontier remain excluded despite appearing in the new index. Incorporate those days into the seed decision and bounded repair window; test the terminal-only case."
+    },
+    {
+     "ref": "sol/3/2",
+     "severity": "CONCERN",
+     "title": "Truncated days behind the seed frontier remain unrepaired",
+     "location": "src/manta_trading/data/acquisition/daemon/minute.py:765-771",
+     "description": "Passing `uncovered_days` does not expand the seed window. When existing gaps are all terminal, surrounding code seeds only from `_gap_frontier`, or skips seeding if that frontier reaches `target_end`. A truncated day before that frontier is therefore excluded even when the new index identifies it. Seed the identified truncated sessions explicitly without resetting unrelated terminal gaps, and test this terminal-only state."
+    }
+   ]
+  },
+  {
+   "id": "u103-I3",
+   "case": "u103",
+   "members": [
+    {
+     "ref": "haiku-xhigh/2/1",
+     "severity": "CONCERN",
+     "title": "Series count drifts on pane removal, and `Math.max` hides it",
+     "location": "src/chart/chart-facade.ts:78-80",
+     "description": "The facade's `removePane` does not touch the series count. The provider's `removePane` (lightweight-charts-provider.ts:153-160) deletes only the pane handle, so series registry entries survive. If lightweight-charts also drops a pane's series when the pane is removed (unverified; node_modules is absent), `seriesCountRef` stays above the real count. The range guard then passes, `setVisibleRange` runs against an empty time scale, and the error surfaces. The `Math.max(0, \u2026)` floor at use-chart-provider.ts:150 would hide a negative drift instead of reporting it. No test covers pane removal affecting the count. Fix: derive the count from provider state, or have pane removal update it, and drop the silent floor."
+    }
+   ]
+  },
+  {
+   "id": "921-I19",
+   "case": "921",
+   "members": [
+    {
+     "ref": "sonnet/1/2",
+     "severity": "CONCERN",
+     "title": "Extra pool connection opened per chunk while another is held",
+     "location": "src/manta_trading/data/acquisition/daemon/minute.py:~905",
+     "description": "`_do_minute_symbol` calls `pool.connection()` again for `fetch_session_bounds` inside its fetch loop. I did not confirm whether the outer `conn` is still held at that point. Nested checkouts risk pool exhaustion or deadlock when workers are concurrent, and every chunk now pays for an additional query. Reuse the existing connection if it is still held, or confirm the pool size and concurrency make this safe."
+    }
+   ]
+  },
+  {
+   "id": "921-I10",
+   "case": "921",
+   "members": [
+    {
+     "ref": "sonnet-high/2/2",
+     "severity": "CONCERN",
+     "title": "Cagg-freshness probe probably matches nothing, so verify may wait forever",
+     "location": "src/manta_trading/data/gaps/repair_921.py:200-212",
+     "description": "The job lookup filters `job.hypertable_name = %s` with the cagg view name (`minute_4hour_ohlcv`). In TimescaleDB, `timescaledb_information.jobs.hypertable_name` for a continuous-aggregate refresh policy normally holds the internal materialization hypertable (`_materialized_hypertable_N`), not the view name. I couldn't check this against a live database. If it is true, `job_row` is `None`, `last_refresh` is `None`, and `CaggFreshness.stale` is `True` whenever any bar exists. `--verify` would then answer WAIT on every run.\n\nA missing job row is also silently folded into \"stale\". That conflicts with the project rule against silent fallbacks, and it should raise or report that no refresh policy was found. The unit test (`test_the_probe_reads_the_job_stats_and_the_session_chunk`) uses a mock cursor and asserts only that the SQL text contains the proc name, so it can't catch a wrong join key. Run the query against a real TimescaleDB, or join through `continuous_aggregates.materialization_hypertable_name`."
+    }
+   ]
+  },
+  {
+   "id": "307-I16",
+   "case": "307",
+   "members": [
+    {
+     "ref": "sol/3/1",
+     "severity": "FAIL",
+     "title": "Pre-install baseline omits the new GC bar family",
+     "location": "scripts/cutover_304_first_purchase.py:112-115",
+     "description": "The baseline reads production accounting before `install_release()`. The previous universe has no GC bar want, and `family_wants()` only reports configured families, so this baseline lacks `GC/bar_1m`. After installation and purchase, accounting includes that family; `purchase_accounting.totals_delta()` then raises because its baseline is missing. Reruns retain the same incomplete baseline. Capture totals for every target family before spending, independently of the installed universe."
+    }
+   ]
+  },
+  {
+   "id": "921-I4",
+   "case": "921",
+   "members": [
+    {
+     "ref": "haiku-xhigh/2/3",
+     "severity": "CONCERN",
+     "title": "MT_RUN wildcard exposes the whole production mt CLI to root",
+     "location": "deploy/sudoers.d/manta-ops:8",
+     "description": "`/usr/local/bin/mt-run *` matches any arguments. Non-verb arguments go to `run_production_mt` (deploy/mt-run:160-168). When run as root, that function sources `/etc/manta-trading.env` and `exec`s `/opt/manta-trading/.venv/bin/mt \"$@\"` as root. The cutover scripts need only `mt-run minute`, `mt-run daily`, `mt-run kalshi`, and `mt-run data kalshi status --json`. Narrow the rule to those invocations."
+    },
+    {
+     "ref": "sol/1/2",
+     "severity": "FAIL",
+     "title": "Unit wildcard permits operations on unrelated services",
+     "location": "deploy/sudoers.d/manta-ops:7",
+     "description": "Sudoers argument wildcards match whitespace, so `systemctl stop mt-minute-pass.service ssh.service` also matches this rule. The grant therefore extends beyond `mt-*` units. Enumerate exact commands or use a root-owned wrapper that validates every unit argument. See the [official sudoers documentation](https://github.com/sudo-project/sudo/blob/main/docs/sudoers.man.in)."
+    },
+    {
+     "ref": "sonnet/2/1",
+     "severity": "CONCERN",
+     "title": "Sudoers wildcards also match extra arguments",
+     "location": "deploy/sudoers.d/manta-ops:7-8",
+     "description": "In sudoers, `*` also matches spaces. `systemctl stop mt-*` therefore matches `systemctl stop mt-x sshd`, and `mt-run *` and `--ref *` match any arguments at all. The rule is wider than the comment says (\"exactly the commands those scripts issue\"). I did not check what `mt-run` itself accepts. The `systemctl` rules should name the units explicitly. The `mt-run` rule should list the specific subcommands the scripts use, which are `minute`, `kalshi` and `data kalshi status --json`."
+    },
+    {
+     "ref": "sonnet-high/3/1",
+     "severity": "CONCERN",
+     "title": "Wildcard command aliases allow much more than the stated commands",
+     "location": "deploy/sudoers.d/manta-ops:7-8",
+     "description": "In sudoers, `*` matches spaces and additional arguments. `systemctl stop mt-*` therefore also permits `systemctl stop mt-x sshd.service`, and the same applies to `start` and `restart`. This is not a root shell, but it is wider than \"a named unit\".\n\n`mt-run *` is wider still. For any argument that isn't a pass kind, `deploy/mt-run:197` falls through to `run_production_mt`. That runs the production `mt` CLI as `manta-trading` with every `MT_*` credential from the env file. The alias is effectively \"run any `mt` command with production credentials\".\n\nEnumerate the exact units and the exact `mt-run` verbs the scripts use: `minute`, `data kalshi status --json`, and so on."
+    }
+   ]
+  },
+  {
+   "id": "a122-I3",
+   "case": "a122",
+   "members": [
+    {
+     "ref": "haiku-xhigh/2/1",
+     "severity": "CONCERN",
+     "title": "A persistent planner error spins the resident loop",
+     "location": "src/amoeba/runner/tenant.py:145-149",
+     "description": "The broad catch escalates on the project path, where `raise_project_escalation` returns the open row unchanged and writes nothing (project_escalations.py:58-59). It then returns `(TickResult.COMPLETE, True)` unconditionally. `RunnerTenant.tick` returns that `True`, which contradicts its own docstring (tenant.py:96-99). The host runs `worked = tenant.tick(self) or worked` (host.py:275) and skips the idle wait when `worked` is true (host.py:253-254). So a planner that raises every tick causes back-to-back full tracebacks, one `BEGIN IMMEDIATE` per pass, and write-lock churn against the other tenants. Production planners are empty today, so this is dormant, but slice 125 adds them. `tests/runner/test_tenant.py#test_an_unexpected_exception_is_logged_and_the_other_project_still_ticks` asserts `wrote` is true and pins the wrong behavior. Fix: return whether the escalation actually wrote, and consider a backoff."
+    },
+    {
+     "ref": "haiku-xhigh/3/0",
+     "severity": "FAIL",
+     "title": "A caught tick exception reports work done, so the loop never idles under a recurring fault",
+     "location": "src/amoeba/runner/tenant.py:149",
+     "description": "`_tick_project` returns `TickResult.COMPLETE, True` after the broad catch, whether or not `escalate()` wrote anything. `escalate()` writes nothing when the node is already blocked (`faults.py:172-182`), and `raise_project_escalation` returns the open row unchanged on a repeat (`store/project_escalations.py:58-59`). So a fault that recurs every tick reports work every tick. `RunnerTenant.tick` passes that `True` up (`tenant.py:111-116`), and `ResidentProcess._loop` skips its idle wait when a tenant reports work (`process/host.py:252-254, 275`).\n\nThe result is a loop with no pause that logs a full traceback on every pass (`tenant.py:146`) and takes SQLite's write lock on every pass (`BEGIN IMMEDIATE`, `project_escalations.py:54`). This breaks the `Tenant.tick` contract (\"Returns whether any work was done\", `host.py:79-80`) and the `RunnerTenant.tick` docstring (\"True only if something was written\", `tenant.py:96-97`). A planner that raises on each call reproduces it: `decide` runs with the node context cleared, so the escalation is project-scoped and deduplicated.\n\nThe tests miss it. `test_an_unexpected_exception_is_logged_and_the_other_project_still_ticks` asserts `wrote` only because the other project launched. Fix: have `escalate()` report whether it wrote and return that value from the catch. Add a test that ticks a single failing project twice and asserts `tick()` returns `False` on the second call."
+    },
+    {
+     "ref": "sol/1/3",
+     "severity": "CONCERN",
+     "title": "Repeated unexpected faults bypass the idle interval",
+     "location": "src/amoeba/runner/tenant.py:145-149",
+     "description": "The exception handler always reports a write, even when `escalate` deduplicates an existing escalation or finds an already-blocked node. `ResidentProcess._loop` waits only when tenants report no work, so a persistent exception produces a tight retry-and-error-log loop. Have escalation report whether it actually changed the store, and combine that with `tick.wrote` instead of returning unconditional `True`."
+    }
+   ]
+  },
+  {
+   "id": "u103-I19",
+   "case": "u103",
+   "members": [
+    {
+     "ref": "sonnet/1/4",
+     "severity": "CONCERN",
+     "title": "Stale cross-reference in the smoke spec comment",
+     "location": "e2e/smoke.spec.ts:9-10",
+     "description": "The comment says the chart is asserted in `chart-render.spec.ts`. That spec covers the `/__chart-harness` route. The `/` chart is asserted in `chart-live.spec.ts`, which this diff adds. The smoke assertion `getByText('Chart workspace')` is also a substring match on user-visible copy. Per the project rule against using user-accessible labels as logical structure, the `chart-container` test id already covers the shell check."
+    }
+   ]
+  }
+ ]
+}

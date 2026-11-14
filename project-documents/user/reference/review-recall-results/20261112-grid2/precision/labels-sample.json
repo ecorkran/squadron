@@ -1,0 +1,182 @@
+[
+ {
+  "n": 1,
+  "id": "197-I19",
+  "case": "197",
+  "agent_grade": "REAL"
+ },
+ {
+  "n": 2,
+  "id": "175-I17",
+  "case": "175",
+  "agent_grade": "MINOR"
+ },
+ {
+  "n": 3,
+  "id": "188-I4",
+  "case": "188",
+  "agent_grade": "MINOR"
+ },
+ {
+  "n": 4,
+  "id": "u103-I1",
+  "case": "u103",
+  "agent_grade": "REAL"
+ },
+ {
+  "n": 5,
+  "id": "a122-I7",
+  "case": "a122",
+  "agent_grade": "MINOR"
+ },
+ {
+  "n": 6,
+  "id": "225-I5",
+  "case": "225",
+  "agent_grade": "FALSE"
+ },
+ {
+  "n": 7,
+  "id": "225-I4",
+  "case": "225",
+  "agent_grade": "UNSURE"
+ },
+ {
+  "n": 8,
+  "id": "175-I24",
+  "case": "175",
+  "agent_grade": "FALSE"
+ },
+ {
+  "n": 9,
+  "id": "197-I22",
+  "case": "197",
+  "agent_grade": "PREEXISTING"
+ },
+ {
+  "n": 10,
+  "id": "225-I1",
+  "case": "225",
+  "agent_grade": "REAL"
+ },
+ {
+  "n": 11,
+  "id": "188-I13",
+  "case": "188",
+  "agent_grade": "PREEXISTING"
+ },
+ {
+  "n": 12,
+  "id": "175-I3",
+  "case": "175",
+  "agent_grade": "MINOR"
+ },
+ {
+  "n": 13,
+  "id": "a122-I19",
+  "case": "a122",
+  "agent_grade": "FALSE"
+ },
+ {
+  "n": 14,
+  "id": "921-I8",
+  "case": "921",
+  "agent_grade": "REAL"
+ },
+ {
+  "n": 15,
+  "id": "u103-I3",
+  "case": "u103",
+  "agent_grade": "UNSURE"
+ },
+ {
+  "n": 16,
+  "id": "227-I7",
+  "case": "227",
+  "agent_grade": "MINOR"
+ },
+ {
+  "n": 17,
+  "id": "175-I1",
+  "case": "175",
+  "agent_grade": "REAL"
+ },
+ {
+  "n": 18,
+  "id": "225-I11",
+  "case": "225",
+  "agent_grade": "FALSE"
+ },
+ {
+  "n": 19,
+  "id": "921-I19",
+  "case": "921",
+  "agent_grade": "FALSE"
+ },
+ {
+  "n": 20,
+  "id": "921-I10",
+  "case": "921",
+  "agent_grade": "FALSE"
+ },
+ {
+  "n": 21,
+  "id": "197-I1",
+  "case": "197",
+  "agent_grade": "REAL"
+ },
+ {
+  "n": 22,
+  "id": "307-I16",
+  "case": "307",
+  "agent_grade": "REAL"
+ },
+ {
+  "n": 23,
+  "id": "921-I4",
+  "case": "921",
+  "agent_grade": "REAL"
+ },
+ {
+  "n": 24,
+  "id": "a122-I3",
+  "case": "a122",
+  "agent_grade": "REAL"
+ },
+ {
+  "n": 25,
+  "id": "197-I23",
+  "case": "197",
+  "agent_grade": "FALSE"
+ },
+ {
+  "n": 26,
+  "id": "197-I15",
+  "case": "197",
+  "agent_grade": "PREEXISTING"
+ },
+ {
+  "n": 27,
+  "id": "175-I19",
+  "case": "175",
+  "agent_grade": "REAL"
+ },
+ {
+  "n": 28,
+  "id": "175-I4",
+  "case": "175",
+  "agent_grade": "REAL"
+ },
+ {
+  "n": 29,
+  "id": "u103-I19",
+  "case": "u103",
+  "agent_grade": "MINOR"
+ },
+ {
+  "n": 30,
+  "id": "188-I1",
+  "case": "188",
+  "agent_grade": "REAL"
+ }
+]

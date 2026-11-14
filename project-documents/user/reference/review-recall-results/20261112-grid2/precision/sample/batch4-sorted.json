@@ -1,0 +1,127 @@
+[
+ {
+  "id": "188-I18",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "trading-data 188 head src/manta_trading/data/kalshi/serve_timeseries.py:72 docstring says 'fourteen value columns' (file added in base..head)",
+   "src/manta_trading/data/kalshi/candle_repository.py:45,50-62: _OHLC has 4 fields; yes_bid 4 + yes_ask 4 + price 6 = 14, plus volume_fp and open_interest_fp = 16 CANDLE_COLUMNS",
+   "src/manta_trading/api_server/models/kalshi_timeseries.py:5 and test/unit/api_server/test_kalshi_models.py:186 repeat 'fourteen'; diff shows both added in base..head"
+  ],
+  "escalation_question": null,
+  "reason": "Claim is true and the docstrings are new, but it is a comment/docstring inaccuracy; the code is correct. BRIEF MINOR: 'comments or docs'."
+ },
+ {
+  "id": "175-I10",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "squadron 175: summary.py base 352 lines, _execute_summary at base line 184 to end (~169 lines); head 398 lines, def at 187 (~212 lines); diff adds 50 lines to summary.py",
+   "dispatch.py base 835 lines, head 931 lines; _dispatch_via_session base 488-566 (~79 lines), head 515-620 (~106 lines)",
+   "Project CLAUDE.md: 'Keep source files to ~300 lines, functions to ~50 lines where practical'; no pyproject/CI rule enforces it (a guideline only)"
+  ],
+  "escalation_question": null,
+  "reason": "True and partly grown by the diff, but it is a size/style guideline ('where practical') with no wrong behavior. BRIEF MINOR: 'style'. Both functions and dispatch.py were already far over the guideline at base."
+ },
+ {
+  "id": "197-I25",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "squadron 197 head src/squadron/cli/commands/run.py:930-955: _take_run_lock and _locked added in the diff; _locked closes the coroutine at line 952 when the lock is refused, so no coroutine is left unawaited",
+   "The proposed factory / nullcontext alternative is a simplification; the current code behaves correctly"
+  ],
+  "escalation_question": null,
+  "reason": "Design-preference finding on added code. The code is correct (coroutine closed on refusal, lock released by ExitStack). BRIEF MINOR: style, no defect."
+ },
+ {
+  "id": "197-I14",
+  "settled": false,
+  "grade": null,
+  "evidence": [
+   "run.py:238-241 init_run skipped when run_id given; run.py:263 on_step_complete=state_mgr.make_step_callback(run_id); run.py:279 state_mgr.finalize(run_id, result) run on normal return",
+   "run_item.py:~75-90 run_body calls _run_pipeline_sdk(run_id=run_id, from_step=rerun.report.step_name, item_rerun=rerun), so item resume reaches those lines (run_item.py is new in the diff)",
+   "state.py:319 appends a StepState for the slices step; state.py:375-386 finalize overwrites status; state.py:459-471 first_unfinished_step returns None once slices is COMPLETED; run.py:1222-1224 then prints 'All steps already completed. Nothing to resume.'",
+   "executor.py:1599-1603: a GitEnvironmentError halt re-raises before on_step_complete, so a halted batch has no slices StepState (run.py:~270 finalizes it FAILED)",
+   "implement-plan.yaml has a single each step named slices, so after item resume plain --resume has nothing left",
+   "Slice 197 doc line 139: 'Run state is unchanged in shape ... status stays COMPLETED'; line 304 and 464: item resume (not plain resume) is the recovery for not_run items; no passage says plain --resume must keep working after an item resume"
+  ],
+  "escalation_question": "After a git-halted batch (items not_run, run FAILED), is a plain `sq run --resume <run_id>` (re-running the whole each step) a supported recovery that must still work after an item resume, or is item resume the only intended recovery?",
+  "reason": "The code behaviour is verified: item resume appends a slices step and re-finalizes the run, disabling plain resume. Whether that is a defect or an accepted side effect of item resume being the designed recovery is not shown by the repo (design says run state is 'unchanged in shape' but does not address plain resume afterwards)."
+ },
+ {
+  "id": "197-I21",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "batch_report.py:378 and item_resume.py:311 (_reconcile), :164 (_outcome) use next() without default (new code)",
+   "item_resume.py:209-211 _check_record raises _Stop(REJECTED) before any run if the report has no record for request.index, so the record exists when ItemRerun.replace/_outcome/_reconcile run",
+   "batch_report.py:138 from_item sets index=str(item['index']); item_resume.py:288 selects the item with str(i.get('index')) == request.index, so record.index always equals an existing record's index; the in-memory report is never shortened",
+   "item_resume.py:136 raise AssertionError('unreachable') # pragma: no cover follows a with-block whose every path returns or raises (lines 124-135)"
+  ],
+  "escalation_question": null,
+  "reason": "StopIteration needs a missing record, which validation rules out and normal operation cannot produce; the AssertionError line is dead code kept for the type checker. BRIEF MINOR: 'speculative hardening against inputs that cannot arrive' and style."
+ },
+ {
+  "id": "227-I11",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "trading-data 227: test/unit/test_setup_backup.py base 812 lines, head 1072 lines (diff numstat +310/-50)",
+   "CLAUDE.md line 36: ~300 lines 'where practical'; the file was already far over at base; no lint/CI limit configured in pyproject.toml"
+  ],
+  "escalation_question": null,
+  "reason": "File-length guideline on a test file, no behavior impact. BRIEF MINOR: 'style'."
+ },
+ {
+  "id": "225-I16",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "trading-data 225 head src/manta_trading/cli/commands/tick_store_cmds.py:67-80 run_mapped(storage=...) override added in the diff (diff greps: new storage param, _read_storage at ~line 170-173, used by the two read verbs)",
+   "src/manta_trading/data/tick/store_context.py:76 TickDatabaseUnreachable subclasses TickPreflightError, so the override gives exit 4 on read verbs and exit 1 elsewhere, as the finding itself says is tested and documented",
+   "tick_exit.py module docstring says codes are 'defined once, here'; the per-verb override splits the policy but yields no wrong result"
+  ],
+  "escalation_question": null,
+  "reason": "True design-smell observation about added code; behaviour is correct and tested per the finding. BRIEF MINOR: no wrong behavior, crash or data."
+ },
+ {
+  "id": "227-I12",
+  "settled": true,
+  "grade": "REAL",
+  "evidence": [
+   "trading-data 227 head scripts/cutover_227_helpers.py:91-99: before = production_lines(old) unstripped; after = strip_new_args applied to production_lines(new) only (file added in base..head)",
+   "scripts/cutover_227_tick_backup.py:95 step_check sets ctx.old_cron = CRON_FILE.read_text() on every run, so after cron installation it holds the updated lines; step_apply at :114-119 compares ctx.old_cron with the same file",
+   "deploy/cron.d/manta-trading-backup.cluster renders --url-key and --remote on the job lines while test/unit/fixtures/cron_main_pre227.txt has neither, and test_cutover_227.py:122 asserts production_changes(FIXTURE, rendered) == [], so strip_new_args is not a no-op on installed lines and installed-vs-stripped-installed differs",
+   "cutover_227_tick_backup.py:5-8 documents 're-run the whole script ... a re-run ... changes nothing there' as the recovery; step_apply then fails require(not changes) at :122. Attempt to execute render_cron.sh failed on this host, so the rerun result is derived from code and the test, not executed"
+  ],
+  "escalation_question": null,
+  "reason": "Added code: a rerun after the cron file is installed captures already-updated lines as 'old', production_changes reports them as differing, and step 4 aborts, blocking the documented recovery for any later-step failure."
+ },
+ {
+  "id": "921-I5",
+  "settled": false,
+  "grade": null,
+  "evidence": [
+   "trading-data 921: deploy/sudoers.d/manta-ops is new in base..head; header says 'Exactly the commands those scripts issue'; its aliases (MT_UNITS, MT_RUN, MT_INSTALL, MT_READ, MT_GIT) contain no /opt/manta-trading/.venv/bin/python rule",
+   "scripts/cutover_921_minute_sessions.py:96-100 _repair runs sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode> (this code predates the diff; the uncovered rule is the new file's omission); cutover_common.py:69 builds plain `sudo`, not `sudo -n`",
+   "cutover_921_minute_sessions.py:200-212 _verify_when_fresh (added) sleeps 15 min between repair polls (VERIFY_WAIT_SECONDS) with no `sudo -v` between them",
+   "cutover_921_minute_sessions.py:29 documents the run as `sudo -v && uv run python ...`, and cutover_common.py:361 prints 'a password prompt here is normal after a long firing', so password prompts are tolerated by the scripts' own design, while the sudoers header claims full coverage"
+  ],
+  "escalation_question": "Is the 921 cutover meant to run to completion without a password prompt once the sudoers rule is installed (so the uncovered repair command is a defect), or is an operator at the terminal who re-authenticates with sudo expected (so the prompt is tolerated)?",
+  "reason": "The omission and the false 'exactly' header are verified in added code, but the impact is a password prompt (stall only if unattended), and the repo gives both signals about whether passwordless operation is required."
+ },
+ {
+  "id": "175-I20",
+  "settled": true,
+  "grade": "REAL",
+  "evidence": [
+   "squadron 175 head src/squadron/pipeline/executor.py:2046 usage_capture passed into fan-out branches (line added in the diff; executor.py:550 creates the run's UsageCapture)",
+   "executor.py:2072-2080 on any FAILED branch the step returns action_results=[]; executor.py:2086-2093 returns only [reducer.reduce(...)]",
+   "src/squadron/pipeline/intelligence/fan_in/reducers.py:42-79 CollectReducer copies only action_type/success/outputs/verdict per branch action; :111-128 FirstPassReducer builds new ActionResult(outputs, verdict) from one action; neither carries metadata, so branch metadata['usage'] never reaches the persisted action_results (state.py:313 dataclasses.asdict of step_result.action_results)",
+   "Slice 175 doc line 282 acceptance: 'Every dispatch, summary, compact, and review action in a pipeline run has metadata.usage in the run state file ... includes failed actions whose error carries telemetry'; fan-out branches run those actions (executor.py:2040-2060)"
+  ],
+  "escalation_question": null,
+  "reason": "The diff makes fan-out branches capture usage, but the reducers and the fail-fast path discard it, so branch spend is silently absent from run state, contradicting the slice's own acceptance criterion. No built-in pipeline uses fan_out, but the step type is supported and reachable."
+ }
+]

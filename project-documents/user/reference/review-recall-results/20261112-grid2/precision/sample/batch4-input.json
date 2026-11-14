@@ -1,0 +1,235 @@
+{
+ "cases": {
+  "175": {
+   "repo": "squadron",
+   "base": "3812c815b377eadfd7741ab1734c350c73789e2b",
+   "head": "1cbd6be4317f37498b07a31cd9cb64562fdb9d0a",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175"
+  },
+  "188": {
+   "repo": "trading-data",
+   "base": "0c6060f80be38524eb02585c44a481a9b6cdf453",
+   "head": "3e29c2afc500d786b26ee925efd0eb9269e18d52",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188"
+  },
+  "197": {
+   "repo": "squadron",
+   "base": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece",
+   "head": "90a40dbf40289fd46b99e999c957a6e9295545be",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197"
+  },
+  "225": {
+   "repo": "trading-data",
+   "base": "09106ab48bda1b7397cfefa0145928a82e3056ac",
+   "head": "f328230d409b21ef1c9d8f8d96db21a478169076",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/225"
+  },
+  "227": {
+   "repo": "trading-data",
+   "base": "11168d5b2ae7805e15a63888eb85ca26b1fdc811",
+   "head": "85fee397cbbe12ca5b74bb38fb77cf1165b5ba1c",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227"
+  },
+  "921": {
+   "repo": "trading-data",
+   "base": "eaf1ab4e5913465369ad916785cce5974eaab08c",
+   "head": "9b54f27bdc6b62bca9890bc5006bbac73f2ea6bc",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/921"
+  }
+ },
+ "items": [
+  {
+   "id": "188-I18",
+   "case": "188",
+   "members": [
+    {
+     "ref": "haiku-xhigh/3/6",
+     "severity": "CONCERN",
+     "title": "Docstrings say \"fourteen\" value columns; the mapping has sixteen",
+     "location": "src/manta_trading/data/kalshi/serve_timeseries.py:72",
+     "description": "`CandleRow` says it holds \"the fourteen value columns.\" `models/kalshi_timeseries.py:5` says \"the fourteen flat stored columns,\" and `test_kalshi_models.py:186` says \"The fourteen values.\" `CANDLE_COLUMNS` (`candle_repository.py:50-62`) has sixteen entries: fourteen nested OHLC, previous, and mean columns, plus `volume_fp` and `open_interest_fp`. `constants.py:1306` says sixteen, and the candle test asserts `len(values) == len(CANDLE_COLUMNS)`. The code is right and the prose is wrong.\n\nFix: correct the three docstrings to \"sixteen\" (or \"fourteen nested, two flat\")."
+    }
+   ]
+  },
+  {
+   "id": "175-I10",
+   "case": "175",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/7",
+     "severity": "CONCERN",
+     "title": "Functions and files grew well past the length guideline",
+     "location": "src/squadron/pipeline/actions/summary.py:187",
+     "description": "`_execute_summary` runs about 210 lines (from line 187 to the end of the 398-line file). `_dispatch_via_session` runs about 105 lines (`dispatch.py:515-620`), and `dispatch.py` is now 931 lines. The guide asks for roughly 50-line functions and 300-line files. Part of the length predates this diff, but the diff adds usage branching to both functions. Fix: extract the SDK-versus-one-shot capture block into helpers in `usage_capture.py`, and extract the session record building out of `_dispatch_via_session`."
+    },
+    {
+     "ref": "haiku-xhigh/2/10",
+     "severity": "CONCERN",
+     "title": "`dispatch.py` is now 931 lines",
+     "location": "src/squadron/pipeline/actions/dispatch.py:1",
+     "description": "CLAUDE.md asks for source files of about 300 lines where practical. The file was already well over that, and this diff adds session capture, one-shot capture, the provider-failure mapping, and the `_one_shot` wrapper to it. Consider moving the usage plumbing or the session path into their own modules."
+    },
+    {
+     "ref": "haiku-xhigh/3/6",
+     "severity": "CONCERN",
+     "title": "Two functions are well past the length guideline, and this diff grew both",
+     "location": "src/squadron/pipeline/actions/summary.py:187",
+     "description": "`_execute_summary` runs from line 187 to line 395, about 210 lines. This diff adds usage capture to both its SDK and one-shot branches. `_dispatch_via_session` (`dispatch.py:515-620`) is about 105 lines and also grew here. CLAUDE.md asks for functions of about 50 lines.\n\nFix: extract each branch's capture-and-stamp step into a helper that returns the text and its metadata."
+    }
+   ]
+  },
+  {
+   "id": "197-I25",
+   "case": "197",
+   "members": [
+    {
+     "ref": "sonnet-high/3/3",
+     "severity": "CONCERN",
+     "title": "`_locked` builds a coroutine before the lock is taken, then closes it on failure",
+     "location": "src/squadron/cli/commands/run.py:930-955",
+     "description": "`_locked` receives an already-created coroutine and must call `run_coroutine.close()` if the lock is refused. `ExitStack` and `_take_run_lock(stack, ...)` wrap what is really one optional context manager. This contradicts the project rule to resist complexity. Pass a zero-argument factory, or use `with project_run_lock(os.getcwd()) if pipeline_mutates(definition) else nullcontext():`. Then no coroutine can be left unawaited and the `ExitStack` goes away. Five call sites would simplify."
+    }
+   ]
+  },
+  {
+   "id": "197-I14",
+   "case": "197",
+   "members": [
+    {
+     "ref": "haiku-xhigh/3/2",
+     "severity": "CONCERN",
+     "title": "Item resume writes the batch run's state as if it were a new step result",
+     "location": "src/squadron/cli/commands/run.py:279",
+     "description": "`_run_pipeline` skips `init_run` when a `run_id` is given (`run.py:238`), but it still calls `state_mgr.finalize(run_id, result)` (`run.py:279`). The step callback also appends a `slices` StepState (`state.py:319`). Two effects follow:\n\n- The run's terminal status becomes the result of this one item.\n- After a git halt the batch run has no `slices` entry, because `on_step_complete` runs only on normal return (`executor.py:576-577`). Item resume appends one, so `first_unfinished_step` (`state.py:459-471`) returns None. A later plain `sq run --resume <id>` then prints \"All steps already completed\" while items are still `not_run`.\n\nUnless D8 intends this, item resume should not finalize the run or append a step to it. The item-resume tests miss it: `tests/pipeline/item_resume_support.py` `body_runner` calls `execute_pipeline` directly, never reaches `_run_pipeline`, and omits the `from_step` argument that production passes (`run_item.py:84`)."
+    }
+   ]
+  },
+  {
+   "id": "197-I21",
+   "case": "197",
+   "members": [
+    {
+     "ref": "sonnet/1/4",
+     "severity": "CONCERN",
+     "title": "`ItemRerun.replace` raises a bare `StopIteration` when the index is missing",
+     "location": "src/squadron/pipeline/batch_report.py#ItemRerun.replace",
+     "description": "`next(i for i, r in enumerate(records) if r.index == record.index)` has no default. If the index is absent, `StopIteration` escapes. Inside the coroutine that becomes an opaque `RuntimeError`, and it fires from the `finally` handling in `_finish_each_report`, where it could mask the original fault. `_reconcile` has the same pattern. Raise an explicit error naming the index instead."
+    },
+    {
+     "ref": "sonnet/2/3",
+     "severity": "CONCERN",
+     "title": "Unreachable code and a fragile `next()` inside coroutines",
+     "location": "src/squadron/pipeline/item_resume.py:121, src/squadron/pipeline/batch_report.py#ItemRerun.replace",
+     "description": "`raise AssertionError(\"unreachable\")` after the `with ExitStack()` block is dead code. The block always returns or raises, so it only exists to quiet a type checker. Separately, `ItemRerun.replace` and `_outcome` use bare `next(...)` with no default. If the record is missing, a `StopIteration` raised inside a coroutine surfaces as an opaque `RuntimeError`. An explicit error would honor the fail-fast and \"name the fact\" convention the rest of the module follows."
+    }
+   ]
+  },
+  {
+   "id": "227-I11",
+   "case": "227",
+   "members": [
+    {
+     "ref": "haiku-xhigh/3/7",
+     "severity": "CONCERN",
+     "title": "`test_setup_backup.py` has grown to 1072 lines",
+     "location": "test/unit/test_setup_backup.py",
+     "description": "This diff adds roughly 250 lines to a file that already exceeded the ~300-line guideline. Split it by subject: argument parsing, the cluster table, render, and lifecycle."
+    }
+   ]
+  },
+  {
+   "id": "225-I16",
+   "case": "225",
+   "members": [
+    {
+     "ref": "sonnet/1/1",
+     "severity": "CONCERN",
+     "title": "Exception-to-exit-code mapping depends on a caller-supplied tuple",
+     "location": "src/manta_trading/cli/commands/tick_store_cmds.py:67-80",
+     "description": "`run_mapped` checks `isinstance(exc, storage)` before `exit_code_for`. This lets `TickDatabaseUnreachable` override the \"preflight\" mapping for the read verbs only. It works, and `tick_exit.py` already maps `TickCalendarError` and `psycopg.OperationalError` to storage. However, exit-code policy is now split between `tick_exit.py`, which the design says defines it once, and a per-verb parameter. `_read_storage()` also needs a function-local import just to build a one-element tuple. A cleaner option is a dedicated `TickReadUnreachable` exception, or a `read_only` flag passed to `exit_code_for`. As written, the \"one place\" invariant is weakened."
+    },
+    {
+     "ref": "sonnet-high/3/4",
+     "severity": "CONCERN",
+     "title": "`run_mapped` storage override is order-dependent",
+     "location": "src/manta_trading/cli/commands/tick_store_cmds.py:70-80",
+     "description": "`TickDatabaseUnreachable` subclasses `TickPreflightError`, so `exit_code_for` still returns exit 1 for it in the writers. The read verbs get exit 4 only because they pass a `storage` tuple to `run_mapped`. Exit-code mapping is now split between `tick_exit.exit_code_for` and a per-call override, which cuts against the \"defined once, in `tick_exit.py`\" statement in the module docstring. Handling the subclass in `exit_code_for` would keep one source of truth. The writers would need a decision on whether unreachable means exit 1 or 4 there too. The behaviour is tested and the override is documented, so this is a design smell and not a bug."
+    }
+   ]
+  },
+  {
+   "id": "227-I12",
+   "case": "227",
+   "members": [
+    {
+     "ref": "sol/1/0",
+     "severity": "FAIL",
+     "title": "Cron comparison prevents recovery by rerunning the cutover",
+     "location": "scripts/cutover_227_helpers.py:95-99",
+     "description": "`production_changes()` strips new arguments only from `new`. After cron installation, a rerun captures the already-updated file as `old`, so identical cron files compare as different and step 4 fails. This blocks the documented recovery path for failures in later steps. Normalize both sides and add a post-installation rerun regression test."
+    },
+    {
+     "ref": "sol/2/1",
+     "severity": "FAIL",
+     "title": "Production comparison rejects every post-install rerun",
+     "location": "scripts/cutover_227_helpers.py:95-99",
+     "description": "Only the new cron lines have their added arguments stripped. After the first installation, `step_check` captures already-updated lines as `old`, so comparing an unchanged installed file against itself reports differences and stops step 4. This was reproduced with the helper. Normalize both sides and add an already-installed rerun test."
+    },
+    {
+     "ref": "sol/3/1",
+     "severity": "FAIL",
+     "title": "Re-running after cron installation always fails",
+     "location": "scripts/cutover_227_helpers.py:95-96",
+     "description": "Only the new cron lines have their added arguments stripped. On a rerun, `ctx.old_cron` already contains those arguments, so comparing an unchanged post-cutover file against itself reports differences and aborts step 4. This prevents the documented recovery procedure after any later failure. Normalize both sides and add a post-cutover rerun regression test."
+    }
+   ]
+  },
+  {
+   "id": "921-I5",
+   "case": "921",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/3",
+     "severity": "CONCERN",
+     "title": "The cutover's own repair/verify command is not covered by the sudoers rule",
+     "location": "scripts/cutover_921_minute_sessions.py:93-105",
+     "description": "`_repair` runs `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode>` (lines 96-100). No rule in `deploy/sudoers.d/manta-ops` matches that interpreter path. Sudo will therefore prompt for a password on `--check`, `--apply`, and each `--verify` poll. `_verify_when_fresh` polls for up to 75 minutes, and the credential timestamp lapses after 5 minutes by default. Unattended or non-interactive runs will fail or stall. Add the exact argv and verify with `sudo -l -U manta`."
+    },
+    {
+     "ref": "haiku-xhigh/2/2",
+     "severity": "CONCERN",
+     "title": "The sudoers rule does not match what the scripts actually run",
+     "location": "scripts/cutover_921_minute_sessions.py:96-100",
+     "description": "The header says the rule covers \"exactly the commands those scripts issue\". But `_repair` runs `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode>`, and no rule covers that interpreter. Each repair and verify call falls back to a password prompt, and `sudo -n` fails. The installer path also disagrees: `install()` resolves it from `__file__` (scripts/cutover_common.py:134), while the rule hard-codes one checkout path, so running from any other checkout (including a worktree) prompts for a password. Add the interpreter, narrowly, for this script's three modes. Either pin the installer location or document that the checkout must match."
+    },
+    {
+     "ref": "haiku-xhigh/3/3",
+     "severity": "CONCERN",
+     "title": "The sudoers rule does not cover the repair step, and its header claim is inaccurate",
+     "location": "deploy/sudoers.d/manta-ops:1",
+     "description": "The header says the rule covers \"Exactly the commands those scripts issue.\" It does not. `_repair` (`scripts/cutover_921_minute_sessions.py:96-100`) runs `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode>` on every `--check`, `--apply` and `--verify`. None of the aliases match that command, so the cutover prompts for a password at its first repair step, or fails without a TTY. In the other direction, `MT_UNITS` lists `systemctl is-active`, which `unit_active` never runs under sudo.\n\nFix: run the repair as the service user (`sudo -u manta-trading ...`), which is the same pattern as `MT_GIT`, and add that alias. Do not grant root to a repository script."
+    },
+    {
+     "ref": "sonnet-high/3/2",
+     "severity": "CONCERN",
+     "title": "Sudoers rule omits a command the cutover issues, and exposes the env file",
+     "location": "deploy/sudoers.d/manta-ops:5-10",
+     "description": "`_repair` in `scripts/cutover_921_minute_sessions.py:96-100` runs `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py <mode>`. No alias covers it. It would prompt for a password, with stdout and stderr captured, in the middle of an unattended cutover. The header's \"exactly the commands those scripts issue\" is therefore false.\n\n`MT_READ` grants `cat /etc/manta-trading.env` as root. That file holds all production credentials, including the maintenance DB URL. This works against the project's split-role principle, and the file should not be readable this way."
+    }
+   ]
+  },
+  {
+   "id": "175-I20",
+   "case": "175",
+   "members": [
+    {
+     "ref": "sol/2/3",
+     "severity": "FAIL",
+     "title": "Fan-out usage is discarded before persistence",
+     "location": "src/squadron/pipeline/executor.py:2043-2046",
+     "description": "Passing the capture into branches records usage temporarily, but the fan-in reducers discard action metadata. The successful executor result retains only the reduced action; failed branches return an empty action list. A `CollectReducer` probe confirmed empty metadata despite populated branch usage. Preserve all branch usage independently of the selected output and test both successful and failed fan-outs."
+    }
+   ]
+  }
+ ]
+}

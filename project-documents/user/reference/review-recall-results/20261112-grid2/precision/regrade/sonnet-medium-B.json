@@ -1,0 +1,123 @@
+[
+ {
+  "id": "u103-I1",
+  "grade": "REAL",
+  "confidence": "medium",
+  "reason": "The range effect reads a ref (seriesCountRef) and depends only on [mount.ready, chart, range], so adding the first series after the range is set never applies the range; the comment claiming the seam activates when the first series is added is false, though the chart is empty in this slice so impact is latent.",
+  "evidence": [
+   "src/chart/use-chart-provider.ts:333-345",
+   "src/chart/use-chart-provider.ts:72",
+   "src/chart/chart-facade.ts:49-56"
+  ]
+ },
+ {
+  "id": "a122-I7",
+  "grade": "MINOR",
+  "confidence": "medium",
+  "reason": "The re-raise at tenant.py:142-144 skips logger.exception, a literal deviation from the project rule, but the exception propagates to cli/main.py which prints the message (UpstreamShapeError/StoreError) or logs the traceback, so nothing is lost silently.",
+  "evidence": [
+   "src/amoeba/runner/tenant.py:141-149",
+   "src/amoeba/cli/main.py:285-322"
+  ]
+ },
+ {
+  "id": "a122-I19",
+  "grade": "FALSE",
+  "confidence": "high",
+  "reason": "ruff 0.17.2 check on tenant.py at head passes with the repo config (E selected, line-length 88); the 91-char line is not flagged because the trailing noqa pragma is excluded from E501 width.",
+  "evidence": [
+   "src/amoeba/runner/tenant.py:145",
+   "pyproject.toml:37-43"
+  ]
+ },
+ {
+  "id": "921-I8",
+  "grade": "REAL",
+  "confidence": "low",
+  "reason": "uncovered_days is only used inside 'if seed_from is not None'; with only terminal gaps the seed starts at MAX(gap_end) or is skipped, so a truncated session behind the frontier is never re-seeded, contradicting the docstring, though this needs a later gap row and the repair script is the stated main path.",
+  "evidence": [
+   "src/manta_trading/data/acquisition/daemon/minute.py:722-772",
+   "src/manta_trading/data/acquisition/daemon/minute.py:352-363",
+   "src/manta_trading/data/gaps/minute_coverage.py:236-238"
+  ]
+ },
+ {
+  "id": "u103-I3",
+  "grade": "MINOR",
+  "confidence": "medium",
+  "reason": "Facade removePane does not adjust the series count and provider removePane only drops the pane handle, so drift is possible if lightweight-charts removes a pane's series, but the finding is hedged and unverified, nothing adds panes or series in this slice, and the registry staleness is provider behavior outside the diff.",
+  "evidence": [
+   "src/chart/chart-facade.ts:78-80",
+   "src/chart/providers/lightweight-charts-provider.ts:153-160",
+   "src/chart/use-chart-provider.ts:150"
+  ]
+ },
+ {
+  "id": "921-I19",
+  "grade": "FALSE",
+  "confidence": "high",
+  "reason": "The pool.connection() for fetch_session_bounds is a sequential with-block inside the loop; the earlier conn is released before the loop and the pick-gap connection block has already exited, so no connection is held while it checks out another.",
+  "evidence": [
+   "src/manta_trading/data/acquisition/daemon/minute.py:792",
+   "src/manta_trading/data/acquisition/daemon/minute.py:823-834",
+   "src/manta_trading/data/acquisition/daemon/minute.py:901-904"
+  ]
+ },
+ {
+  "id": "921-I10",
+  "grade": "FALSE",
+  "confidence": "medium",
+  "reason": "The repo's own existing code states and relies on timescaledb_information.jobs.hypertable_name carrying the cagg view name for refresh policies, so the join key is right; the missing-job-row-as-stale point is a minor secondary issue.",
+  "evidence": [
+   "src/manta_trading/data/gaps/repair_921.py:200-212",
+   "src/manta_trading/cli/commands/data.py:3101-3116",
+   "src/manta_trading/market/maintenance/rechunk.py:226"
+  ]
+ },
+ {
+  "id": "307-I16",
+  "grade": "REAL",
+  "confidence": "medium",
+  "reason": "The baseline is read from the pre-install production build whose accounting lists only wanted families, and this diff adds the GC ohlcv-1m want, so GC/bar_1m is absent from the baseline and totals_delta raises CutoverError after the purchase has been spent.",
+  "evidence": [
+   "scripts/cutover_304_first_purchase.py:107-120,286-288",
+   "scripts/purchase_accounting.py:131-144",
+   "scripts/cutover_304_evidence.py:237-241,268-270",
+   "src/manta_trading/data/tick/family_report.py:249",
+   "src/manta_trading/data/tick/universe.py (diff: GC history gains OHLCV_1M)"
+  ]
+ },
+ {
+  "id": "921-I4",
+  "grade": "REAL",
+  "confidence": "high",
+  "reason": "Sudoers * matches spaces, so 'systemctl stop mt-x ssh.service' matches, and 'mt-run *' passes any args through to run_production_mt which execs the production mt CLI (as root when the env file is readable), making the new grant wider than its comment claims.",
+  "evidence": [
+   "deploy/sudoers.d/manta-ops:7-8",
+   "deploy/mt-run:160-168,197"
+  ]
+ },
+ {
+  "id": "a122-I3",
+  "grade": "REAL",
+  "confidence": "high",
+  "reason": "The broad catch always returns (COMPLETE, True) even when escalate writes nothing (node already blocked or project escalation deduplicated), and the host skips the idle wait whenever a tenant reports work, so a persistently raising planner spins with a traceback and a write lock each pass.",
+  "evidence": [
+   "src/amoeba/runner/tenant.py:145-149",
+   "src/amoeba/runner/faults.py:160-190",
+   "src/amoeba/store/project_escalations.py:50-60",
+   "src/amoeba/process/host.py:250-275"
+  ]
+ },
+ {
+  "id": "u103-I19",
+  "grade": "MINOR",
+  "confidence": "high",
+  "reason": "The smoke spec comment says the chart is asserted in chart-render.spec.ts, but that spec targets /__chart-harness and the / chart is asserted in chart-live.spec.ts; a stale comment only.",
+  "evidence": [
+   "e2e/smoke.spec.ts:9-10",
+   "e2e/chart-render.spec.ts:14",
+   "e2e/chart-live.spec.ts:107"
+  ]
+ }
+]

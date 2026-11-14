@@ -1,0 +1,242 @@
+{
+ "cases": {
+  "175": {
+   "repo": "squadron",
+   "base": "3812c815b377eadfd7741ab1734c350c73789e2b",
+   "head": "1cbd6be4317f37498b07a31cd9cb64562fdb9d0a",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/175"
+  },
+  "188": {
+   "repo": "trading-data",
+   "base": "0c6060f80be38524eb02585c44a481a9b6cdf453",
+   "head": "3e29c2afc500d786b26ee925efd0eb9269e18d52",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/188"
+  },
+  "197": {
+   "repo": "squadron",
+   "base": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece",
+   "head": "90a40dbf40289fd46b99e999c957a6e9295545be",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197"
+  },
+  "307": {
+   "repo": "trading-data",
+   "base": "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0",
+   "head": "b5c3d781963789cef917771538a0b51a10bab29b",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/307"
+  },
+  "921": {
+   "repo": "trading-data",
+   "base": "eaf1ab4e5913465369ad916785cce5974eaab08c",
+   "head": "9b54f27bdc6b62bca9890bc5006bbac73f2ea6bc",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/921"
+  },
+  "a122": {
+   "repo": "amoeba",
+   "base": "f8097604697cfefb5fb7313d29648a1c6c22b221",
+   "head": "e07f13739a5c7cd88c04fe2dffcc57b2a1eb5793",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122"
+  }
+ },
+ "items": [
+  {
+   "id": "175-I17",
+   "case": "175",
+   "members": [
+    {
+     "ref": "haiku-xhigh/3/5",
+     "severity": "CONCERN",
+     "title": "`sq stats reviews` aborts on malformed artifacts",
+     "location": "src/squadron/stats/reviews_report.py:155",
+     "description": "`_basis` runs `value in {basis.value for basis in CostBasis}`. `value` is whatever `yaml.safe_load` returned, so `costBasis:` written as a list or mapping raises `TypeError: unhashable type` and the whole report aborts. The module contract says malformed fields become `None` with a warning. Separately, `documents/frontmatter.py:66` calls `path.read_text(encoding=\"utf-8\")` without catching `OSError` or `UnicodeDecodeError`, so one unreadable artifact aborts the report instead of being counted in `skipped`. The tests cover only `costBasis: guess`, a string.\n\nFix: check `isinstance(value, str)` before the membership test. Catch `OSError` and `UnicodeDecodeError` around the read in `reviews_usage_report` so the file is counted as skipped. Add parametrized tests for a list, a mapping and non-UTF-8 content."
+    },
+    {
+     "ref": "sol/3/4",
+     "severity": "CONCERN",
+     "title": "Malformed cost basis crashes the reviews report",
+     "location": "src/squadron/stats/reviews_report.py:155",
+     "description": "Set membership raises `TypeError` when valid YAML supplies a list or mapping for `costBasis`. Verified reproduction with `costBasis: [provider]` crashes instead of warning and retaining the row. Validate that the value is a string before membership testing; add list and mapping cases."
+    }
+   ]
+  },
+  {
+   "id": "197-I18",
+   "case": "197",
+   "members": [
+    {
+     "ref": "sol/1/0",
+     "severity": "FAIL",
+     "title": "Unresolved design items cannot resume once their design exists",
+     "location": "src/squadron/pipeline/item_resume.py:286-304",
+     "description": "`slices-plan` selects only undesigned slices. After design creation succeeds but its review remains unresolved, reevaluating that source excludes the flagged item. Both retry and accept therefore return REJECTED instead of resolving it. The planning-batch test masks this by continuing to report the slice as undesigned. Support resuming an existing, unresolved design and test that actual lifecycle."
+    },
+    {
+     "ref": "sol/2/0",
+     "severity": "FAIL",
+     "title": "Design-batch resumes reject already-created designs",
+     "location": "src/squadron/pipeline/item_resume.py:286-304",
+     "description": "A `slices-plan` item whose design was created but whose review exhausted its rounds is no longer returned by `cf.undesigned_slices`. Both retry and accept therefore reject the flagged item instead of resolving it. Reproduced with an open slice having a design file. The planning-batch test hides this by returning no design whenever queried with the plan. Support recovery from the post-design state and test that realistic case."
+    },
+    {
+     "ref": "sol/3/0",
+     "severity": "FAIL",
+     "title": "Resume rejects planning items once their design exists",
+     "location": "src/squadron/pipeline/item_resume.py:286-304",
+     "description": "A `slices-plan` item whose design was created but whose review exhausted its rounds is no longer returned by `cf.undesigned_slices`. Consequently, both retry and accept are rejected despite the report marking it `review_unresolved`. Reproduced with an open slice containing a design file. The planning-resume test masks this by returning no design whenever a plan argument is supplied. Support resuming existing flagged designs and test that real post-failure state."
+    }
+   ]
+  },
+  {
+   "id": "921-I9",
+   "case": "921",
+   "members": [
+    {
+     "ref": "sonnet/3/2",
+     "severity": "CONCERN",
+     "title": "Cagg freshness probe can report \"fresh\" when it is stale",
+     "location": "src/manta_trading/data/gaps/repair_921.py:170-222",
+     "description": "`stale` compares `last_successful_finish` with `max(created_at)`. A refresh job that started before the last bars were written but finished after them looks fresh, even though it never materialized those bars. The `job_stats` view also has `last_run_started_at`. Comparing the bar's `created_at` with the refresh's start time is the safe choice. `last_successful_finish` can also be NULL while `last_run_status` shows a failure, and the code reads that as \"stale\". The retry loop then waits 75 minutes with no explanation. This is an edge case and a narrow one, but the probe is what decides acceptance."
+    },
+    {
+     "ref": "sonnet-high/1/3",
+     "severity": "CONCERN",
+     "title": "Cagg freshness compares job finish time with row `created_at`",
+     "location": "src/manta_trading/data/gaps/repair_921.py#cagg_freshness_for_session",
+     "description": "`stale` is `last_successful_finish < max(created_at)`. A refresh materializes the data present when it started, not when it finished. A bar written between the start and finish of the refresh job passes as \"fresh\" while the cagg has not seen it. The probe also does not account for a refresh policy `end_offset`, which can leave the newest buckets unmaterialized after a successful refresh. The window may be small, but this check exists to prevent a wrong verdict, so the race should at least be documented. Using `last_successful_start`, if the view exposes it, would remove the first problem. I did not verify the `job.hypertable_name = <cagg>` join against a live TimescaleDB, so that join is untested."
+    },
+    {
+     "ref": "sonnet-high/3/4",
+     "severity": "CONCERN",
+     "title": "Cagg freshness compares against `last_successful_finish`, which can report a bar as materialized when it isn't",
+     "location": "src/manta_trading/data/gaps/repair_921.py:196-221",
+     "description": "A refresh that starts before a bar is written and finishes after it makes `last_refresh >= newest_bar_written`. That reads as fresh, but the refresh never saw the bar, so the original \"1 bar\" misread can recur. The comparison should use the job's last start time (`last_run_started_at`), not its finish time.\n\nWhether the policy's `end_offset` also hides recent buckets is not visible in this diff, and I did not check it. The tests only assert SQL substrings against mocks. Nothing exercises the probe against a real TimescaleDB, and I did not confirm that `created_at` exists on `minute_ohlcv`."
+    }
+   ]
+  },
+  {
+   "id": "921-I18",
+   "case": "921",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/7",
+     "severity": "CONCERN",
+     "title": "`fire_unit_until` duplicates `fire_unit`",
+     "location": "scripts/cutover_common.py:341-383",
+     "description": "Both functions take the journal cursor, record the start, print the streaming notice, run `mt-run`, wait, print the `sudo -v` notice, and run `sudo -v`. The diff copied the `sudo -v` print into `fire_unit`. `wait_for_unit_to_end` and `wait_for_unit_or_line` also repeat the same poll-and-print loop. CLAUDE.md asks for no duplicated logic. One `fire_unit(unit, args, until=None)` covers both, and the fix for the blocking-call finding above naturally unifies them."
+    }
+   ]
+  },
+  {
+   "id": "307-I13",
+   "case": "307",
+   "members": [
+    {
+     "ref": "sol/1/0",
+     "severity": "CONCERN",
+     "title": "Tick-tier families bypass the session exit rule",
+     "location": "scripts/cutover_304_evidence.py:72-91",
+     "description": "`coverage_reads()` includes only history wants, excluding both products\u2019 configured `tbbo` tiers. Consequently, `_family_evidence()` never checks or lists their incomplete sessions, even when accounting reports `caught_up=False`. With unchanged health and units carrying failure reasons, the cutover can pass without accounting for these sessions. Include tier ranges and test this case."
+    },
+    {
+     "ref": "sol/2/0",
+     "severity": "FAIL",
+     "title": "Include tick-tier families in completeness evidence",
+     "location": "scripts/cutover_304_evidence.py:75-76",
+     "description": "`coverage_reads()` visits only `entry.history`, omitting both products\u2019 configured `tbbo` tiers. Consequently, `_family_evidence()` never checks or names their incomplete sessions, despite D6 requiring every family. An already-failing health baseline can remain unchanged while these omissions produce no exit-rule failure. Include each configured tier\u2019s range and add a regression test for an unaccounted-for tick-tier session."
+    },
+    {
+     "ref": "sol/3/2",
+     "severity": "CONCERN",
+     "title": "Session evidence excludes the tick-tier families",
+     "location": "scripts/cutover_304_evidence.py:72-91",
+     "description": "`coverage_reads()` includes only history wants, so `_family_evidence()` never judges ES or GC `tbbo` sessions. Accounting narrates those families but does not enforce their caught-up state. Consequently, an unchanged unhealthy baseline can pass without naming outstanding tick-tier sessions, contrary to D6\u2019s every-family exit criterion. Include tier coverage over each entry\u2019s tier range."
+    }
+   ]
+  },
+  {
+   "id": "307-I19",
+   "case": "307",
+   "members": [
+    {
+     "ref": "sonnet/3/1",
+     "severity": "CONCERN",
+     "title": "Mixed `fetch_status` vocabulary and bucket names are matched by string literals",
+     "location": "scripts/purchase_verdicts.py:196-216",
+     "description": "The `_NEEDS_REASON`, `_NEVER_ACCOUNTED`, `_NEEDS_PUBLICATION` and `_LISTED_NEVER` sets are built from `TickSessionStatus` values, so that part is fine. `_unaccounted` falls through to a `CutoverError` for any bucket not in those four sets, so a new status will stop the cutover. That is the intended fail-closed behaviour and is tested. However, the other `purchase_verdicts` literals, such as `ISSUE_CLOSED = \"CLOSED\"`, depend on `gh` output text. A short comment next to `ISSUE_CLOSED` shows the author considered this. Even so, `_label` compares session dates and request ranges as ISO strings (`request.start <= day < request.end`). That is correct only while the formats match exactly, and `str(date)` does match. Parsing them as `date` objects would make this robust. It is minor."
+    },
+    {
+     "ref": "sonnet-high/2/2",
+     "severity": "CONCERN",
+     "title": "Request ranges are matched as strings, not dates",
+     "location": "scripts/purchase_verdicts.py#_label",
+     "description": "`_label` decides whether a session falls inside an exhausted request with `request.start <= day < request.end`. Both sides are `str(row[\"range_start\"])` and `str(session[\"session_date\"])`. This is correct only while `debug requests` renders both as `YYYY-MM-DD`. `_cell` renders `date` and `datetime` through `isoformat()`. If a range column ever arrives as a datetime, the lexicographic comparison silently mislabels sessions. The same string-keyed matching applies to `RequestKey` in `resubmit_origins` and `_check_scope`. Parse to `date` once in `retry_exhausted_requests` and compare `date` objects. At minimum, add a test that feeds rows rendered through the real `_cell`. The tests already do this for `symbols`, but not for ranges."
+    }
+   ]
+  },
+  {
+   "id": "a122-I20",
+   "case": "a122",
+   "members": [
+    {
+     "ref": "sonnet/2/2",
+     "severity": "CONCERN",
+     "title": "Test reaches into private tenant state, and the single-`except` guard is brittle",
+     "location": "tests/runner/test_tenant.py:190",
+     "description": "`test_the_runner_package_has_exactly_one_broad_except` counts the substring `except Exception` in source text. A comment or docstring containing that text would break it, and a different broad form such as `except BaseException` would not be counted. `test_factory.py` also reads `tenant._planners` and `test_tenant.py` reads `tenant._tracker`, both with pyright suppressions. Rely on the `BLE` ruff rule for the first, and on public behaviour for the second, instead of source-text or private-attribute checks."
+    }
+   ]
+  },
+  {
+   "id": "188-I9",
+   "case": "188",
+   "members": [
+    {
+     "ref": "haiku-xhigh/3/1",
+     "severity": "CONCERN",
+     "title": "Count guard and fetch run on separate snapshots, so \"one row over\" is overstated",
+     "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:112",
+     "description": "The candle count and fetch (lines 112\u2013120) and the trade count and fetch (lines 160\u2013163) are separate statements. Nothing wraps them in a `REPEATABLE READ` transaction, so each one takes its own snapshot. The trades phase commits pages of up to 1,000 rows in one statement (`trade_repository.py`, `write_page` docstring). If a page commits between the count and the fetch, the response carries the counted rows plus that page. The overage is up to a whole write batch, not the \"one row over\" that `serve_timeseries.py:6-9` promises. The 422 message can then disagree with the rows actually delivered. The never-truncated invariant still holds.\n\nFix: run count and fetch in one `REPEATABLE READ READ ONLY` transaction at the top of `_read`. The guard and the payload then describe one snapshot, and the docstring's claim becomes exact."
+    },
+    {
+     "ref": "sonnet/2/3",
+     "severity": "CONCERN",
+     "title": "Blocking DB work and unbounded row materialisation under a count-then-fetch race",
+     "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:94-117",
+     "description": "The design deliberately omits `LIMIT`, so rows inserted between the count and the fetch can exceed the ceiling, as the module docstring acknowledges. The ceiling is the only memory bound, and a ceiling-sized candle response is about 35 MB in memory as pydantic models plus the serialized body. The two steps also run on separate statements inside a `with pool.connection()` block with no explicit transaction or snapshot. That is acceptable at the current tape-write rate, but a `REPEATABLE READ` transaction would remove the race cheaply. `run_in_executor(None, ...)` uses the default executor, whose size is not tied to the pool size. This is minor."
+    }
+   ]
+  },
+  {
+   "id": "307-I17",
+   "case": "307",
+   "members": [
+    {
+     "ref": "sonnet/2/1",
+     "severity": "CONCERN",
+     "title": "Naive and aware datetimes can be compared in resubmit matching",
+     "location": "scripts/cutover_304_checks.py:158",
+     "description": "`resubmit_origins` parses `requested_at` with `datetime.fromisoformat`. `judge()` in `cutover_304_first_purchase.py` parses `start`, which is tz-aware. If the `debug requests` JSON renders `requested_at` without an offset, `made < since` in `_check_resubmit` raises a raw `TypeError`. It would not raise a `CutoverError`, and the operator would see an unexplained crash. The tests only use `+00:00` values, so nothing covers the naive case. `_edge_of` already rejects naive instants explicitly, and this path should do the same, or a test should pin the real CLI's format."
+    },
+    {
+     "ref": "sonnet-high/3/1",
+     "severity": "CONCERN",
+     "title": "Resubmit time comparison has no timezone guard, unlike the dataset-edge parser",
+     "location": "scripts/cutover_304_checks.py:147-165",
+     "description": "`resubmit_origins` parses `requested_at` with `datetime.fromisoformat` and only checks that it parses. `_check_resubmit` then compares it with `since`, which is tz-aware (`datetime.now(UTC).isoformat`). If a row ever renders a naive timestamp, `made < since` raises `TypeError`. `main` catches only `KeyError` and `ValueError` (`scripts/cutover_304_first_purchase.py:246-252`), so this becomes an unrecorded traceback after the install step, not a narrated `FAILED:` stop. `purchase_verdicts._edge_of` already guards this case (`edge.tzinfo is None`). The two parsers handle timestamps inconsistently. Fix: reject a naive `requested_at` in `resubmit_origins` with a `CutoverError`, as `_edge_of` does. Add a test for it."
+    }
+   ]
+  },
+  {
+   "id": "175-I7",
+   "case": "175",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/4",
+     "severity": "CONCERN",
+     "title": "Frontmatter key names are duplicated between the writer and the stats reader",
+     "location": "src/squadron/stats/reviews_report.py:27",
+     "description": "The writer spells the keys as literals in `src/squadron/review/run_cost.py:53-61`. The reader repeats them in `_INT_KEYS` and in its `_int`, `_float`, and `_basis` calls (`reviews_report.py:27-31, 118-121, 152`). `_int` and `_float` return None for an absent key without warning, so renaming a key on the writer side silently blanks that whole column. This breaks the project's one-value-one-source rule. Fix: define the key names once beside `RunCost.frontmatter_lines` and import them in the reader."
+    }
+   ]
+  }
+ ]
+}

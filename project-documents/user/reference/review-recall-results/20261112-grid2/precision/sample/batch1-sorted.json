@@ -1,0 +1,131 @@
+[
+  {
+    "id": "175-I17",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "squadron wt/175 src/squadron/stats/reviews_report.py:155 `if value in {basis.value for basis in CostBasis}:` (file added in base..head: 162 insertions)",
+      "reviews_report.py:106-107 docstring of _record: 'bad fields become None'; _int/_float (lines 130-148) use isinstance checks and warn on lists, only _basis does not",
+      "python3: `[1] in {'a'}` raises TypeError: unhashable type: 'list'",
+      "reviews_report.py:60-80 reviews_usage_report has no try/except around _row, so the TypeError aborts the whole report"
+    ],
+    "escalation_question": null,
+    "reason": "In added code, valid YAML `costBasis: [x]` or a mapping raises TypeError and aborts the report, against the module's own malformed-field contract. The unreadable-file part cites frontmatter.py:66, which is not in the diff, but the core claim stands on its own."
+  },
+  {
+    "id": "197-I18",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "squadron wt/197 src/squadron/pipeline/item_resume.py:277-304 _select_item: re-evaluates run.each source via evaluate_each_source (line 287); if the item is absent and not COMPLETE-and-merged it raises _Stop REJECTED 'no longer selected' (line 304); file added in base..head",
+      "src/squadron/data/pipelines/slices-plan.yaml:15 source: cf.undesigned_slices(\"{plan}\")",
+      "src/squadron/pipeline/sources.py:142 undesigned_slices returns only entries with `not entry.design_file`",
+      "tests/pipeline/test_item_resume_plan_batches.py:36-39 stub keeps returning design_file=None whenever plan == PLAN, so the test never sees the post-design state",
+      "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:472 and 528 state item resume (retry and accept on review_unresolved) works on slices-plan runs"
+    ],
+    "escalation_question": null,
+    "reason": "A slices-plan item flagged review_unresolved already has its design file, so the source no longer selects it and resume rejects both retry and accept. This contradicts the slice's stated requirement, and the test stub hides it."
+  },
+  {
+    "id": "921-I9",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "trading-data wt/921 src/manta_trading/data/gaps/repair_921.py:179 `stale` is `last_refresh < newest_bar_written`; line 201 reads stats.last_successful_finish; line 213 reads max(created_at); function added in base..head (60 insertions)",
+      "repair_921.py:201 the query reads only last_successful_finish, never a start time (job_stats also carries last_run_started_at)",
+      "src/manta_trading/market/schema/migrations/minute.py:797-916 created_at TIMESTAMPTZ DEFAULT NOW() exists, so the 'created_at may not exist' point is false",
+      "scripts/repair_921_minute_sessions.py:286-295 `freshness.stale` is the sole gate before the mass check in --verify"
+    ],
+    "escalation_question": null,
+    "reason": "The comparison uses refresh finish time, so a refresh that started before the last bars committed but finished after their created_at reads fresh without having materialized them. The probe is the acceptance gate, so a wrong 'fresh' gives a wrong verdict. The race window is narrow, and the BRIEF's REAL definition has no frequency threshold; the end_offset sub-claim is unverified and not needed. Medium confidence."
+  },
+  {
+    "id": "921-I18",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "trading-data wt/921 scripts/cutover_common.py:341-364 fire_unit_until and :366-383 fire_unit share journal_cursor, start stamp, streaming print, mt-run call, 'sudo -v' print and run (lines 361-362, 381-382); both added or changed in base..head",
+      "scripts/cutover_common.py:298-304 wait_for_unit_to_end and wait_for_unit_or_line repeat the same poll-and-print loop",
+      "Both functions behave correctly; the difference is the wait condition (unit end versus journal line)"
+    ],
+    "escalation_question": null,
+    "reason": "The duplication is true but causes no wrong behavior, crash or silent failure. The BRIEF puts style and maintainability points under MINOR."
+  },
+  {
+    "id": "307-I13",
+    "settled": true,
+    "grade": "REAL",
+    "evidence": [
+      "trading-data wt/307 scripts/cutover_304_evidence.py:72-91 coverage_reads iterates only entry.history (line 76) and skips definitions; the tbbo tier is never read; function added in base..head",
+      "src/manta_trading/data/tick/universe.py:100-117 both ES and GC entries set tier=TickSchema.TBBO, separate from history",
+      "scripts/cutover_304_evidence.py:217 _family_evidence loops coverage_reads(), so tbbo gets no not_caught_up_report and no ledger_failures",
+      "project-documents/user/slices/307-slice.futures-history-acquisition.md:187 'Coverage is read for every product and wanted family'; :229 item 2 names 'ES and GC tbbo, ohlcv-1m and statistics'; :230 item 3 'for every family not caught up, every judged session'; :235 exit criterion 'each family's not-caught-up count is zero, or every remaining session is in item 3'",
+      "scripts/cutover_304_evidence.py:final_failures (health exit only compared with baseline) cannot catch an unchanged unhealthy tbbo baseline"
+    ],
+    "escalation_question": null,
+    "reason": "The slice design in the repo names tbbo as a family covered by the D6 exit rule. The added coverage_reads leaves it out, so tbbo sessions that are not caught up are neither listed nor failed, and the cutover can exit 0 against the stated criterion. The old base code did not read tbbo either, but coverage_reads and _family_evidence are new."
+  },
+  {
+    "id": "307-I19",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "trading-data wt/307 scripts/purchase_verdicts.py:240 `request.start <= day < request.end` compares str(range_start), str(range_end) (lines 168-169) with str(session_date) (line 238); file added in base..head",
+      "src/manta_trading/market/schema/migrations/tick.py:129-130 range_start and range_end are DATE NOT NULL, so they render as YYYY-MM-DD",
+      "session_date comes from the coverage JSON as a date",
+      "scripts/purchase_verdicts.py:196-216 the bucket sets are built from TickSessionStatus values and _unaccounted raises CutoverError for an unknown bucket (fail closed), as sonnet/3/1 itself concedes"
+    ],
+    "escalation_question": null,
+    "reason": "Both sides are ISO date strings today because the columns are DATE, so the comparison is correct. A datetime would have to arrive for it to fail. The members call it minor or speculative themselves."
+  },
+  {
+    "id": "a122-I20",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "amoeba wt/a122 tests/runner/test_tenant.py:190-196 counts the substring 'except Exception' across the runner package (tests added in base..head)",
+      "pyproject.toml:43 ruff select includes BLE, which already flags broad excepts",
+      "tests/runner/test_tenant.py:180 `rig.tenant._tracker.confirm(...)  # pyright: ignore[reportPrivateUsage]` and tests/runner/test_factory.py:88 `tenant._planners` are private reads in tests",
+      "All the claims are about test style; nothing asserts wrong behavior"
+    ],
+    "escalation_question": null,
+    "reason": "The claim is true but concerns test style and brittleness only. Nothing in the production code is wrong."
+  },
+  {
+    "id": "188-I9",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "trading-data wt/188 src/manta_trading/api_server/routes/kalshi_timeseries.py:112-120 and 160-163 count then fetch as separate statements on one pooled connection; file added in base..head",
+      "src/manta_trading/data/kalshi/serve_timeseries.py:6-9 the module docstring states the design: a row inserted between count and fetch makes the response 'one row over' and never truncated; no LIMIT by design (D4)",
+      "kalshi_timeseries.py:128 and 167 run_in_executor(None, ...) with pool.connection(); pool exhaustion is covered by GATEWAY_TIMEOUT_RESPONSE"
+    ],
+    "escalation_question": null,
+    "reason": "The race is a documented design trade-off that preserves the never-truncated invariant. The 'one row over' wording understates a multi-row insert batch, which is a documentation precision point, and both members rate it minor. The executor-size point describes no defect."
+  },
+  {
+    "id": "307-I17",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "trading-data wt/307 scripts/cutover_304_checks.py:158 `made = datetime.fromisoformat(row['requested_at'])`, :182 `if made < since`; function added in base..head",
+      "src/manta_trading/market/schema/migrations/tick.py:146 requested_at TIMESTAMPTZ NOT NULL, so psycopg returns aware datetimes",
+      "src/manta_trading/cli/commands/tick_debug_cmds.py:104 JSON rendering uses value.isoformat(), which carries the UTC offset for an aware datetime",
+      "scripts/cutover_304_first_purchase.py:170 `since = datetime.fromisoformat(start)` where start is a tz-aware isoformat"
+    ],
+    "escalation_question": null,
+    "reason": "The column is TIMESTAMPTZ and the CLI renders with isoformat(), so a naive requested_at cannot arrive from the real source. The finding is speculative hardening against an input that cannot arrive."
+  },
+  {
+    "id": "175-I7",
+    "settled": true,
+    "grade": "MINOR",
+    "evidence": [
+      "squadron wt/175 src/squadron/review/run_cost.py:53-61 writes turns, promptTokens, cachedTokens, cacheWriteTokens, completionTokens, reasoningTokens, durationSeconds, costUsd, costBasis",
+      "src/squadron/stats/reviews_report.py:26-32 _INT_KEYS, and :118-121, :152 read the same nine keys as literals; every key matches today",
+      "tests/review/test_run_cost_rendering.py and tests/stats/test_reviews_report.py use the same literals"
+    ],
+    "escalation_question": null,
+    "reason": "The duplication is true, but the writer and reader keys match now, so nothing misbehaves. A silent blank column would follow only from a future rename, which is a maintainability point under MINOR."
+  }
+]

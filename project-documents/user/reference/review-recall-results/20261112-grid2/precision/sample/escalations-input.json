@@ -1,0 +1,77 @@
+{
+ "cases": {
+  "197": {
+   "repo": "squadron",
+   "base": "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece",
+   "head": "90a40dbf40289fd46b99e999c957a6e9295545be",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/197"
+  },
+  "227": {
+   "repo": "trading-data",
+   "base": "11168d5b2ae7805e15a63888eb85ca26b1fdc811",
+   "head": "85fee397cbbe12ca5b74bb38fb77cf1165b5ba1c",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/227"
+  },
+  "a122": {
+   "repo": "amoeba",
+   "base": "f8097604697cfefb5fb7313d29648a1c6c22b221",
+   "head": "e07f13739a5c7cd88c04fe2dffcc57b2a1eb5793",
+   "worktree": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/a122"
+  }
+ },
+ "items": [
+  {
+   "id": "a122-I13",
+   "case": "a122",
+   "members": [
+    {
+     "ref": "sonnet-high/3/0",
+     "severity": "CONCERN",
+     "title": "Run-id extraction from a journal entry is duplicated three times, with different strictness",
+     "location": "src/amoeba/runner/observe.py:127-129",
+     "description": "The same rule, that an `sq_run` entry must carry a non-empty string `run_id`, is written separately in three places:\n- `observe.py:127-129` in `_observe_one` raises `ValueError` on a missing or empty id.\n- `finish.py:141-145` in `_run_id` raises `ValueError` only when the id is not a string. An empty string passes.\n- `launch.py:166` `_text_parameter(entry, PARAM_RUN_ID)` raises on a missing or empty id.\n\n`faults.py:194-198` in `_in_flight_run_ids` skips validation and calls `str(entry.parameters[PARAM_RUN_ID])`. That raises `KeyError` for a malformed entry. It does this inside `escalate`, which is the last-resort fault path, so the failure surfaces from the one place that must not raise. The project rules say not to duplicate logic and not to scatter comparison values.\n\nDefine one helper, for example `run_id_of(entry)`, in one module (probably `launch.py`) that raises `ValueError`. Use it in `observe`, `finish` and `faults`. For `escalate`, decide explicitly what a malformed entry means."
+    }
+   ]
+  },
+  {
+   "id": "197-I1",
+   "case": "197",
+   "members": [
+    {
+     "ref": "haiku-xhigh/1/0",
+     "severity": "CONCERN",
+     "title": "Item resume lets cf errors escape as tracebacks and mislabels unrelated OSErrors",
+     "location": "src/squadron/pipeline/item_resume.py:130-135",
+     "description": "`resume_item` maps only `_Stop`, `GitEnvironmentError`, and `OSError`. Several calls after the git precondition reach cf directly and raise `ContextForgeError` or `ContextForgeNotAvailable` unwrapped. `_select_item` (item_resume.py:277) calls `evaluate_each_source` (executor.py:1441), which runs the cf source functions. `_open_dependencies` calls `list_slices` directly. The fresh-run path maps these errors to a typed exit (`_check_cf`, run.py:172-188), and `commit_run.py:82` and `branch_run.py:46` catch them. `handle_item_resume` (run_item.py:99-103) catches only `typer.Exit`, so a cf outage during item resume ends in an uncaught exception, which exits 1. Exit 1 means FLAGGED in the handoff contract. The slice design (`project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md`, line 467) reserves exit 3 for environment faults. An automated caller would read a cf outage as \"flagged again\". Separately, `load_pipeline(state.pipeline)` at item_resume.py:186 is unwrapped. The plain resume path handles that `FileNotFoundError` (run.py:1217-1220).\n\nThe `OSError` branch (item_resume.py:133-135) has the opposite problem. It catches any OSError from the whole resume, including source reads and body work, and reports it as \"cannot write the batch report\". It logs nothing at this layer.\n\nSuggested fix: in `resume_item`, catch the cf exceptions and return HALTED with an ERROR log, and map a missing pipeline to REJECTED. Narrow the OSError catch to the report writes, or make its message accurate and log it. Add tests where `list_slices` raises and where the pipeline file is missing. No test covers either path, and the failure-mode rule requires an observable signal for each."
+    },
+    {
+     "ref": "haiku-xhigh/2/1",
+     "severity": "CONCERN",
+     "title": "Exit code 1 is shared by FLAGGED and any uncaught exception",
+     "location": "src/squadron/cli/commands/run_item.py:89",
+     "description": "`ResumeExit` promises automated callers distinct codes: 1 means FLAGGED and 3 means HALTED. `resume_item` catches only `_Stop`, `GitEnvironmentError`, and `OSError`, and `handle_item_resume` catches only `typer.Exit`. Anything else escapes as a traceback, which exits 1. Reachable cases:\n\n- `ContextForgeError` from `cf_client.list_slices` in `_select_item` (`item_resume.py:291`) and `_open_dependencies` (`item_resume.py:333`).\n- A dependency-cycle `ValueError` from `order_by_dependencies`, raised through `evaluate_each_source` in `_select_item`.\n- A corrupt run-state file. `_validate` (`item_resume.py:181-185`) catches only `FileNotFoundError` and `SchemaVersionError`, but `StateManager.load` can raise `JSONDecodeError` or `ValidationError`.\n\nThe fresh-run path has an explicit `except ValueError` that prints `Error:` (`run.py:1339`). The item path has nothing equivalent. Map these to HALTED (environment and cf faults) or REJECTED (state and validation) with a named message, so a crash can't pass as FLAGGED."
+    },
+    {
+     "ref": "haiku-xhigh/3/1",
+     "severity": "CONCERN",
+     "title": "cf failures during item resume escape as uncaught exceptions, and exit 1 reads as FLAGGED",
+     "location": "src/squadron/pipeline/item_resume.py:124",
+     "description": "`resume_item` catches `_Stop`, `GitEnvironmentError` and `OSError`. It does not catch `ContextForgeError` or `ContextForgeNotAvailable` (`integrations/context_forge.py:29-34`). Those can come from `evaluate_each_source` (line 287, which calls the cf source and its `list_tasks`/`list_slices`), from `_select_item` (line 291), and from `_open_dependencies` (line 333). `handle_item_resume` catches only `typer.Exit` (`run_item.py:99`). An uncaught exception exits with status 1, which is `ResumeExit.FLAGGED`, so an automated caller would read a crash as \"flagged again\". D8's table assigns HALTED (3) to environment faults. The target read is wrapped (`read_integration_target`, `git_ops.py:66-73`), but the source reads are not. No test injects a cf failure mid-resume. Catch `ContextForgeError` in `resume_item` as HALTED with an ERROR log, and add a test."
+    }
+   ]
+  },
+  {
+   "id": "227-I5",
+   "case": "227",
+   "members": [
+    {
+     "ref": "haiku-xhigh/2/4",
+     "severity": "CONCERN",
+     "title": "SQL built with an f-string, and shell code built by interpolation",
+     "location": "scripts/cutover_227_host.py:92",
+     "description": "`tick_locks_held` builds its query with an f-string (line 94). The project rule says never f-string SQL. No injection path exists today, because the keys are two integer constants. The same pattern appears at line 75, where `env_value` interpolates the library path into a `bash -c` string. The env-file path and key are passed as positional arguments, but the library path is not, so a checkout path containing a double quote would break the command. Fix: bind the lock keys as psql `-v` variables, as `provision_tick_roles.sql` does with `tick_db`, and pass the library path as `$3`."
+    }
+   ]
+  }
+ ]
+}

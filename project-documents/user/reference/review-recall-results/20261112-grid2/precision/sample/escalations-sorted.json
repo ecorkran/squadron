@@ -1,0 +1,48 @@
+[
+ {
+  "id": "a122-I13",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "amoeba src/amoeba/runner/observe.py:127-129 (added in base..head; rejects non-str or empty run_id)",
+   "amoeba src/amoeba/runner/finish.py:141-145 (_run_id rejects non-str only; empty string passes)",
+   "amoeba src/amoeba/runner/launch.py:164-168 (_text_parameter rejects missing/non-str/empty)",
+   "amoeba src/amoeba/runner/faults.py:194-198 (_in_flight_run_ids uses str(entry.parameters[PARAM_RUN_ID]))",
+   "amoeba src/amoeba/store/journal_models.py:79-82 and src/amoeba/store/journal.py:78 (journal_issue requires the run_id key for every SQ_RUN entry before writing, so the KeyError claimed for faults.py cannot occur for entries written through the store)",
+   "amoeba src/amoeba/runner/tenant.py:145-148 (escalate is called only from the tick's top-level handler)"
+  ],
+  "escalation_question": null,
+  "reason": "All cited code is new in base..head, so not PREEXISTING. The duplication and strictness differences are true (finish.py accepts an empty string; observe and launch do not), but each copy is a small guard and none produces wrong behavior: an empty id is rejected earlier by observe/launch, and the one claimed crash (KeyError in faults._in_flight_run_ids inside escalate) cannot arrive because journal_issue refuses to write an SQ_RUN entry lacking run_id. What remains is a DRY and consistency point, which is MINOR."
+ },
+ {
+  "id": "197-I1",
+  "settled": true,
+  "grade": "REAL",
+  "evidence": [
+   "squadron src/squadron/pipeline/item_resume.py:124-136 (resume_item catches only _Stop, GitEnvironmentError, OSError; file is entirely new in base..head)",
+   "squadron src/squadron/pipeline/item_resume.py:287 (evaluate_each_source runs the cf source), :292 and :333 (cf_client.list_slices unwrapped)",
+   "squadron src/squadron/pipeline/item_resume.py:186 (load_pipeline unwrapped), :179-185 (_validate catches only FileNotFoundError and SchemaVersionError)",
+   "squadron src/squadron/integrations/context_forge.py:29-34, 133, 146 (ContextForgeError / ContextForgeNotAvailable are plain Exception subclasses, not OSError, so the OSError branch does not catch them; list_slices -> _run_json raises them)",
+   "squadron src/squadron/cli/commands/run_item.py:89-105 (only typer.Exit is caught, so any other exception escapes as a traceback and exit status 1)",
+   "squadron src/squadron/pipeline/item_resume.py:63-69 (ResumeExit.FLAGGED = 1, HALTED = 3 'an environment fault ... ended it mid-item') and slice 197 design 'Flag handoff contract' (exit 1 = flagged again, exit 3 = halted on environment)",
+   "squadron src/squadron/pipeline/git_ops.py:66-73 (read_integration_target does map cf failures to GitEnvironmentError, so the later unwrapped cf calls are inconsistent with it)",
+   "squadron src/squadron/pipeline/item_resume.py:133-135 (OSError branch labels any OSError, including source reads, as 'cannot write the batch report' and logs nothing)"
+  ],
+  "escalation_question": null,
+  "reason": "The code is new in base..head. When cf fails after the git precondition (list_slices or the cf source in evaluate_each_source), ContextForgeError propagates out of resume_item and handle_item_resume and the process exits 1 with a traceback. The documented contract tells the caller (Amoeba) that 1 means flagged again and a cf/environment fault is 3, so a crash is read as a flag. A missing pipeline file at load_pipeline likewise escapes. This is a wrong-exit-code and unobserved failure path, and the three members describe the same defect."
+ },
+ {
+  "id": "227-I5",
+  "settled": true,
+  "grade": "MINOR",
+  "evidence": [
+   "trading-data scripts/cutover_227_host.py:90-96 (added in base..head; tick_locks_held interpolates TICK_LOCK_KEYS into the SQL)",
+   "trading-data src/manta_trading/data/tick/constants.py:172, 240 (TICK_ACQUISITION_LOCK_KEY = 220_000_001, TICK_INGEST_LOCK_KEY = 220_000_002; int constants, str(k) of an int cannot inject)",
+   "trading-data scripts/cutover_227_host.py:72-76 (env_value builds '. \"{lib}\"; env_value \"$1\" \"$2\"' where lib = SCRIPTS.parent/deploy/lib/env_value.sh, the script's own checkout path)",
+   "trading-data scripts/cutover_common.py:70-75 (run uses check=True by default, so a broken command raises CalledProcessError; it is not silent)",
+   "trading-data scripts/cutover_227_tick_backup.py:296 (the only caller, reading the .env bucket key in a one-off cutover script)"
+  ],
+  "escalation_question": null,
+  "reason": "The code is new in base..head. The f-string SQL interpolates two integer module constants, so it has no injection path and no wrong behavior; it only violates a style rule. The bash -c string embeds the script's own checkout path, which breaks only if that path contains a double quote, dollar sign, backtick or backslash; that is not a plausible location for a deploy checkout, and the failure is loud (check=True raises) in a one-shot operator script. Both parts are hardening or style points, so MINOR."
+ }
+]
