@@ -32,6 +32,15 @@ from squadron.cli.commands.run_item import (
     handle_flagged_resume,
     handle_item_resume,
 )
+from squadron.cli.commands.run_producer_only import (
+    apply_producer_only,
+    check_code_branch,
+    check_producer_only_flags,
+    dry_run_line,
+    narrow_for_params,
+    print_stop_line,
+    producer_only_record,
+)
 from squadron.cli.run_views import render_run_status, status_color
 from squadron.events import EventType, bootstrap_event_actions
 from squadron.events.contexts import PostActionContext
@@ -81,6 +90,7 @@ from squadron.pipeline.loader import (
 )
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.pause_hook import start_pause_command
+from squadron.pipeline.producer_only import ProducerOnlyError
 from squadron.pipeline.prompt_renderer import (
     CompletionResult,
     PromptOnlyUnsupportedError,
@@ -92,8 +102,10 @@ from squadron.pipeline.run_heartbeat import RunHeartbeat, heartbeat_interval_s
 from squadron.pipeline.run_liveness import is_live
 from squadron.pipeline.run_lock import RunLockError, pipeline_mutates, project_run_lock
 from squadron.pipeline.run_session import classify_for_run, pipeline_session
+from squadron.pipeline.run_spend import read_cost_cap, remaining_budget
 from squadron.pipeline.state import (
     ExecutionMode,
+    ProducerOnlyRecord,
     RunOwner,
     RunState,
     SchemaVersionError,
@@ -237,7 +249,15 @@ def _load_run_definition(state: RunState, *, file: TextIO) -> PipelineDefinition
     """
     target = state.load_target
     try:
-        return load_pipeline(target)
+        definition = load_pipeline(target)
+        # A producer-only run stays producer-only on every resume path (slice 424 D3).
+        selection = narrow_for_params(definition, state.params)
+        return definition if selection is None else selection.definition
+    except ProducerOnlyError as exc:
+        rprint(
+            f"[red]Error: the pipeline changed shape since the run started: {escape(str(exc))}[/red]",
+            file=file,
+        )
     except FileNotFoundError:
         rprint(f"[red]Error: Pipeline '{escape(target)}' not found.[/red]", file=file)
     except (ValidationError, yaml.YAMLError, OSError, UnicodeDecodeError) as exc:
@@ -361,6 +381,9 @@ async def _run_pipeline(
     if errors:
         msg = "; ".join(f"{e.field}: {e.message}" for e in errors)
         raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
+    selection = narrow_for_params(definition, params)
+    if selection is not None:
+        definition = selection.definition
 
     cf_client = ContextForgeClient()
     # #288: a pipeline whose steps never call cf (e.g. prompt-only dispatches) runs from any
@@ -385,6 +408,7 @@ async def _run_pipeline(
             pipeline_path=run_path,
             replay=replay,
             working_directory=os.getcwd(),
+            producer_only=None if selection is None else producer_only_record(selection),
         )
         _announce_run_id(run_id)
 
@@ -476,6 +500,9 @@ async def _run_pipeline_sdk(
     if errors:
         msg = "; ".join(f"{e.field}: {e.message}" for e in errors)
         raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
+    selection = narrow_for_params(definition, params)
+    if selection is not None:
+        definition = selection.definition
 
     try:
         classification = classify_for_run(
@@ -505,7 +532,12 @@ async def _run_pipeline_sdk(
             step.profile,
         )
 
-    async with pipeline_session(classification) as session:
+    # The SDK stops a dispatch that crosses the run's cap (slice 424 D9); nothing is spent
+    # yet at this point, so the whole cap is the budget. A mistyped cap fails here.
+    cap = read_cost_cap(
+        os.getcwd(), run_override=params.get(RUN_MAX_COST), pipeline_cap=definition.max_cost_usd
+    )
+    async with pipeline_session(classification, max_budget_usd=remaining_budget(cap, 0.0)) as session:
         try:
             result = await _run_pipeline(
                 pipeline_name,
@@ -721,12 +753,18 @@ def _display_result(result: PipelineResult) -> None:
     _display_recovery(result)
 
 
-def _finish_run(result: PipelineResult, pause_hook: bool) -> NoReturn:
+def _finish_run(
+    result: PipelineResult,
+    pause_hook: bool,
+    producer_only: ProducerOnlyRecord | None = None,
+) -> NoReturn:
     """Show the result, start the on-pause command for a paused run, and exit.
 
     Called after ``_locked`` returned, so the run lock is already released (#302).
+    A producer-only run also prints its stop line (slice 424 D3).
     """
     _display_result(result)
+    print_stop_line(result, producer_only)
     if pause_hook and result.status == ExecutionStatus.PAUSED and result.run_id is not None:
         start_pause_command(result.run_id, os.getcwd())
     raise typer.Exit(_exit_code(result))
@@ -845,8 +883,12 @@ def _handle_prompt_only_init(
     model_override: str | None,
     param_list: list[str] | None,
     verbosity: int = 0,
+    producer_only: bool = False,
 ) -> None:
-    """Initialize a prompt-only run and emit the first step's JSON."""
+    """Initialize a prompt-only run and emit the first step's JSON.
+
+    With *producer_only* the run holds only the pipeline's producer step (slice 424 D3).
+    """
     try:
         definition = load_pipeline(pipeline_name)
     except FileNotFoundError:
@@ -867,6 +909,12 @@ def _handle_prompt_only_init(
         raise typer.Exit(1)
 
     params = _assemble_params(definition, target, model_override, param_list)
+    record = None
+    if producer_only:
+        selection = apply_producer_only(definition, params)
+        check_code_branch(selection, params, os.getcwd())
+        definition = selection.definition
+        record = producer_only_record(selection)
     state_mgr = StateManager()
     run_name, run_path = _run_record_identity(pipeline_name)
     run_id = state_mgr.init_run(
@@ -875,6 +923,7 @@ def _handle_prompt_only_init(
         execution_mode=ExecutionMode.PROMPT_ONLY,
         pipeline_path=run_path,
         working_directory=os.getcwd(),
+        producer_only=record,
     )
     _announce_run_id(run_id)
 
@@ -927,14 +976,13 @@ def _handle_prompt_only_next(
         # All done — finalize and return completion
         from squadron.pipeline.executor import PipelineResult
 
-        state_mgr.finalize(
-            run_id,
-            PipelineResult(
-                pipeline_name=state.pipeline,
-                status=ExecutionStatus.COMPLETED,
-                step_results=[],
-            ),
+        completed = PipelineResult(
+            pipeline_name=state.pipeline,
+            status=ExecutionStatus.COMPLETED,
+            step_results=[],
         )
+        state_mgr.finalize(run_id, completed)
+        print_stop_line(completed, state.producer_only, file=sys.stderr)
         result = CompletionResult(
             status="completed",
             message="All steps complete",
@@ -1233,6 +1281,11 @@ def run(
         help="Absolute directory that dispatch steps' prompt_files, reply_file and "
         "delivered_prompt_file resolve against, instead of the working directory.",
     ),
+    producer_only: bool = typer.Option(
+        False,
+        "--producer-only",
+        help="Run only the pipeline's producer step, without its review, then stop.",
+    ),
 ) -> None:
     """Execute, inspect, and manage pipeline runs."""
     # Both are enforced by the SDK executor; a prompt-only run cannot honor them.
@@ -1243,6 +1296,7 @@ def run(
         rprint("[red]Error: --io-dir cannot be combined with --prompt-only.[/red]")
         raise typer.Exit(1)
     # ---- mutual exclusivity validation ----
+    check_producer_only_flags(producer_only, from_step=from_step, item=item, flagged=flagged)
     check_item_flags(resume, item, decision, instructions, flagged)
     if resume is not None and new_run_id is not None:
         rprint("[red]Error: --resume and --run-id cannot be used together.[/red]")
@@ -1330,7 +1384,12 @@ def run(
             rprint("[red]Error: pipeline argument is required for --prompt-only.[/red]")
             raise typer.Exit(1)
         _handle_prompt_only_init(
-            _normalize_pipeline_arg(pipeline), target, model, param, verbosity=verbose
+            _normalize_pipeline_arg(pipeline),
+            target,
+            model,
+            param,
+            verbosity=verbose,
+            producer_only=producer_only,
         )
         raise typer.Exit(0)
 
@@ -1399,6 +1458,11 @@ def run(
             raise typer.Exit(1)
 
         params = _assemble_params(definition, target, model, param)
+        dry_selection = None
+        if producer_only:
+            dry_selection = apply_producer_only(definition, params)
+            check_code_branch(dry_selection, params, os.getcwd())
+            definition = dry_selection.definition
         # The same pre-run check a real run applies, so a typo'd alias or template
         # fails here instead of rendering a plan that cannot run (#175).
         try:
@@ -1416,6 +1480,8 @@ def run(
         rprint(f"[bold]Params:[/bold] {escape(str(params))}")
         rprint("\n[bold]Steps:[/bold]")
         render_steps(definition.steps, params, ContextForgeClient(), cwd=os.getcwd())
+        if dry_selection is not None:
+            rprint(f"\n{escape(dry_run_line(dry_selection))}")
         raise typer.Exit(0)
 
     # ---- --resume --flagged (#248) ----
@@ -1493,7 +1559,7 @@ def run(
             rprint(f"Resume with: [bold]sq run --resume {escape(str(run_id))}[/bold]")
             raise typer.Exit(1) from None
 
-        _finish_run(result, pause_hook)
+        _finish_run(result, pause_hook, state.producer_only)
 
     # ---- standard execution ----
     assert pipeline is not None  # guarded above
@@ -1507,6 +1573,12 @@ def run(
 
     params = _assemble_params(definition, target, model, param)
     _set_run_options(params, max_cost, io_dir)
+    stop_record = None
+    if producer_only:
+        selection = apply_producer_only(definition, params)
+        check_code_branch(selection, params, os.getcwd())
+        definition = selection.definition
+        stop_record = producer_only_record(selection)
 
     # Implicit resume detection
     state_mgr = StateManager()
@@ -1553,7 +1625,7 @@ def run(
                         rprint(f"Resume with: [bold]sq run --resume {escape(str(match.run_id))}[/bold]")
                         raise typer.Exit(1) from None
 
-                    _finish_run(result, pause_hook)
+                    _finish_run(result, pause_hook, match.producer_only)
 
     # Fresh run
     try:
@@ -1583,4 +1655,4 @@ def run(
         rprint("Resume with: [bold]sq run --resume <run-id>[/bold]")
         raise typer.Exit(1) from None
 
-    _finish_run(result, pause_hook)
+    _finish_run(result, pause_hook, stop_record)

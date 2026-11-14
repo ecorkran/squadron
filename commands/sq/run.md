@@ -6,13 +6,16 @@ Parse `$ARGUMENTS` using this three-step procedure:
 
 1. **Scan** the argument string for known verbosity tokens at the tail end: `-v`, `-vv`, or `--verbose`.
 2. **Capture** any matched tokens as `<verbose_flags>` (e.g., `-v` or `-vv`). If none are present, `<verbose_flags>` is an empty string.
-3. **Remove** the matched tokens from the argument string. The remaining text is split: the first word becomes `<pipeline>`, the rest becomes `<target>`.
+3. **Remove** the matched tokens from the argument string.
+4. **Scan** the remaining text for the token `--producer-only`. If present, capture it as `<producer_flag>` and remove it; otherwise `<producer_flag>` is an empty string.
+
+The remaining text is split: the first word becomes `<pipeline>`, the rest becomes `<target>`.
 
 If the pipeline name is missing after stripping verbosity tokens, show the usage below and stop.
 
 **Usage:**
 ```
-/sq:run <pipeline> [target] [-v|-vv]  — run a pipeline (e.g., /sq:run P456 152 -v)
+/sq:run <pipeline> [target] [--producer-only] [-v|-vv]  — run a pipeline (e.g., /sq:run P456 152 -v)
 ```
 
 ---
@@ -21,8 +24,10 @@ If the pipeline name is missing after stripping verbosity tokens, show the usage
 
 Run:
 ```bash
-sq run <pipeline> <target> <verbose_flags> --prompt-only
+sq run <pipeline> <target> <verbose_flags> <producer_flag> --prompt-only
 ```
+
+With `--producer-only` the run holds only the pipeline's producer step and stops after it; the stop line is printed by `sq run` when the step is done (`producer-only: stopped after <step> (commit <sha>); skipped: <steps>`).
 
 This initializes the pipeline run and outputs the first step's instructions as JSON. Capture:
 - The `run_id` (printed to stderr as `run_id=<value>`)

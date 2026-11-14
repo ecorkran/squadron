@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from squadron.core.finding_categories import AuditCategory as AuditCategory  # re-exported
 from squadron.metrology.benchmark_models import BenchmarkCase, CaseSet, FixQualification
+from squadron.metrology.benchmark_replay_models import BenchmarkRun, ImplementationReplay
 from squadron.metrology.levels import ArtifactLevel
 from squadron.metrology.project_id import ProjectId as ProjectId  # re-exported
 from squadron.metrology.project_id import ProjectIdSource as ProjectIdSource  # re-exported
@@ -51,6 +52,9 @@ RECORD_TYPE_BENCHMARK_CASE = "benchmark_case"
 RECORD_TYPE_CASE_SET = "case_set"
 #: Written by 422's fix-case qualification: one record per (project, commit, environment).
 RECORD_TYPE_FIX_QUALIFICATION = "fix_qualification"
+#: Written by 424's benchmark runner: one record per benchmark, one per producer replay.
+RECORD_TYPE_BENCHMARK_RUN = "benchmark_run"
+RECORD_TYPE_IMPLEMENTATION_REPLAY = "implementation_replay"
 
 
 class JudgeResultRef(BaseModel):
@@ -252,7 +256,8 @@ class MetrologyRecord(BaseModel):
     records; 322 writes ``"graduated_config"``; 323 writes
     ``"audit_finding"`` (an ``AuditRun``, findings inline) and
     ``"audit_noise_floor"``; 421 writes ``"benchmark_case"`` and ``"case_set"``;
-    422 writes ``"fix_qualification"``. Each addition is an optional sibling field, so
+    422 writes ``"fix_qualification"``; 424 writes ``"benchmark_run"`` and
+    ``"implementation_replay"``. Each addition is an optional sibling field, so
     the envelope shape stays backward compatible and ``schema_version``
     does not move — no store migration is needed.
     """
@@ -271,3 +276,5 @@ class MetrologyRecord(BaseModel):
     benchmark_case: BenchmarkCase | None = None
     case_set: CaseSet | None = None
     fix_qualification: FixQualification | None = None
+    benchmark_run: BenchmarkRun | None = None
+    implementation_replay: ImplementationReplay | None = None

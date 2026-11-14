@@ -25,6 +25,7 @@ from squadron.benchmark.adapter import (
 )
 from squadron.benchmark.scrubbed_env import CredentialGrant, ScrubbedEnvironment
 from squadron.core.process_runner import ProcessRunner
+from squadron.providers.base import ProfileName
 from squadron.replay.history_free_sandbox import HistoryFreeSandbox
 from squadron.replay.sandbox import sweep_orphans
 
@@ -65,6 +66,8 @@ class BenchmarkSandbox:
         root: Path | None = None,
     ) -> None:
         self._root = root if root is not None else benchmark_root()
+        self._sandbox_id = sandbox_id
+        self._harness_env = harness_env
         self._runner = runner
         self._adapter = adapter
         self._install_timeout_s = install_timeout_s
@@ -100,6 +103,15 @@ class BenchmarkSandbox:
         if self._identity is None:
             raise RuntimeError("the sandbox has not been entered")
         return self._identity
+
+    def checkout_branch(self, name: str) -> None:
+        """Put the tree on a new branch at the start commit.
+
+        The tree starts detached, and a producer that commits (the ``fix`` pipeline) refuses a
+        detached HEAD. The branch holds only the start commit, so the tree stays history-free.
+        Raises ``SandboxError`` carrying git's stderr.
+        """
+        self._history.checked("git", "-C", str(self.tree), "checkout", "-q", "-b", name)
 
     def keep(self) -> None:
         """Leave all four paths in place on exit."""
@@ -139,6 +151,22 @@ class BenchmarkSandbox:
     def process_env(self) -> dict[str, str]:
         """The environment for any child process in this sandbox."""
         return self._environment.variables(self._adapter.path_entries(self._context()))
+
+    def producer_env(self, profile: ProfileName) -> dict[str, str]:
+        """The environment for a producer child: ``process_env`` plus *profile*'s credentials.
+
+        The producer's run state and transcripts are read from this same home, so its login
+        must live in it. The grant is linked into the existing home (nothing already built is
+        redone); ``process_env`` stays credential-free for suite runs.
+        """
+        environment = ScrubbedEnvironment(
+            self._root,
+            self._sandbox_id,
+            CredentialGrant.for_profiles([profile]),
+            self._harness_env,
+        )
+        environment.grant_carryover_into_home()
+        return environment.variables(self._adapter.path_entries(self._context()))
 
     def _context(self) -> SandboxContext:
         return SandboxContext(

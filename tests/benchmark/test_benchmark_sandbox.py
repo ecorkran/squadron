@@ -184,3 +184,155 @@ def test_sweep_removes_siblings_whose_owner_directory_is_missing(tmp_path: Path)
     (root / "kept.lock").write_text(live.to_json())
     sweep_benchmark_orphans(SubprocessRunner(), root)
     assert leftovers(root) == ["kept.home", "kept.lock"]
+
+
+class _NoInstallAdapter:
+    """Resolves nothing and installs nothing: for tests of the sandbox's own paths."""
+
+    language = PythonBenchmarkAdapter.language
+
+    def resolve_environment(self, ctx: Any) -> Any:
+        from tests.metrology.test_benchmark_models import environment
+
+        return environment()
+
+    def path_entries(self, ctx: Any) -> tuple[Path, ...]:
+        return ()
+
+    def run_suite(self, ctx: Any, selection: Any) -> Any:
+        raise AssertionError("no suite run in this test")
+
+
+class TestProducerEnv:
+    API_KEY_VARIABLE = "OPENAI_API_KEY"
+
+    @pytest.fixture
+    def real_home(self, tmp_path: Path) -> Path:
+        home = tmp_path / "real-home"
+        (home / ".codex").mkdir(parents=True)
+        (home / ".codex" / "auth.json").write_text('{"token": "carried"}')
+        return home
+
+    def _sandbox(
+        self, tmp_path: Path, real_home: Path, *, with_api_key: bool = True
+    ) -> BenchmarkSandbox:
+        harness_env = {
+            **os.environ,
+            "HOME": str(real_home),
+            "GH_TOKEN": "must-not-reach-the-producer",
+        }
+        harness_env.pop(self.API_KEY_VARIABLE, None)
+        if with_api_key:
+            harness_env[self.API_KEY_VARIABLE] = "api-key-value"
+        return BenchmarkSandbox(
+            start_sha=head(git_tree("env_ok", tmp_path)),
+            sandbox_id=SANDBOX_ID,
+            repo_root=tmp_path / "env_ok",
+            runner=SubprocessRunner(),
+            adapter=_NoInstallAdapter(),  # type: ignore[arg-type]
+            harness_env=harness_env,
+            install_timeout_s=60,
+            suite_timeout_s=60,
+            root=tmp_path / "root",
+        )
+
+    def test_oauth_profile_gets_its_login_in_the_sandbox_home(
+        self, tmp_path: Path, real_home: Path
+    ) -> None:
+        from squadron.providers.base import ProfileName
+
+        with self._sandbox(tmp_path, real_home) as sandbox:
+            env = sandbox.producer_env(ProfileName.OPENAI_OAUTH)
+            carried = sandbox.home / ".codex" / "auth.json"
+            assert carried.read_text() == '{"token": "carried"}'
+            assert env["HOME"] == str(sandbox.home)
+            assert "GH_TOKEN" not in env
+
+    def test_api_key_profile_gets_its_variable(self, tmp_path: Path, real_home: Path) -> None:
+        from squadron.providers.base import ProfileName
+
+        with self._sandbox(tmp_path, real_home) as sandbox:
+            env = sandbox.producer_env(ProfileName.OPENAI)
+            assert env[self.API_KEY_VARIABLE] == "api-key-value"
+            assert "GH_TOKEN" not in env
+
+    def test_a_second_call_changes_nothing_in_the_home(self, tmp_path: Path, real_home: Path) -> None:
+        from squadron.providers.base import ProfileName
+
+        with self._sandbox(tmp_path, real_home) as sandbox:
+            sandbox.producer_env(ProfileName.OPENAI_OAUTH)
+            carried = sandbox.home / ".codex" / "auth.json"
+            carried.write_text('{"token": "refreshed by the tool"}')
+
+            def snapshot() -> list[tuple[str, int, int]]:
+                return sorted(
+                    (str(p.relative_to(sandbox.home)), p.stat().st_mtime_ns, p.stat().st_size)
+                    for p in sandbox.home.rglob("*")
+                    if p.is_file() or p.is_symlink()
+                )
+
+            before = snapshot()
+            sandbox.producer_env(ProfileName.OPENAI_OAUTH)
+            assert snapshot() == before
+            assert carried.read_text() == '{"token": "refreshed by the tool"}'
+
+    def test_process_env_still_carries_no_grant(self, tmp_path: Path, real_home: Path) -> None:
+        from squadron.providers.base import ProfileName
+
+        with self._sandbox(tmp_path, real_home) as sandbox:
+            sandbox.producer_env(ProfileName.OPENAI)
+            assert self.API_KEY_VARIABLE not in sandbox.process_env()
+            assert "GH_TOKEN" not in sandbox.process_env()
+
+    def test_missing_credential_fails_explicitly(self, tmp_path: Path, real_home: Path) -> None:
+        from squadron.benchmark.scrubbed_env import MissingCredentialError
+        from squadron.providers.base import ProfileName
+
+        with self._sandbox(tmp_path, real_home, with_api_key=False) as sandbox:
+            with pytest.raises(MissingCredentialError):
+                sandbox.producer_env(ProfileName.OPENAI)
+
+
+class TestCheckoutBranch:
+    """The tree starts detached; a committing producer needs a branch (slice 424)."""
+
+    def _sandbox(self, tmp_path: Path) -> BenchmarkSandbox:
+        source = git_tree("env_ok", tmp_path)
+        return BenchmarkSandbox(
+            start_sha=head(source),
+            sandbox_id=SANDBOX_ID,
+            repo_root=source,
+            runner=SubprocessRunner(),
+            adapter=_NoInstallAdapter(),  # type: ignore[arg-type]
+            harness_env=dict(os.environ),
+            install_timeout_s=60,
+            suite_timeout_s=60,
+            root=tmp_path / "root",
+        )
+
+    def _git(self, tree: Path, *args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(tree), *args], capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+    def test_the_tree_starts_detached_and_ends_on_the_named_branch_at_the_start_commit(
+        self, tmp_path: Path
+    ) -> None:
+        with self._sandbox(tmp_path) as sandbox:
+            assert self._git(sandbox.tree, "branch", "--show-current") == ""
+            start = head(sandbox.tree)
+            sandbox.checkout_branch("benchmark-replay")
+            assert self._git(sandbox.tree, "branch", "--show-current") == "benchmark-replay"
+            assert head(sandbox.tree) == start
+
+    def test_the_tree_stays_history_free(self, tmp_path: Path) -> None:
+        with self._sandbox(tmp_path) as sandbox:
+            sandbox.checkout_branch("benchmark-replay")
+            assert self._git(sandbox.tree, "rev-list", "--all", "--count") == "1"
+
+    def test_a_branch_that_cannot_be_made_raises_with_git_output(self, tmp_path: Path) -> None:
+        from squadron.replay.history_free_sandbox import SandboxError
+
+        with self._sandbox(tmp_path) as sandbox:
+            with pytest.raises(SandboxError, match="not a valid branch name"):
+                sandbox.checkout_branch("bad..name")

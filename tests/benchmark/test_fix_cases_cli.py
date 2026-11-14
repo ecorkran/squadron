@@ -17,6 +17,7 @@ from typer.testing import CliRunner
 from squadron.benchmark.build_errors import BuildHalted
 from squadron.benchmark.case_build import BuildDeps, BuildResult
 from squadron.cli.app import app
+from squadron.cli.commands import benchmark_common as common_module
 from squadron.cli.commands import benchmark_fix_cases as cli_module
 from squadron.metrology.benchmark_models import (
     BenchmarkCase,
@@ -52,7 +53,7 @@ def repo(tmp_path: Path) -> Path:
 @pytest.fixture
 def store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> BenchmarkRecordStore:
     directory = tmp_path / "store"
-    monkeypatch.setattr(cli_module, "resolve_store_dir", lambda cwd: directory)
+    monkeypatch.setattr(common_module, "resolve_store_dir", lambda cwd: directory)
     monkeypatch.setattr(cli_module, "derive_project_id", lambda cwd: PROJECT)
     monkeypatch.setattr(cli_module, "sweep_benchmark_orphans", lambda runner: None)
     monkeypatch.setattr(cli_module, "build_github_host", lambda runner: object())

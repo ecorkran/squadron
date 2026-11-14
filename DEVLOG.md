@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261113
+dateUpdated: 20261114
 ---
 
 # Development Log
@@ -10,6 +10,61 @@ dateUpdated: 20261113
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261114
+
+
+**p6: devlog-4**
+- branch-0:branch-0: PASS
+- implement-1:cf-op-0: PASS
+- implement-1:cf-op-1: PASS
+- implement-1:cf-op-2: PASS
+- implement-1:cf-op-3: PASS
+- implement-1:dispatch-4: PASS
+- implement-1:review-5: PASS (verdict: FAIL)
+- implement-1:checkpoint-6: PASS
+- implement-1:commit-7: PASS
+- close-out:dispatch-0: PASS
+- revise-code:dispatch-0: PASS
+- revise-code:review-1: PASS (verdict: CONCERNS)
+- revise-code:commit-2: PASS
+- revise-code:dispatch-3: PASS
+- revise-code:review-4: PASS (verdict: CONCERNS)
+- revise-code:commit-5: PASS
+
+### Slice 424: Producer-Only Replay Runner — Complete
+
+- **Delivered:** `sq run <pipeline> <slice> --producer-only` (also `--prompt-only`, and `/sq:run`); the `ProducerStep` capability on the phase and fix steps; SDK in-dispatch cost enforcement (`max_budget_usd`, `error_max_budget_usd` → `cost_cap`); `BenchmarkRun` / `ImplementationReplay` records with content-addressed diff sidecars; per-profile `TranscriptSource`s (Claude Code, Codex) and the leak scan; `FixCaseRunner`, `replay_one`, the benchmark runner (lock, bound, caps, resume, interruption sweep, `--retry-harness`); `sq benchmark run` and `sq benchmark replay-show`, mirrored in `/sq:benchmark`. Nothing here grades (425).
+- **Branch** `424-slice.producer-only-replay-runner`, commits `c53814c5` … `f70d0d4c`, closing commit after them.
+- **Issues:** #329 (in-dispatch cost enforcement for Codex and OpenAI-compatible runs, filed in Task 2); #330 (the `fix` step's dispatch is not write-required, so a Codex `fix` run is read-only); #331 (`--keep` sandboxes are swept by the next benchmark command).
+- **Transcript spike answers:** see the Task 13 entry below: both runtimes write their transcript into the scrubbed home; layouts and entry types are recorded there and in `tests/benchmark/fixtures/transcripts/`. The scan does not use `turns`; zero extracted tool calls is `scan_unavailable`.
+- **Verification (real runs, squadron's own `fix-squadron` set):** producer-only on a scratch slice: one implementation commit, run state `cf-op ×4, dispatch, commit`, no review, no merge; the three refusals; both cap refusals; `opus` replay `committed` ($0.50, 4-file diff, `no_leak_detected`); run cap `partial` exit 2 then resume to `complete`; a SIGKILLed run reported `interrupted`, swept its orphaned sandbox and resumed; the kept transcript's distinct `tool_use` count equals the record's `tool calls seen`. Gates: pyright 0 errors, 10351+ tests pass; `ruff format --check` and `ruff check` fail only in `project-documents/user/reference/review-recall-results/` (already on `main`).
+- **Surprises:**
+  - The sandbox tree is a detached HEAD and `fix` refuses one, so every real replay ended `frozen_text_mismatch` until `BenchmarkSandbox.checkout_branch` put the tree on a branch at the start commit (the tree stays history-free). The unit tests with doubles could not see it.
+  - The harness runs the `sq` on `PATH`; a released `sq` without `--producer-only` makes every replay `no_run_state`. The record's detail names the missing option.
+  - `unpriced_replays` was carried across invocations, so `--retry-harness` left deleted records counted; it is now counted from the stored records.
+  - The global `ruff` on PATH (0.17) formats differently from the project's pinned 0.15; use `uv run ruff`.
+  - `sol` (Codex) ends `no_commit` until #330 is fixed, so a benchmark that includes it measures that bug.
+- **Design changes:** the producer environment is `sandbox.producer_env(profile)` passed to an invoker that replaces the child's environment; `scan(source, home, rules)`; the replay enums live in `metrology/benchmark_replay_enums.py`; `bench_caps.py` was not needed (the caps are in `bench_plan.py`). The slice design lists the final modules.
+- **Review fixes (verdict FAIL answered):** spend persisted after each replay; lock written before it is linked; leak scan sees `timeout`/`nice`/`xargs`/`eval`/backtick commands; `--keep` warning says copies; auth reminder at each profile's first `no_run_state`; load test takes the cap from the built options; `ReplaySandbox` protocol; instruction-file symlinks that dangle or leave the tree are skipped with a WARNING. `max_budget_usd` exists in the SDK at the declared minimum, so that finding changed nothing. Deferred: #332 (benchmark tests' type ignores), #297 (no bound before dispatch).
+- **Review fixes, round 2 (CONCERNS answered):** JSONL split on `\n` only; flock guard around lock take-over; no silent SDK profile; the case-kind seam now owns classification and the record's pipeline and step names (`ReplayFields`); instruction files that cannot be hashed carry a marker; `build_production_services` split; one copy of the action helpers; typed test doubles; `MetrologyStore.delete_record`; only the `squadron` package directory is protected. The producer timeout stays deferred to #297.
+- **Next:** 425 (grader and paired report). Before a Codex benchmark: #330.
+
+### Slice 424 Task 13: transcript spike
+
+One-step `dispatch` runs per profile in a scrubbed home (`ScrubbedEnvironment` with the profile's credential grant), home kept. Both runtimes wrote their transcript into the redirected home, so the D6 gate holds. Fixtures: `tests/benchmark/fixtures/transcripts/<profile>/`, layout kept, message text replaced by `scrubbed`, tool names and path/command inputs kept, home rewritten to `/home/user`.
+
+- **`sdk`** (alias `haiku`; Claude Code 2.1.319, claude-agent-sdk 0.2.179, `entrypoint: sdk-py`)
+  - Files: `<home>/.claude/projects/<cwd with / as ->/<session>.jsonl`; a subagent run adds `<session>/subagents/agent-<id>.jsonl` (entries `isSidechain: true`). Paths in tool inputs are realpaths (`/private/tmp/...` on macOS).
+  - Entry types: `queue-operation`, `user`, `attachment`, `atis-latch`, `api-request-shape`, `api-request-blob`, `api-request`, `last-prompt`, `ai-title`, `tools-used`, `assistant`, `cost-state`.
+  - Tool call: `type: assistant`, `message.content[]` block `{type: "tool_use", id, name, input, caller}`. `Read` input `{file_path}`; `Bash` input `{command, description}`; `Agent` input `{description, prompt, subagent_type}`. The subagent file's `Read` call is a `tool_use` block in an `assistant` entry like any other.
+  - `turns` in the run state's usage record: 3 for a `Read` + `Bash` run, 3 for the subagent run (informational).
+- **`openai-oauth`** (alias `luna`; Codex `cli_version` 0.160.0; the `codex` on PATH reports 0.163.0)
+  - File: `<home>/.codex/sessions/YYYY/MM/DD/rollout-<timestamp>-<uuid>.jsonl`; entries `{timestamp, ordinal, type, payload}`.
+  - Entry types (`type` / `payload.type`): `session_meta`, `turn_context`, `world_state`, `event_msg` (`task_started`, `item_completed`, `token_count`, `task_complete`), `response_item` (`message`, `custom_tool_call`, `custom_tool_call_output`), `token_usage_record`.
+  - Tool call: `type: response_item`, `payload.type: custom_tool_call`, `payload.name: exec`, `payload.input` a JavaScript snippet such as `const r = await tools.exec_command({cmd:"ls", max_output_tokens:2000});`. There is no `command` field: the command is the `cmd:"…"` string inside that source text, so the parser must read it from there. This run issued two `custom_tool_call` items (`cat hello.txt`, `ls`) and no file tool.
+  - `turns` in the run state's usage record: 1 although the transcript holds two tool calls, so `turns` cannot corroborate extraction (PM decision: the scan does not use it).
+- Scratch homes under `/tmp/sq424/spike-root` hold copied credentials and are deleted after capture; scripts are in `/tmp/sq424/`.
 
 ## 20261113
 

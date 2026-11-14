@@ -70,6 +70,14 @@ class ProviderAPIError(ProviderError):
         self.status_code = status_code
 
 
+class BudgetExhaustedError(ProviderAPIError):
+    """The provider stopped a call at the dollar budget the run gave it (slice 424 D9).
+
+    Distinct from a generic API error so the dispatch can stamp ``failure_kind:
+    cost_cap`` and the run ends failed at the cap, not as a provider fault.
+    """
+
+
 class ProviderRateLimitError(ProviderError):
     """The provider rate-limited the request and retries were exhausted.
 

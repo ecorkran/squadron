@@ -463,6 +463,20 @@ class MetrologyStore:
         finally:
             tmp.unlink(missing_ok=True)
 
+    def delete_record(self, record_id: str) -> bool:
+        """Remove the record stored under *record_id*; ``False`` when there was none.
+
+        The storage layer owns removal, as it owns writing: callers do not unlink record
+        paths themselves.
+        """
+        try:
+            self._record_path(record_id).unlink()
+        except FileNotFoundError:
+            return False
+        except OSError as exc:
+            raise MetrologyStoreError(f"Failed to delete metrology record {record_id}: {exc}") from exc
+        return True
+
     def iter_records(self) -> Iterator[tuple[str, MetrologyRecord]]:
         """Yield ``(record_id, record)`` for every readable file; corrupt ones warn and skip."""
         return self._iter_records()

@@ -57,7 +57,12 @@ from squadron.pipeline.actions.tool_support import (
     tool_isolation_failure,
 )
 from squadron.pipeline.control_params import OVERRIDE_INSTRUCTIONS, RESUMED_FROM_HANDOFF
-from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind, usage_limit_stamp
+from squadron.pipeline.failure_kind import (
+    FAILURE_KIND_KEY,
+    FailureKind,
+    cost_cap_stamp,
+    usage_limit_stamp,
+)
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError, ResolvedModel
@@ -534,6 +539,7 @@ class DispatchAction:
             FailureKind.STALL if isinstance(exc, DispatchStalledError) else FailureKind.PROVIDER_ERROR
         ).value
         metadata.update(usage_limit_stamp(exc))
+        metadata.update(cost_cap_stamp(exc))
         if isinstance(exc, DispatchStalledError):
             # An expected, named failure (slice 174 D7): the session already logged
             # the interrupt, so no traceback; the step fails through its result.

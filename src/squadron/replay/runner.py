@@ -16,7 +16,7 @@ import json
 import logging
 import subprocess
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -80,11 +80,24 @@ class RunStateReader(Protocol):
     def load(self, run_id: str) -> RunState: ...
 
 
-def run_sq_subprocess(argv: Sequence[str], cwd: Path) -> ProcessResult:
-    """The production invoker: captured output, no timeout."""
+def run_sq_subprocess(
+    argv: Sequence[str], cwd: Path, env: Mapping[str, str] | None = None
+) -> ProcessResult:
+    """The production invoker: captured output, no timeout.
+
+    ``env`` is the child's entire environment (it replaces, never merges with, the harness
+    environment), so a producer child sees only what the caller grants. ``None`` inherits the
+    harness environment, which is what ``sq replay`` relies on.
+    """
     try:
         done = subprocess.run(
-            list(argv), cwd=cwd, capture_output=True, text=True, **TEXT_DECODING, check=False
+            list(argv),
+            cwd=cwd,
+            env=None if env is None else dict(env),
+            capture_output=True,
+            text=True,
+            **TEXT_DECODING,
+            check=False,
         )
     except FileNotFoundError as exc:
         return ProcessResult(

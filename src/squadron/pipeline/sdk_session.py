@@ -46,6 +46,7 @@ from squadron.pipeline.sdk_turns import (
 )
 from squadron.pipeline.text_tail import tail_text
 from squadron.providers.errors import (
+    BudgetExhaustedError,
     ProviderAPIError,
     ProviderAuthError,
     ProviderError,
@@ -123,6 +124,9 @@ def _seeded_options(base: ClaudeAgentOptions, seed: str | None) -> ClaudeAgentOp
     preset: SystemPromptPreset = {"type": "preset", "preset": "claude_code", "append": framed}
     return dataclasses.replace(base, system_prompt=preset)
 
+
+# The result subtype the SDK reports when a dispatch crosses ``max_budget_usd`` (slice 424 D9).
+SDK_BUDGET_SUBTYPE = "error_max_budget_usd"
 
 # Per-read bound on the post-interrupt drain, and on the interrupt request itself
 # (slice 174 D7). Matches the SDK's own 60 s control-request bound.
@@ -443,6 +447,11 @@ class SDKExecutionSession:
                 turns.fold_result(sdk_msg)  # an error result still spent tokens (D5)
                 if turns.rate_limit_rejection is not None:
                     raise UsageLimitReached.from_info(turns.rate_limit_rejection)
+                if sdk_msg.subtype == SDK_BUDGET_SUBTYPE:
+                    detail = sdk_msg.result or sdk_msg.subtype
+                    raise BudgetExhaustedError(
+                        f"SDK stopped the dispatch at the run's budget: {detail}"
+                    )
                 raise ProviderAPIError(
                     f"SDK reported is_error=True: {sdk_msg.result or sdk_msg.subtype}"
                 )
@@ -659,7 +668,10 @@ class SDKExecutionSession:
 
 
 async def open_pipeline_session(
-    *, seed: str | None = None, effort: Effort | None = None
+    *,
+    seed: str | None = None,
+    effort: Effort | None = None,
+    max_budget_usd: float | None = None,
 ) -> SDKExecutionSession:
     """Build and connect the pipeline's persistent SDK session.
 
@@ -670,6 +682,8 @@ async def open_pipeline_session(
     ``seed`` is appended to that preset (see ``_seeded_options``), never sent
     as a turn. Settings follow the pipeline policy (slice 932 D10/D11).
     ``effort`` is fixed for the session's life: the SDK has no runtime setter (#216).
+    ``max_budget_usd`` is the run's remaining dollar cap: the SDK stops a dispatch that
+    crosses it (slice 424 D9). ``None`` (an uncapped run) passes no budget.
     """
     cwd = str(Path.cwd())
     settings = sdk_settings_options(
@@ -688,6 +702,7 @@ async def open_pipeline_session(
         hooks=pipeline_hooks(),  # pyright: ignore[reportArgumentType]
         max_buffer_size=SDK_MAX_BUFFER_BYTES,
         **sdk_effort_options(effort),  # pyright: ignore[reportArgumentType]
+        **({} if max_budget_usd is None else {"max_budget_usd": max_budget_usd}),
     )
     client = ClaudeSDKClient(options=_seeded_options(base, seed))
     session = SDKExecutionSession(

@@ -217,6 +217,13 @@ class ActiveItem(BaseModel):
     index: str | None  # the item's own "index" field when present (plan slice index)
 
 
+class ProducerOnlyRecord(BaseModel, frozen=True):
+    """What ``sq run --producer-only`` kept and dropped (slice 424 D3)."""
+
+    step: str  # the producer step the run executes
+    skipped: list[str]  # every other top-level step, in definition order
+
+
 class RunState(BaseModel):
     """Complete persisted state of a pipeline run."""
 
@@ -249,6 +256,10 @@ class RunState(BaseModel):
     # True for a run `sq replay` started: a controlled experiment, not an observed run
     # (#229). Absent in older files, which read as False.
     replay: bool = False
+
+    # Set for a ``sq run --producer-only`` run (slice 424 D3). Absent in older files,
+    # which read as None; no schema-version bump.
+    producer_only: ProducerOnlyRecord | None = None
 
     # Absolute directory the run started in; resume keeps it (#303). None in older
     # files and in scratch runs that never record it.
@@ -335,8 +346,16 @@ def state_file_name(run_id: str) -> str:
     return f"{run_id}.json"
 
 
+_RUNS_DIR_UNDER_HOME = Path(".config") / "squadron" / "runs"
+
+
+def runs_dir_under(home: Path) -> Path:
+    """Where run state lives for a process whose ``HOME`` is *home*."""
+    return home / _RUNS_DIR_UNDER_HOME
+
+
 def _default_runs_dir() -> Path:
-    return Path.home() / ".config" / "squadron" / "runs"
+    return runs_dir_under(Path.home())
 
 
 class StateManager:
@@ -389,11 +408,13 @@ class StateManager:
         pipeline_path: str | None = None,
         replay: bool = False,
         working_directory: str | None = None,
+        producer_only: ProducerOnlyRecord | None = None,
     ) -> str:
         """Create an initial state file and return the run_id.
 
         With *replay*, the run is marked as a replay experiment so observed-run
-        reports leave it out (#229).
+        reports leave it out (#229). *producer_only* records a ``--producer-only``
+        run's kept step and skipped steps (slice 424).
 
         With *owner*, the write that creates the ``running`` file also records
         the owner, so no v5 ``running`` file is ever ownerless (slice 174 D13).
@@ -431,6 +452,7 @@ class StateManager:
             progress_at=now if owner is not None else None,
             pipeline_path=pipeline_path,
             replay=replay,
+            producer_only=producer_only,
             working_directory=working_directory,
         )
         self._save(state)

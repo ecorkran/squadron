@@ -81,7 +81,7 @@ from squadron.pipeline.models import (
     local_output_key,
     prior_output_key,
 )
-from squadron.pipeline.run_spend import RunSpend, read_cost_cap
+from squadron.pipeline.run_spend import RunSpend, read_cost_cap, remaining_budget
 from squadron.pipeline.sources import (
     FLAG_KIND_KEY,
     FLAG_REASON_KEY,
@@ -100,6 +100,7 @@ from squadron.providers.base import (
     TOOLS_GIVEN_KEY,
     USAGE_KEY,
 )
+from squadron.providers.errors import BudgetExhaustedError
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
@@ -677,10 +678,17 @@ async def execute_pipeline(
             sdk_candidate = _step_sdk_candidate(step, resolver, merged_params)
             if sdk_candidate is not None:
                 try:
+                    budget = remaining_budget(cost_cap, spend.known_usd)
+                except BudgetExhaustedError as exc:
+                    return _budget_exhausted_result(
+                        definition, step, step_results, observer, effective_run_id, exc
+                    )
+                try:
                     sdk_session = await _connect_lazy_session(
                         run_id=effective_run_id,
                         seed=resume_seed,
                         effort=model_effort(sdk_candidate),
+                        max_budget_usd=budget,
                     )
                     resume_seed = None  # a later connect must never re-seed
                 except Exception as exc:
@@ -776,6 +784,41 @@ async def execute_pipeline(
         status=ExecutionStatus.COMPLETED,
         step_results=step_results,
         run_id=effective_run_id,
+    )
+
+
+def _budget_exhausted_result(
+    definition: PipelineDefinition,
+    step: StepConfig,
+    step_results: list[StepResult],
+    observer: RunObserver | None,
+    run_id: str,
+    exc: BudgetExhaustedError,
+) -> PipelineResult:
+    """The failed run for a step whose session cannot open: no budget is left (slice 424 D9)."""
+    _logger.error("executor: step %s not started: %s", step.name, exc)
+    failed = ActionResult(
+        success=False,
+        action_type=step.step_type,
+        outputs={},
+        error=str(exc),
+        metadata={FAILURE_KIND_KEY: FailureKind.COST_CAP.value},
+    )
+    step_result = StepResult(
+        step_name=step.name,
+        step_type=step.step_type,
+        status=ExecutionStatus.FAILED,
+        action_results=[failed],
+        error=str(exc),
+    )
+    step_results.append(step_result)
+    if observer is not None:
+        observer.step_completed(step_result)
+    return PipelineResult(
+        pipeline_name=definition.name,
+        status=ExecutionStatus.FAILED,
+        step_results=step_results,
+        run_id=run_id,
     )
 
 
@@ -919,7 +962,11 @@ def _action_metadata(action: dict[str, object]) -> dict[str, object]:
 
 
 async def _connect_lazy_session(
-    *, run_id: str, seed: str | None = None, effort: Effort | None = None
+    *,
+    run_id: str,
+    seed: str | None = None,
+    effort: Effort | None = None,
+    max_budget_usd: float | None = None,
 ) -> SDKExecutionSession:
     """Construct and connect a new SDKExecutionSession for mid-run lazy auth.
 
@@ -934,7 +981,7 @@ async def _connect_lazy_session(
     from squadron.pipeline.sdk_session import open_pipeline_session
 
     try:
-        return await open_pipeline_session(seed=seed, effort=effort)
+        return await open_pipeline_session(seed=seed, effort=effort, max_budget_usd=max_budget_usd)
     except Exception:
         _logger.exception(
             "executor: lazy session connect failed for run %s",

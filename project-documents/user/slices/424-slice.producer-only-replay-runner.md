@@ -6,8 +6,8 @@ parent: user/architecture/420-slices.model-benchmark.md
 dependencies: [421, 422, 423]
 interfaces: [425, 426]
 dateCreated: 20261104
-dateUpdated: 20261105
-status: not_started
+dateUpdated: 20261114
+status: complete
 ---
 
 # Slice Design: Producer-Only Replay Runner
@@ -73,32 +73,53 @@ Producer-only mode is also useful on its own: `sq run P6 <slice> --producer-only
 ```
 src/squadron/
   pipeline/
-    producer_only.py          ProducerStep protocol, select_producer_step, producer_only_definition
+    producer_only.py          ProducerStep protocol, ProducerOnlyError, select_producer_step,
+                                producer_only_definition -> ProducerOnlySelection
     steps/phase.py            + producer_only_config (drops review, checkpoint)
     steps/fix.py              + producer_only_config (unchanged config)  [file from 423]
     control_params.py         + RUN_PRODUCER_ONLY
-    sdk_session.py            + max_budget_usd from the run's cap (D9)
+    state.py                  + ProducerOnlyRecord, RunState.producer_only
+    sdk_session.py            + max_budget_usd from the run's cap; error_max_budget_usd -> COST_CAP (D9)
   metrology/
-    benchmark_models.py       + BenchmarkRun, ImplementationReplay, ProducerOutcome,
-                                AbsenceClass, LeakScanResult, LeakHit, DiffRef
-    benchmark_store.py        + run and replay records; DiffSidecars
+    benchmark_replay_models.py  BenchmarkRun, ImplementationReplay, LeakScanResult, LeakHit, DiffRef, CaseDrop
+    benchmark_replay_enums.py   ProducerOutcome, AbsenceClass, LeakVerdict, LeakRule, BenchmarkStatus
+    diff_sidecars.py          DiffSidecars (content-addressed, hash-verified)
+    benchmark_store.py        + run and replay records (write_run, get_run, write_replay, replays_for, ...)
   benchmark/
     transcripts.py            TranscriptSource protocol, registry by ProfileName, ToolCall
     transcript_claude.py      Claude Code JSONL under <home>/.claude/projects/
     transcript_codex.py       Codex rollouts under <home>/.codex/sessions/
-    leak_scan.py              LeakRules, scan(tool_calls, rules) -> LeakScanResult
-    case_runners.py           CaseKindRunner protocol (requalify, run); FixCaseRunner
+    leak_rules.py             LeakRules (data), build_leak_rules
+    leak_paths.py, leak_shell.py, leak_git_package.py   the three rules' matching
+    leak_scan.py              scan(source, home, rules) -> LeakScanResult
+    case_runners.py           CaseKindRunner protocol (requalify, run, classify, pipeline, producer_step);
+                                ReplaySandbox protocol; FixCaseRunner; registry
+    replay_deps.py            ReplayOneDeps, ReplayStoreError
+    replay_outcome.py         classify_producer_run (run state + git heads -> outcome, absence)
+    replay_records.py         ReplayFields, build_record, writing the ImplementationReplay
     replay_one.py             one (case, config, sample): sandbox -> producer -> scan -> record
-    bench_runner.py           plan, bound, schedule, cap, resume, interruption
-    bench_plan.py             BenchmarkPlan, bound arithmetic
+    instruction_files.py      path + sha256 of the instruction files in the tree
+    bench_plan.py             BenchConfig, ids, Caps, resolve_caps, BenchmarkPlan, format_bound
+    bench_refusals.py         check_plan -> BenchmarkRefusal
+    bench_lock.py             the per-benchmark process lock
+    bench_runner.py           begin_benchmark, run_benchmark (cap, resume, interruption)
+    bench_configs.py          alias -> BenchConfig / ProducerConfigRef
+    run_services.py           RunServices: the command's one dependency seam
+    production_deps.py        build_production_services (the real collaborators)
+    leak_rule_source.py       per-case leak facts (uv cache, [project].name, code-host owner)
   cli/commands/
-    run.py                    + --producer-only
-    benchmark.py              + run, replay-show
+    run.py                    + --producer-only (flag and calls only)
+    run_producer_only.py      flag-combination refusals, branch preflight, stop line
+    benchmark.py              + run, replay-show registration
+    benchmark_run.py          make_run_command(services_factory)
+    benchmark_run_report.py   per-replay lines, summary, kept-sandbox lines
+    benchmark_replay_show.py  replay-show
+    benchmark_common.py       + repo_root_for, open_store
 commands/sq/benchmark.md      + the same subcommands
 commands/sq/run.md            + --producer-only
 ```
 
-`bench_runner.py` reaches the fix pipeline only through `FixCaseRunner`, and it reaches transcript formats only through the `TranscriptSource` registry. Each module stays under 300 lines.
+`bench_runner.py` reaches the fix pipeline only through `FixCaseRunner`, and it reaches transcript formats only through the `TranscriptSource` registry. Each new module stays under 300 lines (`benchmark_run.py` is the longest at 273).
 
 ### Data Flow
 
@@ -134,10 +155,11 @@ sq benchmark run --set fixes --model opus --model sol --samples 3 --max-cost 40
            replay_one(case, config, sample):
               BenchmarkSandbox(start_sha) → EnvironmentIdentity
               runner.requalify(case, env) → drop case if rejected
-              FixCaseRunner: write <id>.out/issue.md; run installed sq by absolute path:
+              FixCaseRunner: write <id>.out/issue.md; git checkout -b benchmark-replay in the tree
+                 (it starts detached and `fix` refuses a detached HEAD); run installed sq by absolute path:
                  sq run fix <n> -m <alias> --producer-only --max-cost <per-replay cap>
                     -p issue-file=issue.md -p commit-to=current --io-dir <id>.out --run-id <rid>
-                 cwd=<tree>, env=ScrubbedEnvironment(grant=config's profile)
+                 cwd=<tree>, env=sandbox.producer_env(config.profile)
               read run state from <id>.home/.config/squadron/runs/
               HEAD vs start_sha → diff → sidecar
               TranscriptSource(profile).tool_calls(<id>.home) → leak scan
@@ -200,12 +222,12 @@ Status: decided
 
   `sq run fix <issue-number> -m <alias> --producer-only --max-cost <per-replay cap> -p issue-file=issue.md -p commit-to=current --io-dir <id>.out --run-id <replay record id>`
 
-  It runs with `cwd=<tree>` and `env=ScrubbedEnvironment(CredentialGrant.for_profiles([config.profile]))`, and with no wall-clock bound, as in 177. Existing bounds end a hang: the SDK dispatch stall bound (`FailureKind.STALL`, slice 174) and Codex's `codex.turn_timeout_s`. Either one fails the run, which records `producer_failed` with the failure kind (D10).
+  Before it starts, `sandbox.checkout_branch(PRODUCER_BRANCH)` puts the tree on a branch at the start commit (the history-free tree is detached, and `fix` refuses a detached HEAD; the branch holds only the start commit). It runs with `cwd=<tree>` and `env=sandbox.producer_env(config.profile)`, which the invoker uses as the child's whole environment (the scrubbed environment plus that profile's credentials), and with no wall-clock bound, as in 177 (a hang before the dispatch starts has none: issue #297). Existing bounds end a hang: the SDK dispatch stall bound (`FailureKind.STALL`, slice 174) and Codex's `codex.turn_timeout_s`. Either one fails the run, which records `producer_failed` with the failure kind (D10).
 - The issue number comes from the case's provenance issue ref. A fix case with no issue ref fails at planning, naming the case. 422 always records one for a qualified case.
 - `--max-cost` is passed on every invocation. The scrubbed home's seeded `config.toml` may carry its own `pipeline.max_cost_usd`, and the flag wins over it (#241 precedence). The per-replay cap is therefore exactly what the bound assumed.
 - Run state is read through `StateManager(runs_dir=<id>.home/.config/squadron/runs)`. 423's `fix-context` outputs must show `issue_source: file` and the sha256 of `issue.md`. A mismatch is a harness error, because the run did not use the frozen text.
 - **Prompt identity** is read from the dispatch metadata, as 177 does. It is joined by `instruction_files`: path and sha256 for each `CLAUDE.md`, `AGENTS.md` and `.claude/rules/**` file in the tree at the start commit. The scrubbed home carries no user-level instructions (421 D7), so these files are all the instructions in effect.
-- `CaseKindRunner` is keyed by 421's `CaseKind` and has two methods: `requalify(case, environment)` and the replay run. `FixCaseRunner.requalify` calls 422's `qualification_for` / `qualify_candidate`; `replay_one` calls only `runner.requalify`, so 426 adds slice-case requalification without editing `bench_runner.py`. A case set that contains a kind with no runner refuses at planning. In 424 that is `slice`, until 426 adds its runner.
+- `CaseKindRunner` is keyed by 421's `CaseKind`. It has `requalify(case, environment)`, the replay `run`, `classify` (how the finished run ended; for fix, whether it used the frozen text), and the `pipeline` and `producer_step` names a record carries. `FixCaseRunner.requalify` calls 422's `qualification_for` / `qualify_candidate`; `replay_one` calls only `runner.requalify`, so 426 adds slice-case requalification without editing `bench_runner.py`. A case set that contains a kind with no runner refuses at planning. In 424 that is `slice`, until 426 adds its runner.
 
 ### D6 — Transcripts come from the agent runtime's own files in the scrubbed home
 Status: decided
@@ -298,7 +320,7 @@ Status: decided
 
 ### Patterns and Conventions
 
-- `ProducerOutcome`, `AbsenceClass`, `LeakVerdict`, `LeakRule` and `BenchmarkStatus` (`running`, `complete`, `partial`, `interrupted`) are `StrEnum`s defined once in `benchmark_models.py`. Reports group by these values, never by message text.
+- `ProducerOutcome`, `AbsenceClass`, `LeakVerdict`, `LeakRule` and `BenchmarkStatus` (`running`, `complete`, `partial`, `interrupted`) are `StrEnum`s defined once in `benchmark_replay_enums.py`. Reports group by these values, never by message text.
 - Every collaborator of `bench_runner` and `replay_one` is injected (sandbox factory, invoker, store, state reader, transcript registry, clock), as in 177's runner. Tests run no model and no git outside fixtures.
 - Harness failures are logged at ERROR with the command's stderr tail and recorded with their class. A store write failure stops the benchmark and keeps the sandbox.
 
@@ -437,45 +459,64 @@ class BenchmarkRun(BaseModel, frozen=True):
 
 ### Verification Walkthrough
 
-These are draft commands. `--producer-only` and the `sq benchmark run/replay-show` commands do not exist until this slice is implemented. Steps 3–7 need a case set from 422 (`sq benchmark fix-cases build --set fixes`) and yes answers from `sq benchmark auth-check` for the aliases used.
+Verified on 2026-11-14 against squadron's own `fix-squadron` case set (one qualified fix case). Run from the squadron checkout with the branch's build first on `PATH` (the harness runs the `sq` it finds on `PATH`, and a released `sq` without `--producer-only` fails every replay as `no_run_state` with `No such option: --producer-only`):
 
-1. **Producer-only on `P6`.** On a slice branch with a design and task file and no commits ahead of the target:
+```bash
+export PATH="$PWD/.venv/bin:$PATH"
+sq benchmark auth-check --model opus --model sol    # both must answer yes
+sq benchmark yield                                  # a case set with qualified cases must exist
+```
+
+Steps 3-7 need a case set from 422 (`sq benchmark fix-cases build --set NAME`); below it is `fix-squadron` (v1, case `case-85c975f100d51ec1`). Replace the names with your own. A replay costs about $0.50-$0.80 with `opus`.
+
+1. **Producer-only on `P6`.** Needs a repository registered with `cf` (`cf init --lite`), a slice plan under `project-documents/user/architecture/` that lists the slice, the guide installed, and the slice's design and task file, on the slice's branch (`<index>-slice.<name>`) with no commits ahead of the target.
    ```bash
    sq run P6 <slice> --producer-only --dry-run
    sq run P6 <slice> --producer-only --max-cost 5
-   sq runs show <run-id>
    git log -1 --format='%s'
    ```
-   The dry run lists `set_slice → check_decisions → set_phase → build_context → dispatch → commit`, with no review or checkpoint. The run prints `producer-only: stopped after implement (commit …)` and names the skipped steps. The run state has no review action. The commit is the implementation commit. No DEVLOG commit and no merge follow it.
+   The dry run prints the one step `implement-1` and `producer-only: step implement-1; skipped: branch-0, close-out, revise-code, devlog-4, branch-5, summary-6`; it does not list the actions. The run prints `producer-only: stopped after implement-1 (commit <sha>); skipped: branch-0, close-out, revise-code, devlog-4, branch-5, summary-6`. The run state (`~/.config/squadron/runs/<run-id>.json`, `completed_steps[0].action_results`) lists `cf-op` four times, `dispatch` and `commit`, with no review action. `git log -1` shows the implementation commit (`feat: implement slice <slice>`); no DEVLOG commit and no merge follow, and `main` is unchanged. (There is no `sq runs show`.)
 
-2. **Refusals.**
+2. **Refusals.** Each exits 1.
    ```bash
-   sq run P6 <slice> --producer-only --from close-out    # refused
-   sq run slice <slice> --producer-only                   # refused if it has several producer steps; names them
+   sq run P6 <slice> --producer-only --from close-out    # Error: --producer-only cannot be combined with --from.
+   sq run P456 <slice> --producer-only                   # names design-0, tasks-2, implement-8
+   git checkout main && sq run P6 <slice> --producer-only  # check out the branch for slice <slice> first (on main)
    ```
+   The third spends nothing.
 
-3. **Caps are required.**
+3. **Caps are required.** With `pipeline.max_cost_usd` unset:
    ```bash
-   sq benchmark run --set fixes --model opus --samples 1
-   sq benchmark run --set fixes --model opus --samples 1 --max-cost 5   # with pipeline.max_cost_usd unset
+   sq benchmark run --set fix-squadron --model opus --samples 1
+   sq benchmark run --set fix-squadron --model opus --samples 1 --max-cost 5
    ```
-   The first is refused for `--max-cost`. The second is refused for the per-replay cap, naming `--max-cost-per-replay` and `pipeline.max_cost_usd`.
+   The first prints `Error: no run cap: set --max-cost USD …`. The second prints `Error: no per-replay cap: set --max-cost-per-replay USD or the config key pipeline.max_cost_usd`. Both exit 1.
 
 4. **A small run.**
    ```bash
-   sq benchmark run --set fixes --model opus --model sol --samples 1 --max-cost 10 --max-cost-per-replay 2 --case <case-id>
-   ```
-   The bound prints first. Two replay lines follow, each with outcome, leak verdict and cost. Then:
-   ```bash
+   sq benchmark run --set fix-squadron --model opus --model sol --samples 1 --max-cost 10 --max-cost-per-replay 2 --case case-85c975f100d51ec1
    sq benchmark replay-show <record-id> --diff
    ```
-   The diff is the producer's fix commit against the case's start commit. The record shows the environment digest, the prompt identity, `instruction_files` and `effort_sent`.
+   The output starts with `swept N orphaned sandboxes`, then the benchmark line, `pending 2 of 2 replays`, and the bound:
+   ```
+   bound: 1 × $2.00 per replay = $2.00, within run cap $10.00
+          + one replay of overshoot $2.00 → at most $4.00 for opus
+          not bounded: sol (openai-oauth) — cost is checked only after each dispatch
+   ```
+   Then one line per replay, `<record id>  <outcome>  leak <verdict>  <cost>`, and a summary (`outcomes`, `absence`, `leak`, `spent`). Observed: `opus` `committed  leak no_leak_detected  $0.50`; `sol` `no_commit  leak no_leak_detected  $0.02`, because a Codex `fix` run gets a read-only sandbox (issue #330). `replay-show <opus record> --diff` prints the producer's commit against the case's start commit (4 files); without `--diff` it shows the environment digest, prompt identity, `instruction_files`, `effort_sent` (`-` when the alias sets none), the leak verdict with its tool-call count, cost and turns.
 
-5. **Run cap stops the run.** `sq benchmark run --set fixes --model opus --samples 2 --max-cost 1 --max-cost-per-replay 1` stops after the first replay that brings spend to $1 or more. Status is `partial`, and the exit code is 2. Rerunning with `--max-cost 10` skips the recorded replays and continues.
+5. **Run cap stops the run.** One `opus` replay cost $0.66-$0.76 here, and the cap is checked before each replay, so a $1 run cap would let both samples run. Use a cap below one replay:
+   ```bash
+   sq benchmark run --set fix-squadron --model opus --samples 2 --max-cost 0.3 --max-cost-per-replay 1 --case case-85c975f100d51ec1   # status partial, exit 2
+   sq benchmark run --set fix-squadron --model opus --samples 2 --max-cost 10 --max-cost-per-replay 1 --case case-85c975f100d51ec1  # skips the recorded replay, runs the other
+   ```
+   The first prints `benchmark <id>: partial` and exits 2 after one replay. The rerun prints `pending 1 of 2 replays (1 already recorded)` and ends `complete`.
 
-6. **Interruption.** Start step 5's rerun, then press Ctrl-C during a replay. Run it again: `interrupted` is reported, one orphaned sandbox is reported and removed, and the run resumes.
+6. **Interruption.** An agent cannot press Ctrl-C; send `SIGKILL` to the `sq benchmark run` process and its `sq run fix` child while a replay is running (find both with `pgrep -fl 'sq '`; leave other `sq run` processes alone). Run step 5's second command again. It prints, in order: the lock takeover warning, `benchmark <id> was left running by an earlier invocation; it is now marked interrupted`, `removing orphaned replay sandbox <path>`, `swept 1 orphaned sandbox`, then `pending 1 of 2 replays (1 already recorded)`, and it completes. The killed replay's spend is not recorded.
 
-7. **Leak detection.** `uv run pytest tests/benchmark/test_leak_scan.py -v` covers the planted reads. For a live check, run step 4 with `--keep`, then inspect `<id>.home/.claude/projects/` to see the transcript the scan read.
+7. **Leak detection.** `uv run pytest tests/benchmark/test_leak_scan.py -v` (19 tests) covers the planted reads. Live: run step 4's `opus` command with `--keep` (use a cap that stops after one replay, such as `--samples 3 --max-cost 0.3`). It prints `tree:`, `home:`, `out:` and the warning that the home holds copies of your auth files. `<home>/.claude/projects/<cwd>/<session>.jsonl` is the transcript the scan read: its distinct `tool_use` ids equal the `N tool calls seen` of `replay-show`. Remove the kept paths with `rm -r` afterwards, and the sandbox's `.lock`. Any other benchmark command run first deletes the kept sandbox (issue #331).
+
+Known limits found by this walkthrough: Codex `fix` runs are read-only until issue #330 is fixed; `--keep` sandboxes do not survive the next benchmark command (issue #331).
 
 ## Risk Assessment
 
@@ -507,5 +548,5 @@ Effort: 4/5.
 ### Special Considerations
 
 - The harness runs the installed, current `sq`. The producer's tools see only the start commit's `sq` inside the tree. That split is deliberate: the pipeline under test is the current production pipeline, and the code under change is the start commit.
-- `--keep` leaves the scrubbed home in place, and it holds symlinks to the user's auth files (421 D8). The CLI prints that warning beside the kept paths.
+- `--keep` leaves the scrubbed home in place, and it holds copies of the user's auth files (421 D8). The CLI prints that warning beside the kept paths.
 - Benchmark replays write no run state to the user's runs directory, so `sq stats producers` never sees them. `--replay` is not needed.

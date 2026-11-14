@@ -137,3 +137,26 @@ def test_builtin_fix_pipeline_loads_and_passes_strict_validation() -> None:
     assert [step.step_type for step in definition.steps] == ["fix"]
     assert validate_pipeline(definition, strict=True) == []
     assert any_step_needs_context_forge(definition.steps) is False
+
+
+def test_producer_only_config_is_an_equal_copy() -> None:
+    config = _valid(**{"issue-file": "issue.md", "commit-to": "current"})
+
+    stripped = FixStepType().producer_only_config(config)
+
+    assert stripped == config
+    assert stripped is not config
+    assert stripped.config is not config.config
+
+
+def test_fix_step_is_a_producer_step() -> None:
+    from squadron.pipeline.producer_only import ProducerStep
+
+    assert isinstance(FixStepType(), ProducerStep)
+
+
+def test_expand_of_the_producer_only_config_equals_expand_of_the_input() -> None:
+    step_type = FixStepType()
+    config = _valid(**{"issue-file": "issue.md", "model": "opus"})
+
+    assert step_type.expand(step_type.producer_only_config(config)) == step_type.expand(config)

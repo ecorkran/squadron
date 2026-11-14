@@ -17,11 +17,15 @@ from squadron.metrology.benchmark_models import (
     case_set_record_id,
     fix_qualification_record_id,
 )
+from squadron.metrology.benchmark_replay_models import BenchmarkRun, ImplementationReplay
+from squadron.metrology.diff_sidecars import DiffSidecars as DiffSidecars  # re-exported
 from squadron.metrology.errors import MetrologyStoreError
 from squadron.metrology.models import (
     RECORD_TYPE_BENCHMARK_CASE,
+    RECORD_TYPE_BENCHMARK_RUN,
     RECORD_TYPE_CASE_SET,
     RECORD_TYPE_FIX_QUALIFICATION,
+    RECORD_TYPE_IMPLEMENTATION_REPLAY,
     MetrologyRecord,
     ProjectId,
 )
@@ -36,6 +40,8 @@ class BenchmarkRecordStore:
 
     def __init__(self, store: MetrologyStore) -> None:
         self._store = store
+        #: Diff files of implementation replays, below the store root (slice 424 D11).
+        self.diffs = DiffSidecars(store.store_dir)
 
     # ------------------------------------------------------------------ cases
 
@@ -156,7 +162,99 @@ class BenchmarkRecordStore:
         ]
         return sorted(found, key=lambda item: item.record_id)
 
+    # ------------------------------------------- benchmark runs and replays (424)
+
+    def write_run(self, run: BenchmarkRun) -> str:
+        """Persist *run*; a run record is overwritten in place as the benchmark progresses."""
+        self._write(
+            run.benchmark_id,
+            MetrologyRecord(
+                schema_version=_SCHEMA_VERSION,
+                record_type=RECORD_TYPE_BENCHMARK_RUN,
+                benchmark_run=run,
+            ),
+        )
+        return run.benchmark_id
+
+    def get_run(self, benchmark_id: str) -> BenchmarkRun | None:
+        """The stored run, ``None`` when absent; a tampered or foreign record raises."""
+        record = self._load(benchmark_id)
+        if record is None:
+            return None
+        if record.record_type != RECORD_TYPE_BENCHMARK_RUN or record.benchmark_run is None:
+            _logger.error("record %s is not a benchmark run", benchmark_id)
+            raise MetrologyStoreError(f"Record {benchmark_id} is not a benchmark run")
+        return record.benchmark_run
+
+    def list_runs(self) -> list[BenchmarkRun]:
+        """Every stored run, sorted by benchmark id; unreadable files warn and are skipped."""
+        runs = [r.benchmark_run for _, r in self._store.iter_records() if r.benchmark_run]
+        return sorted(runs, key=lambda run: run.benchmark_id)
+
+    def write_replay(self, record_id: str, replay: ImplementationReplay) -> str:
+        """Persist *replay* once; the same content again is a no-op, different content raises."""
+        existing = self.get_replay(record_id)
+        if existing is not None:
+            if existing == replay:
+                return record_id
+            _logger.error("replay record %s already exists with different content", record_id)
+            raise MetrologyStoreError(f"Replay record {record_id} already exists and differs")
+        self._write(
+            record_id,
+            MetrologyRecord(
+                schema_version=_SCHEMA_VERSION,
+                record_type=RECORD_TYPE_IMPLEMENTATION_REPLAY,
+                implementation_replay=replay,
+            ),
+        )
+        return record_id
+
+    def get_replay(self, record_id: str) -> ImplementationReplay | None:
+        """The stored replay, ``None`` when absent; a tampered or foreign record raises."""
+        record = self._load(record_id)
+        if record is None:
+            return None
+        if (
+            record.record_type != RECORD_TYPE_IMPLEMENTATION_REPLAY
+            or record.implementation_replay is None
+        ):
+            _logger.error("record %s is not an implementation replay", record_id)
+            raise MetrologyStoreError(f"Record {record_id} is not an implementation replay")
+        return record.implementation_replay
+
+    def replays_for(self, benchmark_id: str) -> list[tuple[str, ImplementationReplay]]:
+        """``(record_id, replay)`` of one benchmark, sorted by record id."""
+        found = [
+            (record_id, record.implementation_replay)
+            for record_id, record in self._store.iter_records()
+            if record.implementation_replay is not None
+            and record.implementation_replay.benchmark_id == benchmark_id
+        ]
+        return sorted(found, key=lambda item: item[0])
+
+    def delete_replays(self, record_ids: list[str] | tuple[str, ...]) -> int:
+        """Remove the named replay records (``--retry-harness`` only); returns how many existed.
+
+        Only replay records are removed: any other record type under a named id raises.
+        Diff sidecars stay: they are content-addressed and may be shared.
+        """
+        removed = 0
+        for record_id in record_ids:
+            if self.get_replay(record_id) is None:
+                continue  # also refuses a record of another type under this id
+            if self._store.delete_record(record_id):
+                removed += 1
+        return removed
+
     # ---------------------------------------------------------------- helpers
+
+    def _write(self, record_id: str, record: MetrologyRecord) -> None:
+        """Write one record; a failure is logged at ERROR and re-raised."""
+        try:
+            self._store.write_record(record_id, record)
+        except MetrologyStoreError:
+            _logger.exception("Failed to write benchmark record %s", record_id)
+            raise
 
     def _load_case_set(self, name: str, version: int) -> CaseSet | None:
         record_id = case_set_record_id(name, version)

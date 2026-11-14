@@ -65,14 +65,17 @@ def run_resolver(
 @asynccontextmanager
 async def pipeline_session(
     classification: PipelineClassification,
+    *,
+    max_budget_usd: float | None = None,
 ) -> AsyncIterator[SDKExecutionSession | None]:
     """Yield a connected SDK session when *classification* needs one, else ``None``.
 
     The session is disconnected on exit, whether the body succeeds, fails,
     pauses or is interrupted. A failed connect propagates before the body runs.
+    *max_budget_usd* is the run's cap, given to the SDK so a dispatch stops at it (slice 424 D9).
     """
     session = (
-        await open_pipeline_session(effort=classification.session_effort)
+        await open_pipeline_session(effort=classification.session_effort, max_budget_usd=max_budget_usd)
         if classification.needs_persistent_session
         else None
     )

@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from enum import StrEnum
 
+from squadron.providers.errors import BudgetExhaustedError
 from squadron.providers.sdk.rate_limit import UsageLimitReached
 
 #: ``ActionResult.metadata`` key holding a ``FailureKind`` value.
@@ -55,3 +56,10 @@ def usage_limit_stamp(exc: BaseException) -> dict[str, object]:
         FAILURE_KIND_KEY: FailureKind.USAGE_LIMIT.value,
         USAGE_LIMIT_RESETS_AT_KEY: exc.resets_at,
     }
+
+
+def cost_cap_stamp(exc: BaseException) -> dict[str, object]:
+    """The metadata a provider call stopped at the run's budget stamps; empty for any other error."""
+    if not isinstance(exc, BudgetExhaustedError):
+        return {}
+    return {FAILURE_KIND_KEY: FailureKind.COST_CAP.value}
