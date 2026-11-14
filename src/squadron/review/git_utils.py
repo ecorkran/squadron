@@ -101,6 +101,42 @@ def _bounded[T](
         return None
 
 
+class AncestryUnknownError(Exception):
+    """``git merge-base --is-ancestor`` gave no answer.
+
+    git could not run, timed out, or exited with something other than 0 (yes)
+    or 1 (no) — typically an object missing locally. ``result`` is the
+    ``run_git`` return value (``None`` when git never answered) so each caller
+    can word the failure the way its own error messages already do.
+    """
+
+    def __init__(
+        self, ancestor: str, descendant: str, result: subprocess.CompletedProcess[str] | None
+    ) -> None:
+        detail = result.stderr.strip() if result is not None else ""
+        super().__init__(
+            f"git merge-base --is-ancestor {ancestor} {descendant}: "
+            f"{detail or 'git timed out or could not run'}"
+        )
+        self.ancestor = ancestor
+        self.descendant = descendant
+        self.result = result
+
+
+def is_ancestor(ancestor: str, descendant: str, *, cwd: str) -> bool:
+    """Whether ``ancestor`` is reachable from ``descendant``.
+
+    Exit 0 is yes and exit 1 is no; both are answers. Anything else raises
+    ``AncestryUnknownError`` rather than answering no, because callers differ on
+    what an unknown means — some must fail, one deliberately treats it as no —
+    and that choice belongs at the call site, not here.
+    """
+    result = run_git(["merge-base", "--is-ancestor", ancestor, descendant], cwd=cwd)
+    if result is None or result.returncode not in (0, 1):
+        raise AncestryUnknownError(ancestor, descendant, result)
+    return result.returncode == 0
+
+
 class DiffRangeUnresolvedError(Exception):
     """Raised when a slice's diff range cannot be resolved from git structure.
 
