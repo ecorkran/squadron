@@ -12,8 +12,8 @@ not fail every subsequent ``sq review pr`` (see ``sweep_orphans``).
 The four git calls that write the checkout's shared worktree metadata (``worktree add``,
 both ``worktree remove`` call sites, ``worktree prune``) each run under an exclusive
 cross-process lock, since git does not serialize them itself (slice 929, issue #133).
-The lock lives in ``metadata_lock.py`` and is POSIX-only: on a platform without
-``fcntl`` it raises ``MetadataLockError``, which ``__enter__`` reports as a
+The lock lives in ``metadata_lock.py``: on a platform without a file-lock module it
+raises ``MetadataLockError``, which ``__enter__`` reports as a
 ``WorktreeCreationError`` and the never-raise cleanup paths log as a WARNING.
 """
 
