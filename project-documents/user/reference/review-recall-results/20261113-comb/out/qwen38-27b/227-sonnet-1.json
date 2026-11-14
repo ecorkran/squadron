@@ -1,0 +1,43 @@
+{
+ "case": "227",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "run_health` (and thus `shell`) ignores the health command's exit status, so a run that crashes before writing its log line (e.g. a broken just-installed health script) leaves step 7/10 judging a previous clean line; the FLAGS check only covers runs that reached their log write, and backup_health_cron.sh's own design treats an uncheckable run as an alarm, not a pass."
+  ],
+  "F2": [
+   "DROP",
+   "the production `/data/backup/backup-health.log` has been written every 30 minutes since the pre-227 slice-920 install and is never rotated or truncated by this change, so a missing/empty file at the final step is hardening against an input that cannot arrive, not a reachable defect."
+  ],
+  "F3": [
+   "DROP",
+   "both asserts are provably dead: `block_commands`'s line is pre-filtered by `_job_lines` (match cannot be None) and `run_health`'s follows a `require()` that already raises, so they are type-narrowing devices whose stripping under `-O` changes no behavior in a script that never runs with `-O`."
+  ],
+  "F4": [
+   "DROP",
+   "the root/manta user columns are fixed by the checked-in templates and setup-backup.sh constants, the matching works on the real rendered file and pre-227 fixture, and a host-user change would fail the cutover loudly (\"production job count 6 -> 4\"), not silently; the cron user column is functional data, not a user-visible label."
+  ],
+  "F5": [
+   "DROP",
+   "the assertions pin real slice-227 requirements (REPLICATION opt-in in the SQL, `-v with_replication=1` at apply, 755/700 modes, single database) against the actual production files, are the only CI guard for a one-shot root-only script, fail loudly on any drift rather than passing false confidence, and the proposed real-psql/runuser execution is infeasible in a unit tier."
+  ]
+ },
+ "wall_seconds": 362.4,
+ "duration_seconds": 362.4322316250764,
+ "cost_usd": 0.20063884,
+ "effort": null,
+ "tool_calls_made": 25,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=383148, cached=307392, cache_write=None, completion=75949, reasoning=74189)",
+ "raw_output": "\n\nF1: KEEP \u2014 `run_health` (and thus `shell`) ignores the health command's exit status, so a run that crashes before writing its log line (e.g. a broken just-installed health script) leaves step 7/10 judging a previous clean line; the FLAGS check only covers runs that reached their log write, and backup_health_cron.sh's own design treats an uncheckable run as an alarm, not a pass.\nF2: DROP \u2014 the production `/data/backup/backup-health.log` has been written every 30 minutes since the pre-227 slice-920 install and is never rotated or truncated by this change, so a missing/empty file at the final step is hardening against an input that cannot arrive, not a reachable defect.\nF3: DROP \u2014 both asserts are provably dead: `block_commands`'s line is pre-filtered by `_job_lines` (match cannot be None) and `run_health`'s follows a `require()` that already raises, so they are type-narrowing devices whose stripping under `-O` changes no behavior in a script that never runs with `-O`.\nF4: DROP \u2014 the root/manta user columns are fixed by the checked-in templates and setup-backup.sh constants, the matching works on the real rendered file and pre-227 fixture, and a host-user change would fail the cutover loudly (\"production job count 6 -> 4\"), not silently; the cron user column is functional data, not a user-visible label.\nF5: DROP \u2014 the assertions pin real slice-227 requirements (REPLICATION opt-in in the SQL, `-v with_replication=1` at apply, 755/700 modes, single database) against the actual production files, are the only CI guard for a one-shot root-only script, fail loudly on any drift rather than passing false confidence, and the proposed real-psql/runuser execution is infeasible in a unit tier.\n\n\nF1: KEEP \u2014 `run_health` discards the health command's exit status and trusts the log's last line without any freshness check, so a health run that hard-fails before it writes its line (script-level crash, log write failure) lets steps 7 and 10 \u2014 the cutover's core health proofs \u2014 pass on a previous clean line, a silent pass path that a before/after log comparison would close without disturbing step 7's deliberate \"archive=0 only\" expectation.\nF2: DROP \u2014 production's `/data/backup/backup-health.log` has been appended by the every-30-minute main health job since before this change and nothing in the change creates, rotates, or truncates it, so the missing/empty state at the final step requires out-of-band host damage and fails as a loud traceback, not wrong data.\nF3: DROP \u2014 both asserts are pure pyright narrowing after invariants that hold structurally (`_job_lines` pre-filters every line so `match` can never be None; `require()` already raises before the second assert), so `python -O` stripping changes no behavior and the \"control flow\" claim is wrong.\nF4: DROP \u2014 if the host block's user ever changed, `production_changes` would report the job-count/line diff and step 4 would refuse to continue with a clear message, and `main()`'s user read is the structural user column of the 17/main block rather than a \"root\" comparison, so no silent misparse results.\nF5: DROP \u2014 the text assertions pin load-bearing TD5 requirements that the unit tier cannot execute (root-only, real-PostgreSQL provisioning script) and they match the repo's established pattern for host scripts (`test/unit/deploy/test_units.py` asserts on `INSTALLER.read_text()`), with `hba_content` run for real and actual role behavior covered by the integration tests."
+}

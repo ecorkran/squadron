@@ -1,0 +1,43 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "the empty-handler subscriptions and treating a subscribe throw as a mount failure are mandated, tested behaviors of the PM-approved slice design (\"prove the disposer lifecycle\", \"no half-initialized ready state\"), not a defect."
+  ],
+  "F2": [
+   "DROP",
+   "the 366-line hook and the `react-hooks/refs` disable are documented, PM-approved overruns in the slice design, and the remaining points (task-reference comments, stacked comment blocks) are style/comment nits."
+  ],
+  "F3": [
+   "KEEP",
+   "verified: the series count lives only in `seriesCountRef` and is absent from the `[mount.ready, chart, range]` dependency array, so `addSeries` never re-runs the effect and the stored range is silently unapplied when data first arrives, contradicting the \"seam activates on the first addSeries\" the code comments document."
+  ],
+  "F4": [
+   "DROP",
+   "the funnel intentionally surfaces the latest failure (no design requires first-wins); the only real gap is a stale doc comment/test-name, and the tested behavior (success doesn't clear error) is correct."
+  ],
+  "F5": [
+   "DROP",
+   "the stale `chart-render.spec.ts` cross-reference is a true but low-value comment nit, and asserting the visible \"Chart workspace\" copy in an e2e shell check is legitimate, not a violation of the user-label-structure rule."
+  ]
+ },
+ "wall_seconds": 511.2,
+ "duration_seconds": 511.20915400004014,
+ "cost_usd": 0.09957296,
+ "effort": null,
+ "tool_calls_made": 18,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=164996, cached=124672, cache_write=None, completion=38028, reasoning=36788)",
+ "raw_output": "\n\nF1: DROP \u2014 the empty-handler subscriptions and treating a subscribe throw as a mount failure are mandated, tested behaviors of the PM-approved slice design (\"prove the disposer lifecycle\", \"no half-initialized ready state\"), not a defect.\nF2: DROP \u2014 the 366-line hook and the `react-hooks/refs` disable are documented, PM-approved overruns in the slice design, and the remaining points (task-reference comments, stacked comment blocks) are style/comment nits.\nF3: KEEP \u2014 verified: the series count lives only in `seriesCountRef` and is absent from the `[mount.ready, chart, range]` dependency array, so `addSeries` never re-runs the effect and the stored range is silently unapplied when data first arrives, contradicting the \"seam activates on the first addSeries\" the code comments document.\nF4: DROP \u2014 the funnel intentionally surfaces the latest failure (no design requires first-wins); the only real gap is a stale doc comment/test-name, and the tested behavior (success doesn't clear error) is correct.\nF5: DROP \u2014 the stale `chart-render.spec.ts` cross-reference is a true but low-value comment nit, and asserting the visible \"Chart workspace\" copy in an e2e shell check is legitimate, not a violation of the user-label-structure rule.\n\n\nF1: DROP \u2014 the no-op subscription handlers, disposer retention, and subscribe-throw-as-mount-failure are all explicitly mandated, tested, and documented behavior of this slice's design (\"prove the disposer lifecycle\", \"no state in which a half-initialized chart reports ready\"), not gratuitous runtime surface.\nF2: DROP \u2014 the 366-line hook and the file-scoped `react-hooks/refs` disable are a documented, PM-approved budget overrun in the slice design's Implementation Outcomes, and the rest (stale task-reference comments, stacked comment blocks) is a style/comment nit.\nF3: KEEP \u2014 verified: the range effect gates on `seriesCountRef.current` while its deps are `[mount.ready, chart, range]` and `addSeries` triggers no re-render, so the stored range is silently never applied when the first series arrives, contradicting the \"seam initiative 120 activates the moment it adds the first series\" that both the code comment and slice design promise.\nF4: DROP \u2014 latest-error-wins with success-not-clearing is a defensible, tested behavior (each failure is also logged at the moment it occurs, so nothing is swallowed); the only real gap is the doc comment's \"first\" wording, a comment nit rather than a behavioral defect.\nF5: DROP \u2014 the stale `chart-render.spec.ts` cross-reference is a true but low-value comment nit, and asserting visible copy in an e2e smoke test is legitimate; the \"user-accessible labels\" rule forbids using labels as logical structure, not asserting rendered text in tests."
+}

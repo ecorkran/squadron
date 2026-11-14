@@ -1,0 +1,129 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Exit-code parameter breaks process error listeners",
+      "description": "`src/index.ts` registers `handleError` directly for `uncaughtException` and `unhandledRejection`. Those events supply a second argument\u2014an origin string or Promise\u2014which now becomes `exitCode`. Consequently, `process.exit(exitCode)` throws instead of terminating cleanly. Wrap both listeners with `(err) => handleError(err)` and add regression tests.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/errors.ts:46"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Fix mode can report success while required fields remain missing",
+      "description": "`remaining` only tracks original findings whose fixes failed. However, `validateFrontmatter` returns immediately when `docType` is missing. Fixing an inferred `docType` can therefore reveal additional missing fields, yet this command exits successfully without checking them. Revalidate after applying fixes and derive the exit status from the resulting findings. Add a real-service regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Validation ignores the resolved worktree",
+      "description": "The command discards `worktreeId` and always validates `project.projectPath`. From a registered worktree, a default run therefore checks\u2014and `--fix` modifies\u2014the main project checkout. Explicit worktree paths are instead filtered out as outside that root. Use the existing `resolveOperationPath` helper and test worktree-local validation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:89-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Value-constraint test never exercises rejection",
+      "description": "The test claims to catch a wrong `docType`, but every assertion expects zero findings. Its inputs exercise valid schema lookup and intentional unknown-type passthrough, not rejection. Rename it to describe those behaviors and remove the contradictory comments, or add a test that actually exercises a violated constraint.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:371-395"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Exit-code parameter breaks process error listeners",
+      "location": "packages/cli/src/utils/errors.ts:46",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fix mode can report success while required fields remain missing",
+      "location": "packages/cli/src/commands/validate.ts:133",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Validation ignores the resolved worktree",
+      "location": "packages/cli/src/commands/validate.ts:89-100",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Value-constraint test never exercises rejection",
+      "location": "packages/core/tests/schema/frontmatterSchema.test.ts:371-395",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T17:15:34.639430",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 64627,
+  "cached_tokens": 62848,
+  "cache_write_tokens": null,
+  "completion_tokens": 422,
+  "reasoning_tokens": 0,
+  "duration_seconds": 49.6117421251256,
+  "cost_usd": 0.0140628,
+  "cost_basis": "alias_pricing"
+}

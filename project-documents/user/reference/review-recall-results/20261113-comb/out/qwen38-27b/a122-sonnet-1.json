@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "every trigger it names is unreachable on the `_launch` path (checkout is a non-empty `str(Path)`, `build_argv`'s comma checks run before journaling, and a non-string `params` value or empty `pipeline` would mean a planner violating the `LaunchRun` type contract while this slice ships `PRODUCTION_PLANNERS = ()`), and even the hypothetical residue is a visible `unexpected_fault` escalation plus a node block, not a silent wrong-data path."
+  ],
+  "F2": [
+   "DROP",
+   "the project guideline is ~300 lines *excluding whitespace where practical* (this file is under that once blanks/comments are out), and file-size/cohesion and a seven-argument helper are style, not a behavioral defect."
+  ],
+  "F3": [
+   "DROP",
+   "the string-keyed `getattr` is a type-checker-robustness nit, and a negative `launch_grace_seconds` behaves identically to `0.0`, which is an explicitly supported value (tests and the recovery proof bootstrap use it), so the missing bound changes no real behavior."
+  ]
+ },
+ "wall_seconds": 123.6,
+ "duration_seconds": 123.60204604198225,
+ "cost_usd": 0.057920040000000006,
+ "effort": null,
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=122543, cached=83392, cache_write=None, completion=20161, reasoning=19334)",
+ "raw_output": "\n\nF1: DROP \u2014 every trigger it names is unreachable on the `_launch` path (checkout is a non-empty `str(Path)`, `build_argv`'s comma checks run before journaling, and a non-string `params` value or empty `pipeline` would mean a planner violating the `LaunchRun` type contract while this slice ships `PRODUCTION_PLANNERS = ()`), and even the hypothetical residue is a visible `unexpected_fault` escalation plus a node block, not a silent wrong-data path.\nF2: DROP \u2014 the project guideline is ~300 lines *excluding whitespace where practical* (this file is under that once blanks/comments are out), and file-size/cohesion and a seven-argument helper are style, not a behavioral defect.\nF3: DROP \u2014 the string-keyed `getattr` is a type-checker-robustness nit, and a negative `launch_grace_seconds` behaves identically to `0.0`, which is an explicitly supported value (tests and the recovery proof bootstrap use it), so the missing bound changes no real behavior.\n\n\nF1: DROP \u2014 every named trigger is impossible on the actual `_launch` path (checkout is `str(Path)`, never empty; the comma/`=` checks run through the pre-journaling `build_argv`; non-string param values raise before journaling or require a planner to violate the typed `Mapping[str, str]`/`Path` contract with `PRODUCTION_PLANNERS` empty in this slice), and even the residual corrupt-entry case fails loudly via a visible project escalation, not silently.\nF2: DROP \u2014 the ~300-line guideline applies excluding whitespace \"where practical\" and this file is near/at the limit only counting blanks; the rest is cohesion and a seven-argument helper, which is style, not a behavioral defect.\nF3: DROP \u2014 the string-keyed `getattr` lookup is a type-checker nit, and a missing non-negativity check on `launch_grace_seconds` is low value: `0.0` is an explicitly supported value used by tests and the recovery proof bootstrap, and a negative value behaves identically to zero (loudly raising `LAUNCH_OVERDUE`, not silently mis-resolving)."
+}

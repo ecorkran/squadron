@@ -1,0 +1,48 @@
+{
+ "case": "307",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "the real `--json` payload nests the purchase summary under `phases[].summary` (`PassResult.to_dict`), so `judge_estimate`/`_estimate_only` raise `KeyError` on top-level `wanted_days`/`planned_usd`/`verdict` and both the full run and the new `--estimate` mode stop with \"unexpected payload\" before any buy, with flat fixtures pinning the wrong shape."
+  ],
+  "F2": [
+   "KEEP",
+   "evaluate_spend(..., estimate_only=True)` sets verdict `estimate_only` (pinned by the integration test) and `judge_estimate` only accepts `allowed`, so no real full-path estimate can ever reach BUY even with correct ceilings."
+  ],
+  "F3": [
+   "KEEP",
+   "with `check_ceilings=False` the judge returns BUY before reading the verdict, so `--estimate` reports \"buy\" and prints the ceiling command, exiting 0, for refusals a ceiling cannot fix (e.g. the archive-space shortfall that reaches the estimate only through `reasons`)."
+  ],
+  "F4": [
+   "KEEP",
+   "named` is keyed by product only, so the statistics document's over-session names (which mix tick_tier and bar_1m verdicts) are attached to every family row and a failure line can name the wrong family's sessions, though the `.get(\"volume_checks\") or ()` half is justified since bar/tick coverage documents legitimately omit that key."
+  ],
+  "F5": [
+   "DROP",
+   "slice` is the operator's own flag on a script they run themselves; a traversal value only misplaces the script's own state files, so this is hardening against an input that cannot arrive from another party, not a security or behavior defect."
+  ],
+  "F6": [
+   "DROP",
+   "the mypy config was not touched by this change and the project explicitly documents per-subpackage mypy runs with \"zero errors on files touched by a slice\" as the bar; the `Any`-typed ModuleType loading and bare annotations are minor strict-pyright points under a checker the project does not adopt."
+  ]
+ },
+ "wall_seconds": 279.8,
+ "duration_seconds": 279.81375691713765,
+ "cost_usd": 0.19780228,
+ "effort": null,
+ "tool_calls_made": 17,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=617490, cached=499648, cache_write=None, completion=65699, reasoning=63296)",
+ "raw_output": "\n\nF1: KEEP \u2014 the real `--json` payload nests the purchase summary under `phases[].summary` (`PassResult.to_dict`), so `judge_estimate`/`_estimate_only` raise `KeyError` on top-level `wanted_days`/`planned_usd`/`verdict` and both the full run and the new `--estimate` mode stop with \"unexpected payload\" before any buy, with flat fixtures pinning the wrong shape.\nF2: KEEP \u2014 `evaluate_spend(..., estimate_only=True)` sets verdict `estimate_only` (pinned by the integration test) and `judge_estimate` only accepts `allowed`, so no real full-path estimate can ever reach BUY even with correct ceilings.\nF3: KEEP \u2014 with `check_ceilings=False` the judge returns BUY before reading the verdict, so `--estimate` reports \"buy\" and prints the ceiling command, exiting 0, for refusals a ceiling cannot fix (e.g. the archive-space shortfall that reaches the estimate only through `reasons`).\nF4: KEEP \u2014 `named` is keyed by product only, so the statistics document's over-session names (which mix tick_tier and bar_1m verdicts) are attached to every family row and a failure line can name the wrong family's sessions, though the `.get(\"volume_checks\") or ()` half is justified since bar/tick coverage documents legitimately omit that key.\nF5: DROP \u2014 `--slice` is the operator's own flag on a script they run themselves; a traversal value only misplaces the script's own state files, so this is hardening against an input that cannot arrive from another party, not a security or behavior defect.\nF6: DROP \u2014 the mypy config was not touched by this change and the project explicitly documents per-subpackage mypy runs with \"zero errors on files touched by a slice\" as the bar; the `Any`-typed ModuleType loading and bare annotations are minor strict-pyright points under a checker the project does not adopt.\n\n\n### [FAIL] F1 \u2014 Estimate parser reads top-level keys from a payload that nests the summary under `phases`\ncategory: error-handling\nlocation: scripts/cutover_304_first_purchase.py:152-163\nKEEP \u2014 the real `--estimate-only --json` payload puts the purchase summary under `phases[i].summary` (`PassResult.to_dict`, and `cutover_234_checks.purchase_wants` already reads it that way), so `fetch_estimate` \u2192 `_check_scope`/`judge_estimate`/`_estimate_only` raise `KeyError` on `wanted_days`/`planned_usd`/`verdict` and stop with exit 1 before any spend, on both the full run and the new `--estimate` mode.\n\n### [FAIL] F2 \u2014 A real estimate can never reach BUY: its verdict is `estimate_only`, the judge accepts only `allowed`\ncategory: logic\nlocation: scripts/cutover_304_checks.py:242-245\nKEEP \u2014 `evaluate_spend(..., estimate_only=True)` sets `VerdictStatus.ESTIMATE_ONLY` for any non-empty plan (pinned by the integration test), and `plan_summary` reports that as the verdict, so the full-path `judge_estimate` (check_ceilings=True) always falls into `verdict != \"allowed\"` and refuses; BUY has to be derived from the ceilings and `reasons`, not from a verdict an estimate-only run never emits.\n\n### [CONCERN] F3 \u2014 `--estimate` returns BUY for any refusal and prints the ceiling command as the fix\ncategory: logic\nlocation: scripts/cutover_304_checks.py:225-226\nKEEP \u2014 with `check_ceilings=False` the judge returns `Estimate.BUY` before reading the verdict or `reasons`, so a plan refused for a reason raising ceilings cannot fix (the archive-space shortfall reaches the estimate only via `reasons`) is reported as \"buy\" and the PM is told to set ceilings; once F1/F2 are fixed this branch must still refuse on non-ceiling reasons.\n\n### [CONCERN] F4 \u2014 Over-session names are keyed by product, not family\ncategory: data-correctness\nlocation: scripts/cutover_304_evidence.py:232-234\nKEEP \u2014 `_family_evidence` collects `over` names into `named[product]` across every coverage read, and a statistics document's `volume_checks` carry per-family verdicts (`family` field) for both tick-tier and bar families, so `over_failures` can attach one family's over-session names to another family's row; the substance holds even though the over-count/exit rule itself is correct and the `volume_checks` `or ()` default is actually intended (the key is legitimately absent on non-statistics coverage).\n\n### [NOTE] F5 \u2014 `--slice` accepts any text, and that text becomes part of file paths\ncategory: input-validation\nlocation: scripts/cutover_304_first_purchase.py:201-204\nDROP \u2014 `--slice` is operator-supplied input to an operator-run script, and a non-numeric value merely misplaces the script's own local state files (no crash, no wrong data, no external attacker); enforcing `^\\d+$` is cheap hardening rather than a defect to fix before merge.\n\n### [NOTE] F6 \u2014 The new scripts and tests are not covered by the configured type checker\ncategory: tooling\nlocation: pyproject.toml:72-75\nDROP \u2014 the project's `[tool.mypy]` comment documents the merge bar as running mypy per-subpackage on the files the slice touches (`uv run --extra dev mypy <paths>`), so the scripts/tests are covered by the documented workflow rather than the `files` glob, and the cited `reportMissingTypeArgument` complaints are pyright-strict concepts that do not apply to this project's mypy toolchain.\n\nDecision: act on F1, F2, F3, F4 before merge (F1/F2 block the cutover's estimate-and-buy path; F3 misreports unbuyable plans as BUY; F4 misattributes over-session names); F5 and F6 can be left as follow-up."
+}

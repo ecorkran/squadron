@@ -1,0 +1,129 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "New exit-code parameter breaks process error listeners",
+      "description": "`src/index.ts` registers `handleError` directly for `uncaughtException` and `unhandledRejection`. Those events supply an origin string or Promise as the second argument, now interpreted as an exit code. Verified locally: the origin string causes `process.exit()` to throw `ERR_INVALID_ARG_TYPE`. Wrap both listeners so they pass only the error.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/errors.ts:46"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Fixing an inferred docType can falsely report success",
+      "description": "`validateFrontmatter()` returns immediately when `docType` is missing. After fixing that field, this command removes the finding without revalidating. A slice document missing `docType` and other required fields therefore exits successfully despite remaining invalid. Revalidate modified documents before determining the exit status, and add a regression test using the real validator.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:113-133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Worktree invocation validates or modifies the main checkout",
+      "description": "The resolver detects worktree context, but the command discards it and always uses `project.projectPath`. From a registered worktree, a no-path run checks\u2014and with `--fix`, edits\u2014the main checkout. Explicit worktree paths are instead silently excluded by the service\u2019s main-root containment check. Resolve the active checkout root and test both invocation modes.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:89-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Date backfill can overwrite the actual fix timestamp",
+      "description": "For a document missing both `status` and `dateUpdated`, the validator emits fixes in that order. Fixing `status` stamps today, but the subsequent `dateUpdated` fix writes the original `dateCreated` value. The writer intentionally ignores its timestamp argument when updating `dateUpdated` itself. Ensure the final timestamp reflects this run\u2019s actual edit.\n\nTests could not run: dependencies are absent (`vitest: command not found`).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:119-124"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "New exit-code parameter breaks process error listeners",
+      "location": "packages/cli/src/utils/errors.ts:46",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fixing an inferred docType can falsely report success",
+      "location": "packages/cli/src/commands/validate.ts:113-133",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Worktree invocation validates or modifies the main checkout",
+      "location": "packages/cli/src/commands/validate.ts:89-100",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Date backfill can overwrite the actual fix timestamp",
+      "location": "packages/cli/src/commands/validate.ts:119-124",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfe9597a",
+    "diff": "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T16:57:02.437141",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23272,
+  "diff_chars_injected": 23272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 69257,
+  "cached_tokens": 68736,
+  "cache_write_tokens": null,
+  "completion_tokens": 703,
+  "reasoning_tokens": 170,
+  "duration_seconds": 60.676867333007976,
+  "cost_usd": 0.0149456,
+  "cost_basis": "alias_pricing"
+}

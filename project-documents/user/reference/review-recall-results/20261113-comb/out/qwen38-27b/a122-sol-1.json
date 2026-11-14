@@ -1,0 +1,38 @@
+{
+ "case": "a122",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2",
+  "F4": "sol/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "the one shared RunObserver prunes `_last_poll`/`_overdue`/`_faulted` down to the current call's entries (observe.py:105-108), so ticking a second project erases the first project's poll times, overdue markers and standing faults, violating D10's poll-interval guarantee."
+  ],
+  "F2": [
+   "DROP",
+   "the Popen path is budget-checked before it begins, and the unchecked gap between check and spawn is only the journal commit and log-file creation (no subprocess call), leaving consistent, recoverable state under the journal-first ordering, so this is hardening against a sub-millisecond race rather than a behavioral defect."
+  ],
+  "F3": [
+   "KEEP",
+   "an unconfirmed launch whose due poll returned `PollFailure` goes through `_still_overdue` on within-interval ticks without replaying `_faulted` (unlike `_confirmed`), so the state flips FAULT\u2192LAUNCHING with no reported fault and `_close_recovered` closes the still-active escalation."
+  ],
+  "F4": [
+   "KEEP",
+   "the process-boundary handler returns `(COMPLETE, True)` even when `escalate` deduplicates and writes nothing (already-blocked node or open project escalation), so a persistent unexpected fault keeps `ResidentProcess._loop` from taking its idle wait and spins a tight retry-and-ERROR-log loop."
+  ]
+ },
+ "wall_seconds": 324.1,
+ "duration_seconds": 324.0522588749882,
+ "cost_usd": 0.18380192,
+ "effort": null,
+ "tool_calls_made": 27,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=518438, cached=437760, cache_write=None, completion=64796, reasoning=62859)",
+ "raw_output": "\n\nF1: KEEP \u2014 the one shared RunObserver prunes `_last_poll`/`_overdue`/`_faulted` down to the current call's entries (observe.py:105-108), so ticking a second project erases the first project's poll times, overdue markers and standing faults, violating D10's poll-interval guarantee.\nF2: DROP \u2014 the Popen path is budget-checked before it begins, and the unchecked gap between check and spawn is only the journal commit and log-file creation (no subprocess call), leaving consistent, recoverable state under the journal-first ordering, so this is hardening against a sub-millisecond race rather than a behavioral defect.\nF3: KEEP \u2014 an unconfirmed launch whose due poll returned `PollFailure` goes through `_still_overdue` on within-interval ticks without replaying `_faulted` (unlike `_confirmed`), so the state flips FAULT\u2192LAUNCHING with no reported fault and `_close_recovered` closes the still-active escalation.\nF4: KEEP \u2014 the process-boundary handler returns `(COMPLETE, True)` even when `escalate` deduplicates and writes nothing (already-blocked node or open project escalation), so a persistent unexpected fault keeps `ResidentProcess._loop` from taking its idle wait and spins a tight retry-and-ERROR-log loop.\n\n\nF1: KEEP \u2014 the single shared RunObserver prunes `_last_poll`/`_overdue`/`_faulted` down to the current call's entries (observe.py:105-108), so ticking any other project, even an empty one, erases this project's polling state and breaks the configured poll interval.\nF2: DROP \u2014 Popen is checked against the budget before it starts and the un-checked gap only covers the in-process journal commit and log-file creation, so this is a sub-millisecond race-hardening point, not a reachable behavioral defect.\nF3: KEEP \u2014 for an unconfirmed launch whose due poll failed, within-interval ticks take the `_still_overdue` path (observe.py:186) without replaying the standing `_faulted` fault, so state flips FAULT\u2192LAUNCHING with no reported fault and `_close_recovered` closes the still-open escalation.\nF4: KEEP \u2014 the process-boundary handler returns `(COMPLETE, True)` even when `escalate` deduplicates and writes nothing (tenant.py:145-149), so a persistent unexpected fault defeats `ResidentProcess._loop`'s idle wait and spins a tight retry-and-ERROR-log loop."
+}

@@ -1,4 +1,5 @@
-{"case": "932",
+{
+ "case": "932",
  "matched": {
   "sol-high/1/0": "932-I2",
   "sol-high/1/1": "932-I3",
@@ -6,44 +7,113 @@
   "luna-r-xhigh/1/0": "932-I5",
   "luna-r-xhigh/1/1": "932-I7",
   "minimax31-flash/1/0": "932-I16",
-  "minimax31-flash/1/3": "932-I11"
+  "minimax31-flash/1/3": "932-I11",
+  "sol-r/1/0": "932-I3",
+  "sol-r/1/1": "932-I6",
+  "sol-r/1/2": "932-I7"
  },
  "new_issues": [
-  {"id": "932-N1", "title": "_stop_background awaits each stop_task sequentially, so stalled stop requests can delay the dispatch return by up to about 60 s per task.",
-   "members": ["luna-xhigh/1/0"],
-   "grade": "MINOR", "confidence": "medium",
+  {
+   "id": "932-N1",
+   "title": "_stop_background awaits each stop_task sequentially, so stalled stop requests can delay the dispatch return by up to about 60 s per task.",
+   "members": [
+    "luna-xhigh/1/0"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
    "why": "The loop awaits client.stop_task per id, and the code's own comment says the SDK stop control request times out at 60 s. The delay is bounded, only occurs after the background idle timeout has already fired and only when the CLI stops answering control requests, and dispatch still returns. A performance point on a rare cleanup path, not a defect.",
-   "evidence": ["src/squadron/pipeline/sdk_session.py:329-341"],
-   "known": null, "fail_justified": null},
-  {"id": "932-N2", "title": "The SDK provider now always sets env on ClaudeAgentOptions, which the finding says may replace the inherited process environment.",
-   "members": ["minimax31-flash/1/1"],
-   "grade": "FALSE", "confidence": "high",
+   "evidence": [
+    "src/squadron/pipeline/sdk_session.py:329-341"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "932-N2",
+   "title": "The SDK provider now always sets env on ClaudeAgentOptions, which the finding says may replace the inherited process environment.",
+   "members": [
+    "minimax31-flash/1/1"
+   ],
+   "grade": "FALSE",
+   "confidence": "high",
    "why": "ClaudeAgentOptions.env defaults to an empty dict, and the SDK's subprocess transport builds the child env as {**os.environ (minus CLAUDECODE), ..., **options.env}, so an explicit {} or a one-key dict only adds to the inherited environment. PATH and API keys still reach the CLI; setting env unconditionally is equivalent to the default.",
-   "evidence": ["src/squadron/providers/sdk/provider.py:81-90", "src/squadron/providers/sdk/settings.py:62-65", ".venv claude_agent_sdk/_internal/transport/subprocess_cli.py:819-823"],
-   "known": null, "fail_justified": null},
-  {"id": "932-N3", "title": "sq serve agents leave setting_sources unset, said to contradict the settings.py docstring that no automated path may leave it unset.",
-   "members": ["minimax31-flash/1/2"],
-   "grade": "FALSE", "confidence": "medium",
+   "evidence": [
+    "src/squadron/providers/sdk/provider.py:81-90",
+    "src/squadron/providers/sdk/settings.py:62-65",
+    ".venv claude_agent_sdk/_internal/transport/subprocess_cli.py:819-823"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "932-N3",
+   "title": "sq serve agents leave setting_sources unset, said to contradict the settings.py docstring that no automated path may leave it unset.",
+   "members": [
+    "minimax31-flash/1/2"
+   ],
+   "grade": "FALSE",
+   "confidence": "medium",
    "why": "The slice design explicitly lists sq serve agent spawning as out of scope because the API caller supplies the config and it is not an automated pipeline or review path, and models.py names that carve-out next to SETTING_SOURCES_CLI_DEFAULT. The docstring's 'no automated path' therefore does not cover sq serve; there is no contradiction, and the unset behavior itself predates the diff.",
-   "evidence": ["src/squadron/providers/sdk/settings.py:1-7", "src/squadron/core/models.py:110-111", "src/squadron/providers/sdk/provider.py:89-90", "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md:47"],
-   "known": null, "fail_justified": null},
-  {"id": "932-N4", "title": "describe_system_prompt keys on use_default_system_prompt and instructions with no is_sdk parameter, so it would report a preset mode for a non-SDK provider that ignores the flag.",
-   "members": ["minimax31-flash/1/4"],
-   "grade": "FALSE", "confidence": "high",
+   "evidence": [
+    "src/squadron/providers/sdk/settings.py:1-7",
+    "src/squadron/core/models.py:110-111",
+    "src/squadron/providers/sdk/provider.py:89-90",
+    "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md:47"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "932-N4",
+   "title": "describe_system_prompt keys on use_default_system_prompt and instructions with no is_sdk parameter, so it would report a preset mode for a non-SDK provider that ignores the flag.",
+   "members": [
+    "minimax31-flash/1/4"
+   ],
+   "grade": "FALSE",
+   "confidence": "high",
    "why": "Every caller that sets use_default_system_prompt ties it to the provider: dispatch sets it to is_sdk, review_client to provider == SDK, audit only for SDK, and summary_oneshot leaves it False. A non-SDK config with the flag True never reaches describe_system_prompt, so the misreport the finding describes cannot occur; the finding itself concedes the actual cases are reported correctly.",
-   "evidence": ["src/squadron/core/models.py:101-105", "src/squadron/pipeline/actions/dispatch.py:139", "src/squadron/review/review_client.py:195-204"],
-   "known": null, "fail_justified": null},
-  {"id": "932-N5", "title": "dispatch_artifact appends the agent's final text to every post-condition failure, including ones unrelated to the agent's output.",
-   "members": ["minimax31-flash/1/5"],
-   "grade": "MINOR", "confidence": "high",
+   "evidence": [
+    "src/squadron/core/models.py:101-105",
+    "src/squadron/pipeline/actions/dispatch.py:139",
+    "src/squadron/review/review_client.py:195-204"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "932-N5",
+   "title": "dispatch_artifact appends the agent's final text to every post-condition failure, including ones unrelated to the agent's output.",
+   "members": [
+    "minimax31-flash/1/5"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
    "why": "The append happens after _dispatch_artifact_post_condition_error returns, so run-state, missing-start-time and missing-slice-param failures also carry the tail text. This is deliberate per the comment (D7), the real cause stays first in the message, and nothing behaves wrongly; it is a diagnostic-noise preference.",
-   "evidence": ["src/squadron/events/builtin/dispatch_artifact.py:145-150", "src/squadron/events/builtin/dispatch_artifact.py:88-108"],
-   "known": null, "fail_justified": null},
-  {"id": "932-N6", "title": "A mistyped pipeline.background_idle_timeout_s raises a raw ValueError mid-dispatch, outside the provider-error mapping, leaving background agents unstopped.",
-   "members": ["minimax31-flash/1/6"],
-   "grade": "MINOR", "confidence": "medium",
+   "evidence": [
+    "src/squadron/events/builtin/dispatch_artifact.py:145-150",
+    "src/squadron/events/builtin/dispatch_artifact.py:88-108"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "932-N6",
+   "title": "A mistyped pipeline.background_idle_timeout_s raises a raw ValueError mid-dispatch, outside the provider-error mapping, leaving background agents unstopped.",
+   "members": [
+    "minimax31-flash/1/6"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
    "why": "_background_idle_timeout_s is read lazily inside _collect_turns and get_typed_config raises ValueError on a non-int; dispatch() maps only SDK exceptions, so ValueError propagates. DispatchAction.execute catches Exception and fails the step with the clear config message, and sq config set already rejects non-ints, so this needs a hand-edited TOML. The non-positive part of the finding is already 932-I5. Hardening against a user config error rather than a defect on normal input.",
-   "evidence": ["src/squadron/pipeline/sdk_session.py:223-224", "src/squadron/pipeline/sdk_session.py:323-327", "src/squadron/config/manager.py:134-137", "src/squadron/pipeline/actions/dispatch.py:251-258"],
-   "known": null, "fail_justified": null}
+   "evidence": [
+    "src/squadron/pipeline/sdk_session.py:223-224",
+    "src/squadron/pipeline/sdk_session.py:323-327",
+    "src/squadron/config/manager.py:134-137",
+    "src/squadron/pipeline/actions/dispatch.py:251-258"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
  ],
- "disputes": []}
+ "disputes": []
+}

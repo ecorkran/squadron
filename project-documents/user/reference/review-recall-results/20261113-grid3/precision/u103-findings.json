@@ -61,5 +61,26 @@
   "title": "Exported React components omit explicit return types",
   "location": "src/routes/chart-route.tsx#ChartRoute",
   "description": "The TypeScript convention requires explicit return types on exported functions, but `ChartRoute` has none. The same issue exists in `src/app/App.tsx#App` and `src/routes/routes.tsx#RootLayout`. Add explicit `ReactElement` or equivalent return annotations to these exported components."
+ },
+ {
+  "ref": "sol-r/1/0",
+  "severity": "CONCERN",
+  "title": "Adding the first populated series does not apply the current range",
+  "location": "src/chart/use-chart-provider.ts:340-345",
+  "description": "The range effect depends on `mount.ready`, `chart`, and `range`, but adding a series only mutates `seriesCountRef`. Once the initial empty-chart effect has returned, adding populated data neither schedules a render nor changes an effect dependency. Consequently, the existing Context range remains unapplied until the user changes it.\n\nThe translation test masks this by calling `setRange(NEXT_RANGE)` immediately after adding the series. Make data availability a reactive trigger, or explicitly synchronize the current range when the chart becomes populated. Add a regression test that adds populated data without subsequently changing the range."
+ },
+ {
+  "ref": "sol-r/1/1",
+  "severity": "CONCERN",
+  "title": "Series count does not establish that the time scale contains data",
+  "location": "src/chart/chart-facade.ts:48-65",
+  "description": "Every successful `addSeries` increments the count, including valid configurations with `data: []`. Conversely, `updateSeries` can empty or populate a series without changing that count. The hook uses this count to decide whether `setVisibleRange` is safe, despite documenting that a time scale without points throws.\n\nFor example, adding an empty line series and then changing the Context range passes the guard and invokes the operation the guard is intended to prevent. Track actual data availability across additions, updates, and removals rather than treating series existence as populated data. Cover empty additions and populated-to-empty updates in the translation tests."
+ },
+ {
+  "ref": "sol-r/1/2",
+  "severity": "CONCERN",
+  "title": "Missing theme tokens silently select library defaults",
+  "location": "src/routes/chart-route.tsx:35-48",
+  "description": "`readChartStyle` converts missing CSS tokens to `undefined`; when all are absent, it returns `undefined` and the provider silently renders with its library defaults. Partial token loss likewise silently defaults individual colors.\n\nThis contradicts the project convention against silent fallback values and can conceal a missing stylesheet or renamed token while reporting a successfully initialized chart. Validate the required tokens and surface missing-token errors through a visible error path instead of silently accepting default styling."
  }
 ]

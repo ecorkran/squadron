@@ -1,0 +1,28 @@
+{
+ "case": "227",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "verified: `run_steps` catches only `StepFailed`/`CalledProcessError`, so the four named `IndexError`/`FileNotFoundError`/`StopIteration` sites (empty tick log, unguarded production log read in `step_production`, `next(...)` in `conf_sums`, `production_lines(...)[0]` in `main`) abort `main()` before `report.write_text`, and `run_health` discards the health command's exit code while reading the last line of a log also written by the 30-minute cron job, so a health run that fails before appending can let steps 7 and 10 pass on a previous run's `archive=0 stale=0` line."
+  ],
+  "F2": [
+   "DROP",
+   "the values currently match the table (production replication is 127.0.0.1 per `deploy/backup-clusters.conf`), so behavior is correct today; the drift hazard requires a future table edit that a one-off cutover script would not see, would fail closed (a false change blocks the run rather than silently passing it), and the remaining items are cross-language host-fact constants with no behavioral effect."
+  ]
+ },
+ "wall_seconds": 303.4,
+ "duration_seconds": 303.3673967500217,
+ "cost_usd": 0.07207396,
+ "effort": null,
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=173706, cached=124252, cache_write=None, completion=24542, reasoning=23569)",
+ "raw_output": "\n\nF1: KEEP \u2014 verified: `run_steps` catches only `StepFailed`/`CalledProcessError`, so the four named `IndexError`/`FileNotFoundError`/`StopIteration` sites (empty tick log, unguarded production log read in `step_production`, `next(...)` in `conf_sums`, `production_lines(...)[0]` in `main`) abort `main()` before `report.write_text`, and `run_health` discards the health command's exit code while reading the last line of a log also written by the 30-minute cron job, so a health run that fails before appending can let steps 7 and 10 pass on a previous run's `archive=0 stale=0` line.\nF2: DROP \u2014 the values currently match the table (production replication is 127.0.0.1 per `deploy/backup-clusters.conf`), so behavior is correct today; the drift hazard requires a future table edit that a one-off cutover script would not see, would fail closed (a false change blocks the run rather than silently passing it), and the remaining items are cross-language host-fact constants with no behavioral effect.\n\n\nF1: KEEP \u2014 verified: `run_steps` catches only `StepFailed`/`CalledProcessError`, so the four named paths (empty tick log `[-1]` in `run_health`, unguarded `[-1]` read of production's `backup-health.log` in `step_production`, `next(...)` in `conf_sums` with no `StopIteration` default, `production_lines(...)[0]` in `main`) raise `IndexError`/`FileNotFoundError`/`StopIteration` that abort `main()` before `report.write_text`, losing the report on exactly the failure path it exists for; separately `run_health` ignores the health command's exit code and takes the last line of an append-only log also written by the 30-minute cron job, so a health run that fails before appending (e.g. the `>> \"$LOG\"` under `set -uo pipefail`) lets steps 7 and 10 pass on the previous run's `archive=0 stale=0` line, a real silent-failure gap in changed code.\nF2: DROP \u2014 the values currently agree with the table (`deploy/backup-clusters.conf` has `17/main` `replication_host` `127.0.0.1`, `backup_root` `/data/backup`), so behavior is correct today; the drift hazard only bites on a future table edit, and when it does `production_changes` fails closed (blocks the cutover, never lets a real change pass), and the remaining `RCLONE_REMOTE`/`CRON_FILE`/`ARM_FILE`/`TICK_UNIT` items are cross-language constants with no behavioral effect, making the whole finding a low-value single-edit-hazard note rather than a defect."
+}

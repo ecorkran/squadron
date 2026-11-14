@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "verified duplication of the pipeline user_settings/auto_memory policy across dispatch.py and sdk_session.py with divergent cwd resolution (\".\" vs Path.cwd()), risking drifted behavior between the two dispatch paths and violating the project's define-once rule"
+  ],
+  "F2": [
+   "DROP",
+   "the object-annotated fakes and ~35 type ignores plus the broad pytest.raises(Exception) are accurate but purely test-typing/style concerns with no behavioral defect to fix"
+  ]
+ },
+ "wall_seconds": 364.0,
+ "duration_seconds": 363.9547296250239,
+ "cost_usd": 0.12249840000000001,
+ "effort": null,
+ "tool_calls_made": 19,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=343918, cached=174208, cache_write=None, completion=33208, reasoning=31436)",
+ "raw_output": "\n\nBoth findings verified against the code:\n\n**F1**: Confirmed in `dispatch.py:144-153` (`config_cwd = cwd or \".\"`, literals `\"pipeline.user_settings\"` and `\"pipeline.auto_memory\"`, plus a `setting_sources is None` distinction for the non-SDK path) and `sdk_session.py:445-461` (`cwd = str(Path.cwd())`, same two literals via `get_typed_config`, unconditional `sdk_settings_options`). The keys are thus referenced at 5 sites; the pipeline session is built with the process cwd in `run.py:348`/`executor.py:667` while the one-shot path threads `context.cwd`, so the two dispatch paths of the same step can diverge when cwd differs from the process cwd \u2014 a config-resolution drift, not just duplication. This is new code from this change and violates the explicit AGENTS.md \"define once, reference everywhere\" rule.\n\n**F2**: Confirmed as stated \u2014 the conftest fakes return `-> object` and `test_sdk_session.py` carries ~35 `type: ignore`/`pyright: ignore` comments, and line 830 uses `pytest.raises(Exception, match=\"E2BIG\")`. But this is a typing-quality point on test code: the tests pass, the assertions target correct behavior, and no code defect is masked. Low-value style/hardening concern \u2192 DROP.\n\nF1: KEEP \u2014 verified duplication of the pipeline user_settings/auto_memory policy across dispatch.py and sdk_session.py with divergent cwd resolution (\".\" vs Path.cwd()), risking drifted behavior between the two dispatch paths and violating the project's define-once rule\nF2: DROP \u2014 the object-annotated fakes and ~35 type ignores plus the broad pytest.raises(Exception) are accurate but purely test-typing/style concerns with no behavioral defect to fix\n\n\nBoth findings verified against the code. Key checks:\n\n- **F1**: The literal config-key reads appear at `dispatch.py:147,153` and `sdk_session.py:458,460`, plus `keys.py` \u2014 but every config key in the codebase is referenced by literal string at its call site (metrology.*, events.*, agent.*, etc.), so this is the established pattern, not a defect unique to this change. On the cwd point: `get_typed_config` \u2192 `load_config` \u2192 `project_config_path(cwd)` = `Path(cwd).resolve()`. `dispatch.py` uses `config_cwd = cwd or \".\"`; when `cwd` is None, `Path(\".\").resolve()` = process cwd; in production the CLI calls `execute_pipeline` with `cwd=None` \u2192 `effective_cwd = os.getcwd()`, so it's `Path(os.getcwd()).resolve()` = process cwd. `sdk_session.py` uses `Path.cwd()` = process cwd. Both resolve to the process cwd in every shipped flow \u2014 no real divergence.\n\n- **F2**: Confirmed the `-> object` annotations and the `# type: ignore[attr-defined]` lines, and `pytest.raises(Exception, match=\"E2BIG\")`. The re-raised exception from `_reconnect` is the SDK's `CLIConnectionError` (matched by \"E2BIG\"), and the subsequent `unusable_reason` assertion verifies the intent. The suppressions make strict pyright *pass*, not fail \u2014 a test-quality/style preference with no runtime effect.\n\nF1: DROP \u2014 True but low-value: the repeated key reads match the codebase-wide pattern of passing literal config-key strings to `get_typed_config`, and both `.` (when `cwd` is None) and `Path.cwd()` resolve to the process cwd in all production flows, so there is no behavioral drift.\nF2: DROP \u2014 The `-> object` test helpers and broad `pytest.raises(Exception)` are typing/style nits in test code; the `# type: ignore` lines are explicit suppressions that make strict pyright pass rather than fail, so nothing behaves wrongly at runtime."
+}

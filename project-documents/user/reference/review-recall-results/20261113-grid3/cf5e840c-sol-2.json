@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Adoption failures can be reported as successful builds",
+      "description": "`renderFacts()` can throw ordinary filesystem errors through `presentPaths()` or `recognizeCi()`. For example, a `.github/workflows` path that is a file causes `ENOTDIR`. `ContextIntegrator` only rethrows `AdoptionError`, so this becomes an error-stub string returned as a successful CLI/MCP build, after adoption state has already been persisted. Wrap adoption-operation failures in `AdoptionError` and add a regression test verifying failure propagation.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:128-134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Remove the accidentally committed test backup",
+      "description": "This duplicates the previous factory tests, including obsolete single-argument `createContextPipeline()` calls. The configured Vitest pattern excludes `.ts-E`, so it provides no coverage and leaves a misleading, stale copy beside the maintained suite. Delete the backup file.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Adoption failures can be reported as successful builds",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:128-134",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Remove the accidentally committed test backup",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T17:02:35.186805",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 89620,
+  "cached_tokens": 82816,
+  "cache_write_tokens": null,
+  "completion_tokens": 442,
+  "reasoning_tokens": 206,
+  "duration_seconds": 65.26314612501301,
+  "cost_usd": 0.026309600000000002,
+  "cost_basis": "alias_pricing"
+}

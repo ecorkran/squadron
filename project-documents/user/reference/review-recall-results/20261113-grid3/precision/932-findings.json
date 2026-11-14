@@ -89,5 +89,26 @@
   "title": "The background idle timeout is read from config on every waiting dispatch and can raise an uncaught `ValueError`",
   "location": "src/squadron/pipeline/sdk_session.py:308-314",
   "description": "`_background_idle_timeout_s` calls `get_typed_config(\"pipeline.background_idle_timeout_s\", int, ...)`, which raises `ValueError` on a type mismatch (e.g. a hand-edited `.squadron.toml` with `pipeline.background_idle_timeout_s = \"abc\"`). The call sits inside `_collect_turns`, outside the `try` block in `dispatch()` that maps SDK exceptions to provider errors, so a `ValueError` escapes as an unexpected exception type. `dispatch.py`'s `DispatchAction.execute` catches broad `Exception`, so the pipeline survives, but the error surfaces as a raw `ValueError` rather than a `ProviderError`, and the background agents that were still running are never stopped. A negative or zero timeout would also be accepted by the config layer and passed straight to `asyncio.timeout`, which treats `None` as \"no timeout\" but a non-positive value as an immediate expiry."
+ },
+ {
+  "ref": "sol-r/1/0",
+  "severity": "CONCERN",
+  "title": "Check session usability before switching models",
+  "location": "src/squadron/pipeline/sdk_session.py#SDKExecutionSession.set_model",
+  "description": "After a reconnect fails, `_reconnect()` sets `unusable_reason` and resets `current_model` to `None`. However, `set_model()` does not call `_require_usable()`.\n\n`DispatchAction._dispatch_via_session()` calls `set_model()` **before** `dispatch()`, so subsequent batch items can issue control requests against the disconnected client instead of immediately reporting the recorded reconnect failure. Depending on SDK behavior, this can produce another connection error or wait for a control-request timeout.\n\nAdd the usability guard before either the model comparison or SDK call. Extend the failed-reconnect test to call `set_model()` and assert that the underlying client is not contacted; the current fake permits that call and therefore masks this path."
+ },
+ {
+  "ref": "sol-r/1/1",
+  "severity": "CONCERN",
+  "title": "Move configuration file reads off the event loop",
+  "location": "src/squadron/pipeline/sdk_session.py#open_pipeline_session",
+  "description": "The new calls to `get_typed_config()` synchronously resolve paths, check files, and open and parse user/project TOML files through `load_config()`. These operations run directly inside `open_pipeline_session()`, one-shot dispatch, and the background-wait loop.\n\nFilesystem operations cannot guarantee the required sub-millisecond worst-case execution, particularly for network-mounted home directories or cold storage. They can stall unrelated I/O on the same event loop. Repeated typed reads also reload both files separately.\n\nLoad and validate a settings snapshot off-thread, then pass the resolved values into session and dispatch construction. Resolve the idle timeout before entering the response-reading loop rather than performing synchronous file I/O while collecting messages."
+ },
+ {
+  "ref": "sol-r/1/2",
+  "severity": "CONCERN",
+  "title": "Add load coverage for persistent-session message collection",
+  "location": "tests/pipeline/test_sdk_session.py",
+  "description": "The new scripted tests cover individual lifecycle events, timeouts, and follow-up turns, but do not exercise realistic message volumes or assert latency, throughput, or resource bounds.\n\nInspection of `tests/load/` found only grep-timeout and worktree-concurrency tests; neither exercises the modified SDK session path. The additional review rules explicitly require load coverage for network and concurrency changes.\n\nAdd a load test using realistic task/message counts across repeated dispatches, asserting bounded completion latency and resource usage. Include timed-out background work followed by another dispatch to exercise stream reuse and leftover-turn handling."
  }
 ]

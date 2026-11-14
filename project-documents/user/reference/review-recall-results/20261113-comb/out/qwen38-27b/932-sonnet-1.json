@@ -1,0 +1,43 @@
+{
+ "case": "932",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "the claim is accurate but it is typing hygiene in test helpers (the code already passes strict pyright via the ignores and no runtime behavior is affected), not a defect that would cause wrong behavior."
+  ],
+  "F2": [
+   "DROP",
+   "both the 0.05s idle timer and the 0.15s scripted sleep are scheduled on the same event loop, so the timeout is guaranteed to fire first regardless of machine load; the proposed flake mechanism does not hold and the change would be speculative hardening."
+  ],
+  "F3": [
+   "DROP",
+   "the values (\"user\", \"project\") are valid SDK setting-source literals, so the per-caller suppression is only a type-placement/refactor preference with no behavioral defect."
+  ],
+  "F4": [
+   "DROP",
+   "the divergence is unreachable in shipped entry points: `sq run` never passes `cwd` to `execute_pipeline`, so `config_cwd` and `open_pipeline_session`'s `Path.cwd()` both resolve to the process cwd; it only affects hypothetical programmatic callers."
+  ],
+  "F5": [
+   "DROP",
+   "the referenced table is in the same file just above (albeit on a different class, a mild indirection), and placing `describe_*` in `core/models.py` is an explicit slice-932 design decision that also serves non-SDK paths, making this a comment-level nit."
+  ]
+ },
+ "wall_seconds": 158.5,
+ "duration_seconds": 158.47420037491247,
+ "cost_usd": 0.1176242,
+ "effort": null,
+ "tool_calls_made": 28,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=693524, cached=601024, cache_write=None, completion=29715, reasoning=27867)",
+ "raw_output": "\n\nF1: DROP \u2014 the claim is accurate but it is typing hygiene in test helpers (the code already passes strict pyright via the ignores and no runtime behavior is affected), not a defect that would cause wrong behavior.\nF2: DROP \u2014 both the 0.05s idle timer and the 0.15s scripted sleep are scheduled on the same event loop, so the timeout is guaranteed to fire first regardless of machine load; the proposed flake mechanism does not hold and the change would be speculative hardening.\nF3: DROP \u2014 the values (\"user\", \"project\") are valid SDK setting-source literals, so the per-caller suppression is only a type-placement/refactor preference with no behavioral defect.\nF4: DROP \u2014 the divergence is unreachable in shipped entry points: `sq run` never passes `cwd` to `execute_pipeline`, so `config_cwd` and `open_pipeline_session`'s `Path.cwd()` both resolve to the process cwd; it only affects hypothetical programmatic callers.\nF5: DROP \u2014 the referenced table is in the same file just above (albeit on a different class, a mild indirection), and placing `describe_*` in `core/models.py` is an explicit slice-932 design decision that also serves non-SDK paths, making this a comment-level nit.\n\n\nF1: DROP \u2014 true but typing hygiene in test helpers only; the code already passes strict pyright via the ignores and no runtime behavior or test coverage is affected.\nF2: DROP \u2014 the idle timer and the scripted sleep are scheduled on the same event loop with relative deadlines, so the 0.05s timeout is guaranteed to fire before the 0.15s sleep regardless of load; the described flake mechanism cannot occur.\nF3: DROP \u2014 the values (\"user\", \"project\") are valid SDK setting-source literals, so the per-caller suppression is a type-placement preference with no behavioral defect.\nF4: DROP \u2014 unreachable in shipped entry points: `sq run` never passes `cwd` to `execute_pipeline`, so `config_cwd` (\".\" resolved) and `open_pipeline_session`'s `Path.cwd()` read the same project config, matching the SDK agent's own process-cwd spawn.\nF5: DROP \u2014 the referenced table is in the same file directly above the enum (only on a different class), and placing `describe_*` in `core/models.py` is an explicit slice-932 D12 design decision serving both SDK and non-SDK paths, making this a comment-level nit."
+}

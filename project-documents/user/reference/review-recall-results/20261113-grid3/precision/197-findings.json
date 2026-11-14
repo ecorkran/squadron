@@ -124,5 +124,33 @@
   "title": "`_write_atomic` leaves the temp file behind when the rename fails",
   "location": "src/squadron/pipeline/batch_report.py:355-370",
   "description": "`tempfile.NamedTemporaryFile(..., delete=False)` creates the temp file; if `temp.replace(target)` raises `OSError`, the `except OSError` block logs and re-raises, but the temp file is never removed. Every failed report write therefore leaves a `.{name}.{random}` file in the runs directory. The runs directory is also globbed by `StateManager.list_runs` for `*.json` \u2014 the temp file is named `.{target.name}.XXXX` where target is e.g. `run.slices.report.json`, so the temp file is `.run.slices.report.json.abc123` and does *not* end in `.json`, so `list_runs` will not pick it up. But `BatchReport.load` globs nothing, so the residue is inert clutter rather than a correctness bug \u2014 still, it accumulates in the user's config directory on every failed write. A `finally` that unlinks the temp file when the replace failed would be correct."
+ },
+ {
+  "ref": "sol-r/1/0",
+  "severity": "FAIL",
+  "title": "Previously designed items cannot resume from slices-plan",
+  "location": "src/squadron/pipeline/item_resume.py:288-313",
+  "description": "`_select_item()` requires the item to remain selected by the original source. However, `slices-plan` uses `cf.undesigned_slices(...)`: once its design step writes and commits a design, the item disappears from that source\u2014even when its subsequent review loop fails.\n\nBoth retry and accept therefore reject a normal `review_unresolved` item. The reconciliation fallback does not help because it requires a complete slice with a merged implementation branch, which is not the state of a failed design review.\n\nThe planning-batch test masks this by always returning `design_file=None` for plan-scoped queries. Add coverage using the actual post-failure state, and resolve eligible recorded items without requiring them to satisfy an initial-work selection predicate."
+ },
+ {
+  "ref": "sol-r/1/1",
+  "severity": "FAIL",
+  "title": "Resume preparation and source evaluation block the event loop",
+  "location": "src/squadron/pipeline/item_resume.py:146-155",
+  "description": "`_resume_locked()` directly performs synchronous state loading, git precondition checks, dependency queries, and report writes inside an async function. Git calls can block for up to 30 seconds; Context Forge subprocess calls currently have no timeout.\n\nThe new `_cf_slices_ready_to_implement()` source likewise directly invokes synchronous CF subprocesses and reads review/design files inside its async body. These operations cannot satisfy the required worst-case runtime below 1 ms and can prevent cancellation and other scheduled I/O from progressing.\n\nMove blocking preparation and persistence into explicitly awaited worker-thread operations, or use asynchronous subprocess/file boundaries. Add bounded CF execution and a test demonstrating that slow external operations do not stall the event loop."
+ },
+ {
+  "ref": "sol-r/1/2",
+  "severity": "CONCERN",
+  "title": "Deferred dependencies are treated as satisfied during batch execution",
+  "location": "src/squadron/pipeline/sources.py:257-280",
+  "description": "`open_in_plan` excludes both complete and deferred slices. Deferred slices are also omitted from the returned items, so a dependent slice receives neither a source dependency flag nor a later executor dependency flag. It can consequently be implemented despite its prerequisite never being completed.\n\nThis also differs from item resume: `_open_dependencies()` blocks any in-plan dependency whose status is not complete, including deferred dependencies.\n\nSeparate \u201cnot selected for execution\u201d from \u201csatisfies a dependency.\u201d Flag dependents of deferred prerequisites and add a regression test covering this case."
+ },
+ {
+  "ref": "sol-r/1/3",
+  "severity": "CONCERN",
+  "title": "Malformed report items escape the documented load-error boundary",
+  "location": "src/squadron/pipeline/batch_report.py:330-340",
+  "description": "The `cast` does not validate `report[\"items\"]` or its elements. For example, a report containing `\"items\": [null]` reaches `BatchItemRecord.from_json()`, where `data.get(...)` raises `AttributeError`. That exception is not converted to `BatchReportLoadError`, so item resume crashes instead of returning its expected rejected outcome.\n\nOther invalid shapes are silently coerced: missing indices become `\"None\"`, and a string `unsavedParts` becomes a list of characters. Validate the external report with a Pydantic schema before constructing internal dataclasses, and test malformed containers, elements, and required fields."
  }
 ]

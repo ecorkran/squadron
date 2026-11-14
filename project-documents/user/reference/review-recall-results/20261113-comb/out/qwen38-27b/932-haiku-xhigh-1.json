@@ -1,0 +1,43 @@
+{
+ "case": "932",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "the claim is accurate but no production path can build a template with `setting_sources=None` (the only production constructor is `load_template`, which resolves None/absent to `[\"project\"]`), so ~20 test fixtures and the suggested `__post_init__` are test hygiene/defensive hardening, not a defect that would change behavior."
+  ],
+  "F2": [
+   "DROP",
+   "a hand-edited TOML `true`/`0`/`-1` is the only trigger since `set_config` coerces through `int()`, the int branch is the pre-existing shared validator used identically by `events.timeout_seconds`, `cf.mcp_timeout_s`, and `agent.*` keys, and a 1-second bound produces a loud WARNING early-stop rather than wrong data, a hang, or a silent failure."
+  ],
+  "F3": [
+   "DROP",
+   "verified the new async-side `get_typed_config` calls follow the established repo-wide pattern (`events/dispatcher.py:92` in `fire`, `tools/cf_tools.py:221` in `execute`, `providers/openai/provider.py:63-67` in `create_agent` all do the same sync read on the loop), and 2\u20133 small TOML reads are a performance point with no real effect, not behavior worth blocking on."
+  ],
+  "F4": [
+   "DROP",
+   "the slice design restates no NFR and the idle timeout is an operational safety bound already verified by unit tests with a fake silent client and a small value, matching this project's settled precedent (slices 261/266 reviews) that such bounds do not require a `tests/load/` entry."
+  ],
+  "F5": [
+   "DROP",
+   "the ~300-line guideline applies \"where practical\" and has no bearing on behavior; the module is cohesive around one client lifecycle, the slice already extracted `sdk_turns.py`, and further extraction is a follow-up refactor, not a merge blocker."
+  ]
+ },
+ "wall_seconds": 313.4,
+ "duration_seconds": 313.36296824994497,
+ "cost_usd": 0.21331936,
+ "effort": null,
+ "tool_calls_made": 33,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=914231, cached=788352, cache_write=None, completion=65314, reasoning=62823)",
+ "raw_output": "\n\nF1: DROP \u2014 the claim is accurate but no production path can build a template with `setting_sources=None` (the only production constructor is `load_template`, which resolves None/absent to `[\"project\"]`), so ~20 test fixtures and the suggested `__post_init__` are test hygiene/defensive hardening, not a defect that would change behavior.\nF2: DROP \u2014 a hand-edited TOML `true`/`0`/`-1` is the only trigger since `set_config` coerces through `int()`, the int branch is the pre-existing shared validator used identically by `events.timeout_seconds`, `cf.mcp_timeout_s`, and `agent.*` keys, and a 1-second bound produces a loud WARNING early-stop rather than wrong data, a hang, or a silent failure.\nF3: DROP \u2014 verified the new async-side `get_typed_config` calls follow the established repo-wide pattern (`events/dispatcher.py:92` in `fire`, `tools/cf_tools.py:221` in `execute`, `providers/openai/provider.py:63-67` in `create_agent` all do the same sync read on the loop), and 2\u20133 small TOML reads are a performance point with no real effect, not behavior worth blocking on.\nF4: DROP \u2014 the slice design restates no NFR and the idle timeout is an operational safety bound already verified by unit tests with a fake silent client and a small value, matching this project's settled precedent (slices 261/266 reviews) that such bounds do not require a `tests/load/` entry.\nF5: DROP \u2014 the ~300-line guideline applies \"where practical\" and has no bearing on behavior; the module is cohesive around one client lifecycle, the slice already extracted `sdk_turns.py`, and further extraction is a follow-up refactor, not a merge blocker.\n\n\nF1: DROP \u2014 no production code path can construct a `ReviewTemplate` with `setting_sources=None` (the only production constructor, `load_template`, always resolves absent/null to `[\"project\"]` via `_resolve_setting_sources`), so the ~20 test fixtures passing `None` are test-only and the proposed `__post_init__` guard is hardening against an input that cannot arrive, not a merge-blocking defect.\nF2: DROP \u2014 the int branch of `get_typed_config` accepting bool/zero/negative values is the pre-existing shared config-validation pattern used by many earlier keys (`events.timeout_seconds`, `cf.mcp_timeout_s`, `agent.*`, `metrology.*`), and the CLI cannot produce these values (`_coerce_value` runs `int()`); only a deliberately hand-edited TOML reaches them, and the outcome (idle bound of 1s, with a loud `logger.warning` stop in the negative case) is visible, so this is optional hardening rather than a real defect in changed behavior.\nF3: DROP \u2014 verified the cited \"existing callers\": `events/dispatcher.py:92` (`fire`), `tools/cf_tools.py:221` (`execute`), and `providers/openai/provider.py:63-67` (`create_agent`) all already perform the same synchronous `get_typed_config`/TOML read on the event loop, so this slice follows an established repo-wide pattern; two small local-TOML reads in a one-shot dispatch are a performance point with no demonstrated effect, and re-plumbing reads across the codebase is out of scope for this change.\nF4: DROP \u2014 the slice design states no NFR (no latency/throughput/resource SLA) and the idle bound is a safety/operational cap, not an SLA; the new wait path is already covered by unit tests that exercise the timer, stop fan-out, and timeout with fake clients, matching this project's settled precedent (slice 261/266 reviews: \"bounds work is a correctness property verified by unit tests, not a load test\").\nF5: DROP \u2014 the ~300-line guideline applies \"where practical,\" the slice already split out `sdk_turns.py` for size, `sdk_session.py` is cohesive around one client lifecycle with the wait machinery tightly coupled to session state (`background_tasks_waited/stopped`, `session_id`), and extracting ~130 more lines is a follow-up refactor with no effect on correctness or behavior."
+}

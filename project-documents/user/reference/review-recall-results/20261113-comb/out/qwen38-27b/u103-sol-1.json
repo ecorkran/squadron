@@ -1,0 +1,28 @@
+{
+ "case": "u103",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Confirmed against the code: the range effect is keyed only on [mount.ready, chart, range] and addSeries mutates just seriesCountRef, so the Context range already present at mount stays silently unapplied after the first series is added, contradicting the hook's own documented \"activates on the first addSeries\" contract and a gap the translation test enforces by calling setRange after addSeries."
+  ],
+  "F2": [
+   "KEEP",
+   "Confirmed: chart-facade.ts increments the counter for any successful addSeries (including valid configs with empty data) and updateSeries never adjusts it, so the guard this change introduced to prevent lightweight-charts' \"Value is null\" throw is defeated by reachable API inputs, routing that throw into the app's error state on a healthy chart."
+  ]
+ },
+ "wall_seconds": 192.2,
+ "duration_seconds": 192.1704047920648,
+ "cost_usd": 0.09497259999999999,
+ "effort": null,
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=163055, cached=86720, cache_write=None, completion=32871, reasoning=32188)",
+ "raw_output": "\n\nF1: KEEP \u2014 Confirmed against the code: the range effect is keyed only on [mount.ready, chart, range] and addSeries mutates just seriesCountRef, so the Context range already present at mount stays silently unapplied after the first series is added, contradicting the hook's own documented \"activates on the first addSeries\" contract and a gap the translation test enforces by calling setRange after addSeries.\nF2: KEEP \u2014 Confirmed: chart-facade.ts increments the counter for any successful addSeries (including valid configs with empty data) and updateSeries never adjusts it, so the guard this change introduced to prevent lightweight-charts' \"Value is null\" throw is defeated by reachable API inputs, routing that throw into the app's error state on a healthy chart.\n\n\nF1: KEEP \u2014 the range effect's dependency array is only `[mount.ready, chart, range]` and `addSeries` mutates just `seriesCountRef`, so the Context range already present at mount stays silently unapplied after the first series is added, contradicting the documented \"activates on the first addSeries\" behavior; the translation test masks this by calling `setRange` after `addSeries`, which is the only thing that actually re-runs the effect.\nF2: KEEP \u2014 `addSeries` in chart-facade.ts increments the counter for any successful call including valid configs with `data: []`, and `updateSeries` can replace all series data with an empty array without decrementing it, so the guard this change added to prevent lightweight-charts' \"Value is null\" throw on an empty time scale is defeated by reachable API inputs and routes that throw into the hook's surfaced `error` state on a healthy chart."
+}

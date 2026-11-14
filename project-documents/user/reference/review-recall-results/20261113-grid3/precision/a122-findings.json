@@ -68,5 +68,26 @@
   "title": "A journal entry without a run id makes the fault handler raise `KeyError`",
   "location": "src/amoeba/runner/faults.py#_in_flight_run_ids",
   "description": "`_in_flight_run_ids` does `str(entry.parameters[PARAM_RUN_ID])` for every unresolved `SQ_RUN` entry of the node. `PARAM_RUN_ID` is a *required* key for new `SQ_RUN` entries (`REQUIRED_PARAMETER_KEYS` in `src/amoeba/store/journal_models.py`), but entries journaled before slice 120 carry no run id \u2014 that is exactly why `SquadronRunObserver` routes on `PARAM_RUN_ID in entry.parameters` (`src/amoeba/process/observers/sq_run_id.py`).\n\nThis runs inside `escalate()`, which is called from the tenant's process-boundary handler (`src/amoeba/runner/tenant.py`, the `except Exception` branch). A `KeyError` raised there escapes the handler that was supposed to isolate the fault, so a legacy entry turns a per-project fault into a process crash. `entry.parameters.get(PARAM_RUN_ID)` with a `isinstance` check (the pattern used in `src/amoeba/runner/observe.py` and `src/amoeba/runner/finish.py`) keeps the same behaviour for well-formed entries and does not raise for the rest."
+ },
+ {
+  "ref": "sol-r/1/0",
+  "severity": "FAIL",
+  "title": "Observing one project deletes every other project's polling state",
+  "location": "src/amoeba/runner/observe.py:108-111",
+  "description": "`RunnerTenant` shares one `RunObserver` across all projects, but each `ProjectTick` supplies only its own entries. These cleanup operations therefore discard `_last_poll`, `_overdue`, and `_faulted` records belonging to other projects.\n\nWith two projects visited on each tick, confirmed runs can be polled every tick instead of respecting `run_poll_interval_seconds`. Standing faults and overdue-launch state are also lost between visits. Scope observer state and cleanup by project, or give each project its own observer. Add a multi-project regression test covering polling cadence and fault persistence."
+ },
+ {
+  "ref": "sol-r/1/1",
+  "severity": "FAIL",
+  "title": "The launch budget is checked before potentially blocking journal work",
+  "location": "src/amoeba/runner/tick.py:170-187",
+  "description": "The budget check in `_act` occurs before `_launch` validates arguments and commits `journal_issue`. The SQLite write can wait for contention or durable storage, allowing the deadline to expire\u2014or a stop request to arrive\u2014before `launch` starts `Popen`. Neither `_launch` nor `launch` checks the budget again.\n\nThis violates the stated guarantee that no subprocess starts after the deadline or a stop request. Recheck immediately before spawning and explicitly handle an entry that was journaled but not launched. Add a regression test where journal issuance advances the clock past the deadline or requests shutdown."
+ },
+ {
+  "ref": "sol-r/1/2",
+  "severity": "CONCERN",
+  "title": "Unconfirmed launches do not replay standing poll failures",
+  "location": "src/amoeba/runner/observe.py:186-187",
+  "description": "When an unconfirmed launch receives a `PollFailure`, `_fault` saves it in `_faulted`. On the next tick before another poll is due, this branch calls `_still_overdue`, which does not replay that saved observation fault.\n\nConsequently, `ProjectTick._close_recovered` can close the `run_observation_failed` escalation even though no successful observation has occurred. Persistent failures can repeatedly open and close escalations at the polling cadence. Replay standing poll faults for unconfirmed launches, as `_confirmed` already does, and test consecutive ticks with fresh `TickFaults` instances."
  }
 ]

@@ -75,5 +75,26 @@
   "title": "The --estimate run never narrates the estimate's refusal reasons",
   "location": "scripts/cutover_304_first_purchase.py:271",
   "description": "`_estimate_only` prints `verdict {summary['verdict']}: {outcome}` (line 271) and then, whenever the outcome is `BUY`, the ceiling command (line 274) \u2014 but it never narrates `summary[\"reasons\"]`, the list the planner fills with why the estimate was refused (absent or short ceilings, archive space short, provider costs). The full path does surface them: `judge_estimate` raises with `summary[\"reasons\"]` (scripts/cutover_304_checks.py:249-252), so the estimate path loses exactly the information the operator needs to choose the ceilings. The output is also self-contradictory: with `check_ceilings=False`, `judge_estimate` returns `BUY` for every verdict other than `nothing_to_buy` (scripts/cutover_304_checks.py:232-233), so a plan refused for a non-ceiling reason still yields \"verdict refused: buy\", a ceiling command and exit code 0. No test asserts on the estimate's reasons."
+ },
+ {
+  "ref": "sol-r/1/0",
+  "severity": "FAIL",
+  "title": "Tick-tier gaps bypass the per-session exit rule",
+  "location": "scripts/cutover_304_evidence.py:72-93",
+  "description": "`coverage_reads()` includes only `entry.history`, excluding each product\u2019s configured `tbbo` tier. Consequently, `_family_evidence()` never evaluates not-caught-up tick-tier sessions, although accounting includes those families and D6 requires evidence for every family.\n\nA pre-existing tick-tier gap can therefore remain unaccounted for while the cutover reports success: narration prints `caught_up=False`, but no failure is added if health\u2019s exit code remains unchanged. Include the configured tier and its range in coverage reads, and add a regression test where only the tick tier has an unexplained missing session."
+ },
+ {
+  "ref": "sol-r/1/1",
+  "severity": "CONCERN",
+  "title": "Ingest failures are incorrectly classified as acquisition failures",
+  "location": "scripts/purchase_verdicts.py:149-176",
+  "description": "`retry_exhausted_requests()` treats any retry-exhausted unit as evidence that its entire request failed acquisition. However, `ingest_pass._fail()` also records deterministic ingest failures as `RETRY_EXHAUSTED`, leaving the unit in `verified` state after successful acquisition.\n\nThose units cause delivered requests to be narrated as \u201cthe provider will not serve\u201d and labelled `acquisition failed` across the request\u2019s entire range. This confuses provider failures with the ingest findings the report is meant to distinguish. Identify acquisition exhaustion using acquisition state or other explicit manifest evidence, and test a delivered request containing a deterministic ingest failure."
+ },
+ {
+  "ref": "sol-r/1/2",
+  "severity": "CONCERN",
+  "title": "Over-session names lose their volume-family identity",
+  "location": "scripts/purchase_accounting.py:105-128",
+  "description": "Statistics coverage emits volume verdicts for both tick-tier and bar families, including a `family` field. `over_sessions()` discards that field, and `_family_evidence()` accumulates all names under the product alone. `over_failures()` then attaches that combined list to every family with an over count.\n\nWhen the two families have different over sessions, each failure message names sessions belonging to the other family, making the evidence misleading. Preserve and group names by `(product, family)`, and test distinct tick-tier and bar over sessions for the same product."
  }
 ]

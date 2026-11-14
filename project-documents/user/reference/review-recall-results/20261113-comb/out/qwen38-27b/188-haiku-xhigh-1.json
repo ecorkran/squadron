@@ -1,0 +1,63 @@
+{
+ "case": "188",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Verified: `CandlesResponse.build`/`TradesResponse.build` and `timeseries_response` (model_dump + orjson/msgpack on up to 75k records/~35 MB) run on the event loop after the executor call, violating the project's <1 ms/CPU-to-executor rule and stalling every other request including /health for roughly a second per ceiling request, which the sequential load tier never exposes."
+  ],
+  "F2": [
+   "KEEP",
+   "Verified: `tape_facts` returns the trades `sync_state` watermark (advanced to walked-window far edges in `trade_sync._advance`), which is generally later than the newest stored trade, so the published field description is wrong and contradicts the slice's own D5 definition, undermining the field's purpose of letting clients judge tape freshness."
+  ],
+  "F3": [
+   "DROP",
+   "The flag value and served rows are correct and the finding itself frames the remedy as an open design call; only the description's \"no trades are stored\" sentence overstates a post-hoc-filtering edge case, making this a docs nuance rather than a functional defect."
+  ],
+  "F4": [
+   "DROP",
+   "The helper's behavior is correct and agrees with the SQL today; the complaint is a wrong docstring plus a DRY preference, and the divergence it worries about is already guarded by `test_agrees_with_the_sql_predicate`."
+  ],
+  "F5": [
+   "DROP",
+   "The docstring's \"without an edit\" claim is indeed false (new nested fields hit pydantic `extra=\"ignore\"`), but the code is correct today and `test_nested_field_set_is_exactly_what_candle_columns_describes` fails on any dropped column, so this is a docstring/future-proofing point."
+  ],
+  "F6": [
+   "DROP",
+   "The positional mapping matches `TRADE_VALUE_COLUMNS` today (verified), so no wrong data is produced; zipping by name is a hardening against a hypothetical future column swap, not a present defect."
+  ],
+  "F7": [
+   "DROP",
+   "gaps.py` is untouched by the change and its next-midnight end bound is a deliberate, documented analogue for its half-open predicate, so this is a low-value DRY/refactor point with no behavior effect."
+  ],
+  "F8": [
+   "DROP",
+   "Verified the constant is explicitly \"Recorded here rather than asserted\" per the design's deliberate deferral of a byte ceiling, the tier already carries three latency-bound tests satisfying the load rule, and the \"Four assertions\" vs six-functions mismatch is a minor docstring inaccuracy."
+  ],
+  "F9": [
+   "DROP",
+   "The ~300/~50 line guidance applies \"where practical\" to style/structure, part of the overflow predates the diff, and no behavior is affected."
+  ]
+ },
+ "wall_seconds": 600.6,
+ "duration_seconds": 600.5410959580913,
+ "cost_usd": 0.22010548,
+ "effort": null,
+ "tool_calls_made": 33,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=703943, cached=520576, cache_write=None, completion=68213, reasoning=71780)",
+ "raw_output": "\n\nF1: KEEP \u2014 Verified: `CandlesResponse.build`/`TradesResponse.build` and `timeseries_response` (model_dump + orjson/msgpack on up to 75k records/~35 MB) run on the event loop after the executor call, violating the project's <1 ms/CPU-to-executor rule and stalling every other request including /health for roughly a second per ceiling request, which the sequential load tier never exposes.\nF2: KEEP \u2014 Verified: `tape_facts` returns the trades `sync_state` watermark (advanced to walked-window far edges in `trade_sync._advance`), which is generally later than the newest stored trade, so the published field description is wrong and contradicts the slice's own D5 definition, undermining the field's purpose of letting clients judge tape freshness.\nF3: DROP \u2014 The flag value and served rows are correct and the finding itself frames the remedy as an open design call; only the description's \"no trades are stored\" sentence overstates a post-hoc-filtering edge case, making this a docs nuance rather than a functional defect.\nF4: DROP \u2014 The helper's behavior is correct and agrees with the SQL today; the complaint is a wrong docstring plus a DRY preference, and the divergence it worries about is already guarded by `test_agrees_with_the_sql_predicate`.\nF5: DROP \u2014 The docstring's \"without an edit\" claim is indeed false (new nested fields hit pydantic `extra=\"ignore\"`), but the code is correct today and `test_nested_field_set_is_exactly_what_candle_columns_describes` fails on any dropped column, so this is a docstring/future-proofing point.\nF6: DROP \u2014 The positional mapping matches `TRADE_VALUE_COLUMNS` today (verified), so no wrong data is produced; zipping by name is a hardening against a hypothetical future column swap, not a present defect.\nF7: DROP \u2014 `gaps.py` is untouched by the change and its next-midnight end bound is a deliberate, documented analogue for its half-open predicate, so this is a low-value DRY/refactor point with no behavior effect.\nF8: DROP \u2014 Verified the constant is explicitly \"Recorded here rather than asserted\" per the design's deliberate deferral of a byte ceiling, the tier already carries three latency-bound tests satisfying the load rule, and the \"Four assertions\" vs six-functions mismatch is a minor docstring inaccuracy.\nF9: DROP \u2014 The ~300/~50 line guidance applies \"where practical\" to style/structure, part of the overflow predates the diff, and no behavior is affected.\n\n\nF1: KEEP \u2014 Verified that `CandlesResponse.build`/`TradesResponse.build` and `timeseries_response` (model_dump plus orjson/msgpack over up to 75,000 records / ~35 MB) run on the event loop after the executor returns, breaching the project's <1 ms / CPU-to-executor rule and stalling every other request, including /health, by the design's own admitted \"hundreds of milliseconds\".\nF2: KEEP \u2014 `tape_facts` serves the trades watermark (advanced in `trade_sync._advance` to each fully walked window's far edge), which on a quiet market is later than the newest stored trade, so the published field description \"Created time of the newest stored trade\" is wrong in the shipped OpenAPI contract and contradicts the slice's own D5 watermark semantics.\nF3: DROP \u2014 The flag and the rows are each true facts; the description only overstates for the edge of a category excluded after trades were already stored, and the finding itself concedes the fix is an open design call rather than a defect.\nF4: DROP \u2014 The Python membership check agrees with the rendered SQL today and `test_agrees_with_the_sql_predicate` pins that agreement across configurations; the remainder is a docstring overclaim and a DRY preference with no wrong behavior.\nF5: DROP \u2014 The mapping is correct as built and `test_nested_field_set_is_exactly_what_candle_columns_describes` fails on any column a re-nersting edit would silently drop, leaving only an overclaiming docstring to fix.\nF6: DROP \u2014 The positional order matches `TRADE_VALUE_COLUMNS` today (verified against `TRADE_COLUMNS`), so the data served is correct; zipping by name is hardening against a hypothetical future column swap, not a present defect.\nF7: DROP \u2014 `gaps.py` is not touched by this change and its next-midnight end bound is a deliberately documented analogue for its half-open predicate, not the accidental duplication the windows docstring warns about.\nF8: DROP \u2014 `CANDLES_CEILING_RESPONSE_MB` is explicitly \"recorded here rather than asserted\" per the design's deliberate deferral of any byte-ceiling decision, the tier's other tests carry the required latency bounds, and the \"Four assertions\" docstring mismatch is trivial.\nF9: DROP \u2014 File and function length is a \"where practical\" style guideline with no behavioral effect, and `conftest.py` was already over the limit before this diff."
+}

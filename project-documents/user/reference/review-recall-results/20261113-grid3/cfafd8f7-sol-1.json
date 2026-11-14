@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Windows paths lose the subject index used for ownership",
+      "description": "The newly added ownership metadata calls `extractFileIndex()`, which splits paths only on `/`. Document discovery uses platform-native `join()`, so Windows paths yield `null` instead of their filename index. I verified this using the actual extractor: a POSIX path returned `950`; its Windows equivalent returned `null`.\n\n`resolveFixOwner()` then selects the primary checkout rather than the indexed owner, potentially fixing the wrong copy and deferring the correct one. Use platform-aware basename extraction and add Windows-path regression coverage.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:1244"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Apply-time readiness accepts stale fix plans",
+      "description": "The second readiness check verifies checkout state and target-file dirtiness, but never verifies that the dry-run inputs remain unchanged. While confirmation waits, another agent can commit changes to task completion or reorder a plan, leaving a clean checkout that passes this gate.\n\nThe code then applies stale status values or line indices and automatically commits them. The inspected checkbox writer checks only that the saved line contains a checkbox\u2014not that it belongs to the intended subject. Recompute findings after confirmation or validate captured input revisions before applying; add a regression covering committed changes between planning and application.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/routedFixes.ts:255-263"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Windows paths lose the subject index used for ownership",
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:1244",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Apply-time readiness accepts stale fix plans",
+      "location": "packages/core/src/introspection/routedFixes.ts:255-263",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cfafd8f7",
+    "diff": "a72ec96d2beaae34f39e6d097dac5d8a8d57cbd1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T16:58:14.479235",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 146353,
+  "diff_chars_injected": 146353,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 121940,
+  "cached_tokens": 121600,
+  "cache_write_tokens": null,
+  "completion_tokens": 659,
+  "reasoning_tokens": 268,
+  "duration_seconds": 130.1554793328978,
+  "cost_usd": 0.01943,
+  "cost_basis": "alias_pricing"
+}

@@ -1,4 +1,5 @@
-{"case": "188",
+{
+ "case": "188",
  "matched": {
   "luna-xhigh/1/0": "188-I2",
   "sol-high/1/0": "188-I1",
@@ -9,14 +10,29 @@
   "luna-r-xhigh/1/2": "188-I7",
   "minimax31-flash/1/0": "188-I6",
   "minimax31-flash/1/1": "188-I3",
-  "minimax31-flash/1/2": "188-I11"
+  "minimax31-flash/1/2": "188-I11",
+  "sol-r/1/0": "188-I2",
+  "sol-r/1/1": "188-I9",
+  "sol-r/1/2": "188-I6"
  },
  "new_issues": [
-  {"id": "188-N1", "title": "The route unit test hard-codes CEILING = 75_000 instead of importing API_MAX_BARS_PER_REQUEST.",
-   "members": ["minimax31-flash/1/3"],
-   "grade": "FALSE", "confidence": "medium",
+  {
+   "id": "188-N1",
+   "title": "The route unit test hard-codes CEILING = 75_000 instead of importing API_MAX_BARS_PER_REQUEST.",
+   "members": [
+    "minimax31-flash/1/3"
+   ],
+   "grade": "FALSE",
+   "confidence": "medium",
    "why": "The test injects its own ceiling through `dependency_overrides[get_max_bars] = lambda: CEILING`, so the route under test enforces exactly the test's value regardless of the production constant. The fake count of 132,552 is always above that injected 75,000, so changing the constant cannot make the over-ceiling test stop exercising refusal or diverge from the route's message. The claimed failure mode cannot happen; the decoupling is the purpose of the override.",
-   "evidence": ["test/unit/api_server/test_kalshi_timeseries.py:42", "test/unit/api_server/test_kalshi_timeseries.py:111", "test/unit/api_server/test_kalshi_timeseries.py:171-182"],
-   "known": null, "fail_justified": null}
+   "evidence": [
+    "test/unit/api_server/test_kalshi_timeseries.py:42",
+    "test/unit/api_server/test_kalshi_timeseries.py:111",
+    "test/unit/api_server/test_kalshi_timeseries.py:171-182"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
  ],
- "disputes": []}
+ "disputes": []
+}

@@ -110,5 +110,26 @@
   "title": "`dispatch.py` grew past the project's ~300-line source-file guideline",
   "location": "src/squadron/pipeline/actions/dispatch.py",
   "description": "`src/squadron/pipeline/actions/dispatch.py` is now roughly 930 lines. AGENTS.md asks for source files at ~300 lines \"where practical\". The new usage-capture work added `_provider_failure` and `_one_shot` methods to an already-large class. The extraction of `_one_shot` is a good step in that direction (it isolates the agent call), but the class still carries model resolution, prompt resolution, pre-emption fragment handling, tool gating, feedback resolution, and now usage attribution. A `dispatch_usage.py` sibling (mirroring the existing `dispatch_outcome.py` / `dispatch_rules.py` / `dispatch_helpers` decomposition) would keep the usage concern separate."
+ },
+ {
+  "ref": "sol-r/1/0",
+  "severity": "FAIL",
+  "title": "Split reviews retain only the first part\u2019s usage",
+  "location": "src/squadron/pipeline/actions/review.py:506",
+  "description": "Each part now receives a usage record, but `_review()` returns `fold_review_parts(results)`. In `src/squadron/pipeline/actions/review_fold.py`, `_metadata()` copies the first part\u2019s metadata and sums only tool calls. Consequently, a successful three-part review records only part 1\u2019s tokens, turns, duration, and cost. The other artifacts are excluded from standalone statistics because they carry `runId`, so their spend disappears from both reports.\n\nAggregate usage across all parts before returning the folded result, and add a multi-part test with distinct usage values asserting the persisted record and report totals."
+ },
+ {
+  "ref": "sol-r/1/1",
+  "severity": "CONCERN",
+  "title": "Failed compactions discard available spend",
+  "location": "src/squadron/pipeline/actions/compact.py:77-88",
+  "description": "Usage is stamped only when `session.compact()` succeeds. If its summary dispatch raises a `ProviderError`, the session attaches completed-result telemetry, but this exception handler returns an empty-metadata result and discards it. Spend is also lost if summary capture succeeds and the subsequent reconnect fails, because `SDKExecutionSession.compact()` never returns the captured reply.\n\nPreserve captured telemetry through both failure paths and stamp it on the failed action. Cover provider failure after a completed result and reconnect failure after successful summary capture."
+ },
+ {
+  "ref": "sol-r/1/2",
+  "severity": "CONCERN",
+  "title": "Collection-valued costBasis crashes the entire reviews report",
+  "location": "src/squadron/stats/reviews_report.py:151-158",
+  "description": "`read_frontmatter()` returns arbitrary YAML values. A valid YAML field such as `costBasis: [provider]` produces a list, and testing that value for membership in a set raises `TypeError: unhashable type: 'list'`. This aborts `sq stats reviews` instead of warning and retaining the row with an unknown basis, as the parser promises.\n\nValidate that the value is a string before the membership check. Add parametrized tests for list and mapping values, asserting a warning and successful report generation."
  }
 ]

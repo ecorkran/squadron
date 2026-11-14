@@ -82,5 +82,19 @@
   "title": "No load test covers the new bounded `tick_trade` scan",
   "location": "test/load/test_225_tick_ingest_nfr.py",
   "description": "The slice adds a read path over the `tick_trade` hypertable (`raw_counts`: a `count(*)` over the range's first open to last close joined against the session array). The project rules require a load test for code on the database/environment paths that asserts on latency, throughput or resource bounds, and the slice already has a load tier (`test/load/test_225_tick_ingest_nfr.py` covers ingest). Nothing exercises `coverage` at scale: a wide `--start/--end` range, a session array with hundreds of entries, or the resulting scan cost on a multi-chunk hypertable is untested. The range is unbounded by the CLI (only `end > start` is checked), so an operator can ask for a decade-wide scan with no statement timeout on the connection."
+ },
+ {
+  "ref": "sol-r/1/0",
+  "severity": "FAIL",
+  "title": "Compare ledger and raw counts using one database snapshot",
+  "location": "src/manta_trading/data/tick/tick_coverage.py:108-113",
+  "description": "`build_coverage` reads ledger totals and raw counts in separate statements. The CLI connection is explicitly autocommit (`store_context.py:161`), and `_read` does not establish a transaction or stable snapshot.\n\nIf an ingest commits between these statements, the ledger query sees the old counts while the raw query sees newly inserted records. Supersession can similarly replace raw rows between reads. Both are normal operations performed atomically by `ingest_worker.py`, but coverage can incorrectly report corruption and exit 3.\n\nRun the related reads within a read-only, repeatable-read transaction, or obtain both counts in one SQL statement. Add a regression test that commits an ingest between the reads and verifies that coverage remains internally consistent."
+ },
+ {
+  "ref": "sol-r/1/1",
+  "severity": "CONCERN",
+  "title": "Scope raw counts to the same product shape as ledger counts",
+  "location": "src/manta_trading/data/tick/status_reads.py:151-174",
+  "description": "`ledger_totals` restricts records by dataset, symbols, input symbology, and current units through `_SHAPE_WHERE`. `raw_counts`, however, counts every instrument in `tick_trade` within the supplied session times, without any corresponding product or request-shape restriction.\n\nConsequently, valid rows ingested for another shape or product during those hours appear as raw-only instruments in `_session_row`, producing false mismatches for the selected product. The existing raw-count test seeds only one shape, so it does not expose this discrepancy.\n\nDefine and apply matching ownership boundaries to both counts while preserving detection of unexpected rows within that boundary. Add a test containing unrelated instruments during the same session and verify that they do not affect the selected product\u2019s coverage."
  }
 ]

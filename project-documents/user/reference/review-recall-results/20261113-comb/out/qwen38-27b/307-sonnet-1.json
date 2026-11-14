@@ -1,0 +1,23 @@
+{
+ "case": "307",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet/1/0"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "the project's pyproject.toml explicitly adopts mypy (python-rules' permitted alternative to strict pyright) configured with `files = [\"src/manta_trading\"]`, so the cited `scripts/` and `test/` files are not type-checked at all, the unconfirmed \"likely violations\" cannot be merge blockers, and bare `dict`/`object` annotations have zero runtime effect."
+  ]
+ },
+ "wall_seconds": 48.6,
+ "duration_seconds": 48.610873667057604,
+ "cost_usd": 0.0372528,
+ "effort": null,
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=93482, cached=59712, cache_write=None, completion=11892, reasoning=11205)",
+ "raw_output": "\n\nF1: DROP \u2014 the project's pyproject.toml explicitly adopts mypy (python-rules' permitted alternative to strict pyright) configured with `files = [\"src/manta_trading\"]`, so the cited `scripts/` and `test/` files are not type-checked at all, the unconfirmed \"likely violations\" cannot be merge blockers, and bare `dict`/`object` annotations have zero runtime effect.\n\n\n## Review\n\n**Verdict: PASS** \u2014 one finding submitted; it is dropped, so nothing blocks merge.\n\n### [NOTE] F1 \u2014 Loose typing in new script and test code under the strict-pyright rule\ncategory: typing\nlocation: test/unit/scripts/test_purchase_verdicts.py:94\n\nF1: DROP \u2014 this project's pyproject.toml explicitly adopts mypy (the python-rules' documented \"or mypy\" alternative to strict pyright) with `files = [\"src/manta_trading\"]`, so the cited `scripts/` and `test/` files are not checked by the configured tooling at all; the finding is self-declared unconfirmed (\"I did not run pyright\"), and even under plain mypy the specific claims do not hold \u2014 `pv` is `ModuleType` so `pv.check_dataset_edge(_status(...))` exposes no parameter to reject the `object` argument, `origins = {}` in `judge` is a partial type mypy resolves from the later `resubmit_origins` assignment, and bare `-> dict` / `list | None` annotations are legal \u2014 none of the loose typing changes runtime behavior."
+}

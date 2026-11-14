@@ -1,0 +1,38 @@
+{
+ "case": "197",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2",
+  "F4": "sol/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "slices-plan`'s source (`cf.undesigned_slices`) filters out slices with a `design_file`, so after the design is created but its review stays unresolved, `_select_item` re-evaluates the source without the item and its cf fallback only reconciles complete slices, so every retry/accept exits REJECTED for the one flag kind the design says planning batches must support; the planning-batch test masks this by keeping cf reporting the slice as undesigned."
+  ],
+  "F2": [
+   "KEEP",
+   "_git_precondition` never calls `_require_registered_worktree` (unlike `enter_slice_branch`), so in an unregistered linked worktree it reads the primary checkout's integration target and commits leftovers / checks that target out via `restore_target` before the body's `branch enter` guard can refuse, mutating git state on the wrong target."
+  ],
+  "F3": [
+   "KEEP",
+   "the new async `resume_item`/`_resume_locked` path performs synchronous `run_git` subprocess calls (30s timeout each), cf subprocesses and report writes directly on the event loop, violating the project's stated <1ms sync-work rule for async code (python.md, \"Reviewers MUST verify this\"), which the repo already enforced as a fix on the sibling 196 code paths."
+  ],
+  "F4": [
+   "KEEP",
+   "BatchReport.load` casts `items` without validation, so a well-formed report.json like `\"items\": [null]` reaches `BatchItemRecord.from_json(None)`, whose `data.get(...)` raises AttributeError \u2014 not caught by the `(KeyError, TypeError, ValueError)` handler \u2014 escaping the documented `BatchReportLoadError` contract and crashing item resume instead of rejecting it."
+  ]
+ },
+ "wall_seconds": 1036.2,
+ "duration_seconds": 1036.1532658750657,
+ "cost_usd": 0.21146151,
+ "effort": null,
+ "tool_calls_made": 28,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=813900, cached=660651, cache_write=None, completion=64386, reasoning=62587)",
+ "raw_output": "\n\nF1: KEEP \u2014 `slices-plan`'s source (`cf.undesigned_slices`) filters out slices with a `design_file`, so after the design is created but its review stays unresolved, `_select_item` re-evaluates the source without the item and its cf fallback only reconciles complete slices, so every retry/accept exits REJECTED for the one flag kind the design says planning batches must support; the planning-batch test masks this by keeping cf reporting the slice as undesigned.\nF2: KEEP \u2014 `_git_precondition` never calls `_require_registered_worktree` (unlike `enter_slice_branch`), so in an unregistered linked worktree it reads the primary checkout's integration target and commits leftovers / checks that target out via `restore_target` before the body's `branch enter` guard can refuse, mutating git state on the wrong target.\nF3: KEEP \u2014 the new async `resume_item`/`_resume_locked` path performs synchronous `run_git` subprocess calls (30s timeout each), cf subprocesses and report writes directly on the event loop, violating the project's stated <1ms sync-work rule for async code (python.md, \"Reviewers MUST verify this\"), which the repo already enforced as a fix on the sibling 196 code paths.\nF4: KEEP \u2014 `BatchReport.load` casts `items` without validation, so a well-formed report.json like `\"items\": [null]` reaches `BatchItemRecord.from_json(None)`, whose `data.get(...)` raises AttributeError \u2014 not caught by the `(KeyError, TypeError, ValueError)` handler \u2014 escaping the documented `BatchReportLoadError` contract and crashing item resume instead of rejecting it.\n\n\nF1: KEEP \u2014 `_cf_undesigned_slices` filters out any slice with a `design_file`, so after a `slices-plan` design is written but its review stays unresolved the source no longer returns the item, `_select_item`'s cf fallback only reconciles complete slices, and both retry and accept fall through to REJECTED \u2014 a real wrong outcome the design explicitly requires to work, masked by the test's mock that keeps the slice undesigned.\nF2: KEEP \u2014 `_git_precondition` omits `_require_registered_worktree` (which `enter_slice_branch` calls), so in an unregistered linked worktree it reads the primary checkout's target and, via `restore_target`, commits leftovers and checks that target out before any later guard can reject, mutating git state against the wrong target.\nF3: DROP \u2014 the async resume path does run blocking git/cf/write work, but in a single-operation CLI there is no concurrent I/O to stall, so the loop-blocking has no real user-visible effect and is a style/concurrency point rather than a merge-blocker.\nF4: DROP \u2014 `items: [null]` does reach `from_json(None)` and raise AttributeError past the `BatchReportLoadError` handler, but report.json is squadron-generated and replaced atomically so a malformed item cannot realistically arrive, making this hardening against an unreachable input."
+}

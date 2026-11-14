@@ -138,5 +138,33 @@
   "title": "The minute timer's \"staggered 30 minutes behind the daily pass\" is now false",
   "location": "deploy/systemd/mt-minute-pass.timer:3",
   "description": "The `Description=` line and the comment above `OnCalendar` both state the minute pass is staggered 30 minutes behind `mt-daily-pass.timer` (00:35/12:35). With the firing moved to 04:05, only the 13:05 firing is 30 minutes behind (12:35); the 04:05 firing is 3 h 30 min behind the daily 00:35. The rationale for the original staggering (\"so the two passes never start simultaneously \u2026 both compete for the same provider quota bucket\") still applies to 13:05 but the comment now describes a schedule that no longer exists. `deploy/systemd/mt-kalshi-pass.timer` was updated consistently for this change; this one was not."
+ },
+ {
+  "ref": "sol-r/1/0",
+  "severity": "FAIL",
+  "title": "Journal monitoring starts only after the pass finishes",
+  "location": "scripts/cutover_common.py#fire_unit_until",
+  "description": "`run([\"mt-run\", ...], stream=True)` uses blocking `subprocess.run`. In `deploy/mt-run`, `start_and_stream` waits until the service ends before returning. Consequently, `wait_for_unit_or_line` cannot observe the trailing-completion marker or stop the service while backfill is running\u2014the multi-hour wait this change intends to eliminate remains.\n\nStart the service without waiting, then monitor its journal, or manage the streaming subprocess concurrently. Add a regression test that exercises the wrapper's blocking lifecycle rather than mocking `run` as immediately returning."
+ },
+ {
+  "ref": "sol-r/1/1",
+  "severity": "FAIL",
+  "title": "The sudoers policy permits unrestricted root execution",
+  "location": "deploy/sudoers.d/manta-ops:7-9",
+  "description": "`MT_INSTALL` authorizes root execution of a script in the operator's own checkout. The operator can modify or replace that script and execute arbitrary code as root, so naming its absolute path does not constrain privileges.\n\nAdditionally, sudoers argument wildcards match whitespace: `systemctl stop mt-*` can match additional unit arguments beyond the intended `mt-` unit.\n\nUse a root-owned deployment entry point in a root-owned directory, validate its inputs, and enumerate permitted units and operations rather than matching unrestricted argument tails."
+ },
+ {
+  "ref": "sol-r/1/2",
+  "severity": "FAIL",
+  "title": "Session coverage counts bars that will never be stored",
+  "location": "src/manta_trading/data/acquisition/daemon/minute_sessions.py#sessions_without_bars",
+  "description": "Coverage is determined solely from each response bar's timestamp. However, `_bar_to_row` in `minute.py` rejects bars with missing, null, non-finite, or non-positive prices. A response containing only such a bar inside each judged session becomes `SUCCESS`; insertion skips the bars, and `_advance_minute_gap` deletes the gap despite no usable session data being stored.\n\nValidate and normalize bars once, then use those same accepted bars for both coverage judgment and insertion. Add a regression case with a valid in-session timestamp and invalid price fields."
+ },
+ {
+  "ref": "sol-r/1/3",
+  "severity": "CONCERN",
+  "title": "The narration log omits the acceptance evidence",
+  "location": "scripts/cutover_921_minute_sessions.py#_repair",
+  "description": "The new log captures only `say()` calls. `_repair` emits its captured report through `print(output)`, so before/after counts, acceptance numbers, `[FAIL]` details, and `[WAIT]` explanations remain terminal-only. The file advertised as the \u201cfull narration\u201d therefore cannot substantiate the final cutover verdict.\n\nTee repair output into the log as well, and test that an actual acceptance report\u2014not just calls to `say`\u2014is persisted."
  }
 ]

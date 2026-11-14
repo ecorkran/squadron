@@ -1,0 +1,58 @@
+{
+ "case": "921",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "run()` is a blocking `subprocess.run` and `mt-run minute` loops `while is_running` until the unbounded pass ends (deploy/mt-run start_and_stream), so `wait_for_unit_or_line` is only reached after the firing is over and the stop-on-trailing-line mechanism is dead, with the unit test masking it by patching `run` to return instantly."
+  ],
+  "F2": [
+   "KEEP",
+   "ok` is defined by the absence of literal \"FAIL\"/\"[WAIT]\", and verified paths like `scan refused` (RepairScanTimeout, exit 2) or an uncaught traceback in `_run` carry no such literal, so the cutover prints \"CUTOVER COMPLETE\" and exits 0 when acceptance was never measured."
+  ],
+  "F3": [
+   "KEEP",
+   "mt-run *` lets root exec the production `mt` CLI with arbitrary arguments, and the NOPASSWD installer path sits in the operator's own /home checkout (editable by the grantee), so the rule is root-equivalent despite the header claiming \"nothing wider\"."
+  ],
+  "F4": [
+   "KEEP",
+   "_repair` invokes `sudo /opt/manta-trading/.venv/bin/python scripts/...`, which no alias in the new sudoers file matches, so each `--check`/`--apply`/`--verify` poll hits a password prompt or refusal, and the 15-minute verify polls outlive the default 5-minute sudo credential timestamp."
+  ],
+  "F5": [
+   "KEEP",
+   "any legitimately empty session in a multi-session chunk (halt/no-trade day) forces PARTIAL\u2192UNKNOWN, burns attempts until the chunk is mislabeled RETRY_EXHAUSTED while its bars are stored, where the old classifier returned SUCCESS, and the log's \"provider has not published them\" assertion cannot be known."
+  ],
+  "F6": [
+   "DROP",
+   "every sub-point either fails closed (paused/failing job yields a bounded 75-minute wait then a correct INCOMPLETE refusal, the finish-vs-start comparator errs toward false FAIL not false PASS) or targets an input that cannot arrive here (a never-run `'-infinity'` policy for a long-running production cagg, whose fail-open consequence is already captured by F2)."
+  ],
+  "F7": [
+   "KEEP",
+   "_repair` emits the `[PASS]`/`[FAIL]` verdicts via `print`, which bypasses the `say()` tee, so the new log file the change introduces as the cutover's record omits the acceptance evidence it exists to preserve (and `start_log` also creates the notes dir before `preflight` validates the cwd)."
+  ],
+  "F8": [
+   "DROP",
+   "the two functions differ in their wait/stop semantics and the shared text is a handful of lines; this is a DRY/refactoring preference with no behavioral defect, and the real problem in that code is F1."
+  ]
+ },
+ "wall_seconds": 853.9,
+ "duration_seconds": 853.6530779579189,
+ "cost_usd": 0.17541980000000001,
+ "effort": null,
+ "tool_calls_made": 15,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=301817, cached=238992, cache_write=None, completion=67451, reasoning=65622)",
+ "raw_output": "\n\nF1: KEEP \u2014 `run()` is a blocking `subprocess.run` and `mt-run minute` loops `while is_running` until the unbounded pass ends (deploy/mt-run start_and_stream), so `wait_for_unit_or_line` is only reached after the firing is over and the stop-on-trailing-line mechanism is dead, with the unit test masking it by patching `run` to return instantly.\nF2: KEEP \u2014 `ok` is defined by the absence of literal \"FAIL\"/\"[WAIT]\", and verified paths like `scan refused` (RepairScanTimeout, exit 2) or an uncaught traceback in `_run` carry no such literal, so the cutover prints \"CUTOVER COMPLETE\" and exits 0 when acceptance was never measured.\nF3: KEEP \u2014 `mt-run *` lets root exec the production `mt` CLI with arbitrary arguments, and the NOPASSWD installer path sits in the operator's own /home checkout (editable by the grantee), so the rule is root-equivalent despite the header claiming \"nothing wider\".\nF4: KEEP \u2014 `_repair` invokes `sudo /opt/manta-trading/.venv/bin/python scripts/...`, which no alias in the new sudoers file matches, so each `--check`/`--apply`/`--verify` poll hits a password prompt or refusal, and the 15-minute verify polls outlive the default 5-minute sudo credential timestamp.\nF5: KEEP \u2014 any legitimately empty session in a multi-session chunk (halt/no-trade day) forces PARTIAL\u2192UNKNOWN, burns attempts until the chunk is mislabeled RETRY_EXHAUSTED while its bars are stored, where the old classifier returned SUCCESS, and the log's \"provider has not published them\" assertion cannot be known.\nF6: DROP \u2014 every sub-point either fails closed (paused/failing job yields a bounded 75-minute wait then a correct INCOMPLETE refusal, the finish-vs-start comparator errs toward false FAIL not false PASS) or targets an input that cannot arrive here (a never-run `'-infinity'` policy for a long-running production cagg, whose fail-open consequence is already captured by F2).\nF7: KEEP \u2014 `_repair` emits the `[PASS]`/`[FAIL]` verdicts via `print`, which bypasses the `say()` tee, so the new log file the change introduces as the cutover's record omits the acceptance evidence it exists to preserve (and `start_log` also creates the notes dir before `preflight` validates the cwd).\nF8: DROP \u2014 the two functions differ in their wait/stop semantics and the shared text is a handful of lines; this is a DRY/refactoring preference with no behavioral defect, and the real problem in that code is F1.\n\n\nF1: KEEP \u2014 `run()` is a blocking `subprocess.run` and `mt-run minute` loops `while is_running` until the unbounded pass exits, so `wait_for_unit_or_line` is only reached after the firing has already ended and the stop-on-trailing-line path this design exists for is dead, with the unit test masking it by patching `run` to return instantly.\nF2: KEEP \u2014 success is the absence of literal \"FAIL\"/\"[WAIT]\", and verified failure paths (RepairScanTimeout \"scan refused\" with exit 2, or any uncaught `_run` traceback) carry no such literal, so the cutover prints \"CUTOVER COMPLETE\" and exits 0 when acceptance was never measured.\nF3: KEEP \u2014 `mt-run *` lets the operator run the production `mt` CLI as root with arbitrary arguments and the NOPASSWD installer path is in the operator's own writable /home checkout, making the grant root-equivalent contrary to its \"nothing wider\" header.\nF4: KEEP \u2014 `_repair` calls `sudo /opt/manta-trading/.venv/bin/python scripts/repair_921_minute_sessions.py`, which no alias in the new sudoers file matches, so unattended or long-running verify polls (15 min apart, far beyond the default 5-minute credential timeout) hit password prompts and fail or stall.\nF5: KEEP \u2014 a legitimately empty session (halt, no trades) in a judged chunk forces PARTIAL\u2192UNKNOWN, burns attempts until the chunk is mislabeled terminal RETRY_EXHAUSTED with up to five wasted provider calls, where the old classifier returned SUCCESS, and the log's \"provider has not published them\" claim is not knowable from the code.\nF6: DROP \u2014 every sub-point either fails closed (a paused or failing refresh job yields bounded WAIT polls then a correct INCOMPLETE refusal; the finish-vs-start comparator errs toward false FAIL, not false pass) or targets an input that cannot arrive (a never-run '-infinity' policy on a long-running production cagg, whose crash-then-fail-open consequence is already captured by F2).\nF7: KEEP \u2014 `_repair` emits the `[PASS]`/`[FAIL]` verdicts via `print`, bypassing the `say()` tee, so the log file this change introduces as the cutover's only record omits the acceptance evidence it exists to preserve, and `start_log` also creates the notes directory relative to CWD before `preflight` validates the checkout root.\nF8: DROP \u2014 the two functions differ in their wait/stop semantics and the shared text is a few lines; this is a DRY/style preference with no behavioral defect, and the real problem in that code is F1."
+}

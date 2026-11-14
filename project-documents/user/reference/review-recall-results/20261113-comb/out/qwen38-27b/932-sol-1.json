@@ -1,0 +1,28 @@
+{
+ "case": "932",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "this exact ordering (terminal signal before the own result, ledger empty, follow-up owed) is the SDK-documented race #1190 that slice 932's design D6/D13 explicitly handle and accept (leftover turn read past and dropped with a WARNING at the next dispatch), and closing it requires CLI session-state frames the SDK hides from callers, so the requested fix is out of scope for this change."
+  ],
+  "F2": [
+   "KEEP",
+   "verified against the code: `idle_s` is chosen once (sdk_session.py:223-224) and stays armed for the entire `_read_turn` pass, so when a mid-turn TaskNotification clears the last tracked agent, the parent's resumed foreground continuation is still bounded; a gap longer than the timeout raises TimeoutError into the `except TimeoutError` handler, whose `_stop_background` logs a false \"background agent(s) still running; stopped: \" WARNING with zero tracked ids and dispatch returns the truncated text as success, contradicting D5 (timer scoped to the state where the ledger is non-empty; foreground turns get no timer, tracked in #165) \u2014 the fix (re-check `turns.waiting`/the ledger to disarm the timer mid-pass) is small and belongs in this new state machine."
+  ]
+ },
+ "wall_seconds": 272.3,
+ "duration_seconds": 272.2438540419098,
+ "cost_usd": 0.16297424000000002,
+ "effort": null,
+ "tool_calls_made": 14,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=423295, cached=300224, cache_write=None, completion=53830, reasoning=53490)",
+ "raw_output": "\n\nF1: DROP \u2014 this exact ordering (terminal signal before the own result, ledger empty, follow-up owed) is the SDK-documented race #1190 that slice 932's design D6/D13 explicitly handle and accept (leftover turn read past and dropped with a WARNING at the next dispatch), and closing it requires CLI session-state frames the SDK hides from callers, so the requested fix is out of scope for this change.\n\nF2: KEEP \u2014 verified against the code: `idle_s` is chosen once (sdk_session.py:223-224) and stays armed for the entire `_read_turn` pass, so when a mid-turn TaskNotification clears the last tracked agent, the parent's resumed foreground continuation is still bounded; a gap longer than the timeout raises TimeoutError into the `except TimeoutError` handler, whose `_stop_background` logs a false \"background agent(s) still running; stopped: \" WARNING with zero tracked ids and dispatch returns the truncated text as success, contradicting D5 (timer scoped to the state where the ledger is non-empty; foreground turns get no timer, tracked in #165) \u2014 the fix (re-check `turns.waiting`/the ledger to disarm the timer mid-pass) is small and belongs in this new state machine.\n\n\nI already verified both cited code paths this round (sdk_session.py `_collect_turns`/`_read_turn`/`_stop_background`, sdk_turns.py `DispatchTurns.waiting`, and the slice 932 design D5/D6/D13). No further reads are needed; here is the comb.\n\nF1: DROP \u2014 the described ordering (agent reaches terminal state before the own result, ledger empty, follow-up owed) is the SDK-documented race #1190 that this slice's design D6/D13 explicitly handles and accepts: the leftover injected turn is read past and dropped with a WARNING at the start of the next dispatch, the step's post-condition already records a flagged step, and closing it requires CLI session-state frames the SDK hides (`sdk_host_only`), so this is documented, accepted behavior of the new code rather than a defect to fix before merge.\n\nF2: KEEP \u2014 verified in `_collect_turns`: `idle_s` is set once when `turns.waiting` first becomes true (lines 223-224) and the timer stays armed for the entire `_read_turn` pass, so if a `TaskNotificationMessage` inside that pass clears the last tracked agent and the parent resumes foreground work, a gap longer than the bound raises TimeoutError into the `except TimeoutError` handler; `_stop_background` then logs a false \"no activity \u2026 background agent(s) still running; stopped: \" warning with zero tracked ids and dispatch returns truncated text as success \u2014 contradicting D5 (the timer bounds only the ledger-non-empty wait state; foreground turns get no timer, tracked in #165) and D13 (\"never returns partial text as success\"), so the timer must be re-evaluated (disarmed) once no tracked tasks remain."
+}

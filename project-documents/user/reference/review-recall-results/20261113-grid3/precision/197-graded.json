@@ -11,7 +11,10 @@
   "minimax31-flash/1/1": "197-I5",
   "minimax31-flash/1/5": "197-I7",
   "minimax31-flash/1/7": "197-I21",
-  "minimax31-flash/1/8": "197-I4"
+  "minimax31-flash/1/8": "197-I4",
+  "sol-r/1/0": "197-I18",
+  "sol-r/1/1": "197-I20",
+  "sol-r/1/3": "197-I3"
  },
  "new_issues": [
   {
@@ -130,6 +133,24 @@
    ],
    "known": null,
    "fail_justified": null
+  },
+  {
+   "id": "197-N8",
+   "title": "A dependent of a deferred in-plan slice is not flagged by the batch source, so it runs although its prerequisite was never completed; item resume blocks the same dependent.",
+   "members": [
+    "sol-r/1/2"
+   ],
+   "grade": "UNSURE",
+   "confidence": "low",
+   "why": "True of the code: open_in_plan excludes deferred slices, deferred slices are not returned, and the dependency loop flags a dependency only if it is in open_in_plan and not returned, so a slice depending on a deferred one gets no flag (and no outside-plan warning, since it is in in_plan). item_resume._open_dependencies treats any non-complete in-plan dependency, deferred included, as open, so the two paths disagree. Whether the batch side is the defect is not settled by the code: the slice design says a deferred slice 'drops out of selection' and is silent on its dependents, and 197-I11 graded the same disagreement as a resume-side defect. The PM's intent for deferred prerequisites (block dependents or not) would settle it.",
+   "evidence": [
+    "src/squadron/pipeline/sources.py:48",
+    "src/squadron/pipeline/sources.py:257",
+    "src/squadron/pipeline/sources.py:278",
+    "src/squadron/pipeline/item_resume.py:334"
+   ],
+   "known": null,
+   "fail_justified": false
   }
  ],
  "disputes": []

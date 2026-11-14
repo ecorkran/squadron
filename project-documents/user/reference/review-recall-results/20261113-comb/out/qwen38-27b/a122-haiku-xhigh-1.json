@@ -1,0 +1,63 @@
+{
+ "case": "a122",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "the tenant shares one RunObserver across all projects and observe() prunes _last_poll/_overdue/_faulted to the observed project's entries (verified in tenant.py and observe.py), so with two or more hosted projects every run is re-polled each tick instead of per run_poll_interval_seconds, breaking the documented D10 contract and LRU ordering."
+  ],
+  "F2": [
+   "KEEP",
+   "the project's python rules require a load test (CI-gated, asserting latency/throughput/budget bounds) for concurrency and environment-layer code, the Runner's budgeted subprocess launch/poll path is exactly that and has none in tests/load while every sibling tenant does, and it would have caught the F1 poll-rate defect."
+  ],
+  "F3": [
+   "KEEP",
+   "verified the unconfirmed path never replays _faulted between polls, so a standing poll fault's run_observation_failed escalation is closed by _close_recovered on the next tick and reopens at the next poll, flapping against D8's closure rule and the module's own comment intent."
+  ],
+  "F4": [
+   "DROP",
+   "first-payload-wins is the documented store contract (open row returned unchanged, D8/D9 say the raise is deduplicated and writes nothing) and the per-tick BEGIN IMMEDIATE is a small lock acquisition in a single-writer process with no real effect; a design improvement, not a merge-blocking defect."
+  ],
+  "F5": [
+   "KEEP",
+   "verified the re-raise branch has no logger.exception while the slice's task doc and the python rules require re-raise after logging at ERROR, and UpstreamShapeError reaches the CLI as a one-line print with no traceback recorded anywhere."
+  ],
+  "F6": [
+   "DROP",
+   "the catch is the architecture's documented D8 design (\"the Runner's one process-boundary catch\", exactly one except Exception enforced by the slice's own technical requirement), it logs and escalates rather than swallowing, so this is a rules-interpretation/documentation nit with no behavioral defect."
+  ],
+  "F7": [
+   "DROP",
+   "the duplicated key constants are a DRY/maintainability observation with no effect on runtime behavior; the keys are stored journal values, and the change does not break any existing consumer."
+  ],
+  "F8": [
+   "DROP",
+   "LaunchTracker.confirm is uncalled in src, but the observer's direct write sets the same confirmed flag with no behavioral difference; this is dead-code/state-ownership cleanup, not a defect that causes wrong behavior."
+  ],
+  "F9": [
+   "DROP",
+   "the docstring line is stale (verified: the module now contains raise_expected_faults and escalate), but that is a comment correction with no impact on behavior."
+  ]
+ },
+ "wall_seconds": 246.8,
+ "duration_seconds": 246.82777133304626,
+ "cost_usd": 0.1428132,
+ "effort": null,
+ "tool_calls_made": 22,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=329694, cached=264064, cache_write=None, completion=51754, reasoning=49850)",
+ "raw_output": "\n\nF1: KEEP \u2014 the tenant shares one RunObserver across all projects and observe() prunes _last_poll/_overdue/_faulted to the observed project's entries (verified in tenant.py and observe.py), so with two or more hosted projects every run is re-polled each tick instead of per run_poll_interval_seconds, breaking the documented D10 contract and LRU ordering.\nF2: KEEP \u2014 the project's python rules require a load test (CI-gated, asserting latency/throughput/budget bounds) for concurrency and environment-layer code, the Runner's budgeted subprocess launch/poll path is exactly that and has none in tests/load while every sibling tenant does, and it would have caught the F1 poll-rate defect.\nF3: KEEP \u2014 verified the unconfirmed path never replays _faulted between polls, so a standing poll fault's run_observation_failed escalation is closed by _close_recovered on the next tick and reopens at the next poll, flapping against D8's closure rule and the module's own comment intent.\nF4: DROP \u2014 first-payload-wins is the documented store contract (open row returned unchanged, D8/D9 say the raise is deduplicated and writes nothing) and the per-tick BEGIN IMMEDIATE is a small lock acquisition in a single-writer process with no real effect; a design improvement, not a merge-blocking defect.\nF5: KEEP \u2014 verified the re-raise branch has no logger.exception while the slice's task doc and the python rules require re-raise after logging at ERROR, and UpstreamShapeError reaches the CLI as a one-line print with no traceback recorded anywhere.\nF6: DROP \u2014 the catch is the architecture's documented D8 design (\"the Runner's one process-boundary catch\", exactly one except Exception enforced by the slice's own technical requirement), it logs and escalates rather than swallowing, so this is a rules-interpretation/documentation nit with no behavioral defect.\nF7: DROP \u2014 the duplicated key constants are a DRY/maintainability observation with no effect on runtime behavior; the keys are stored journal values, and the change does not break any existing consumer.\nF8: DROP \u2014 LaunchTracker.confirm is uncalled in src, but the observer's direct write sets the same confirmed flag with no behavioral difference; this is dead-code/state-ownership cleanup, not a defect that causes wrong behavior.\nF9: DROP \u2014 the docstring line is stale (verified: the module now contains raise_expected_faults and escalate), but that is a comment correction with no impact on behavior.\n\n\nF1: KEEP \u2014 verified the tenant shares one RunObserver across projects (tenant.py) and observe() prunes _last_poll/_overdue/_faulted to the observed project's entries, so with \u22652 projects every run is re-polled each tick instead of per run_poll_interval_seconds, violating the D10 contract and least-recently-polled guarantee with no test covering it.\nF2: KEEP \u2014 the project's python rules require a CI-gated load test for concurrency/environment-layer code, tests/load has no runner test at all (grep confirmed), and the new Runner's subprocess/poll/budget path is exactly the class of defect unit tests miss.\nF3: KEEP \u2014 traced the code: a PollFailure on an unconfirmed launch is recorded once and never replayed between polls (_unconfirmed/_still_overdue read no _faulted), so _close_recovered closes the run_observation_failed escalation on the next tick and it reopens at the next poll, flapping against D8's closure rule; the only test asserts a single tick.\nF4: DROP \u2014 first-payload-wins is the store's documented dedup contract (open row returned unchanged, \"a kind already open writes nothing\") and the per-fault BEGIN IMMEDIATE is a negligible lock take in a single-writer resident process, so this is a design/polish point, not a merge-blocking defect.\nF5: KEEP \u2014 verified the re-raise branch logs nothing while the task doc and python rules require logger.exception before re-raise, and UpstreamShapeError reaches the CLI as a one-line print with no traceback anywhere, so an aborting shape failure leaves no ERROR record.\nF6: DROP \u2014 the catch is the architecture's documented D8 design (\"the Runner's one process-boundary catch,\" enforced by the slice's own `grep -c` technical requirement), it logs and escalates rather than swallowing, and the finding itself concedes no behavioral flaw; this is a rules-wording/documentation nit.\nF7: DROP \u2014 the duplicated journal parameter key constants are a maintainability/DRY observation with no effect on runtime behavior; changing a key is a deliberate multi-module edit with the required-keys list as a check, not a defect.\nF8: DROP \u2014 LaunchTracker.confirm is uncalled in src/ (verified), but the observer's direct `tracked.confirmed = True` write achieves the same state with no behavioral difference; this is dead-code/state-ownership cleanup, not wrong behavior.\nF9: DROP \u2014 verified the module docstring line is stale (the module now contains raise_expected_faults and escalate), but a corrected comment has no impact on behavior, so this is a docs nit, not a merge blocker."
+}

@@ -1,4 +1,5 @@
-{"case": "u103",
+{
+ "case": "u103",
  "matched": {
   "luna-xhigh/1/0": "u103-I1",
   "sol-high/1/0": "u103-I1",
@@ -6,20 +7,45 @@
   "minimax31-flash/1/0": "u103-I1",
   "sol-high/1/1": "u103-I2",
   "luna-r-xhigh/1/1": "u103-I14",
-  "minimax31-flash/1/1": "u103-I14"
+  "minimax31-flash/1/1": "u103-I14",
+  "sol-r/1/0": "u103-I1",
+  "sol-r/1/1": "u103-I2",
+  "sol-r/1/2": "u103-I5"
  },
  "new_issues": [
-  {"id": "u103-N1", "title": "The mount catch logs every mount-stage failure (resize, observer setup, subscriptions) as 'provider create failed'.",
-   "members": ["minimax31-flash/1/2"],
-   "grade": "MINOR", "confidence": "high",
+  {
+   "id": "u103-N1",
+   "title": "The mount catch logs every mount-stage failure (resize, observer setup, subscriptions) as 'provider create failed'.",
+   "members": [
+    "minimax31-flash/1/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
    "why": "The try at lines 240-301 covers create, initial resize, ResizeObserver setup and both subscriptions, and the catch logs a fixed 'provider create failed' message. The underlying Error with its own message and stack is still logged and committed as error state, so only the log label is misleading.",
-   "evidence": ["src/chart/use-chart-provider.ts:240-304"],
-   "known": null, "fail_justified": null},
-  {"id": "u103-N2", "title": "Exported React components lack the explicit return types the TypeScript rules require.",
-   "members": ["minimax31-flash/1/3"],
-   "grade": "MINOR", "confidence": "high",
+   "evidence": [
+    "src/chart/use-chart-provider.ts:240-304"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "u103-N2",
+   "title": "Exported React components lack the explicit return types the TypeScript rules require.",
+   "members": [
+    "minimax31-flash/1/3"
+   ],
+   "grade": "MINOR",
+   "confidence": "high",
    "why": "The new ChartRoute has no return annotation, against .claude/rules/typescript.md:130; App and RootLayout signatures are unchanged from base. Style convention only, no behavior impact.",
-   "evidence": ["src/routes/chart-route.tsx:57", ".claude/rules/typescript.md:130", "src/app/App.tsx:16", "src/routes/routes.tsx:14"],
-   "known": null, "fail_justified": null}
+   "evidence": [
+    "src/routes/chart-route.tsx:57",
+    ".claude/rules/typescript.md:130",
+    "src/app/App.tsx:16",
+    "src/routes/routes.tsx:14"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
  ],
- "disputes": []}
+ "disputes": []
+}

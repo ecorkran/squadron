@@ -1,0 +1,68 @@
+{
+ "case": "u103",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7",
+  "F9": "haiku-xhigh/1/8",
+  "F10": "haiku-xhigh/1/9"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Verified: the range effect's deps are `[mount.ready, chart, range]` and the series count lives only in `seriesCountRef`, so after `addSeries` no dependency changes and the effect never re-runs; the context range would sit unapplied until the user changes it, contradicting the code's own comment and the test's stated contract that adding a series \"activates the translation.\""
+  ],
+  "F2": [
+   "DROP",
+   "Pre-ready dropping is intentional and documented at both the funnel (use-chart-provider.ts:101-107) and the type contract (chart-operations.ts), `ready` state already lets callers distinguish the cases, and no path in this change issues operations before ready."
+  ],
+  "F3": [
+   "DROP",
+   "All three tokens are defined in theme.css which main.tsx always loads, and the e2e spec already asserts the painted pixel equals the token and the token is non-empty, so the empty-token path is untriggerable hardening, not a live silent fallback."
+  ],
+  "F4": [
+   "DROP",
+   "366 lines vs a \"~300 where practical\" soft guide and a long effect that is mostly comments, with the late-declaration \"hazard\" explicitly documented and provably safe; a refactoring preference with no behavioral impact."
+  ],
+  "F5": [
+   "DROP",
+   "The rule is scoped to this one file with a documented, probe-verified justification, the file deliberately avoids the bug class the rule catches, and the finding concedes the false-positive claim was never verified; a lint-config style point, not a defect."
+  ],
+  "F6": [
+   "DROP",
+   "The placeholder effect is intentional, documented, and required to keep the `useIndicators()` consumer wired for initiative 120; it has no runtime effect on behavior, so removing or keeping it is a taste call."
+  ],
+  "F7": [
+   "DROP",
+   "The guarded handlers are deliberately empty by design in this slice, so the test is a vacuous seam that becomes meaningful when the handlers gain work; it doesn't indicate any defect in production code."
+  ],
+  "F8": [
+   "DROP",
+   "Duplicated per-file test scaffolding (MEASURED/measuredRect/Host) is a test-only DRY nit with zero runtime impact, and per-file vi.mock hoisting already forces much of this structure."
+  ],
+  "F9": [
+   "DROP",
+   "The spy currently matches IChartProvider's full surface, so no drift or wrong behavior exists today; typing the double is test hardening against a future interface change."
+  ],
+  "F10": [
+   "DROP",
+   "The reviewer's own analysis shows the observer's first delivery corrects the 2px border-box delta before paint, so the final size is correct, e2e sizing passes, and the mismatch is a theoretical transient with no observable effect."
+  ]
+ },
+ "wall_seconds": 447.6,
+ "duration_seconds": 447.6124643329531,
+ "cost_usd": 0.12834928,
+ "effort": null,
+ "tool_calls_made": 21,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=236425, cached=158368, cache_write=None, completion=46226, reasoning=44296)",
+ "raw_output": "\n\nF1: KEEP \u2014 Verified: the range effect's deps are `[mount.ready, chart, range]` and the series count lives only in `seriesCountRef`, so after `addSeries` no dependency changes and the effect never re-runs; the context range would sit unapplied until the user changes it, contradicting the code's own comment and the test's stated contract that adding a series \"activates the translation.\"\nF2: DROP \u2014 Pre-ready dropping is intentional and documented at both the funnel (use-chart-provider.ts:101-107) and the type contract (chart-operations.ts), `ready` state already lets callers distinguish the cases, and no path in this change issues operations before ready.\nF3: DROP \u2014 All three tokens are defined in theme.css which main.tsx always loads, and the e2e spec already asserts the painted pixel equals the token and the token is non-empty, so the empty-token path is untriggerable hardening, not a live silent fallback.\nF4: DROP \u2014 366 lines vs a \"~300 where practical\" soft guide and a long effect that is mostly comments, with the late-declaration \"hazard\" explicitly documented and provably safe; a refactoring preference with no behavioral impact.\nF5: DROP \u2014 The rule is scoped to this one file with a documented, probe-verified justification, the file deliberately avoids the bug class the rule catches, and the finding concedes the false-positive claim was never verified; a lint-config style point, not a defect.\nF6: DROP \u2014 The placeholder effect is intentional, documented, and required to keep the `useIndicators()` consumer wired for initiative 120; it has no runtime effect on behavior, so removing or keeping it is a taste call.\nF7: DROP \u2014 The guarded handlers are deliberately empty by design in this slice, so the test is a vacuous seam that becomes meaningful when the handlers gain work; it doesn't indicate any defect in production code.\nF8: DROP \u2014 Duplicated per-file test scaffolding (MEASURED/measuredRect/Host) is a test-only DRY nit with zero runtime impact, and per-file vi.mock hoisting already forces much of this structure.\nF9: DROP \u2014 The spy currently matches IChartProvider's full surface, so no drift or wrong behavior exists today; typing the double is test hardening against a future interface change.\nF10: DROP \u2014 The reviewer's own analysis shows the observer's first delivery corrects the 2px border-box delta before paint, so the final size is correct, e2e sizing passes, and the mismatch is a theoretical transient with no observable effect.\n\n\nF1: KEEP \u2014 Verified: the series count lives only in `seriesCountRef` (a ref), the range effect's deps are `[mount.ready, chart, range]` with `chart` memo-stable, so adding the first series never re-runs the effect and the context range stays unapplied until `range` itself changes \u2014 the test passes only because `setRange` follows `addSeries`, and the code's own \"activates the moment it adds the first series\" contract is not met for initiative 120.\nF2: DROP \u2014 Pre-ready dropping is intentional and documented at the funnel (use-chart-provider.ts:101-107) and in the `ChartOperations` type, the provider throws by contract in that state, and callers can distinguish the cases via the exposed `ready`/`error`, with nothing in this slice actually calling operations pre-ready.\nF3: DROP \u2014 All three tokens are defined in theme.css which main.tsx always imports, and e2e/chart-live.spec.ts already asserts the token is non-empty and the painted pane pixel matches it, so the empty-token fallback is hardening against an input that cannot arrive in this app.\nF4: DROP \u2014 366 lines against a \"~300 where practical\" soft guide (mostly comments) and a long effect are maintainability points with no behavioral impact, and the teardown-after-declaration pattern is documented and provably safe since teardown is only called after those declarations execute.\nF5: DROP \u2014 The suppression is scoped to this one file with a documented, probe-verified false-positive justification, the file deliberately avoids the rule's bug class, and the finding concedes its core claim was never verified; it has no effect on runtime behavior.\nF6: DROP \u2014 The indicator effect is a documented deliberate placeholder with zero runtime behavior, kept so initiative 120 can fill it in; removing it is a design taste call, not a defect.\nF7: DROP \u2014 The handlers are intentionally empty in this slice, so the test is a vacuous seam for future work; it's a test-hygiene observation with no production defect, and the disposed guard itself is harmless and documented.\nF8: DROP \u2014 The per-file `MEASURED`/`measuredRect`/`Host` copies are test-scaffolding duplication with no runtime impact, and per-file `vi.mock` hoisting already forces much of the structure.\nF9: DROP \u2014 The spy's `unknown`-parameter typing is test-double hardening; the hook and the real `LightweightChartsProvider implements IChartProvider` are fully typed against the interface, so interface drift would still be caught where it matters.\nF10: DROP \u2014 The 2px border-box-vs-contentRect delta is corrected by the observer's initial delivery before the next paint, the e2e sizing assertion passes, and the finding itself concedes the impact is probably transient and never painted."
+}

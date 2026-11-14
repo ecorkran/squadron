@@ -103,5 +103,33 @@
   "title": "Production's live backup directories are re-owned and re-moded, outside TD3's guarantee",
   "location": "deploy/setup-backup.sh#ensure_dir",
   "description": "The new per-cluster loop calls `ensure_dir \"$C dir-root\" \"$ROOT\" \"$CRON_OWNER\" \"$CRON_DIR_MODE\"` and the same for `base/` and `metadata/`. For `17/main` that means `/data/backup`, `/data/backup/base` and `/data/backup/metadata` are chowned to `manta:manta` and chmod'ed `775` \u2014 the old code created those directories as root and only ever fixed the WAL directory's shape. So production's live backup tree changes ownership and gains group-write, and the slice's TD3 (\"production's backup paths and prefixes unchanged\") and the cutover's verification (cron lines, config hashes) do not cover directory ownership or mode. Either state the intended production shape explicitly in the design, or exclude the host root and production's existing directories from the shape enforcement and report them read-only."
+ },
+ {
+  "ref": "sol-r/1/0",
+  "severity": "FAIL",
+  "title": "Apply validation rejects drift that setup has successfully repaired",
+  "location": "scripts/cutover_227_tick_backup.py:112-113",
+  "description": "`step_apply()` passes the entire setup output to `setup_not_ok()`, but `APPLY_ALLOWED` permits only tick restart and arm-file messages. `deploy/lib/pg_settings.sh` prints initial `DRIFT` lines before applying changes and reporting the resulting state. `setup-backup.sh#run_lib` preserves those lines, so ordinary tick setup\u2014such as changing `archive_mode` from `off` to `on`\u2014causes the cutover to fail even after the change was applied successfully. Validate final item states rather than treating historical drift messages as unresolved failures, and add a test using actual apply-output sequencing."
+ },
+ {
+  "ref": "sol-r/1/1",
+  "severity": "FAIL",
+  "title": "Production comparison prevents rerunning an already-applied cutover",
+  "location": "scripts/cutover_227_helpers.py:95-96",
+  "description": "`production_changes()` strips the new arguments from `new` but not from `old`. After the first apply, a rerun captures an already-upgraded cron file in `ctx.old_cron`. Comparing that file with an identical fresh render then reports differences because only one side is normalized. Consequently, recovery after any later-step failure stops at step 4. Normalize both sides and test an upgraded-file-to-identical-upgraded-file comparison."
+ },
+ {
+  "ref": "sol-r/1/2",
+  "severity": "FAIL",
+  "title": "Weekly recovery cannot resume after a completed local base backup",
+  "location": "scripts/cutover_227_tick_backup.py:176-179",
+  "description": "The weekly step skips only when today's base directory **and** the arm file exist. However, `scripts/backup_prod.sh` publishes the verified local directory before uploading it. An upload failure\u2014or a later weekly-stage failure\u2014therefore leaves today's base directory present without an arm file. On rerun, this step invokes the full weekly job again, which fails immediately because `backup_prod.sh` refuses an existing destination. Provide a recovery path that verifies and uploads the existing backup, then resumes reconciliation before arming; test failure after local backup completion."
+ },
+ {
+  "ref": "sol-r/1/3",
+  "severity": "CONCERN",
+  "title": "Health verification can pass using an earlier successful log entry",
+  "location": "scripts/cutover_227_tick_backup.py:157-166",
+  "description": "`run_health()` ignores the command result and reads the existing final log line without confirming that this invocation appended it. If the command fails before writing its log\u2014for example, because its executable cannot run or the log is unwritable\u2014an older `FLAGS archive=0 stale=0` entry can make the health steps pass. Verify that the current invocation produced a fresh summary and explicitly handle execution failures. Preserve the intended first-check allowance for stale-backup flags rather than indiscriminately requiring exit zero."
  }
 ]

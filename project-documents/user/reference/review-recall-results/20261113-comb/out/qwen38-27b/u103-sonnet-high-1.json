@@ -1,0 +1,48 @@
+{
+ "case": "u103",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2",
+  "F4": "sonnet-high/1/3",
+  "F5": "sonnet-high/1/4",
+  "F6": "sonnet-high/1/5"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "create() failing leaves chart null, so teardown's provider.destroy() throws \"not ready\" and logs a misleading second error on top of the real failure."
+  ],
+  "F2": [
+   "KEEP",
+   "setOperationError overwrites with the latest failure while the documented contract and the test name both claim the first error is kept."
+  ],
+  "F3": [
+   "DROP",
+   "degrading to library defaults when tokens are empty is a deliberate, documented design choice and the total-failure case is already asserted by the e2e pixel check."
+  ],
+  "F4": [
+   "DROP",
+   "the mount-time no-op subscriptions are explicitly mandated by the task breakdown and slice design to prove the disposer lifecycle, not accidental dead code."
+  ],
+  "F5": [
+   "DROP",
+   "the 366-line hook and the file-scoped react-hooks/refs suppression are recorded as a PM-approved, documented budget overrun in the slice outcomes."
+  ],
+  "F6": [
+   "KEEP",
+   "seriesCountRef is not state and not an effect dependency, so adding the first series after the range was set never re-runs the effect, leaving the viewport out of sync with the Context."
+  ]
+ },
+ "wall_seconds": 331.7,
+ "duration_seconds": 331.67168983398005,
+ "cost_usd": 0.12486,
+ "effort": null,
+ "tool_calls_made": 11,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=243974, cached=113344, cache_write=None, completion=39928, reasoning=39693)",
+ "raw_output": "\n\nBased on my verification of the code:\n\n**F1** \u2014 Confirmed. `LightweightChartsProvider.create()` does `this.chart = createChart(...)` on one line (provider:63). If `createChart` throws, `chart` stays null; the mount-failure path in the hook calls `teardown()` \u2192 `provider.destroy()` \u2192 `assertReady()` throws \"not ready\", which gets logged as a second, misleading `provider teardown failed` error on top of the real `provider create failed` one. This is a genuine failure-path defect in changed code the spy never exposes. KEEP.\n\n**F2** \u2014 Confirmed. `setOperationError` does `error: failure`, overwriting any prior error; the doc in `chart-operations.ts:77` says \"The first error from any provider operation\" and the test is named \"keeps the first error rather than being reset by a later success\" but only asserts that a later *success* preserves it. The doc/behavior mismatch is real. KEEP.\n\n**F3** \u2014 `readChartStyle` intentionally returns `undefined`/omits fields so the provider applies library defaults; the e2e spec already asserts the pane paints in the theme color and that no chart-error region appears. This is a deliberate, commented design decision to degrade gracefully (documented as a deviation in the slice doc), not a silent fallback that the project rule targets. DROP.\n\n**F4** \u2014 The no-op mount-time subscriptions are explicitly required by the task breakdown (\"set up on mount; disposers called on unmount; a subscribe throw runs teardown\") and the slice design (\"the hook *subscribes* (to prove the disposer lifecycle)\"). It's sanctioned complexity, not dead code. DROP.\n\n**F5** \u2014 The 366-line hook and file-wide `react-hooks/refs` off are recorded as a known, PM-approved budget overrun in the slice's Implementation Outcomes with the reasoning captured in `eslint.config.js`. No action required. DROP.\n\n**F6** \u2014 Confirmed. The range effect keys on `range` only and reads `seriesCountRef` inside; adding the first series never re-runs it, so a range set while the chart was empty is never applied until the *next* range change. This is a real latent sync bug the slice's own \"activates on the first series\" comment misdescribes, and it ships to initiative 120. KEEP.\n\n\nF1: KEEP \u2014 create() failing leaves chart null, so teardown's provider.destroy() throws \"not ready\" and logs a misleading second error on top of the real failure.\nF2: KEEP \u2014 setOperationError overwrites with the latest failure while the documented contract and the test name both claim the first error is kept.\nF3: DROP \u2014 degrading to library defaults when tokens are empty is a deliberate, documented design choice and the total-failure case is already asserted by the e2e pixel check.\nF4: DROP \u2014 the mount-time no-op subscriptions are explicitly mandated by the task breakdown and slice design to prove the disposer lifecycle, not accidental dead code.\nF5: DROP \u2014 the 366-line hook and the file-scoped react-hooks/refs suppression are recorded as a PM-approved, documented budget overrun in the slice outcomes.\nF6: KEEP \u2014 seriesCountRef is not state and not an effect dependency, so adding the first series after the range was set never re-runs the effect, leaving the viewport out of sync with the Context."
+}

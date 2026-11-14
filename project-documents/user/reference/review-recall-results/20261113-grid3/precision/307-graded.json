@@ -1,4 +1,5 @@
-{"case": "307",
+{
+ "case": "307",
  "matched": {
   "luna-xhigh/1/0": "307-I4",
   "luna-r-xhigh/1/3": "307-I4",
@@ -6,26 +7,81 @@
   "sol-high/1/1": "307-I16",
   "sol-high/1/2": "307-I13",
   "luna-r-xhigh/1/0": "307-I14",
-  "minimax31-flash/1/1": "307-I3"
+  "minimax31-flash/1/1": "307-I3",
+  "sol-r/1/0": "307-I13",
+  "sol-r/1/2": "307-I4"
  },
  "new_issues": [
-  {"id": "307-N1", "title": "The derived 30-day ceiling and the cutover's own cap check use planned + trailing, while the spend guard uses trailing + unheld + planned_new, so unheld provider jobs are omitted and counted re-submits are double-counted.",
-   "members": ["luna-r-xhigh/1/1", "minimax31-flash/1/0"],
-   "grade": "REAL", "confidence": "medium",
+  {
+   "id": "307-N1",
+   "title": "The derived 30-day ceiling and the cutover's own cap check use planned + trailing, while the spend guard uses trailing + unheld + planned_new, so unheld provider jobs are omitted and counted re-submits are double-counted.",
+   "members": [
+    "luna-r-xhigh/1/1",
+    "minimax31-flash/1/0"
+   ],
+   "grade": "REAL",
+   "confidence": "medium",
    "why": "ceiling_values/ceiling_command (new in this diff) and judge_estimate's cap check sum planned_usd (spend.planned_total, which includes counted re-submits) and trailing_30d_usd, and ignore the unheld_jobs the summary carries. evaluate_spend adds unheld_total and excludes counted re-submits via planned_new. With unheld jobs the printed --cap-30d is too low and the guard still refuses the pass; on the D5 re-run after a failed-retryable request the re-submit cost is counted twice, giving a spurious stop and an inflated cap. Same impact class as I15: a wrong operator command and a re-run, not wrong spending, since the guard still decides.",
-   "evidence": ["scripts/cutover_304_checks.py:88-97", "scripts/cutover_304_checks.py:237-241", "src/manta_trading/data/tick/spend_guard.py:238-252", "src/manta_trading/data/tick/purchase_plan.py:295-299"],
-   "known": null, "fail_justified": null},
-  {"id": "307-N2", "title": "The evidence step never captures the mt data health rows that D6 item 2 requires; it keeps only health's exit code.",
-   "members": ["luna-r-xhigh/1/2"],
-   "grade": "MINOR", "confidence": "medium",
+   "evidence": [
+    "scripts/cutover_304_checks.py:88-97",
+    "scripts/cutover_304_checks.py:237-241",
+    "src/manta_trading/data/tick/spend_guard.py:238-252",
+    "src/manta_trading/data/tick/purchase_plan.py:295-299"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "307-N2",
+   "title": "The evidence step never captures the mt data health rows that D6 item 2 requires; it keeps only health's exit code.",
+   "members": [
+    "luna-r-xhigh/1/2"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
    "why": "health_exit_code runs mt data health via mt_run, which does not log stdout, and collect narrates only accounting lines; D6 item 2 and the evidence note's heading ask for health's row and accounting's line. The accounting line already carries sessions complete/judged, source edge and caught up, and the exit rule still compares health's exit code, so this is an evidence-completeness gap in the narration, not wrong behavior.",
-   "evidence": ["scripts/cutover_304_evidence.py:94-95", "scripts/cutover_304_evidence.py:249-257", "project-documents/user/slices/307-slice.futures-history-acquisition.md:229", "project-documents/user/notes/307-history-acquisition-evidence.md:24-25"],
-   "known": null, "fail_justified": null},
-  {"id": "307-N3", "title": "totals_delta stops on a family absent before but silently drops a family present before and absent after.",
-   "members": ["luna-xhigh/1/1"],
-   "grade": "MINOR", "confidence": "medium",
+   "evidence": [
+    "scripts/cutover_304_evidence.py:94-95",
+    "scripts/cutover_304_evidence.py:249-257",
+    "project-documents/user/slices/307-slice.futures-history-acquisition.md:229",
+    "project-documents/user/notes/307-history-acquisition-evidence.md:24-25"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "307-N3",
+   "title": "totals_delta stops on a family absent before but silently drops a family present before and absent after.",
+   "members": [
+    "luna-xhigh/1/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
    "why": "The dict comprehension iterates only after's keys, so a before-only family vanishes from the narrated delta. Accounting emits one row per wanted family of the installed universe, and 307 only adds families, so a family disappearing after install cannot arrive in this cutover; the delta is item 6 scale narration, not an exit-rule input. Speculative hardening.",
-   "evidence": ["scripts/purchase_accounting.py:136-144", "scripts/cutover_304_evidence.py:268-271"],
-   "known": null, "fail_justified": null}
+   "evidence": [
+    "scripts/purchase_accounting.py:136-144",
+    "scripts/cutover_304_evidence.py:268-271"
+   ],
+   "known": null,
+   "fail_justified": null
+  },
+  {
+   "id": "307-N4",
+   "title": "retry_exhausted_requests labels every request holding a retry-exhausted unit 'acquisition failed / the provider will not serve', though the ingest pass also records deterministic ingest failures as RETRY_EXHAUSTED on units whose data was acquired.",
+   "members": [
+    "sol-r/1/1"
+   ],
+   "grade": "MINOR",
+   "confidence": "medium",
+   "why": "ingest_pass._fail calls record_failure(..., UnitState.VERIFIED, reason, deterministic=True) and the module header says such a unit is recorded as RETRY_EXHAUSTED, so a delivered request can carry a retry-exhausted unit and be narrated 'acquisition failed' over its whole range with the ingest reason as the error text. The mislabel is real, but the real reason text is printed verbatim, and the exit rule is not weakened: a session with a manifest reason is already accounted for through the reasons, independent of the label. Only the narration class is wrong.",
+   "evidence": [
+    "scripts/purchase_verdicts.py:144-176",
+    "scripts/purchase_verdicts.py:231-253",
+    "src/manta_trading/data/tick/ingest_pass.py:110-122"
+   ],
+   "known": null,
+   "fail_justified": null
+  }
  ],
- "disputes": []}
+ "disputes": []
+}

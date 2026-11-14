@@ -1,0 +1,28 @@
+{
+ "case": "307",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "the duplication is verified, but it is a pure DRY/style observation with no behavioral, crash, or security impact, so it is low value per the rubric."
+  ],
+  "F2": [
+   "DROP",
+   "the bare generics are real, but the project's pyproject shows it uses mypy (not pyright, which is not even in the dev dependencies), so the stated \"strict pyright merge blocker\" does not exist and the finding fails on its own premise."
+  ]
+ },
+ "wall_seconds": 63.1,
+ "duration_seconds": 63.04465570813045,
+ "cost_usd": 0.02520804,
+ "effort": null,
+ "tool_calls_made": 6,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=105753, cached=57472, cache_write=None, completion=4885, reasoning=4449)",
+ "raw_output": "\n\nF1: DROP \u2014 the duplication is verified, but it is a pure DRY/style observation with no behavioral, crash, or security impact, so it is low value per the rubric.\nF2: DROP \u2014 the bare generics are real, but the project's pyproject shows it uses mypy (not pyright, which is not even in the dev dependencies), so the stated \"strict pyright merge blocker\" does not exist and the finding fails on its own premise.\n\n\nF1: DROP \u2014 the duplication is real and violates the DRY guideline, but it is a maintainability/style point with no effect on behavior, so it is low value under the keep bar.\nF2: DROP \u2014 the project's pyproject uses mypy (not pyright, which is unconfigured and not even a dev dependency) without `disallow-any-generics`, so the claimed strict-pyright merge blocker does not apply and the bare generics in the tests are not actionable."
+}

@@ -1,0 +1,58 @@
+{
+ "case": "197",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "haiku-xhigh/1/0",
+  "F2": "haiku-xhigh/1/1",
+  "F3": "haiku-xhigh/1/2",
+  "F4": "haiku-xhigh/1/3",
+  "F5": "haiku-xhigh/1/4",
+  "F6": "haiku-xhigh/1/5",
+  "F7": "haiku-xhigh/1/6",
+  "F8": "haiku-xhigh/1/7"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "cf errors (ContextForgeError/NotAvailable) raised by `evaluate_each_source` and `cf_client.list_slices` in `_select_item`/`_open_dependencies` escape `resume_item`'s handlers (only `_Stop`/`GitEnvironmentError`/`OSError` are caught) as an uncaught traceback that exits 1, which the D8 handoff contract reserves for \"flagged again\", misreporting an environment fault to the automated caller instead of exit 3."
+  ],
+  "F2": [
+   "DROP",
+   "a non-dict item or missing keys in report.json can only come from hand-corruption, since the only writer (`to_json`) always emits every key, and the result is a visible traceback rather than wrong behavior on any reachable path."
+  ],
+  "F3": [
+   "DROP",
+   "the stray hidden temp file after a failed write is a minor cleanup detail; the D12 contract (ERROR log, re-raise, previous report intact) is met."
+  ],
+  "F4": [
+   "DROP",
+   "the KeyError requires cf to omit `completed`/`total`, fields the slice's declared interface says it emits, in which case the run fails visibly (exit 1 = failed run for `sq run`), and the zero defaults only affect test-constructed entries whose `total > 0` guard already reads 0 as \"no counts\"."
+  ],
+  "F5": [
+   "DROP",
+   "a static-typing consistency point (`Any` vs a protocol) with no runtime behavior."
+  ],
+  "F6": [
+   "DROP",
+   "the circular import is bridged by the commented function-level import and works; it is a structural smell, not a functional defect."
+  ],
+  "F7": [
+   "DROP",
+   "pipeline_mutates` implements design D11's explicitly enumerated scope (steps that commit or move cf state), and judge-cycle is a pre-existing human-facing pipeline outside that documented lock contract."
+  ],
+  "F8": [
+   "DROP",
+   "the two path constructions currently produce identical names and any future drift would surface as an explicit REJECTED naming the path; this is a DRY nit, not a defect."
+  ]
+ },
+ "wall_seconds": 750.5,
+ "duration_seconds": 750.5219028750435,
+ "cost_usd": 0.21942836000000002,
+ "effort": null,
+ "tool_calls_made": 22,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=654298, cached=399344, cache_write=None, completion=62851, reasoning=64349)",
+ "raw_output": "\n\nF1: KEEP \u2014 cf errors (ContextForgeError/NotAvailable) raised by `evaluate_each_source` and `cf_client.list_slices` in `_select_item`/`_open_dependencies` escape `resume_item`'s handlers (only `_Stop`/`GitEnvironmentError`/`OSError` are caught) as an uncaught traceback that exits 1, which the D8 handoff contract reserves for \"flagged again\", misreporting an environment fault to the automated caller instead of exit 3.\nF2: DROP \u2014 a non-dict item or missing keys in report.json can only come from hand-corruption, since the only writer (`to_json`) always emits every key, and the result is a visible traceback rather than wrong behavior on any reachable path.\nF3: DROP \u2014 the stray hidden temp file after a failed write is a minor cleanup detail; the D12 contract (ERROR log, re-raise, previous report intact) is met.\nF4: DROP \u2014 the KeyError requires cf to omit `completed`/`total`, fields the slice's declared interface says it emits, in which case the run fails visibly (exit 1 = failed run for `sq run`), and the zero defaults only affect test-constructed entries whose `total > 0` guard already reads 0 as \"no counts\".\nF5: DROP \u2014 a static-typing consistency point (`Any` vs a protocol) with no runtime behavior.\nF6: DROP \u2014 the circular import is bridged by the commented function-level import and works; it is a structural smell, not a functional defect.\nF7: DROP \u2014 `pipeline_mutates` implements design D11's explicitly enumerated scope (steps that commit or move cf state), and judge-cycle is a pre-existing human-facing pipeline outside that documented lock contract.\nF8: DROP \u2014 the two path constructions currently produce identical names and any future drift would surface as an explicit REJECTED naming the path; this is a DRY nit, not a defect.\n\n\nF1: KEEP \u2014 cf errors from the source re-evaluation and `list_slices` in `_select_item`/`_open_dependencies` escape `resume_item`'s handlers (only `_Stop`/`GitEnvironmentError`/`OSError` are caught) as an uncaught traceback exiting 1, which the D8 handoff contract reads as \"flagged again\" instead of exit 3's environment-fault bucket, and a missing pipeline file (FileNotFoundError \u2282 OSError) degrades to the wrong \"cannot write the batch report\" message instead of the plain-resume path's clean \"pipeline not found\".\nF2: DROP \u2014 the triggering shapes (non-dict item entries, missing keys) cannot come from this codebase's writer, which emits all keys under a checked schemaVersion, so the gap is hardening against hand-corrupted files whose result is a loud traceback rather than wrong or silent behavior.\nF3: DROP \u2014 a failed atomic write leaves only an inert hidden temp dotfile while meeting the D12 contract (previous report intact, ERROR log, re-raise); per-failure clutter is not a merge-blocking defect.\nF4: DROP \u2014 cf's `list tasks` emitting `completed`/`total` is the slice's declared interface and its live verification walkthrough ran `implement-plan` (which calls `list_tasks`) successfully, so the KeyError hardens against inputs that cannot arrive, and the zero defaults are exercised only by test mocks.\nF5: DROP \u2014 a static-typing consistency point with no runtime effect, and `Any` matches the executor's existing convention for `cf_client` at the same boundary.\nF6: DROP \u2014 the cycle is broken by the documented function-level import and works at import and call time; a restructuring preference, not a behavioral defect.\nF7: DROP \u2014 `pipeline_mutates` implements D11's documented scope (steps that commit or move cf state) exactly, `judge-cycle` is pre-existing and outside the design's unattended-run threat model, and any real interleaving is caught loudly by the batch's dirty-tree/state checks rather than corrupting silently.\nF8: DROP \u2014 the two constructions are currently identical, and drift would surface as an explicit REJECTED naming the path, making this a define-once nit rather than a defect."
+}

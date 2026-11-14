@@ -1,0 +1,43 @@
+{
+ "case": "197",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3",
+  "F5": "sonnet/1/4"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The temp file leak on a failed atomic write is a real but minor cleanup concern in a rare disk-failure path; the previous report stays intact and nothing misbehaves, so it's hardening, not a merge-blocker defect."
+  ],
+  "F2": [
+   "DROP",
+   "The function-local import is a working, deliberate pattern that resolves the run.py\u2194run_item.py import cycle without error or misbehavior; moving helpers to a neutral module is an optional refactor with no functional impact."
+  ],
+  "F3": [
+   "DROP",
+   "The sync git/cf/file calls inside `_resume_locked` do violate the async rule in prose, but the reviewer concedes the CLI runs one task under `asyncio.run` so there is no concurrent work to starve \u2014 a performance point with no real effect."
+  ],
+  "F4": [
+   "DROP",
+   "The `not_ready` default for a source flag without a kind is an intentional, documented design choice (slice 197 D7, optional `flag_kind`) locked in by `test_a_source_flag_without_a_kind_is_not_ready`, not a silent fallback causing wrong behavior."
+  ],
+  "F5": [
+   "DROP",
+   "The index is guaranteed present by `_check_record` validation before `replace`/`_reconcile` run, so the bare `StopIteration` is unreachable; raising a named error instead is hardening against an impossible state, not a defect fix."
+  ]
+ },
+ "wall_seconds": 537.5,
+ "duration_seconds": 537.4881076670717,
+ "cost_usd": 0.175638,
+ "effort": null,
+ "tool_calls_made": 15,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=555417, cached=303432, cache_write=None, completion=45450, reasoning=45705)",
+ "raw_output": "\n\nF1: DROP \u2014 The temp file leak on a failed atomic write is a real but minor cleanup concern in a rare disk-failure path; the previous report stays intact and nothing misbehaves, so it's hardening, not a merge-blocker defect.\n\nF2: DROP \u2014 The function-local import is a working, deliberate pattern that resolves the run.py\u2194run_item.py import cycle without error or misbehavior; moving helpers to a neutral module is an optional refactor with no functional impact.\n\nF3: DROP \u2014 The sync git/cf/file calls inside `_resume_locked` do violate the async rule in prose, but the reviewer concedes the CLI runs one task under `asyncio.run` so there is no concurrent work to starve \u2014 a performance point with no real effect.\n\nF4: DROP \u2014 The `not_ready` default for a source flag without a kind is an intentional, documented design choice (slice 197 D7, optional `flag_kind`) locked in by `test_a_source_flag_without_a_kind_is_not_ready`, not a silent fallback causing wrong behavior.\n\nF5: DROP \u2014 The index is guaranteed present by `_check_record` validation before `replace`/`_reconcile` run, so the bare `StopIteration` is unreachable; raising a named error instead is hardening against an impossible state, not a defect fix.\n\n\nF1: DROP \u2014 A failed write does leak the hidden `.{name}.XXXX` temp file, but the old report is preserved, the OSError is logged at ERROR and re-raised, and the leak only occurs on already-fatal conditions like disk full, so this is a minor cleanup point rather than a defect causing wrong behavior or data loss.\n\nF2: DROP \u2014 The function-local import is a working, commented idiom that breaks the run.py\u2194run_item cycle between two sibling CLI command modules with no wrong behavior, and extracting shared helpers is an optional refactor, not a merge blocker.\n\nF3: DROP \u2014 The sync git/cf/file calls in `_resume_locked` do block the loop in prose, but `resume_item` runs as the sole task under `asyncio.run` with no concurrent work to starve and no mechanical rule violated, so the impact the reviewer concedes is nil in practice.\n\nF4: DROP \u2014 The `not_ready` default is the documented, intentional contract (the `FlagKind.NOT_READY` comment says source flag_reason, and `cf.slices_needing_tasks` deliberately omits `flag_kind`), is locked by `test_a_source_flag_without_a_kind_is_not_ready`, and is semantically correct, so it is a design decision the reviewer disagrees with, not a silent misclassification.\n\nF5: DROP \u2014 `_check_record` in `_validate` guarantees a record exists for `request.index` before any `replace` or `_reconcile` runs, and both call sites use items whose index matched `request.index`, so the bare `StopIteration` is unreachable and naming it is hardening against an impossible state."
+}

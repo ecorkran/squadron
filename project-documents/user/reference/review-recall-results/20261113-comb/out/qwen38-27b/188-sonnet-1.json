@@ -1,0 +1,38 @@
+{
+ "case": "188",
+ "reviewer": "sonnet",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet/1/0",
+  "F2": "sonnet/1/1",
+  "F3": "sonnet/1/2",
+  "F4": "sonnet/1/3"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Both existing callers of the private `_window` are correct (candle passes `{\"period\": period}`, trades passes nothing), so the unbound-parameter and dropped-filter scenarios require a hypothetical future caller; this is an API-shape preference, not a defect in current behavior."
+  ],
+  "F2": [
+   "DROP",
+   "The duplicated comparison is intentional and documented in the module docstring: the in-executor check skips the row fetch without holding a connection, and `_admit_rows` raises the 422 only after the connection is released, so removing or relaxing either one would break the D8/D11.2 design rather than fix a bug."
+  ],
+  "F3": [
+   "DROP",
+   "The claimed vacuous pass is unreachable: assertion 2 makes one request that checks out a single connection, so its statements are either fully recorded (making `assert not fetches` meaningful) or not recorded at all (failing `assert counts` loudly), and the private `pool._pool` risk is a speculative upgrade concern in a manually gated, non-CI load tier."
+  ],
+  "F4": [
+   "DROP",
+   "The positional order currently matches `TRADE_VALUE_COLUMNS` exactly (derived from `TRADE_COLUMNS`), pydantic validates each field at the boundary, and the docstring's \"served without an edit\" claim is explicitly about the candle path, making this a future-edit maintainability point rather than a defect in the changed code."
+  ]
+ },
+ "wall_seconds": 266.1,
+ "duration_seconds": 266.0857548750937,
+ "cost_usd": 0.08047976000000001,
+ "effort": null,
+ "tool_calls_made": 11,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=119392, cached=83008, cache_write=None, completion=30726, reasoning=32957)",
+ "raw_output": "\n\nF1: DROP \u2014 Both existing callers of the private `_window` are correct (candle passes `{\"period\": period}`, trades passes nothing), so the unbound-parameter and dropped-filter scenarios require a hypothetical future caller; this is an API-shape preference, not a defect in current behavior.\nF2: DROP \u2014 The duplicated comparison is intentional and documented in the module docstring: the in-executor check skips the row fetch without holding a connection, and `_admit_rows` raises the 422 only after the connection is released, so removing or relaxing either one would break the D8/D11.2 design rather than fix a bug.\nF3: DROP \u2014 The claimed vacuous pass is unreachable: assertion 2 makes one request that checks out a single connection, so its statements are either fully recorded (making `assert not fetches` meaningful) or not recorded at all (failing `assert counts` loudly), and the private `pool._pool` risk is a speculative upgrade concern in a manually gated, non-CI load tier.\nF4: DROP \u2014 The positional order currently matches `TRADE_VALUE_COLUMNS` exactly (derived from `TRADE_COLUMNS`), pydantic validates each field at the boundary, and the docstring's \"served without an edit\" claim is explicitly about the candle path, making this a future-edit maintainability point rather than a defect in the changed code.\n\n\nF1: DROP \u2014 the private `_window` has only two callers, both correct today (candles pass `{\"period\": period}`, trades pass none), so the unbound-parameter and dropped-filter scenarios require a hypothetical future caller, not a defect in current behavior.\nF2: DROP \u2014 the in-executor check skips the fetch and `_admit_rows` raises the 422 only after the connection is released, exactly as the module docstring's design intends, so the duplicated comparison is a DRY refactor preference over currently-correct behavior, not a bug.\nF3: DROP \u2014 the claimed vacuous pass cannot occur because the count and the (never-fetched) rows run in one connection checkout, and if no connection recorded anything `assert counts` fails loudly, making the documented `pool._pool` test technique a non-silent, low-value robustness note rather than a silent failure path.\nF4: DROP \u2014 the positional indices match `TRADE_VALUE_COLUMNS` exactly as shipped, the \"served without an edit\" docstring claim is explicitly scoped to the candle path, and pydantic validates the fields at the boundary, so the fragility exists only against a hypothetical future column reorder."
+}

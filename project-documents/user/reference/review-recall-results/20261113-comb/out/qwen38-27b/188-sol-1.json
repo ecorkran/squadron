@@ -1,0 +1,33 @@
+{
+ "case": "188",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Pydantic's `date | datetime` union parses midnight ISO timestamps as `date`, so `end=\u2026T00:00:00Z` silently expands to end-of-day and returns an extra day of data, contradicting D4's explicit bare-date-vs-datetime distinction."
+  ],
+  "F2": [
+   "KEEP",
+   "model building and serialization of up to 75k rows run synchronously on the event loop after the connection is released, violating the project's <1ms worst-case rule for async-def sync work and measurably blocking unrelated requests."
+  ],
+  "F3": [
+   "DROP",
+   "CI gating is an explicitly documented deferral to slice 907 (design D11, task 6.3, module docstring all state it), and the workflow file is not touched by this change, so this is an already-accepted process step, not a defect in the changed code."
+  ]
+ },
+ "wall_seconds": 574.3,
+ "duration_seconds": 574.2462530839257,
+ "cost_usd": 0.456019,
+ "effort": null,
+ "tool_calls_made": 38,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=2202843, cached=1812288, cache_write=None, completion=123487, reasoning=121442)",
+ "raw_output": "\n\nF1: KEEP \u2014 Pydantic's `date | datetime` union parses midnight ISO timestamps as `date`, so `end=\u2026T00:00:00Z` silently expands to end-of-day and returns an extra day of data, contradicting D4's explicit bare-date-vs-datetime distinction.\nF2: KEEP \u2014 model building and serialization of up to 75k rows run synchronously on the event loop after the connection is released, violating the project's <1ms worst-case rule for async-def sync work and measurably blocking unrelated requests.\nF3: DROP \u2014 CI gating is an explicitly documented deferral to slice 907 (design D11, task 6.3, module docstring all state it), and the workflow file is not touched by this change, so this is an already-accepted process step, not a defect in the changed code.\n\n\nF1: KEEP \u2014 The `date | datetime` union declarations let pydantic parse a midnight timestamp like `end=2026-06-01T00:00:00Z` as a bare date, so `resolve_window`'s day-end expansion silently returns up to a full extra day of rows on both routes, and no existing test pins that case.\n\nF2: KEEP \u2014 Model construction and serialization of up to 75,000 rows (measured ~708 ms build + ~550 ms encode at the ceiling) run synchronously in the async handler after the connection is released, blocking the event loop in violation of the project's <1 ms sync-work rule and defeating the design's own /health-stall rationale.\n\nF3: DROP \u2014 Deferring CI gating to slice 907 is explicitly prescribed by design D11 and task 6.3, the docstring honestly states it, and the untouched publish-on-tag workflow is not code this change touched or the Python rule it is required to satisfy (the load tier itself, which exists)."
+}

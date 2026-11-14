@@ -75,5 +75,26 @@
   "title": "The route unit test hardcodes the ceiling instead of importing it",
   "location": "test/unit/api_server/test_kalshi_timeseries.py",
   "description": "`CEILING = 75_000` in the new unit test duplicates `API_MAX_BARS_PER_REQUEST` (currently 75 000 in `constants.py`). The route under test reads the ceiling from `get_max_bars`, so if the constant moves, the test's `dependency_overrides[get_max_bars] = lambda: CEILING` would keep admitting 75 000 while the application enforces something else \u2014 the fake count of 132 552 would then be under the real ceiling and the \"over the ceiling\" test would stop exercising the refusal at all (it would fail loudly only because the error message quotes the *route's* ceiling while the test asserts its own copy, which is a coincidental failure rather than a designed one). The sibling load test in this same diff does the right thing (`from manta_trading.constants import API_MAX_BARS_PER_REQUEST`), so the two halves of the slice disagree about the same value."
+ },
+ {
+  "ref": "sol-r/1/0",
+  "severity": "FAIL",
+  "title": "Large responses are built and serialized on the event loop",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:123-126",
+  "description": "After awaiting the database read, `get_candlesticks` synchronously constructs up to 75,000 nested Pydantic records and serializes the entire response. `get_trades` does the same at lines 165\u2013174. Inspection of `serialization.py` confirms that `model_dump`, JSON encoding, and msgpack encoding all run synchronously.\n\nThis workload cannot satisfy the required worst-case synchronous execution bound of less than 1 ms, especially for the documented 34.80 MB candle response. It stalls unrelated requests on the same event loop. Move model construction and encoding into an executor after releasing the database connection, and add a load test measuring small-request latency while ceiling-sized time-series requests run concurrently. The current concurrency test exercises only market-detail requests."
+ },
+ {
+  "ref": "sol-r/1/1",
+  "severity": "CONCERN",
+  "title": "Count and fetch do not enforce a stable row ceiling",
+  "location": "src/manta_trading/api_server/routes/kalshi_timeseries.py:112-125",
+  "description": "The admission check uses the count taken before fetching, but these statements do not share a repeatable-read snapshot. The pool configuration in `app.py` and `market/db_session.py` does not establish that isolation level, so PostgreSQL\u2019s default read-committed behavior permits newly committed rows to appear in the fetch.\n\nConcurrent ingestion or backfill can insert a whole batch\u2014not merely the single row described in `serve_timeseries.py`\u2014between these statements. Both routes can therefore fetch and return more than `max_rows`, despite advertising a shared response ceiling.\n\nUse a stable read snapshot for count and fetch, or explicitly reject an oversized fetched result before building the response. Add a regression test covering an insertion between the two reads."
+ },
+ {
+  "ref": "sol-r/1/2",
+  "severity": "CONCERN",
+  "title": "Trade completeness is documented as the newest stored trade",
+  "location": "src/manta_trading/api_server/models/kalshi_timeseries.py:188-193",
+  "description": "`tape_complete_through` is described as the \u201cCreated time of the newest stored trade,\u201d but `serve_timeseries.tape_facts()` populates it from the synchronization watermark. Inspection of `TradeRepository.advance_watermark()` confirms that this represents the completed window edge, which may advance through a quiet interval without any stored trade.\n\nClients using the description could mistake collection completeness for recent trading activity. Describe this field as the instant through which collection is complete, explicitly distinguishing it from the newest stored trade, and test the quiet-window case."
  }
 ]

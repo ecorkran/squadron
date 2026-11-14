@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Adoption fact failures are returned as successful builds",
+      "description": "`renderFacts()` can throw ordinary filesystem errors\u2014for example, when README.md is a broken symlink. `ContextIntegrator` only rethrows `AdoptionError`, so these failures become error-context strings, and MCP returns them without `isError`. Adoption state may already have been persisted. Wrap resolver failures in `AdoptionError` and add a regression test asserting that the build rejects.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/src/adoption/adoptionResolver.ts:134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Remove the accidentally committed test backup",
+      "description": "This duplicates the original factory tests and retains obsolete one-argument `createContextPipeline()` calls. Its `.ts-E` extension excludes it from the configured Vitest discovery pattern, leaving stale, unexecuted code in the repository. Delete the backup; keep the updated `.test.ts` file.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Adoption fact failures are returned as successful builds",
+      "location": "packages/core/src/adoption/adoptionResolver.ts:134",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Remove the accidentally committed test backup",
+      "location": "packages/core/tests/services/CoreServiceFactory.test.ts-E",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf5e840c",
+    "diff": "42648a33aba9b08f6168488d7f475a5955d6d090...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T17:19:52.145679",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61957,
+  "diff_chars_injected": 61957,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "high",
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 95879,
+  "cached_tokens": 92928,
+  "cache_write_tokens": null,
+  "completion_tokens": 247,
+  "reasoning_tokens": 24,
+  "duration_seconds": 66.40118679101579,
+  "cost_usd": null,
+  "cost_basis": null
+}

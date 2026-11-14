@@ -1,0 +1,33 @@
+{
+ "case": "227",
+ "reviewer": "sol",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sol/1/0",
+  "F2": "sol/1/1",
+  "F3": "sol/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "production_changes()` strips the new args from `new` only, so on a re-run `old` is already the post\u2011227 file and differs from the stripped `new`, making step 4 fail and breaking the documented \"fix and re\u2011run the whole script\" recovery path."
+  ],
+  "F2": [
+   "KEEP",
+   "run_health()` discards the health command's result and trusts the log's last line without proving this invocation appended it, so a health run that fails to write can pass the archive/stale gates on a stale clean summary."
+  ],
+  "F3": [
+   "KEEP",
+   "run_steps()` only catches `StepFailed`/`CalledProcessError`, so an `OSError` (unguarded `read_text()`, `arm.touch()`, or a missing executable) escapes and `main()` never writes the report the cutover's contract promises on every failure."
+  ]
+ },
+ "wall_seconds": 184.4,
+ "duration_seconds": 184.4161417922005,
+ "cost_usd": 0.10863484000000001,
+ "effort": null,
+ "tool_calls_made": 7,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=151076, cached=106880, cache_write=None, completion=42129, reasoning=41368)",
+ "raw_output": "\n\nF1: KEEP \u2014 `production_changes()` strips the new args from `new` only, so on a re-run `old` is already the post\u2011227 file and differs from the stripped `new`, making step 4 fail and breaking the documented \"fix and re\u2011run the whole script\" recovery path.\nF2: KEEP \u2014 `run_health()` discards the health command's result and trusts the log's last line without proving this invocation appended it, so a health run that fails to write can pass the archive/stale gates on a stale clean summary.\nF3: KEEP \u2014 `run_steps()` only catches `StepFailed`/`CalledProcessError`, so an `OSError` (unguarded `read_text()`, `arm.touch()`, or a missing executable) escapes and `main()` never writes the report the cutover's contract promises on every failure.\n\n\nF1: KEEP \u2014 `production_changes()` strips the new arguments only from `new`, so on a rerun after the cron file is installed the identical file (now carrying the new args) compares as changed, step 4 fails, and the documented \"fix the cause, re-run the whole script\" recovery path is blocked.\nF2: KEEP \u2014 `run_health()` ignores the health command's result code and reads the log's last line without proving this invocation appended it, so if the command fails to run or write, an earlier clean summary can wrongly pass the archive/stale gates at steps 7 and 10.\nF3: KEEP \u2014 `run_steps()` catches only `StepFailed` and `CalledProcessError`, so an `OSError` (the unguarded log reads, `arm.touch()`, or a missing executable) escapes before `main()` writes the report the cutover's contract promises on every failure, losing the completed steps' recorded evidence."
+}

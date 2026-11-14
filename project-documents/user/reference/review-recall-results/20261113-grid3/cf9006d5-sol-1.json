@@ -1,0 +1,93 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Dry-run symlinks can mutate real files",
+      "description": "The sandbox preserves symlinks, but the installer follows them. For example, an absolute `.github/prompts` symlink remains pointed at its original directory; Copilot\u2019s `removeGeneratedPromptFiles()` then deletes marked prompt files there during `--dry-run`. Directory symlinks can likewise redirect writes outside the sandbox. Reject escaping symlinks or copy their contents into isolated sandbox paths, and add regression tests verifying original files remain untouched.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:42-45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Aborted dry runs discard the diagnostic explaining failure",
+      "description": "Buffered diagnostics are replayed only after `install()` returns. If it throws `InstallAbort`, such as for missing rules or broken managed markers, its stdout error messages are discarded. `installIde()` then returns exit code 1 without reporting the abort reason, leaving the command\u2019s generic \u201cCheck the output above\u201d message without useful details. Flush buffered diagnostics on failure before propagating the exception; extend the existing abort test to assert the diagnostic appears.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/cli/src/ideInstall/dryRun.ts:113-118"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Dry-run symlinks can mutate real files",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:42-45",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Aborted dry runs discard the diagnostic explaining failure",
+      "location": "packages/cli/src/ideInstall/dryRun.ts:113-118",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/7696a7eb-09da-49aa-be7f-09187995ae4e/scratchpad/wt/cf9006d5",
+    "diff": "acbe4590a344698ebd67788772d761c9996a2d00...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-13T16:59:16.893382",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 199225,
+  "diff_chars_injected": 199225,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 121832,
+  "cached_tokens": 117760,
+  "cache_write_tokens": null,
+  "completion_tokens": 389,
+  "reasoning_tokens": 114,
+  "duration_seconds": 60.90374308289029,
+  "cost_usd": 0.02381,
+  "cost_basis": "alias_pricing"
+}

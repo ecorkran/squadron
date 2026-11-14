@@ -1,0 +1,33 @@
+{
+ "case": "a122",
+ "reviewer": "sonnet-high",
+ "run": "1",
+ "comb": "qwen38-27b",
+ "refs": {
+  "F1": "sonnet-high/1/0",
+  "F2": "sonnet-high/1/1",
+  "F3": "sonnet-high/1/2"
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "the dead `confirm()` is only a thin setter for the same `TrackedLaunch.confirmed` flag that tests use, and the real confirmation path (line check plus `_overdue` discard) is exercised by the observe tests, so nothing behaves wrongly."
+  ],
+  "F2": [
+   "DROP",
+   "closing an open escalation on the first complete tick without recurrence is exactly what slice 122's design (D8 \"Closure\") and its success criteria prescribe for all kinds, so this is implemented as specified rather than a defect."
+  ],
+  "F3": [
+   "DROP",
+   "the checks are backstops on entries whose run ids are always minted by the runner, and `finish.record` only ever sees entries that already passed the observer's check in the same tick, so the differing empty-string rule cannot cause wrong behavior."
+  ]
+ },
+ "wall_seconds": 176.0,
+ "duration_seconds": 175.97562937485054,
+ "cost_usd": 0.07843252,
+ "effort": null,
+ "tool_calls_made": 20,
+ "recovery_turn_used": true,
+ "usage": "TokenUsage(prompt=261509, cached=155136, cache_write=None, completion=20521, reasoning=19269)",
+ "raw_output": "\n\nF1: DROP \u2014 the dead `confirm()` is only a thin setter for the same `TrackedLaunch.confirmed` flag that tests use, and the real confirmation path (line check plus `_overdue` discard) is exercised by the observe tests, so nothing behaves wrongly.\nF2: DROP \u2014 closing an open escalation on the first complete tick without recurrence is exactly what slice 122's design (D8 \"Closure\") and its success criteria prescribe for all kinds, so this is implemented as specified rather than a defect.\nF3: DROP \u2014 the checks are backstops on entries whose run ids are always minted by the runner, and `finish.record` only ever sees entries that already passed the observer's check in the same tick, so the differing empty-string rule cannot cause wrong behavior.\n\n\nF1: DROP \u2014 both paths write the same `TrackedLaunch.confirmed` flag (the tracker's `confirm` adds nothing production relies on, and the observe tests assert on the flag the production `_confirm` sets), so no wrong behavior results and this is a low-value cleanup.\nF2: DROP \u2014 the slice design (D8 \"Closure\") and a success criterion explicitly prescribe closing every open project escalation whose kind did not recur on the first complete tick, so auto-closing `unexpected_fault` after a clean tick is implemented as specified, not a defect.\nF3: DROP \u2014 the divergent checks are backstops on entries whose run ids the Runner itself mints and journals, and `finish.record` only ever receives entries that already passed the observer's stricter check, so the duplication cannot cause wrong behavior; it is a DRY preference only."
+}
