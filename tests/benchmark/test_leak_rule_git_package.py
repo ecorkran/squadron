@@ -71,6 +71,21 @@ GIT_HOST_HITS = [
     "echo `gh issue view 3`",
     'echo "`gh issue view 3`"',
     "echo $(gh issue view 3)",
+    # F001: git aimed outside the tree through its environment variables.
+    "GIT_DIR=/elsewhere git log",
+    "GIT_WORK_TREE=/elsewhere git status",
+    "FOO=1 GIT_DIR=/elsewhere git log",
+    "env GIT_DIR=/elsewhere git log",
+    # F002: unbalanced quoting must not hide a later command, and a wrapper option's
+    # separate value is not the program.
+    'ls; gh issue view "3',
+    "echo hi && gh issue view '3",
+    "sudo -u bob gh issue view 3",
+    "sudo -g wheel -u bob gh pr list",
+    "env -u HOME gh issue view 3",
+    "timeout -s KILL 30 gh pr list",
+    "nice -n 5 gh pr list",
+    "stdbuf -o L gh pr list",
 ]
 GIT_HOST_NON_HITS = [
     "git status",
@@ -93,6 +108,10 @@ GIT_HOST_NON_HITS = [
     "timeout 30 ls",
     "echo `date`",
     "",
+    "GIT_DIR=.git git log",
+    "FOO=/elsewhere git status",
+    "sudo -u bob ls",
+    "env -u HOME ls",
 ]
 
 

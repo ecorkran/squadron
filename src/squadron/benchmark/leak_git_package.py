@@ -35,6 +35,8 @@ GIT_REMOTE = "remote"
 GIT_REMOTE_ADD = "add"
 #: Global git options that take their value as the next word, or as ``--name=value``.
 GIT_DIRECTORY_OPTIONS = frozenset({"-C", "--git-dir", "--work-tree"})
+#: Environment variables that aim git at a directory, like the options above.
+GIT_DIRECTORY_VARIABLES = frozenset({"GIT_DIR", "GIT_WORK_TREE"})
 #: Other global git options that take a value as the next word.
 GIT_VALUE_OPTIONS = frozenset({"-c", "--namespace", "--exec-path", "--super-prefix"})
 PIP = "pip"
@@ -79,10 +81,19 @@ def git_subcommand(args: tuple[str, ...]) -> tuple[str | None, tuple[str, ...]]:
     return None, ()
 
 
+def _git_environment_values(assignments: tuple[str, ...]) -> Iterator[str]:
+    """Values of ``GIT_DIR`` / ``GIT_WORK_TREE`` set before the command (``GIT_DIR=/x git log``)."""
+    for assignment in assignments:
+        name, _, value = assignment.partition("=")
+        if name in GIT_DIRECTORY_VARIABLES:
+            yield value
+
+
 def _git_hits(invocation: Invocation, rules: LeakRules) -> list[str]:
+    aimed = (*_git_directory_values(invocation.args), *_git_environment_values(invocation.assignments))
     hits = [
         f"git {value}"
-        for value in _git_directory_values(invocation.args)
+        for value in aimed
         if not is_under(resolve_in_tree(value, rules), rules.tree_roots)
     ]
     subcommand, rest = git_subcommand(invocation.args)

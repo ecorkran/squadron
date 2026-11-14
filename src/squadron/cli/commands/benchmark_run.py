@@ -35,9 +35,11 @@ from squadron.benchmark.bench_runner import (
     exit_code_for,
     run_benchmark,
 )
+from squadron.benchmark.build_errors import BuildHalted
 from squadron.benchmark.production_deps import build_production_services
 from squadron.benchmark.replay_deps import ReplayStoreError
 from squadron.benchmark.run_services import ReplayContext, RunServices
+from squadron.benchmark.scrubbed_env import MissingCredentialError, MissingHarnessHomeError
 from squadron.cli.commands.benchmark_common import repo_root_for, stderr_exit
 from squadron.cli.commands.benchmark_run_report import (
     ReplayReporter,
@@ -51,6 +53,18 @@ from squadron.metrology.errors import MetrologyStoreError
 from squadron.providers.base import ProfileName
 
 ServicesFactory = Callable[[Path], RunServices]
+
+#: Failures a run reports as `Error: <message>` with exit 1, not a traceback: refusals, store
+#: failures, and an environment a replay cannot be built in (case build halted, a credential or
+#: the harness HOME missing).
+_REFUSED_ERRORS = (
+    BenchmarkRefusal,
+    MetrologyStoreError,
+    ReplayStoreError,
+    BuildHalted,
+    MissingCredentialError,
+    MissingHarnessHomeError,
+)
 
 
 def _refuse(message: str) -> typer.Exit:
@@ -260,7 +274,7 @@ def make_run_command(services_factory: ServicesFactory) -> Callable[..., None]:
         )  # fmt: skip
         try:
             code = _run(services_factory, options, repo)
-        except (BenchmarkRefusal, MetrologyStoreError, ReplayStoreError) as exc:
+        except _REFUSED_ERRORS as exc:
             raise _refuse(str(exc)) from exc
         if code != 0:
             raise typer.Exit(code)

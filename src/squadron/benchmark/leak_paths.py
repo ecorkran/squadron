@@ -33,8 +33,9 @@ PARENT = ".."
 
 def _candidates(token: str) -> Iterator[str]:
     yield token
-    if token.startswith("-") and "=" in token:
-        yield token.split("=", 1)[1]  # --git-dir=/x, --file=/etc/passwd
+    if "=" in token:
+        # --git-dir=/x, --file=/etc/passwd, dd if=~/.ssh/id_rsa, GIT_DIR=/x
+        yield token.split("=", 1)[1]
 
 
 def resolve_in_tree(value: str, rules: LeakRules) -> Path:

@@ -75,6 +75,8 @@ class TestHits:
             ),
             ("operator_attached", lambda x: bash(f"ls;cat {x.repo_root}/x")),
             ("option_value", lambda x: bash(f"tool --file={x.repo_root}/x")),
+            ("key_value_path", lambda x: bash(f"dd if={x.repo_root}/x of=/dev/null")),
+            ("key_value_tilde", lambda x: bash("dd if=~/.ssh/id_rsa of=/dev/null")),
             ("nested_command", lambda x: bash(f'bash -c "cat {x.repo_root}/x"')),
             ("glob_pattern", lambda x: ToolCall("Glob", {"pattern": f"{x.repo_root}/**/*.py"})),
             ("grep_path", lambda x: ToolCall("Grep", {"pattern": "needle", "path": str(x.repo_root)})),
@@ -127,6 +129,9 @@ class TestTokens:
 
     def test_unbalanced_quotes_fall_back_to_word_tokens(self) -> None:
         assert "/x/y" in command_tokens('echo "oops /x/y')
+
+    def test_unbalanced_quote_fallback_keeps_the_separators(self) -> None:
+        assert command_tokens('ls; gh issue view "3') == ["ls", ";", "gh", "issue", "view", "3"]
 
     def test_rules_version_is_an_int(self) -> None:
         assert isinstance(LEAK_RULES_VERSION, int)

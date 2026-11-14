@@ -23,8 +23,10 @@ from squadron.benchmark.bench_plan import (
     config_key,
     replay_record_id,
 )
+from squadron.benchmark.build_errors import BuildHalted
 from squadron.benchmark.replay_deps import ReplayStoreError
 from squadron.benchmark.run_services import KeptSandbox, ReplayContext, RunServices
+from squadron.benchmark.scrubbed_env import MissingCredentialError, MissingHarnessHomeError
 from squadron.cli.commands import benchmark_run as run_module
 from squadron.cli.commands.benchmark_run import make_run_command
 from squadron.cli.commands.benchmark_run_report import ReplayReporter
@@ -64,6 +66,7 @@ class Harness:
         self.absence = AbsenceClass.CONFIG
         self.drop: set[str] = set()
         self.store_failure = False
+        self.replay_failure: Exception | None = None
         self.kept: list[KeptSandbox] = []
         self.contexts: list[ReplayContext] = []
         self.auth_requests: list[list[str]] = []
@@ -79,6 +82,8 @@ class Harness:
             self.events.append(f"replay:{config.alias}:{sample}")
             if self.store_failure:
                 raise ReplayStoreError("cannot store the diff")
+            if self.replay_failure is not None:
+                raise self.replay_failure
             if case.case_id in self.drop:
                 return CaseDrop(
                     case_id=case.case_id,
@@ -271,6 +276,25 @@ class TestOutput:
         assert result.exit_code == 1
         assert "Error: cannot store the diff" in result.output
         assert [run.status.value for run in harness.store.list_runs()] == ["running"]
+        assert not list(harness.lock_root.glob("*.lock"))
+
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            BuildHalted("git log could not run"),
+            MissingCredentialError("OPENAI_API_KEY"),
+            MissingHarnessHomeError(),
+        ],
+        ids=["build_halted", "missing_credential", "missing_harness_home"],
+    )
+    def test_a_replay_environment_failure_is_a_refusal_not_a_traceback(
+        self, harness: Harness, failure: Exception
+    ) -> None:
+        harness.replay_failure = failure
+        result = harness.invoke("--model", "opus", *CAPS)
+        assert result.exit_code == 1
+        assert f"Error: {failure}" in result.output
+        assert "Traceback" not in result.output
         assert not list(harness.lock_root.glob("*.lock"))
 
     def test_keep_prints_the_paths_and_the_auth_copy_warning(

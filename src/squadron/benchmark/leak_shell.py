@@ -23,8 +23,20 @@ WRAPPER_PROGRAMS = frozenset(
     {"env", "command", "exec", "nohup", "time", "sudo", "timeout", "nice", "xargs", "stdbuf", "setsid"}
 )
 #: What follows a wrapper before the real program: its options and a number or duration
-#: (``timeout 30``, ``nice -n 5``). An option's separate value (``sudo -u bob``) is not dropped.
+#: (``timeout 30``, ``nice -n 5``).
 _WRAPPER_ARGUMENT = re.compile(r"-.*|\d+(\.\d+)?[smhd]?")
+#: Per wrapper, the options that take their value as the next word (``sudo -u bob gh``: ``bob``
+#: is not the program). A wrapper not listed has none; an attached value (``-ubob``) needs no entry.
+WRAPPER_VALUE_OPTIONS: dict[str, frozenset[str]] = {
+    "sudo": frozenset({"-u", "-g", "-h", "-p", "-C", "-D", "-R", "-T", "-U"}),
+    "env": frozenset({"-u", "-C", "-S"}),
+    "timeout": frozenset({"-s", "-k"}),
+    "nice": frozenset({"-n"}),
+    "xargs": frozenset({"-I", "-n", "-P", "-L", "-s", "-d", "-E", "-a"}),
+    "stdbuf": frozenset({"-i", "-o", "-e"}),
+    "time": frozenset({"-f", "-o"}),
+    "exec": frozenset({"-a"}),
+}
 #: Shells whose ``-c`` argument is itself a command line.
 SHELL_PROGRAMS = frozenset({"sh", "bash", "zsh", "dash"})
 #: ``eval`` runs its joined arguments as a command line.
@@ -32,16 +44,20 @@ EVAL_PROGRAM = "eval"
 _SHELL_COMMAND_FLAG = re.compile(r"-[a-z]*c[a-z]*")
 #: How many times a token containing spaces (``bash -c "cat /x"``) is tokenized again.
 MAX_NESTED_COMMAND_DEPTH = 2
-_TOKEN_FALLBACK = re.compile(r"""[^\s'"`;|&<>()]+""")
+#: Fallback tokens: command separators stay their own tokens (``ls; gh x "3`` still shows
+#: ``gh`` as a command), then word-like runs. Quotes and redirections are dropped.
+_TOKEN_FALLBACK = re.compile(r"""&&|\|\||[;&|()`\n]|[^\s'"`;|&<>()]+""")
 _ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 
 
 @dataclass(frozen=True)
 class Invocation:
-    """One simple command: the program (basename) and its arguments."""
+    """One simple command: the program (basename), its arguments and the ``NAME=value``
+    assignments that preceded it (``GIT_DIR=/x git log``), kept so rules can judge them."""
 
     program: str
     args: tuple[str, ...]
+    assignments: tuple[str, ...] = ()
 
 
 def command_tokens(command: str, depth: int = 0) -> list[str]:
@@ -71,19 +87,28 @@ def _simple_commands(tokens: list[str]) -> list[list[str]]:
     return [command for command in commands if command]
 
 
-def _strip_prefixes(command: list[str]) -> list[str]:
-    """Drop leading ``NAME=value`` assignments and wrapper programs (``env gh`` runs ``gh``)."""
+def _strip_prefixes(command: list[str]) -> tuple[list[str], list[str]]:
+    """Split off leading ``NAME=value`` assignments and wrapper programs (``env gh`` runs ``gh``).
+
+    Returns the assignments and the words from the real program on. A wrapper option's
+    separate value (``sudo -u bob gh``) is dropped with the option.
+    """
     rest = list(command)
-    after_wrapper = False
+    assignments: list[str] = []
+    wrapper: str | None = None
     while rest:
-        if PurePosixPath(rest[0]).name in WRAPPER_PROGRAMS:
-            after_wrapper = True
-        elif not (
-            _ASSIGNMENT.match(rest[0]) or (after_wrapper and _WRAPPER_ARGUMENT.fullmatch(rest[0]))
-        ):
+        word = rest[0]
+        if PurePosixPath(word).name in WRAPPER_PROGRAMS:
+            wrapper = PurePosixPath(word).name
+        elif _ASSIGNMENT.match(word):
+            assignments.append(word)
+        elif wrapper is not None and _WRAPPER_ARGUMENT.fullmatch(word):
+            if word in WRAPPER_VALUE_OPTIONS.get(wrapper, frozenset()) and len(rest) > 1:
+                rest.pop(0)  # the option's value is the next word
+        else:
             break
         rest.pop(0)
-    return rest
+    return assignments, rest
 
 
 def _shell_command_argument(invocation: Invocation) -> str | None:
@@ -102,10 +127,14 @@ def invocations(command: str, depth: int = 0) -> list[Invocation]:
     """Every simple command in *command*, including those a ``sh -c`` argument runs."""
     found: list[Invocation] = []
     for simple in _simple_commands(command_tokens(command)):
-        words = _strip_prefixes(simple)
+        assignments, words = _strip_prefixes(simple)
         if not words:
             continue
-        invocation = Invocation(program=PurePosixPath(words[0]).name, args=tuple(words[1:]))
+        invocation = Invocation(
+            program=PurePosixPath(words[0]).name,
+            args=tuple(words[1:]),
+            assignments=tuple(assignments),
+        )
         found.append(invocation)
         nested = _shell_command_argument(invocation)
         if nested is not None and depth < MAX_NESTED_COMMAND_DEPTH:

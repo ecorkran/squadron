@@ -32,7 +32,7 @@ from squadron.metrology.benchmark_replay_models import (
 
 _logger = logging.getLogger(__name__)
 
-LEAK_RULES_VERSION = 1
+LEAK_RULES_VERSION = 2
 #: How many problems the ``scan_unavailable`` detail spells out; the count is always given.
 DETAIL_PROBLEMS_SHOWN = 3
 
