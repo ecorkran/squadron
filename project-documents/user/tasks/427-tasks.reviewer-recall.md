@@ -16,7 +16,7 @@ projectState: Slices 420–426 have tasks written, not implemented (src/squadron
   does not exist at the time of writing). Slice 427 design written. main is the target
   unless cf config get git.integration_branch says otherwise.
 dateCreated: 20261106
-dateUpdated: 20261106
+dateUpdated: 20261115
 status: not_started
 turns: 22
 promptTokens: 1532607
@@ -36,7 +36,8 @@ usageByModel:
 
 ## Context Summary
 - Working on slice 427: `sq benchmark recall build | run | report | show`. Design: `user/slices/427-slice.reviewer-recall.md`; its D-numbers (D1–D11) are cited below instead of repeating them.
-- Order: branch and design corrections (Task 1); config keys, operators, adapter seam, edit engine and the Python adapter (Tasks 2–8), which need nothing from 421–425; the precondition gate, source-path check and adapter registration (Task 9); records and store (Tasks 10–11); fixtures and verification (Tasks 12–13); planting, discovery and build (Tasks 14–17); materializer and `build`/`show` commands (Tasks 18–19); a live build (Task 20); matcher and statistics (Tasks 21–23); runner and `run` (Tasks 24–28); report, `latest_recall_for` and `review_flag` (Tasks 29–32); slash commands (Task 33); walkthrough (Task 34); final validation (Task 35).
+- Order: branch and design corrections (Task 1); config keys, operators, adapter seam, edit engine and the Python adapter (Tasks 2–8), which need nothing from 421–425; the precondition gate, source-path check and adapter registration (Task 9); records and store (Tasks 10–11); fixtures and verification (Tasks 12–13); planting, discovery and build (Tasks 14–17); materializer and `build`/`show` commands (Tasks 18–19); the build command on the fixture repository (Task 20); matcher and statistics (Tasks 21–23); runner and `run` (Tasks 24–28); report, `latest_recall_for` and `review_flag` (Tasks 29–32); slash commands (Task 33); a live check on the fixture case (Task 34); final validation (Task 35).
+- **Changed 20261115 (PM decision): no task runs against squadron's history.** The build over 40 squadron commits (old Task 20) and the walkthrough on the squadron case set (old Task 34: a hand check in a kept sandbox, two reviewers at three samples over the whole set, a 425 report check that could need a live replay, and a cap test) are deleted. Task 20 now runs the build command on the fixture repository in a test. Task 34 is a live check on the one fixture case: build, show, two reviewers, report, and cap and resume. The hand check is Task 17's assertion, and the 425 report check is Task 31's tests.
 - **Preconditions (Task 9):** Tasks 2–8 touch only config code, pure modules and the adapter, and are committed before the gate. Tasks 10 onward need names 421–425 create. At the time of writing those names do not exist, so Task 9 stops with `BLOCKED:` and Tasks 10 onward wait. Every 421–425 name below is the name those task files give; read the real module before using one, and if a name differs use the real one and say so in the DEVLOG entry.
 - Design gaps found while reading the sibling task files (Task 1 writes each into the design; these tasks follow the corrections):
   - **`ReviewerRef` has no `rules_hash` (D8).** 425 Task 7 drops it (the rules directory differs per case); the outcome carries it. D8 loses `rules_hash` from the tuple. `resolve_reviewer(alias)` (`benchmark/grade_review.py`, 425) builds the ref; 427 does not rebuild it. 425's design still lists `rules_hash`; 425's own Task 1 corrects it, so 427 does not edit 425's design.
@@ -208,12 +209,10 @@ usageByModel:
 
 **Commit**: `feat: add the recall case materializer and sq benchmark recall build and show`
 
-### Task 20: Build on squadron (Walkthrough step 1)
-Scratch work goes in new directories under `/tmp`; nothing is pushed. Needs 421 implemented and `uv` and `git` on the PATH.
-- [ ] Run `sq benchmark recall build --limit 40` in this repository, then run it again
-  - [ ] Success: one line per candidate, counts by reason, `case set recall v1`; the second run prints the same case ids and leaves the set at v1
-- [ ] Record the counts by rejection reason and the dominant reason in `DEVLOG.md` (repo root: under today's `## YYYYMMDD` heading, a `### Slice 427: Recall yield` entry, newest first, as the file's other entries). A build that keeps no case is the yield risk the design names, a result and not a defect: report the counts to the Project Manager in the final message, and file an issue only if CLAUDE.md's criteria hold (actually broken, or high severity and reasonably likely). It does not block Tasks 21–23, which are pure
-  - [ ] Success: `DEVLOG.md` holds the counts
+### Task 20: `recall build` command on the fixture repository
+No command here runs against squadron's history.
+- [ ] Extend `tests/benchmark/test_recall_build_real.py` (`network`): run the `build` command through `CliRunner` from inside the Task 12 `recall_proved_assert` repository, twice, with the real `ProcessRunner` and adapter registry and a store under `tmp_path`
+  - [ ] Success: one line per candidate, counts by reason and `case set <name> v1`; the second run prints the same case id and leaves the set at v1
 
 ### Task 21: Matcher, path and window rules (D6)
 - [ ] `benchmark/recall_match.py` (pure: no I/O, store or model): complete the module Task 4 started with `normalize_match_path(path, tree_root)`: strip a leading `./`, `a/` or `b/`; an absolute path under `tree_root` becomes relative. `finding_reaches(finding, defect, tree_root) -> bool`: paths equal and either `location_span` overlaps `[line_start − W, line_end + W]` or `location_anchor(location)` equals the defect's enclosing bare or dotted name. Add `location_anchor(location) -> str | None` to `review/parsers.py` beside `location_span`: the stripped text after the first `#`, `None` when there is none or for `UNVERIFIED_LOCATION`. Only findings whose severity is `Severity.NOTE`, `Severity.CONCERN` or `Severity.FAIL` (`squadron.review.models.Severity`) are counted; `Severity.PASS` is ignored
@@ -298,30 +297,24 @@ Scratch work goes in new directories under `/tmp`; nothing is pushed. Needs 421 
 
 **Commit**: `feat: add recall slash commands`
 
-### Task 34: Verification walkthrough (design Verification Walkthrough steps 2–6; step 7 is Task 22's test run)
-Scratch work goes in new directories under `/tmp`; nothing is pushed. LLM spend and live runs are pre-authorized. Needs two review aliases that answered yes in `sq benchmark auth-check`; a missing prerequisite no task here can produce is written as `BLOCKED:` with the evidence.
-- [ ] Step 2: `sq benchmark recall show <rcase-id>` for a case from Task 20. If Task 20 kept no case, write `BLOCKED: no recall case kept (Task 20 counts)` under this task and stop
-  - [ ] Success: each defect shows operator, category, original and mutated text and proving nodes
-- [ ] Step 2, hand check: `sq benchmark recall build --set scratch --limit 1 --keep` (if the newest commit keeps no case, repeat with a larger `--limit` until one is kept); in the kept tree apply one defect's stored edit and run its proving node with `.venv/bin/python -m pytest`, then revert the edit and run it again
-  - [ ] Success: the node fails with the edit and passes without it; the scratch set is separate from the `recall` set
-- [ ] Step 3: `sq benchmark recall run --set recall --review-model <A> --review-model <B> --samples 3 --max-cost 8 --review-cost 0.20 --repo .`
-  - [ ] Success: the bound prints first; each line shows found/defects and unmatched
-- [ ] Step 4: `sq benchmark recall report`
-  - [ ] Success: recall with an interval per reviewer, the paired verdict, recall by operator, finding counts, n and K; the header names the measured categories and the matcher version
-- [ ] Step 5: set `benchmark.grading_review_model` to one of the aliases from step 3 and run `sq benchmark report <bench-id>` on a graded benchmark (if the store holds none, create one with the commands of 425 Task 45); then set an alias with no recall run
-  - [ ] Success: the review-findings heading shows the recall line for the first alias and the unmeasured flag for the second; both keys are unset afterwards
-- [ ] Step 6: `sq benchmark recall run --set recall --review-model <A> --review-model <B> --samples 2 --max-cost 0.01 --review-cost 0.20 --repo .` (K = 2 is a new run id, so step 3's finished reviews do not count), then the same command with `--max-cost 8`
-  - [ ] Success: the first stops after the review that crosses the cap and exits 2 with its records kept; the second skips those reviews and finishes with exit 0
+### Task 34: Live check on the fixture case
+Scratch work goes in new directories under `/tmp`; nothing is pushed. No command here runs against squadron's history. LLM spend is pre-authorized: two reviewers on one small diff under a $2 cap, and each command finishes in minutes. Needs two review aliases that answer yes in `sq benchmark auth-check`; if fewer than two do, write `BLOCKED:` with the auth-check output under this task and stop. When two aliases other than the configured `benchmark.grading_review_model` answer yes, use those, so this one-case run does not become that reviewer's recall line in `sq benchmark report`.
+- [ ] In a script under `/tmp`, build the `recall_proved_assert` repository with `tests/benchmark/recall_repos.py`. From inside it run `sq benchmark recall build --set smoke`, then `sq benchmark recall show` with the case id the build printed
+  - [ ] Success: one case is kept; `show` prints each defect's operator, category, original and mutated text and proving nodes
+- [ ] `sq benchmark recall run --set smoke --review-model <A> --review-model <B> --samples 2 --max-cost 2 --review-cost 0.20 --repo <that repository>`, then `sq benchmark recall report`
+  - [ ] Success: the bound prints first; each review line shows found/defects and unmatched; the report shows recall per reviewer with n and K, the measured categories, the matcher version and the paired verdict it gives for one case
+- [ ] Cap and resume: the same `run` command with `--samples 3 --max-cost 0.01` (K = 3 is a new run id), then again with `--max-cost 2`
+  - [ ] Success: the first stops after the review that crosses the cap and exits 2 with its records kept; the second skips those reviews and exits 0
 - [ ] Any defect found in this slice's code is fixed here with a test and recorded in `DEVLOG.md`; run Task 35's first bullet before the commit below. If no file changed there is nothing to commit and the marker below is skipped
 
-**Commit**: `feat: correct recall build and run after the walkthrough`
+**Commit**: `feat: correct recall build and run after the live check`
 
 ### Task 35: Final validation, design names and DEVLOG
 - [ ] Run the gates on the whole branch: `ruff format`, `ruff check`, `pyright` (zero errors) and the full test suite once; fix any failure at its cause
   - [ ] Success: all clean, or failures recorded as already failing on the target with the test names; 421–425 tests pass unchanged except where D11 changed `review_flag`
 - [ ] Check `wc -l` on every file this slice created: each is under ~300 lines (the splits are planned in the Context Summary). `config/keys.py` was 522 lines before this slice and is not split here
 - [ ] Update the slice design with the names the implementation added (`recall_edits.py`, `recall_materialize.py`, `recall_plan.py`, `recall_stats.py`, `recall_discovery.py`, `recall_verify.py`, `recall_plant.py`, `recall_run_state.py`, `recall_summary.py`, `recall_report_render.py`, `python_recall_expr.py`, `python_recall_stmt.py`, `python_recall_closure.py`, `benchmark_recall_run.py`, `recall_models.py`, `recall_store.py`, `location_anchor`, `build_deps`, `run_deps`)
-- [ ] DEVLOG: implementation entry per the Session State Summary guidance (what was done, Task 20's yield counts, walkthrough results) in `DEVLOG.md` at the repo root, under today's `## YYYYMMDD` heading, newest first; mark the slice design `status: complete` and tick its slice-plan entry when every task above is checked, dropped items `[x]` with a note
+- [ ] DEVLOG: implementation entry per the Session State Summary guidance (what was done, the output of Task 34's commands) in `DEVLOG.md` at the repo root, under today's `## YYYYMMDD` heading, newest first; mark the slice design `status: complete` and tick its slice-plan entry when every task above is checked, dropped items `[x]` with a note
   - [ ] Success: slice design and slice plan reflect completion; every task above is checked
 
 **Commit**: `feat: complete reviewer recall slice`

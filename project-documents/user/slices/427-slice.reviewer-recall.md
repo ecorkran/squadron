@@ -6,7 +6,7 @@ parent: user/architecture/420-slices.model-benchmark.md
 dependencies: [421, 424, 425, 300, 400, 402, 420, 917]
 interfaces: [425]
 dateCreated: 20261104
-dateUpdated: 20261105
+dateUpdated: 20261115
 status: not_started
 ---
 
@@ -390,7 +390,7 @@ Review record id: `rreview-<run_id[7:]>-<case_id[6:18]>-<reviewer_key[:8]>-s<sam
 
 ### Functional Requirements
 
-- `sq benchmark recall build` on squadron writes recall cases and a `RecallBuild` record. Every candidate is either kept or listed with a `RecallRejection`.
+- `sq benchmark recall build` in a repository writes recall cases and a `RecallBuild` record. Every candidate is either kept or listed with a `RecallRejection`.
 - Every planted defect has path, lines, operator, a `ReviewCategory` and at least one proving node that passes on the clean commit and fails with the defect alone in every verification run. A rebuild from the same commits gives the same case ids.
 - No two defects in a case are within `2 × RECALL_LINE_WINDOW + 1` lines of each other in one file. The defected diff differs from `P..C` only on the planted lines.
 - The matcher has tests for: a span inside the window, a span just outside it, a `path#function` anchor, a bare path (unlocated), `a/` and `./` prefixes, an absolute path under the tree, a `PASS` finding (not counted), a duplicate, a category mismatch that still matches, a multi-line span reaching two defects (claims the nearest), an anchor shared by two defects (one finding claims one; a second claims the other), and a deletion defect's zero-width span. The planter has a test with a line-removing defect above another defect in the same file: the lower defect's stored lines are shifted, and applying the stored edits to the original tree gives the defected tree the lines describe.
@@ -415,27 +415,24 @@ Review record id: `rreview-<run_id[7:]>-<case_id[6:18]>-<reviewer_key[:8]>-s<sam
 
 These are draft commands. `sq benchmark recall` does not exist until this slice is implemented. Both review aliases must answer yes in `sq benchmark auth-check`.
 
-1. **Build cases from squadron's history.**
+No step runs against squadron's history (PM decision 20261115). Every step uses the one-case set built from the `recall_proved_assert` fixture repository, so each command finishes in minutes and the reviews stay under a $2 cap.
+
+1. **Build the fixture case.** From inside a copy of the `recall_proved_assert` fixture repository:
    ```bash
-   sq benchmark recall build --limit 40
+   sq benchmark recall build --set smoke
    ```
-   One line per candidate, kept with a defect count or rejected with a reason, then counts by reason and `case set recall v1`. Running it again prints the same case ids and leaves the set at v1.
+   One line per candidate, kept with a defect count or rejected with a reason, then counts by reason and `case set smoke v1`. Running it again prints the same case id and leaves the set at v1; the build tests assert this.
 
 2. **Inspect a case.**
    ```bash
    sq benchmark recall show <rcase-id>
    ```
-   Each defect shows its operator, category, original and mutated text, and proving nodes. Check one by hand in a kept sandbox:
-   ```bash
-   sq benchmark recall build --set scratch --limit 1 --keep
-   ```
-   The scratch set keeps this check out of the `recall` set that steps 3 to 6 measure.
-   In the kept tree, apply one defect's edit and run `.venv/bin/python -m pytest <proving node>`. It fails. Revert the edit, and it passes.
+   Each defect shows its operator, category, original and mutated text, and proving nodes. That the proving node fails with the edit and passes without it is asserted by `tests/benchmark/test_recall_build_real.py`.
 
 3. **Run two reviewers.**
    ```bash
-   sq benchmark recall run --set recall --review-model gpt-review --review-model opus-review \
-     --samples 3 --max-cost 8 --review-cost 0.20
+   sq benchmark recall run --set smoke --review-model <A> --review-model <B> \
+     --samples 2 --max-cost 2 --review-cost 0.20 --repo <fixture repository>
    ```
    The bound prints first. Each line shows found/defects and unmatched for one review.
 
@@ -445,9 +442,9 @@ These are draft commands. `sq benchmark recall` does not exist until this slice 
    ```
    Recall with an interval per reviewer, the paired verdict, recall by operator, and the per-review finding counts, with n and K. The header names the measured categories and the matcher version.
 
-5. **425 reads it.** Set `benchmark.grading_review_model` to one of the aliases from step 3 and run `sq benchmark report <bench-id>` on a graded benchmark (425). The review-findings heading shows that reviewer's recall instead of `unmeasured reviewer`. With an alias that has no recall run, the flag is shown.
+5. **425 reads it.** Covered by the `review_flag` tests, not run live: with a recall summary the review-findings heading shows that reviewer's recall, and without one it shows `unmeasured reviewer`.
 
-6. **Cap and resume.** `sq benchmark recall run … --max-cost 0.30` stops after the review that crosses the cap and exits 2. The same command with `--max-cost 8` skips completed reviews and finishes.
+6. **Cap and resume.** Step 3's command with `--samples 3 --max-cost 0.01` stops after the review that crosses the cap and exits 2. The same command with `--max-cost 2` skips completed reviews and finishes.
 
 7. **Matcher tests.** `uv run pytest tests/benchmark/test_recall_match.py -v` covers every case in the matcher criterion above.
 
@@ -471,10 +468,10 @@ These are draft commands. `sq benchmark recall` does not exist until this slice 
 1. Operator table and `PythonRecallAdapter` sites and textual apply, tested on real squadron source.
 2. Records, case identity, store methods and the `write_case_set` extension.
 3. Import-closure test selection and verification against fixture projects.
-4. `recall_build` and `sq benchmark recall build` and `show`. Build on squadron and check two defects by hand (walkthrough step 2).
+4. `recall_build` and `sq benchmark recall build` and `show`. The build command runs on the fixture repository in a test.
 5. `recall_match` and the statistics, pure, on 425's bootstrap.
 6. `recall_runner`: plan, bound, cap, lock, resume.
-7. `recall_report`, the CLI and slash command, then `latest_recall_for` and `review_flag` (D11). Run the walkthrough.
+7. `recall_report`, the CLI and slash command, then `latest_recall_for` and `review_flag` (D11). Run the walkthrough on the fixture case.
 
 Effort: 3/5.
 
