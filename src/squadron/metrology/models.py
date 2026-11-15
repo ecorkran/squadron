@@ -20,6 +20,12 @@ from pydantic import BaseModel
 from squadron.core.finding_categories import AuditCategory as AuditCategory  # re-exported
 from squadron.metrology.benchmark_models import BenchmarkCase, CaseSet, FixQualification
 from squadron.metrology.benchmark_replay_models import BenchmarkRun, ImplementationReplay
+from squadron.metrology.floor_stat import FloorStat as FloorStat  # re-exported
+from squadron.metrology.grade_records import (
+    ImplementationGrade,
+    ReferenceGrade,
+    SampleSizeEstimate,
+)
 from squadron.metrology.levels import ArtifactLevel
 from squadron.metrology.project_id import ProjectId as ProjectId  # re-exported
 from squadron.metrology.project_id import ProjectIdSource as ProjectIdSource  # re-exported
@@ -55,6 +61,11 @@ RECORD_TYPE_FIX_QUALIFICATION = "fix_qualification"
 #: Written by 424's benchmark runner: one record per benchmark, one per producer replay.
 RECORD_TYPE_BENCHMARK_RUN = "benchmark_run"
 RECORD_TYPE_IMPLEMENTATION_REPLAY = "implementation_replay"
+#: Written by 425's grader: a reference grade per (case, grader, environment), an
+#: implementation grade per (replay, grader), one sample-size estimate per benchmark.
+RECORD_TYPE_REFERENCE_GRADE = "reference_grade"
+RECORD_TYPE_IMPLEMENTATION_GRADE = "implementation_grade"
+RECORD_TYPE_SAMPLE_SIZE_ESTIMATE = "sample_size_estimate"
 
 
 class JudgeResultRef(BaseModel):
@@ -183,21 +194,6 @@ class AuditFinding(BaseModel):
     summary: str
 
 
-class FloorStat(BaseModel):
-    """The measured spread of one quantity across a variance series.
-
-    ``stddev`` is the sample standard deviation. At the default n=3 it is a
-    coarse figure, and every surface presenting it says so — it bounds
-    interpretation of a later delta, it does not support a significance
-    claim.
-    """
-
-    min: int
-    max: int
-    mean: float
-    stddev: float
-
-
 class AuditRun(BaseModel):
     """One complete audit of one project — an ``audit_finding`` payload.
 
@@ -257,9 +253,10 @@ class MetrologyRecord(BaseModel):
     ``"audit_finding"`` (an ``AuditRun``, findings inline) and
     ``"audit_noise_floor"``; 421 writes ``"benchmark_case"`` and ``"case_set"``;
     422 writes ``"fix_qualification"``; 424 writes ``"benchmark_run"`` and
-    ``"implementation_replay"``. Each addition is an optional sibling field, so
-    the envelope shape stays backward compatible and ``schema_version``
-    does not move — no store migration is needed.
+    ``"implementation_replay"``; 425 writes ``"reference_grade"``,
+    ``"implementation_grade"`` and ``"sample_size_estimate"``. Each addition is an
+    optional sibling field, so the envelope shape stays backward compatible and
+    ``schema_version`` does not move — no store migration is needed.
     """
 
     schema_version: int
@@ -278,3 +275,6 @@ class MetrologyRecord(BaseModel):
     fix_qualification: FixQualification | None = None
     benchmark_run: BenchmarkRun | None = None
     implementation_replay: ImplementationReplay | None = None
+    reference_grade: ReferenceGrade | None = None
+    implementation_grade: ImplementationGrade | None = None
+    sample_size_estimate: SampleSizeEstimate | None = None

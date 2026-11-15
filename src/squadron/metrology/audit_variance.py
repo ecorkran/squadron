@@ -55,7 +55,7 @@ def _require_uniform(runs: list[AuditRun], field: str, label: str) -> str:
     return str(values.pop())
 
 
-def _stat(counts: list[int]) -> FloorStat:
+def summarize_counts(counts: list[int]) -> FloorStat:
     """Summarize one quantity's spread across the series.
 
     ``stdev`` is the *sample* standard deviation. At the default n=3 it is a
@@ -112,14 +112,14 @@ def reduce_noise_floor(runs: list[AuditRun]) -> AuditNoiseFloor:
         counts = [sum(1 for f in run.findings if f.category is category) for run in runs]
         if not any(counts):
             continue
-        per_category[category] = _stat(counts)
+        per_category[category] = summarize_counts(counts)
 
     return AuditNoiseFloor(
         project_id=runs[0].project_id,
         commit_sha=commit_sha,
         audit_prompt_hash=prompt_hash,
         n_runs=len(runs),
-        total=_stat(totals),
+        total=summarize_counts(totals),
         per_category=per_category,
         measured_at=datetime.now(UTC),
     )

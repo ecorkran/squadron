@@ -22,10 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sq run <pipeline> <slice> --producer-only` runs only the step that writes the code (for `P6`, `implement`) and stops after its commit, with no review, close-out or merge. It refuses a pipeline with several such steps, and runs from the slice's own branch only. It also works with `--prompt-only` and from `/sq:run`.
 - `sq benchmark run --set NAME --model ALIAS … --max-cost USD` replays a case set's fix cases: for each case and model it runs the producer in a clean sandbox, stores the diff and a record (outcome, cost, a scan for reads of your checkout or the code host), and prints the cost bound before it starts. A run that hits its cap exits 2 and resumes where it stopped; an interrupted run is reported and its leftover sandbox removed. `sq benchmark replay-show RECORD [--diff]` prints a record or its diff.
 
+- `sq benchmark grade BENCHMARK_ID --max-cost USD` grades a benchmark's replays and each case's reference fix in fresh sandboxes: the hidden tests, the start commit's own suite, a lint and type snapshot, and a fixed code review of the diff. It prints its cost bound first, stops at the cap with exit 2, and resumes where it stopped. Edits to existing tests, tool config and added suppressions are counted, never honored.
+- `sq benchmark report BENCHMARK_ID [--json]` prints per-config pass fractions, a paired bootstrap comparison ("not distinguishable" when the interval spans zero, "too few cases" under five), review findings flagged as from an unmeasured reviewer, cost and time, and every absence. `/sq:benchmark` mirrors both.
+- `sq benchmark yield` adds a measured sample-count line when a graded benchmark has enough cases.
+
 ### Changed
+- A review run with `--no-tools` now tells the model it has no tools and no longer sends the SDK's tool-use preset, so the model writes the review instead of ending its turn on tool calls it cannot make.
 - A capped SDK run now stops at the cap inside a dispatch, not only after each action.
 
 ### Fixed
+- A review run with `--no-tools` on the SDK no longer sends the Claude Code tool prompt and now tells the model it has no tools, so models stop answering with tool-call text and no review.
 - A pipeline with no step that uses Context Forge no longer calls `cf` when it starts.
 
 ## [0.24.28] - 20261112

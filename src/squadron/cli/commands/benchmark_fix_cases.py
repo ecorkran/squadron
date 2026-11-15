@@ -34,6 +34,7 @@ from squadron.core.process_runner import ProcessRunner, SubprocessRunner
 from squadron.metrology.benchmark_models import CASE_ID_PREFIX, FixQualification
 from squadron.metrology.benchmark_store import BenchmarkRecordStore
 from squadron.metrology.errors import MetrologyIdentityError, MetrologyStoreError
+from squadron.metrology.grade_store import GradeRecordStore
 from squadron.metrology.identity import derive_project_id
 from squadron.metrology.project_id import ProjectId
 from squadron.metrology.snapshot_models import SourceLanguage
@@ -230,7 +231,8 @@ def yield_command(
             records = [r for r in store.list_fix_qualifications() if r.project_id.value in wanted]
         else:
             records = store.list_fix_qualifications()
-        report = build_yield(records, store.list_case_sets(), samples, target)
+        grades = GradeRecordStore(store)
+        report = build_yield(records, store.list_case_sets(), samples, target, grades.latest_estimate)
     except MetrologyStoreError as exc:
         raise stderr_exit(str(exc)) from exc
     typer.echo(render_json(report) if as_json else render_text(report), nl=as_json)

@@ -6,8 +6,8 @@ parent: user/architecture/420-slices.model-benchmark.md
 dependencies: [421, 422, 424]
 interfaces: [426, 427]
 dateCreated: 20261104
-dateUpdated: 20261114
-status: not_started
+dateUpdated: 20261115
+status: complete
 ---
 
 # Slice Design: Grading and Paired Report
@@ -75,32 +75,58 @@ The measured sample-count estimate tells the PM what a benchmark that can separa
 ```
 src/squadron/
   benchmark/
-    grading_adapter.py        GradingAdapter protocol, InjectionResult, RestorationResult
-    python_grading.py         PythonGradingAdapter: inject, restore, deps_changed, edits, suppressions
-    tree_reader.py            GitTreeReader (TreeReader over `git show` / `git ls-tree`)
-    grade_one.py              one subject: sandbox -> apply -> review -> restore -> tests -> snapshot
-    grade_review.py           reviewer resolution, grading review call, normalization, review floor
-    grade_budget.py           ReviewBudget: the run-level cap, shared by every grade_one call
-    grade_plan.py             plan, refusals, the stated bound
-    grade_runner.py           bound, cap, lock, resume, reference-first ordering, the estimate
+    grading_adapter.py        GradingAdapter protocol, InjectionResult, RestorationResult, ProducerConfigError
+    python_grading.py         PythonGradingAdapter; tool-config restoration, deps_changed, test edits
+    python_injection.py       hidden-test injection, clash and collision records
+    python_suppressions.py    count_suppressions
+    tree_reader.py            TreeReader protocol, GitTreeReader, TreeReadError
+    grade_deps.py             GradeDeps, GradeTarget, GradeAbsent, the sandbox and store protocols
+    grade_run.py              GradeRun (what a grade accumulates), run_git
+    grade_prepare.py          digest check, baseline step, diff apply, review, restore, reinstall
+    grade_checks.py           baseline, producer-new, snapshot, regression, hidden, suppressions
+    grade_result.py           GradeResult, ReferenceGrade and ImplementationGrade assembly
+    grade_one.py              grade_one
+    grade_snapshot.py         make_snapshot_measurer (production measure_snapshot wiring)
+    grade_review.py           resolve_reviewer, review_tree_diff, ReviewFailed, review_floor
+    grade_budget.py           ReviewBudget, GradeCapReached
+    grade_plan.py             plan_grading, GradePlan, GradeRefusal, render_bound
+    grade_runner.py           run_grading, GradeSummary, GradeStatus
+    grade_estimate.py         EstimateInputs, write_estimate
+    grade_matrix.py           per-config, per-case outcomes and case inclusion (D13), shared by
+                                the runner and the report
+    grade_services.py         GradeServices (the commands' seam), production wiring
+    grading_config.py         validators and readers of the grading config keys
     paired_stats.py           per-case reduction, paired bootstrap, sample-count estimate
-    bench_report.py           BenchmarkReport model assembled from records, review_flag
-    report_tables.py          CaseKindTable protocol and registry (426 registers its table)
-    registry.py               + grading adapters
+    bench_report.py           build_report, review_flag, latest_grader
+    bench_report_render.py    render_text, render_json
+    report_models.py          BenchmarkReport and its row models
+    report_rows.py            row helpers and number formatting
+    report_tables.py          CaseKindTable protocol, registry, ReportInputs (426 registers here)
+    report_fix_table.py       the fix-case table: sections 1-3
+    registry.py               + grading_adapter_for
+    separability.py           z_total made public (422's formula, shared)
+    yield_report.py           + MeasuredLine
+    sandbox.py                + BenchmarkSandbox.reinstall
   metrology/
+    content_sidecars.py       ContentSidecars, SidecarKind (diff_sidecars.py keeps DiffSidecars)
+    benchmark_nodes.py        NodeResult, NodeOutcome, FailureKind (moved from benchmark/adapter)
+    floor_stat.py             FloorStat (moved from models.py, re-exported)
     grade_models.py           GradeSubject, GradeAbsence, PairVerdict, ReviewerRef, GraderIdentity,
-                                ReviewOutcome, ReviewSummary, GradeResult, ReferenceGrade,
-                                ImplementationGrade, PairEstimate, SampleSizeEstimate
-    grade_store.py            GradeRecordStore: grade and estimate records, record ids
-    benchmark_store.py        ContentSidecars (shared with 421/424, so only the sidecar kinds change)
+                                GRADER_VERSION,
+                                SnapshotRef, SuppressionCounts, ReviewOutcome, ReviewSummary,
+                                GradeResult, check_detail
+    grade_records.py          ReferenceGrade, ImplementationGrade, PairEstimate, SampleSizeEstimate
+    grade_store.py            GradeRecordStore, grade record ids
     snapshot/take.py          + measure_snapshot (extracted, no store write)
     audit_delta.py            is_within_floor accepts float deltas
+    audit_variance.py         summarize_counts (was _stat)
+  review/rules.py             + project_rules_dir
   cli/commands/
     benchmark_grade.py        `sq benchmark grade`, `sq benchmark report` (registered on the benchmark group)
 commands/sq/benchmark.md      + grade, report
 ```
 
-`benchmark_models.py` and `benchmark_store.py` are shared with 421 and 424 and sit near the line limit, so the grade models and the grade record methods live in `grade_models.py` and `grade_store.py`. `grade_runner` reaches language details only through the `GradingAdapter` registry and reaches the reviewer only through `grade_review`. `paired_stats` is pure: no I/O, no store, no model. Each module stays under 300 lines.
+`benchmark_models.py` and `benchmark_store.py` are shared with 421 and 424 and sit near the line limit, so the grade models and the grade record methods live in `grade_models.py` and `grade_store.py`. `grade_runner` reaches language details only through the `GradingAdapter` registry and reaches the reviewer only through `grade_review`. `paired_stats` is pure: no I/O, no store, no model. Each module stays near or under 300 lines.
 
 ### Data Flow
 
@@ -534,35 +560,38 @@ class SampleSizeEstimate(BaseModel, frozen=True):
 
 ### Verification Walkthrough
 
-These are draft commands. `sq benchmark grade` and `sq benchmark report` do not exist until this slice is implemented. The steps need a case set from 422 (`sq benchmark fix-cases build --set fixes`), replays from 424, and `benchmark.grading_review_model` set to an alias that answered yes in `sq benchmark auth-check`.
+Verified 2026-11-15 on squadron's one qualified fix case (`fix-squadron`, `case-85c975f100d51ec1`), with `benchmark.grading_review_model = haiku-xhigh` and `benchmark.review_timeout_s = 900`. Squadron's history qualified 1 of 95 candidates, and `MIN_PAIRED_CASES` is 5, so the paired interval and the measured sample-count estimate cannot print here. Their live check is #333. Run every command with `uv run sq` from the repository root. A grade takes several minutes because each subject builds a sandbox and installs its environment.
 
-1. **Small run for the sample-count measurement.** Pick at least five qualified cases and two configs:
+1. **Build the case set and replay it.**
    ```bash
-   sq benchmark run --set fixes --model opus --model sol --samples 3 \
-     --max-cost 40 --max-cost-per-replay 1.50 --case <id1> … --case <id5>
+   sq benchmark fix-cases build --set fixes --commit 2101361510f4
+   sq benchmark run --set fixes --model opus-high --model opus-medium --samples 2 \
+     --max-cost 20 --max-cost-per-replay 1.50 --case case-85c975f100d51ec1
    sq benchmark grade <bench-id> --max-cost 10 --review-cost 0.25
    ```
-   The bound prints first and counts five references × floor runs plus up to 30 replays. Reference lines print `pass`. Each replay prints pass, fail with the regression count, or an absence kind.
+   Expected: the run prints `benchmark bench-… set fixes v1 configs opus-high, opus-medium samples 2`, one line per replay (`committed` or `no_commit`, leak result, cost) and `outcomes: …`. A replay that read the checkout is `leaked` and is a harness absence, so rerun with `sq benchmark run … --retry-harness` until none is. The grade prints its bound first: `references 1 × 3 reviews + replays N × 1 review = M reviews`, then `bound: M × $0.25 (--review-cost) = …`. Next `reference case-85c975f100d51ec1 pass`, one `case-… <alias> sN pass` line per committed replay (`fail (K regressions)` or `absent <kind>` otherwise), and `graded R references, N replays: P passed, F failed`. Seen: reference `pass`, replays `pass`; `sol` made no commit in three replays (a config absence, not graded).
 
 2. **The report.**
    ```bash
    sq benchmark report <bench-id>
    ```
-   Sections appear in D13's order. Each config row shows n and k. The pair shows an interval and a verdict. The review section carries the unmeasured-reviewer flag. The sample-count line shows the measured MDD and the cases needed at each k.
+   Expected: a header with the grader identity, `cases: 1 in set · 1 compared · 0 dropped`, then in order: objective grade (n, k, pass fraction, hidden, regressions, new tests, config absences, and the reference line "never ranked"), paired (`opus-high − opus-medium +0.50 too few cases (1)`), checks vs baseline, review findings with the heading `unmeasured reviewer: no recall data for haiku-xhigh`, cost / turns / time, absences and exclusions. A benchmark whose case is excluded prints `0 compared` and the reason (for example `not compared: harness_replay 1`), and no config rows.
 
-3. **The yield report reads the measurement.**
+3. **The yield report and the estimate.**
    ```bash
    sq benchmark yield
    ```
-   The separability line shows the analytic bound and, beside it, `measured (bench-…, n=5, k=3)`.
+   Expected: the analytic `separability …` lines and no `measured (…)` line, because the grade summary said `no sample-count estimate: 1 included cases, at least 5 needed`. With five or more included cases and k ≥ 2 the grade writes the estimate and yield adds `measured (bench-…, n=…, k=…)` (#333).
 
-4. **Edits are counted, not honored.** Run `uv run pytest tests/benchmark/test_grade_one_edits.py -k edits -v`. Its fixtures replay a diff that weakens an existing assertion, adds `# type: ignore` and loosens `[tool.pyright]`. The grade shows each count, and the pass equals the unedited diff's.
+4. **Edits are counted, not honored.** `uv run pytest tests/benchmark/test_grade_one_edits.py -k edits -v` → 4 passed (a weakened assertion, an added suppression, a loosened tool config, and the regression run seeing the start versions of edited tests). Each count shows and the pass equals the unedited diff's.
 
-5. **Reference grade.** `sq benchmark replay-show <record-id> --diff` for one graded replay. Then compare its grade with the reference line in the report: the reference passes every hidden test with zero regressions.
+5. **Reference grade.** `sq benchmark replay-show <record-id> --diff` prints a replay's diff. The report's reference line reads `1/1` hidden tests and `0` regressions.
 
-6. **Cap and resume.** `sq benchmark grade <bench-id> --max-cost 0.30` stops after the review that crosses $0.30 and exits 2. Rerunning with `--max-cost 10` skips graded subjects and finishes.
+6. **Cap and resume.** `sq benchmark grade <bench-id> --max-cost 0.30` stops after the review that crosses $0.30 (`grading run cap reached: spent $… of $0.30`, then `stopped at the run cap; rerun with a larger --max-cost to continue`) and exits 2. Rerunning with `--max-cost 10` plans from the stored records, so the bound counts only what is ungraded (`references 0 × 3 reviews + replays 1 × 1 review`), and skips every graded subject. A grader identity that has failed a reference needs `--retry-harness` to try it again.
 
-7. **Inspecting a grade sandbox.** Rerun step 1's grade for one case with `--keep --retry-harness --case <id>`. In the kept tree, `test_sqhidden_*.py` sits beside the producer's test files, and `git diff <start_sha> -- pyproject.toml` shows only the producer's non-tool changes.
+7. **Inspecting a grade sandbox.** `sq benchmark grade <bench-id> --review-model haiku --retry-harness --keep --case case-85c975f100d51ec1` prints `kept: <path> (holds the reference's hidden tests; delete it when done)` per subject. In a kept tree, `tests/providers/test_sqhidden_test_capabilities.py` sits beside `tests/providers/test_capabilities.py`, and `git diff <start_sha> -- pyproject.toml` (the start commit is `HEAD~1` there) is empty when the producer changed no non-tool part of it. Delete the kept trees afterwards; the next benchmark command also sweeps them (#331).
+
+Caveats found: the grading review needs a model that writes a review with no tools. `haiku-xhigh` returned none in about half of its reviews until the no-tools preset and notice fixes in the closing walkthrough commit; since then 4 of 4 succeeded on a recent diff. A review that still returns nothing is `review_failed`, a harness absence that drops the case until `--retry-harness`; the log line `grading review (alias …) wrote no review; the model's output began: …` shows what the model wrote.
 
 ## Risk Assessment
 
@@ -590,6 +619,26 @@ These are draft commands. `sq benchmark grade` and `sq benchmark report` do not 
 8. `bench_report`, the CLI, the slash command and the yield line. Run walkthrough steps 1–7 on squadron.
 
 Effort: 4/5.
+
+### Names and Deviations Found in Implementation
+
+Names the design did not state: `GradeDeps`, `GradeTarget` (the `subject` argument of `grade_one`), `GradeRun`, `GradeAbsent`, `MissingReferenceGrade`, `ReviewBudget` and `GradeCapReached`, `GradeRefusal`, `ReviewFailed`, `TreeReadError`, `GitTreeReader`, `ReviewSummary`, `GradePlan`, `GradeSummary`, `GradeServices`, `EstimateInputs`, `GradeMatrix`, `TableSection`, `CaseKindTable`.
+
+Gaps the implementation found, beyond those corrected before implementation:
+
+- **The reinstall needs a sandbox method.** `BenchmarkSandbox.reinstall()` re-runs 421's `resolve_environment` and leaves `identity` naming the start environment.
+- **Records that stop early.** `ReferenceGrade`'s baseline fields and `ImplementationGrade.environment_digest` are optional, because a grade can end before the baseline is taken or before the environment resolves. A result or an absence, exactly one, is validated; `absence_class` must match `GRADE_ABSENCE_CLASS`.
+- **Import direction.** `NodeResult`, `NodeOutcome` and `FailureKind` moved to `metrology/benchmark_nodes.py`, `FloorStat` to `metrology/floor_stat.py` and `REPLAY_ID_PREFIX` to `benchmark_replay_models.py`, because `metrology` must not import `squadron.benchmark` and the grade records embed them.
+- **The grading review's rules.** `resolve_rules_dir` falls back to config, flags and the user's home, which would leak a machine's rules into a tree with none. `project_rules_dir` returns only the tree's own `rules/` or `.claude/rules/`, assembled with `load_review_rules`.
+- **Injection and Python's file rules.** The conftest imports go after the file's docstring and `from __future__` imports, and an import a hidden fixture's source uses (`pytest`) is added too. A hidden test that already exists in the producer's untouched file is recorded as a same-name clash.
+- **Test edits.** `test_side_edits` compares test source files only; `GitTreeReader` returns decoded text, so binary test data cannot be compared and non-UTF-8 content raises `TreeReadError`.
+- **Order of the baseline.** The reference's start node ids are stored in collection order, not sorted: sorting broke an order-dependent test in the live grade (Task 31).
+- **Tree-read failures.** A `TreeReadError` while reading the start or reference tree is recorded as `reference_unreadable`.
+- **Report inclusion.** A failed replay with no effort stamp is counted by its failure class and given no row (a committed replay that sent no effort is an honest "not sent" row); a row whose identity spans prompt identities is shown with a warning and never merged or compared.
+- **A no-tools review needs two things the design did not state.** `run_review_with_profile` sent the Claude Code preset system prompt on the SDK even with `no_tools=True`, and the `code` template opens with "confirm the working directory"; models wrote tool calls as text and returned no review. A no-tools review now gets no preset and a short "you have no tools" notice (`NO_TOOLS_NOTICE`), which also applies to `sq review --no-tools`.
+- **Line endings of restored files.** `GitTreeReader` returns decoded text with universal newlines, so a CRLF start file is restored with LF endings. Edit counts normalize CRLF, so they are unaffected. Deferred to #334, which gives `ProcessRunner` a bytes read.
+- **The grading review's rules come from the start commit,** read with git into a scratch directory, not from the tree the producer's diff changed.
+- **Pyright's type measurement in a sandbox.** The live reference grade measured no type total: the snapshot's environment check reported ".venv is out of sync with uv.lock" for a tree installed with `--all-extras --dev`, so `type_total` was `None` ("not measured"). This is 400's check, not a grading step; see the DEVLOG.
 
 ### Special Considerations
 

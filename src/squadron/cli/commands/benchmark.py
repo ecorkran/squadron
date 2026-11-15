@@ -24,6 +24,7 @@ from squadron.benchmark.auth_check import (
 from squadron.benchmark.scrubbed_env import MissingHarnessHomeError, MissingHarnessToolError
 from squadron.cli.commands.benchmark_common import stderr_exit
 from squadron.cli.commands.benchmark_fix_cases import fix_cases_app, yield_command
+from squadron.cli.commands.benchmark_grade import grade_command, report_command
 from squadron.cli.commands.benchmark_replay_show import replay_show_command
 from squadron.cli.commands.benchmark_run import run_command
 from squadron.cli.commands.benchmark_sandbox import sandbox_command
@@ -42,6 +43,8 @@ benchmark_app.command("sandbox")(sandbox_command)
 benchmark_app.add_typer(fix_cases_app, name="fix-cases")
 benchmark_app.command("yield")(yield_command)
 benchmark_app.command("run")(run_command)
+benchmark_app.command("grade")(grade_command)
+benchmark_app.command("report")(report_command)
 benchmark_app.command("replay-show")(replay_show_command)
 
 ModelOption = Annotated[str, typer.Option("--model", help="Model alias to probe.")]

@@ -15,6 +15,9 @@ from typing import Protocol, Self
 from squadron.benchmark.scrubbed_env import ScrubbedEnvironment
 from squadron.core.process_runner import ProcessRunner
 from squadron.metrology.benchmark_environment import EnvironmentIdentity
+from squadron.metrology.benchmark_nodes import FailureKind as FailureKind  # re-exported
+from squadron.metrology.benchmark_nodes import NodeOutcome as NodeOutcome  # re-exported
+from squadron.metrology.benchmark_nodes import NodeResult as NodeResult  # re-exported
 from squadron.metrology.snapshot_models import SourceLanguage
 
 
@@ -24,24 +27,6 @@ class EnvironmentFailureReason(StrEnum):
     LOCK_STALE_OR_UNRESOLVABLE = "lock_stale_or_unresolvable"
     INSTALL_TIMEOUT = "install_timeout"
     INSTALLER_MISSING = "installer_missing"
-
-
-class FailureKind(StrEnum):
-    COLLECTION_ERROR = "collection_error"
-    MISSING_SYMBOL = "missing_symbol"
-    ASSERTION_FAILURE = "assertion_failure"
-    PROJECT_EXCEPTION = "project_exception"
-    OTHER_EXCEPTION = "other_exception"
-
-
-class NodeOutcome(StrEnum):
-    PASSED = "passed"
-    FAILED = "failed"
-    ERROR = "error"
-    SKIPPED = "skipped"
-    XFAILED = "xfailed"
-    XPASSED = "xpassed"
-    NOT_RUN = "not_run"
 
 
 class EnvironmentResolutionError(Exception):
@@ -55,15 +40,6 @@ class EnvironmentResolutionError(Exception):
 
 class SuiteRunError(Exception):
     """The suite run produced no usable report; carries pytest's stderr."""
-
-
-@dataclass(frozen=True)
-class NodeResult:
-    node_id: str
-    outcome: NodeOutcome
-    failure_kind: FailureKind | None = None
-    phase: str | None = None
-    exception_type: str | None = None
 
 
 @dataclass(frozen=True)

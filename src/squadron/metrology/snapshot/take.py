@@ -29,6 +29,7 @@ from squadron.metrology.snapshot.files import (
     resolve_files,
 )
 from squadron.metrology.snapshot.preflight import (
+    SnapshotConfig,
     check_integrity,
     preflight,
     read_snapshot_config,
@@ -157,6 +158,35 @@ def take_snapshot(
     return snapshot
 
 
+def measure_snapshot(
+    root: Path,
+    environment_root: Path,
+    config: SnapshotConfig,
+    registry: AdapterRegistry,
+    runner: ToolRunner,
+    project_id: ProjectId,
+    commit_sha: str,
+    files: list[str],
+) -> CodeSnapshot:
+    """Measure *files* under *root* and return the snapshot without writing a record.
+
+    ``take_snapshot_at`` runs this inside its export; the benchmark grader (425 D12)
+    calls it on a sandbox tree whose commit is not in the project's history, so no
+    ``code_snapshot`` record may be keyed on it. The adapters' tools run under
+    ``environment_root``, within ``config.tool_timeout_s``.
+    """
+    exclusions = effective_exclusions(config.project_exclusions, registry.values())
+    ctx = AdapterContext(
+        repo_root=root,
+        environment_root=environment_root,
+        limits=config.limits,
+        runner=runner,
+        tool_timeout_s=config.tool_timeout_s,
+    )
+    languages = _measure_all(ctx, registry, files)
+    return _assemble(project_id, commit_sha, config.limits, exclusions, languages)
+
+
 def take_snapshot_at(
     repo_root: Path,
     commit: str,
@@ -176,14 +206,8 @@ def take_snapshot_at(
     project_id = derive_project_id(str(repo_root))
     exclusions = effective_exclusions(config.project_exclusions, registry.values())
     with export_commit(repo_root, sha, exclusions, repo_root) as exported:
-        ctx = AdapterContext(
-            repo_root=exported.root,
-            environment_root=repo_root,
-            limits=config.limits,
-            runner=runner,
-            tool_timeout_s=config.tool_timeout_s,
+        snapshot = measure_snapshot(
+            exported.root, repo_root, config, registry, runner, project_id, sha, exported.files
         )
-        languages = _measure_all(ctx, registry, exported.files)
-    snapshot = _assemble(project_id, sha, config.limits, exclusions, languages)
     store.write_snapshot(snapshot)
     return snapshot

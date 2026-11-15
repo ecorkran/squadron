@@ -148,6 +148,15 @@ class BenchmarkSandbox:
         """Run the project's tests under the scrubbed environment."""
         return self._adapter.run_suite(self._context(), selection)
 
+    def reinstall(self) -> None:
+        """Install again from the tree's current lock (the grader's reinstall, slice 425 D5).
+
+        ``identity`` keeps naming the start environment, as the grader identity requires, and
+        the grade records only that a reinstall happened. A failure raises
+        ``EnvironmentResolutionError``.
+        """
+        self._adapter.resolve_environment(self._context())
+
     def process_env(self) -> dict[str, str]:
         """The environment for any child process in this sandbox."""
         return self._environment.variables(self._adapter.path_entries(self._context()))

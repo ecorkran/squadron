@@ -18,6 +18,7 @@ from squadron.metrology.benchmark_models import (
     fix_qualification_record_id,
 )
 from squadron.metrology.benchmark_replay_models import BenchmarkRun, ImplementationReplay
+from squadron.metrology.content_sidecars import ContentSidecars, SidecarKind
 from squadron.metrology.diff_sidecars import DiffSidecars as DiffSidecars  # re-exported
 from squadron.metrology.errors import MetrologyStoreError
 from squadron.metrology.models import (
@@ -42,6 +43,16 @@ class BenchmarkRecordStore:
         self._store = store
         #: Diff files of implementation replays, below the store root (slice 424 D11).
         self.diffs = DiffSidecars(store.store_dir)
+        #: Grade sidecars (slice 425 D11): sandbox snapshots, node id lists and id maps,
+        #: and the review findings of one grade.
+        self.snapshots = ContentSidecars(store.store_dir, SidecarKind.SNAPSHOTS)
+        self.nodes = ContentSidecars(store.store_dir, SidecarKind.NODES)
+        self.reviews = ContentSidecars(store.store_dir, SidecarKind.REVIEWS)
+
+    @property
+    def metrology_store(self) -> MetrologyStore:
+        """The underlying record store, for record types whose I/O lives outside this class."""
+        return self._store
 
     # ------------------------------------------------------------------ cases
 

@@ -38,8 +38,11 @@ from squadron.metrology.audit_models import (
 __all__ = ["compute_delta", "is_within_floor"]
 
 
-def is_within_floor(delta: int, floor: FloorStat | None) -> bool | None:
+def is_within_floor(delta: float, floor: FloorStat | None) -> bool | None:
     """Judge a delta against a floor's observed spread.
+
+    ``delta`` may be an int (finding-count change) or a float (a difference
+    of mean finding counts, as the benchmark report compares).
 
     Returns ``None`` when no floor was measured — never ``False``, which
     would read as "measured, and significant" for a quantity that was never

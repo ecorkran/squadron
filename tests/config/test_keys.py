@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pytest
 
+from squadron.benchmark.grading_config import check_review_floor_runs
 from squadron.config.keys import (
+    BENCHMARK_GRADING_REVIEW_MODEL_KEY,
+    BENCHMARK_REVIEW_FLOOR_RUNS_KEY,
+    BENCHMARK_REVIEW_TIMEOUT_KEY,
     CONFIG_KEYS,
     FOREGROUND_IDLE_TIMEOUT_KEY,
     RUN_HEARTBEAT_INTERVAL_KEY,
@@ -215,3 +219,37 @@ class TestCfCliTimeoutKey:
         key = CONFIG_KEYS["cf.cli_timeout_s"]
         assert key.type_ is int
         assert key.default == 300
+
+
+class TestBenchmarkGradingKeys:
+    """Keys added by slice 425 (D7, D8): two with no default, one floor-run count."""
+
+    @pytest.mark.parametrize(
+        "key_name", [BENCHMARK_GRADING_REVIEW_MODEL_KEY, BENCHMARK_REVIEW_TIMEOUT_KEY]
+    )
+    def test_unset_key_reads_as_unset_never_a_value(
+        self, patch_config_paths: dict[str, Path], key_name: str
+    ) -> None:
+        assert CONFIG_KEYS[key_name].default is None
+        assert get_config(key_name) is None
+
+    def test_key_types(self) -> None:
+        assert CONFIG_KEYS[BENCHMARK_GRADING_REVIEW_MODEL_KEY].type_ is str
+        assert CONFIG_KEYS[BENCHMARK_REVIEW_TIMEOUT_KEY].type_ is float
+        assert CONFIG_KEYS[BENCHMARK_REVIEW_FLOOR_RUNS_KEY].type_ is int
+
+    def test_floor_runs_default_is_three(self, patch_config_paths: dict[str, Path]) -> None:
+        assert get_default(BENCHMARK_REVIEW_FLOOR_RUNS_KEY) == 3
+        assert check_review_floor_runs(get_config(BENCHMARK_REVIEW_FLOOR_RUNS_KEY)) == 3
+
+    @pytest.mark.parametrize("value", ["1", "0"])
+    def test_floor_runs_below_two_is_rejected_naming_the_key(
+        self, patch_config_paths: dict[str, Path], value: str
+    ) -> None:
+        set_config(BENCHMARK_REVIEW_FLOOR_RUNS_KEY, value)
+        with pytest.raises(ValueError, match=BENCHMARK_REVIEW_FLOOR_RUNS_KEY):
+            check_review_floor_runs(get_config(BENCHMARK_REVIEW_FLOOR_RUNS_KEY))
+
+    def test_floor_runs_of_two_is_accepted(self, patch_config_paths: dict[str, Path]) -> None:
+        set_config(BENCHMARK_REVIEW_FLOOR_RUNS_KEY, "2")
+        assert check_review_floor_runs(get_config(BENCHMARK_REVIEW_FLOOR_RUNS_KEY)) == 2
