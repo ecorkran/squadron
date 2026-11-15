@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.29] - 20261115
+
 ### Added
 - `sq run fix <issue>` reads the issue from GitHub (every comment included) and fixes it the way the fix rule says: a test that fails for the reported reason, the change, the project's own format, lint, typecheck and test gates, and one `fix:` commit with `Fixes #<issue>`. `-p issue-file=PATH` uses frozen issue text instead. It refuses a dirty tree up front, never pushes or posts, and works from `/sq:run fix` too.
 - `sq review slice <path>` and `sq review tasks <path>` now save the review when the file name follows the naming convention (`104-slice.name.md`) and Context Forge lists that file under that slice, exactly as `sq review slice 104` would. Other names still run unsaved, with the warning saying why (#142).
