@@ -37,6 +37,8 @@ _RULE_STEPS: dict[StepTypeName, RuleStep] = {
     StepTypeName.DESIGN: RuleStep.DESIGN,
     StepTypeName.TASKS: RuleStep.TASKS,
     StepTypeName.IMPLEMENT: RuleStep.IMPLEMENT,
+    # A fix changes code, so it gets the rules an implementation gets (#330).
+    StepTypeName.FIX: RuleStep.IMPLEMENT,
     StepTypeName.DISPATCH: RuleStep.DISPATCH,
 }
 
@@ -93,7 +95,9 @@ def rule_step_from_params(params: Mapping[str, object]) -> StepTypeName:
     return StepTypeName(str(params.get(RULES_STEP_PARAM, StepTypeName.DISPATCH)))
 
 
-_WRITE_REQUIRED_STEPS = frozenset({StepTypeName.DESIGN, StepTypeName.TASKS, StepTypeName.IMPLEMENT})
+_WRITE_REQUIRED_STEPS = frozenset(
+    {StepTypeName.DESIGN, StepTypeName.TASKS, StepTypeName.IMPLEMENT, StepTypeName.FIX}
+)
 
 
 def dispatch_requires_writes(params: Mapping[str, object]) -> bool:

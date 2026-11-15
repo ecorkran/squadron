@@ -29,6 +29,7 @@ from squadron.providers.base import ProviderType
         (StepTypeName.DESIGN, RuleStep.DESIGN),
         (StepTypeName.TASKS, RuleStep.TASKS),
         (StepTypeName.IMPLEMENT, RuleStep.IMPLEMENT),
+        (StepTypeName.FIX, RuleStep.IMPLEMENT),
         (StepTypeName.DISPATCH, RuleStep.DISPATCH),
     ],
 )
@@ -103,6 +104,7 @@ def test_git_refusal_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
         ({RULES_STEP_PARAM: StepTypeName.DESIGN}, True),
         ({RULES_STEP_PARAM: StepTypeName.TASKS}, True),
         ({RULES_STEP_PARAM: StepTypeName.IMPLEMENT}, True),
+        ({RULES_STEP_PARAM: StepTypeName.FIX}, True),
         ({"feedback": "fix the typo"}, True),
         ({}, False),
         ({RULES_STEP_PARAM: StepTypeName.DISPATCH}, False),

@@ -21,6 +21,7 @@ from squadron.pipeline.fix_keys import (
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.producer_only import config_without_keys
 from squadron.pipeline.steps import StepTypeName, register_step_type
+from squadron.pipeline.steps.phase import RULES_STEP_PARAM
 
 MODEL_KEY = "model"
 _ALLOWED_KEYS = frozenset({ISSUE_PARAM, MODEL_KEY, ISSUE_FILE_PARAM, COMMIT_TO_PARAM})
@@ -95,7 +96,12 @@ class FixStepType:
             context_params[ISSUE_FILE_PARAM] = cfg[ISSUE_FILE_PARAM]
         return [
             (ActionType.FIX_CONTEXT, context_params),
-            (ActionType.DISPATCH, {MODEL_KEY: cfg.get(MODEL_KEY)}),
+            # RULES_STEP_PARAM marks the dispatch as a write step (Codex runs it
+            # workspace-write) and picks the project rules a fix gets (#330).
+            (
+                ActionType.DISPATCH,
+                {MODEL_KEY: cfg.get(MODEL_KEY), RULES_STEP_PARAM: StepTypeName.FIX},
+            ),
             (ActionType.COMMIT, {SUBJECT_PARAM: CommitSubject.FIX}),
         ]
 

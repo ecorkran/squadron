@@ -10,6 +10,7 @@ from squadron.pipeline.loader import load_pipeline, validate_pipeline
 from squadron.pipeline.models import StepConfig
 from squadron.pipeline.steps import StepTypeName, bootstrap_step_types, get_step_type
 from squadron.pipeline.steps.fix import FixStepType
+from squadron.pipeline.steps.phase import RULES_STEP_PARAM
 from squadron.pipeline.steps.utils import any_step_needs_context_forge
 
 
@@ -112,7 +113,8 @@ def test_expand_order_and_configs() -> None:
             ActionType.FIX_CONTEXT,
             {"issue": "301", "issue-file": "issue.md", "commit-to": "current"},
         ),
-        (ActionType.DISPATCH, {"model": "sonnet"}),
+        # A fix writes files: the rules step is what makes a Codex dispatch workspace-write.
+        (ActionType.DISPATCH, {"model": "sonnet", RULES_STEP_PARAM: StepTypeName.FIX}),
         (ActionType.COMMIT, {SUBJECT_PARAM: CommitSubject.FIX}),
     ]
 

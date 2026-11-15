@@ -115,6 +115,12 @@ async def test_phase_step_param_sets_requires_writes(tmp_path: Path) -> None:
     assert config.requires_writes is True
 
 
+async def test_fix_step_param_sets_requires_writes(tmp_path: Path) -> None:
+    config = await agent_config_sites.dispatch_action(tmp_path, {RULES_STEP_PARAM: StepTypeName.FIX})
+
+    assert config.requires_writes is True
+
+
 async def test_feedback_param_sets_requires_writes(tmp_path: Path) -> None:
     review = ActionResult(success=True, action_type="review", outputs={}, verdict="CONCERNS")
     config = await agent_config_sites.dispatch_action(
