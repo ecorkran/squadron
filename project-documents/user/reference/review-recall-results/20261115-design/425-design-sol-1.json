@@ -1,0 +1,165 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Grading abandons the benchmark-wide spend contract",
+      "description": "Architecture 420 requires one benchmark cap covering replay, grading and judging. D9 explicitly replaces it with independent invocation caps. Moreover, its \u201cat most $15.18\u201d claim is unsupported: the overshoot figure is an observed estimate, not an enforced per-review limit. Preserve benchmark-wide accounting and distinguish estimated spend from an enforceable upper bound.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:220-236"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Report grouping contradicts the consumed config identity",
+      "description": "D13 groups by `(alias, model, profile, effort_sent)`, contradicting this document\u2019s prerequisite at line 58 and slice 420 D6. The required identity excludes aliases and includes `tool_use` and `max_output_tokens`. The proposed grouping can split identical configurations or merge different ones, invalidating paired comparisons. Use the required wire-level identity consistently.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:262-264"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Newly skipped regressions can receive a passing grade",
+      "description": "D2 assumes skipped and xfailed nodes have the same outcome at the start commit, but D8 records only baseline node ids and snapshots\u2014not baseline test outcomes. Producer source or dependency changes can cause formerly passing tests to skip or xfail. Accepting those outcomes unconditionally undermines the architecture\u2019s producer-independent regression grade. Record baseline outcomes and define how newly skipped or xfailed nodes affect the grade.",
+      "file_ref": null,
+      "category": "grading-correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:164-169"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reviewer rules are neither reliably pinned nor consistently identified",
+      "description": "The review runs after applying the producer diff and loads rules from that sandbox, while calling them \u201cthe start commit\u2019s.\u201d No step restores or independently reads historical rules. A producer can therefore change the grading instructions. Additionally, D10 defines one grader identity for the benchmark although cases can have different historical rules hashes. Load rules explicitly from each case\u2019s start commit and represent their identity consistently in grade lookup and comparison.",
+      "file_ref": null,
+      "category": "reproducibility",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:205-208"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reviewer timeout handling does not specify termination",
+      "description": "`asyncio.wait_for` specifies cancellation, but the design does not state how an active provider request or reviewer subprocess is terminated and reaped before sandbox removal. This leaves the new review I/O path\u2019s timeout handling incomplete: work could continue spending or accessing a deleted tree. Define cancellation propagation, bounded teardown and accounting for interrupted calls.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:210-211"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Recall integration introduces a forbidden sequencing dependency",
+      "description": "The slice plan explicitly permits 427 to be built independently after 421. This design instead requires 427 to import reviewer and bootstrap utilities introduced by 425. Preserve that independence by placing genuinely shared contracts below both slices, or have 425 consume 427\u2019s recall interface without making 427 depend on grading.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:464-465"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Grading abandons the benchmark-wide spend contract",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:220-236",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Report grouping contradicts the consumed config identity",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:262-264",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "grading-correctness",
+      "raw_category": null,
+      "summary": "Newly skipped regressions can receive a passing grade",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:164-169",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "reproducibility",
+      "raw_category": null,
+      "summary": "Reviewer rules are neither reliably pinned nor consistently identified",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:205-208",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Reviewer timeout handling does not specify termination",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:210-211",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "Recall integration introduces a forbidden sequencing dependency",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:464-465",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/425-slice.grading-and-paired-report.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/425-design"
+  },
+  "timestamp": "2026-11-15T15:33:04.878858",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 71183,
+  "cached_tokens": 68096,
+  "cache_write_tokens": null,
+  "completion_tokens": 1098,
+  "reasoning_tokens": 252,
+  "duration_seconds": 68.73114570789039,
+  "cost_usd": 0.0239636,
+  "cost_basis": "alias_pricing"
+}

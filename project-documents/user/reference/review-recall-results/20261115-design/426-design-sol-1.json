@@ -1,0 +1,147 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Judging adds an independent budget instead of honoring the benchmark-wide cap",
+      "description": "Architecture \u00a7Technical Considerations requires one run-level cap covering replay, grading and judging. D16 instead adds a fresh judging-invocation cap following 425\u2019s separate-budget approach, without reconciling that departure. Carry forward benchmark-wide spend and check its remaining budget before judging.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:287-298"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The judge interface cannot enforce the stated per-call cap checks",
+      "description": "`judge_pair` dispatches both orders internally but accepts no budget checker or spend callback, while D16 requires checking the cap before **each call**. It also returns `None` on failure, leaving no structured usage result for a successful first call followed by a failed second call. Expose per-call accounting and budget checks, including partial failures and unpriced calls.\n\nThe displayed \u201cat most\u201d bound is also unsupported: the largest observed call cost is an estimate, not an enforced per-call maximum. Label it as an estimate unless dispatch actually enforces that ceiling.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:255-298"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Resume keys can reuse judgments from a different resolved judge",
+      "description": "Judgment IDs include the judge alias and prompt hash but omit the resolved model, profile and effort. Changing an alias can therefore make resume skip pairs judged by its previous configuration. This conflicts with the architecture\u2019s comparability and identity requirements. Include the resolved judge identity in judgment and over-size record keys, and select report cohorts by that identity.",
+      "file_ref": null,
+      "category": "identity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:299-302"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Partial judging can produce rankings from unequal case cohorts",
+      "description": "D17 pools available judgments and computes intervals without defining completeness when judging stops at its cap or pairs fail. Although 425\u2019s inclusion rule ensures replay and grading completeness, it does not ensure judging completeness. Different config pairs can consequently receive verdicts from different case subsets.\n\nDefine a matched judging-completeness rule before fitting strengths or computing intervals; count incomplete cases separately. This preserves the architecture\u2019s identical-work comparison requirement.",
+      "file_ref": null,
+      "category": "statistical-validity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:304-312"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The over-size threshold does not establish that prompts fit the judge",
+      "description": "A fixed 400,000-character threshold, justified by an approximate token ratio, is not tied to the selected judge\u2019s context capacity or reserved output. A prompt below that threshold can still exceed the model\u2019s context and become a repeatedly retried failed pair rather than a counted `over_size` case.\n\nValidate the complete prompt against the resolved judge\u2019s usable input limit before dispatch, retaining the character threshold as an additional ceiling if useful.",
+      "file_ref": null,
+      "category": "resource-limits",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:272-277"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Judging adds an independent budget instead of honoring the benchmark-wide cap",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:287-298",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The judge interface cannot enforce the stated per-call cap checks",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:255-298",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "identity",
+      "raw_category": null,
+      "summary": "Resume keys can reuse judgments from a different resolved judge",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:299-302",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "statistical-validity",
+      "raw_category": null,
+      "summary": "Partial judging can produce rankings from unequal case cohorts",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:304-312",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "resource-limits",
+      "raw_category": null,
+      "summary": "The over-size threshold does not establish that prompts fit the judge",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:272-277",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/426-slice.slice-cases.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/426-design"
+  },
+  "timestamp": "2026-11-15T15:34:09.492726",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 70779,
+  "cached_tokens": 64768,
+  "cache_write_tokens": null,
+  "completion_tokens": 1418,
+  "reasoning_tokens": 772,
+  "duration_seconds": 63.14504299988039,
+  "cost_usd": 0.0326788,
+  "cost_basis": "alias_pricing"
+}

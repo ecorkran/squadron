@@ -1,0 +1,38 @@
+{
+  "note": "Design-review recall, first pass, 2026-11-15. One run per model. Hits graded by reading each finding against the 25 valid flaws in ../../design-review-recall-cases.md. A hit names the same defect and says what is wrong; an adjacent finding is listed separately and not counted.",
+  "models": ["sonnet-high", "haiku-xhigh", "opus-high", "sol"],
+  "flaws": {
+    "420-design/A except-branch stamp (code)": [],
+    "420-design/B criterion vs five-field identity (doc)": [],
+    "421-design/A ProcessRunner env is merged (code)": ["haiku-xhigh"],
+    "422-design/A is_test_side takes a tree before any sandbox (doc)": [],
+    "422-design/B TraceVerdict undefined (doc)": [],
+    "422-design/C walkthrough 'every line says reused' (doc)": [],
+    "423-design/A dispatch will not read fix-context output (code)": ["opus-high"],
+    "423-design/B IssueSource named twice (doc)": [],
+    "423-design/C --io-dir refused with --prompt-only (code)": [],
+    "425-design/A measure_snapshot has no file list (code)": [],
+    "425-design/B 16 KB record bound vs unbounded fields (doc)": [],
+    "425-design/C D13 row key vs five-field identity (doc)": ["sonnet-high", "haiku-xhigh", "opus-high", "sol"],
+    "425-design/D rules_hash in a one-per-benchmark identity (doc)": ["sol"],
+    "425-design/E inject_hidden lacks the start tree (doc)": [],
+    "425-design/F lockfile_sha256 required (doc)": [],
+    "426-design/A judge_pair cannot keep the call count (code)": [],
+    "426-design/B plan_file_for at the fork (code)": [],
+    "426-design/C task files sorted by name (code)": [],
+    "426-design/D stale over-size record counted twice (doc)": [],
+    "426-design/E 'No edits to 424 or 425' (doc)": ["sonnet-high", "haiku-xhigh", "opus-high"],
+    "426-tasks/A Task 23 live build cannot complete (run time)": [],
+    "426-tasks/B Task 26 live replay cannot complete (run time)": [],
+    "915-design/A four callers of first_unfinished_step (code)": ["haiku-xhigh", "opus-high"],
+    "915-design/B pause WARNING misses _execute_loop_step (code)": ["haiku-xhigh", "opus-high"],
+    "302-design/A sq review slice-vs-arch does not exist (code)": ["haiku-xhigh"]
+  },
+  "adjacent_not_counted": {
+    "426-design/A": ["sol (judge_pair has no per-call accounting for the cap)", "sonnet-high (a failed second order discards the first call's cost)"],
+    "423-design/A": ["haiku-xhigh (says the fallback does pick it up, and worries about other readers)"],
+    "302-design/A": ["opus-high (invocation left unconfirmed)", "sonnet-high (two forms are inconsistent)"],
+    "426-design/D": ["haiku-xhigh (judgments under mixed limits are pooled)"],
+    "426-tasks/A": ["sonnet-high (no dead end when no case qualifies)"]
+  }
+}

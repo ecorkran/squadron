@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "CLI verification assumes an enforcement path the design does not establish",
+      "description": "The design promises that a CLI invocation produces a threshold-derived verdict, but its documented enforcement contract operates through `ReviewAction` and returns an `ActionResult`. Slice 301 likewise establishes enforcement at that action boundary, not a shared CLI boundary. The walkthrough also expects the derived verdict to be persisted without explaining how it reaches persistence.\n\nUse a pipeline review step for the required end-to-end verification, or explicitly resolve CLI and persistence integration. Deferring the command syntax alone (lines 376\u2013379) does not resolve this contract gap.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:277-282"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure mapping omits required ground-truth and transport cases",
+      "description": "The table covers missing registry inputs, but not an input path resolving successfully to an unreadable/missing ground-truth file, or injected ground truth exceeding the cap. Both are explicitly enumerated by the architecture\u2019s \u201cFailure modes and their verdict mapping\u201d commitment. A hung request and peer disconnect mid-response also lack explicit handling strategies.\n\nDocument how these cases terminate with an observable, non-passing outcome, including the inherited timeout/cancellation mechanism. Existing handling can be referenced; new machinery is unnecessary. A general claim that infrastructure handles every case does not establish these mappings.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:383-408"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "CLI verification assumes an enforcement path the design does not establish",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:277-282",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure mapping omits required ground-truth and transport cases",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:383-408",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/302-slice.design-phase-judge-templates.md",
+    "against": "project-documents/user/architecture/300-arch.eval-actions-llm-as-judge-scoring.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/302-design"
+  },
+  "timestamp": "2026-11-15T15:36:41.920740",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 57055,
+  "cached_tokens": 55552,
+  "cache_write_tokens": null,
+  "completion_tokens": 724,
+  "reasoning_tokens": 395,
+  "duration_seconds": 62.34265045914799,
+  "cost_usd": 0.0158012,
+  "cost_basis": "alias_pricing"
+}

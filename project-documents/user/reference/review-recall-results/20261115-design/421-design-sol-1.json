@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Incomplete reporter output lacks fail-closed handling",
+      "description": "D10 handles timeouts and missing or malformed JSONL with a nonzero pytest exit, but not missing output after exit zero or valid, incomplete output after an abrupt process exit. Consumers cannot reliably distinguish a completed suite from partial observations. This leaves the architecture\u2019s \u201cabsent is not zero\u201d requirement unmet.\n\nDefine report completion validation, reconcile it with pytest\u2019s exit status, and return an explicit harness error for incomplete reporting. Test abrupt termination mid-report and missing output after exit zero.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:206-209"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-phase reports lack a per-node reduction contract",
+      "description": "The plugin emits one result per test phase, but the slice promises per-node outcomes to qualification (422) and grading (425). It never defines how setup, call and teardown results combine. A passing call followed by a teardown failure could therefore be interpreted differently by consumers.\n\nSpecify one authoritative outcome per node, including failure precedence, fixture errors, skips, expected failures and interrupted phases. Preserve phase details separately and test multi-phase combinations.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:207-221"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Incomplete reporter output lacks fail-closed handling",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:206-209",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Per-phase reports lack a per-node reduction contract",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:207-221",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/421-design"
+  },
+  "timestamp": "2026-11-15T15:29:20.870582",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 61736,
+  "cached_tokens": 60672,
+  "cache_write_tokens": null,
+  "completion_tokens": 368,
+  "reasoning_tokens": 0,
+  "duration_seconds": 55.554634124971926,
+  "cost_usd": 0.011875199999999999,
+  "cost_basis": "alias_pricing"
+}

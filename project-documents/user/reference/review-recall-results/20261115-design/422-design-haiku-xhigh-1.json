@@ -1,0 +1,279 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Boundary check exempts all method and constructor crossings",
+      "description": "D6 says a crossing \"into a method (a `co_qualname` with a class prefix) is allowed,\" because \"an instance can only come from an allowed constructor or function, and any direct reference to a non-exported class is already caught statically.\" Neither premise holds. An exported function can return an instance of a non-exported class, and the test can call a private method on that instance without naming the class. The static check never sees the class name, so the crossing is admitted. Example: a test calls an exported function that returns a `Pipeline`, then calls `pipeline._apply_fix()`, where the fix put the logic. Architecture line 54 (rule 2) allows only \"what the project's packaging metadata already declares,\" and line 107 rejects tests \"tied to where the fix lives.\" The design admits exactly that.\nThe rule also contradicts itself. A constructor crossing is recorded as `Class.__init__`, which the method exemption admits, so the \"class constructor must be in the allowed set\" rule is never applied. The known-gaps list (line 194) does not disclose this.\nFix: check the owning class of each method crossing against the allowed set. Methods of exported classes pass. Methods of non-exported classes are `reaches_past_boundary`, naming the class. Treat `__init__` as a constructor of its class. Add a fixture where a private method is called on an exported function's return value.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:189-194"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Harness failures and case rejections are classified inconsistently",
+      "description": "Three places disagree. (a) Architecture line 67 lists \"the environment did not resolve\" as a harness failure that drops the case. Line 111 says a lockfile that no longer resolves disqualifies the case. 421 splits the reasons (`EnvironmentFailureReason`, 421 line 152): `no_lockfile`, `lockfile_unsupported`, and `lock_stale_or_unresolvable` are case causes, while `install_timeout` and `installer_missing` are harness causes. The slice maps all of them to one `environment_unresolved` rejection (line 282), with the reason only in `detail`. The report groups by enum values, not detail (line 281), so the two cases cannot be separated. (b) D6 rejects a resolver import failure as `boundary_undecidable`, a candidate rejection (line 185). The test list at line 389 requires \"resolver crash\" to assert `harness_error`. (c) Line 285 says harness failures are never a rejection reason that blames the case.\nFix: make the environment reason a rejection only for the three case causes. Route install timeouts and a missing installer to `harness_error`. Promote the reason to a field so the report can group it. State which resolver failures are harness and which are case.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:185,282,285,389"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Separability uses a bound that assumes a constant per-case difference",
+      "description": "The architecture asks whether the count can separate two configs \"under the paired statistic\" (architecture line 136; plan line 66). Architecture line 95 defines that statistic as paired per-case differences with an interval over cases. The slice uses Var(D) \u2264 0.5/k instead. That bound takes the worst-case within-case variance but omits the between-case variance of the true difference, which the slice admits (line 260). So the bound is conservative for one source of variance and optimistic for the other, and the direction of error for the answer is unknown. That answer orders 423 \u2192 425 (line 361; plan line 170).\nFix: either label \"enough cases\" as a planning estimate under a stated assumption, and amend architecture and plan to say so, or add a between-case term with an explicit assumed standard deviation and print the sensitivity beside the answer.",
+      "file_ref": null,
+      "category": "statistics",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:255-260"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Regression tests that fail at the reference are excluded instead of rejecting the case",
+      "description": "Architecture line 50 says a case \"enters the set only if the original work passes its own grade in the sandbox environment.\" D9 keeps a case whose full suite fails some non-hidden tests at the reference, and removes those tests with reason `fails_at_reference`. On the architecture's wording, the reference does not pass its grade. Architecture line 111 expects qualification to catch environment-dependent tests, not carry them. The exclusion is recorded, so it is not silent, but the case still enters.\nFix: amend the architecture to allow per-test exclusion of consistently failing tests, or reject such a candidate with a named reason (for example `reference_fails_suite`).",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:225-226"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reference qualification uses the reference's tool config, not the start commit's",
+      "description": "D4 rewrites every file the diff changed, so a fix that touches `pyproject.toml`, `ruff.toml` or `pyrightconfig.json` is qualified under the reference's tool config. Architecture line 48 says the grader takes tool config from the start commit, \"by section, not by file,\" so `[tool.*]` tables come from the start. D10 (line 243) checks the reference in \"the same [environment] the replays and the grade use,\" and D11 (line 247) computes grader commands from the parent tree. So a reference can pass qualification under its own `[tool.pytest.ini_options]` and fail the grade, or the reverse.\nFix: at reference state, restore the `[tool.*]` tables and tool files from the parent, using the same section rule. Otherwise reject with a reason.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:162-166"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New I/O paths have no enumerated failure modes or timeouts",
+      "description": "Failure modes are enumerated only for issue fetch and the suite. Not covered: `git log`, `git show` and `git diff` (steps 1, 3, 6); `pytest --collect-only` (steps 5\u20136); the resolver under the sandbox interpreter (step 5); the trace run (step 6); and the GraphQL call beyond \"not found.\" Specific cases with no stated handling: a hang or timeout on any subprocess; a root commit with no parent (`parent_sha` is a required string, line 338); a shallow checkout that truncates history and silently shrinks the candidate count; a non-zero `git` exit. 421 D12 (421 line 225) requires every bounded call to have a config-declared timeout, and \"no timeout is written inline.\" The declared keys (lines 221, 263\u2013264) are counts and thresholds, not timeouts. Line 389 tests only issue fetch, suite timeout and resolver crash.\nFix: enumerate each path with its hang, timeout and non-zero-exit handling and an observable signal (ERROR log and `harness_error`). Declare timeout keys in `config/keys.py`. Fail explicitly on a shallow checkout and on a zero-parent commit.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:104-112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Collection failure is file-level in 421, but the test-first verdict is per node",
+      "description": "421 defines `collection_error` as \"the node's file failed collection\" (421 line 214). When a hidden test imports a name the fix added at module top, every hidden node in that file gets `collection_error`. D5 maps all of them to `uses_symbol_added_by_fix` (line 174). A fix that adds two tests to one file, where only one uses the new name, has both rejected. That contradicts D8's per-test verdicts (line 209). Once collection fails, pytest cannot distinguish the nodes, so the per-node answer has to come from the closure in D3.\nFix: decide `uses_symbol_added_by_fix` per node from the names its reference closure reaches that do not resolve at the parent. Leave a collection error with no such name as `undecidable_failure_at_parent`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:171-177"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Re-qualification can change case identity, and the 424 and 426 seams are unspecified",
+      "description": "Hidden tests and `excluded_tests` are part of `case_id` (421 line 125; this slice line 227). Re-qualifying in a new environment can pass with a different exclusion list or hidden set, which yields a new case. D10 says only that the caller \"runs `qualify_candidate` again\" (line 242). It does not say whether that writes a new case, whether the case set gets a new version, or what 424 does with the old id. Architecture line 63 says changed content \"makes a new case.\" Separately, line 360 says 426 reuses \"the repeat-and-exclude step,\" but that step sits inside the fix-only `qualify.py` pipeline (line 90), and no signature is given.\nFix: specify what `qualify_candidate` returns (new case id or the same), the case-set rule for 424 (new version, or drop and report), and the signature of the repeat seam 426 will reuse.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:227,242,356-361"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The fix pipeline would import the benchmark package",
+      "description": "D2 renders issue text \"with no cutoff (423's live fix)\" through the benchmark-side `issue_freeze` module (line 85). Production code (`sq run fix`, 423) would then depend on the benchmark package, which inverts the layering. The interfaces field (line 7) names 424, 425 and 426 but not 423. The plan says 423 \"has no dependencies in this initiative\" (plan line 166).\nFix: move the no-cutoff renderer to a neutral module both sides can import, or have 423 render text itself and keep only the cutoff filter in benchmark. Either way, list 423 under interfaces.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:139,7"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope covers the plan's 422 entry, and the auth check is correctly deferred",
+      "description": "Discovery, frozen text, hidden and superseded sets, the three fairness checks, repeat-and-exclude, the yield report and the cross-project run all match the plan's 422 success criteria (plan lines 69\u201375). Architecture line 113 names the fix-cases slice for the auth check, but the plan moved it to 421 (plan line 165). Line 365 relies on that, and 421 line 42 puts the `/sq:benchmark` slash command here, so both are in scope.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:368-383"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Rejection reason lists are stated in four places",
+      "description": "The reasons appear in D1, D3 and D5, then again in Patterns. Keep one definition, the `StrEnum` in `benchmark_models.py` (line 281), and have the decision sections refer to it. This is the only duplication of note.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:128-134,154-157,171-177,280-283"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Verification step 6 expects a field the yield output does not show",
+      "description": "Step 6 expects `sq benchmark yield --json` to show the case set name and version. The output specification (lines 313\u2013322) has no case-set field. Add it to the JSON output, or remove the expectation from the step.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:313-322,426"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Boundary check exempts all method and constructor crossings",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:189-194",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Harness failures and case rejections are classified inconsistently",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:185,282,285,389",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "statistics",
+      "raw_category": null,
+      "summary": "Separability uses a bound that assumes a constant per-case difference",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:255-260",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Regression tests that fail at the reference are excluded instead of rejecting the case",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:225-226",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Reference qualification uses the reference's tool config, not the start commit's",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:162-166",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "New I/O paths have no enumerated failure modes or timeouts",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:104-112",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Collection failure is file-level in 421, but the test-first verdict is per node",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:171-177",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Re-qualification can change case identity, and the 424 and 426 seams are unspecified",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:227,242,356-361",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "The fix pipeline would import the benchmark package",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:139,7",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope covers the plan's 422 entry, and the auth check is correctly deferred",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:368-383",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Rejection reason lists are stated in four places",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:128-134,154-157,171-177,280-283",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Verification step 6 expects a field the yield output does not show",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:313-322,426",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/422-design"
+  },
+  "timestamp": "2026-11-15T15:42:08.071856",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 841341,
+  "cached_tokens": 665180,
+  "cache_write_tokens": 176147,
+  "completion_tokens": 86988,
+  "reasoning_tokens": null,
+  "duration_seconds": 391.1602921669837,
+  "cost_usd": 0.41487048000000004,
+  "cost_basis": "provider"
+}

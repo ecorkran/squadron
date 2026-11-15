@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Fix pipeline satisfies the architecture's sandbox and replay requirements",
+      "description": "The architecture requires a production `fix` pipeline that replays run unchanged, with frozen issue text passed in and no GitHub access. This design provides that.\n- Issue text comes from `issue-file`, read verbatim, with no `CodeHost` constructed (D2).\n- `commit-to: current` works without cf or `gh` (D5, D7).\n- `fix` is a single step, so 424 has one producer step to run, and it has no embedded review to strip.\n- Producer-only mode is explicitly left to 424.\n- The prompt is a data file, so prompt identity can distinguish versions (D8).",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#Technical Scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Production fetch path depends on benchmark-owned code, contradicting the slice plan",
+      "description": "The frontmatter has `dependencies: [422]`. Prerequisites (line 49) require 422's `CodeHost.get_issue` and the `issue_freeze` renderer. The slice plan entry says \"Dependencies: none in this initiative\" and \"can be built earlier.\"\n\nSlice 422 places the renderer at `benchmark/issue_freeze.py`. The production module `pipeline/fix_issue.py` would therefore import from the benchmark package. That makes a general-purpose feature depend on the benchmark component, which breaks the layering. It also blocks the user-facing fetched mode behind the highest-risk slice in the keystone path (422, risk High). The design adds a \"renders with no cutoff\" contract that 422 happens to honor, but nothing in the plan records it as a seam.\n\nFix one of these ways:\n- Move the issue-text renderer and `get_issue` into the `codehost/` layer, which is neutral. Then 422 and 423 both consume it.\n- Or amend the plan so the dependency is explicit, and drop the claim that the pipeline is useful on its own before 422.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Plan success criterion \"CLI, slash command and MCP identical\" is dropped",
+      "description": "The plan's criterion for 423 includes MCP. The design excludes it because squadron has no MCP server for pipelines (D9). The reasoning looks sound, but it silently narrows plan-assigned scope. Record the change in the slice plan entry, or in a plan note, so the criterion is not left unmet on paper.",
+      "file_ref": null,
+      "category": "scope-deviation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Self-report gate can pre-empt objective grading and mischarge configs",
+      "description": "The architecture's principles are \"objective before opinion\" and \"a producer's claim that tests pass is never evidence.\" Its failure rule says \"committed nothing\" counts as a config failure. This design makes the commit conditional on shape checks of the agent's self-report. A defect there leaves a possibly correct fix uncommitted.\n- Checks that refuse the commit include `gates` empty, any non-zero exit code, `summary` starting with `fix:` or spanning multiple lines, and `failing_tests` empty.\n- A project with no gate commands always fails.\n- A pre-existing red gate always fails.\n- A formatting slip in the summary fails the run even when the code is correct.\n- Under the architecture's \"absent is not zero\" rule, each of these is charged to the config as a fail. That conflates prompt-following with fix quality, and 425 is explicitly meant to grade without trusting the report.\n\nThe project's own \"prefer lenient parsing\" rule applies here too, since stripping a `fix:` prefix is trivial. Options:\n- Make only `summary` and `blocked` gating.\n- Record the other fields without gating the commit.\n- Tolerate the summary prefix.\n\nAlso state which `failure_kind` values 424 and 425 must treat as config-caused (`fix_report`, `cost_cap`) and which as harness-caused. The design leaves that classification implicit.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:146-158"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design is heavier than the slice requires",
+      "description": "Effort is raised from 2/5 to 3/5. The added weight is not what the architecture needs. The architecture needs only `sq run fix` with a frozen file and `commit-to=current`. Cuttable or reducible scope:\n- The five-field report contract and its seven rejection kinds. They verify shape only. The design itself says nothing trusts them, and 425 re-grades. A minimal report of `summary` plus `blocked` meets the plan's criteria.\n- The `gates` list with exit codes. It restates what the agent's own project rules already enforce.\n- Two new hidden commands (`sq _fix-prompt`, `sq _commit --subject fix`), a start-HEAD-at-render mechanism and a parity test. The slash-command criterion is in the plan, so keep it. Reuse the existing prompt-only renderer, and do not build a parallel report-parsing path beyond what `sq _commit` already shares.\n- The `IssueSource` StrEnum and sha256 recording are small. They are justified only if 424 actually reads them.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:344"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes for the commit step, report file and dirty tree are not enumerated",
+      "description": "The design handles the issue fetch (30s timeout), the file read and the cost cap well. These new or touched paths are not covered:\n- **Git commit failure.** A pre-commit hook rejection or git error after staging is not named. State whether the failure is logged and which `failure_kind` it gets, and what state the tree is left in. Projects in this workflow use pre-commit hooks.\n- **`sq _commit` report file.** A missing, unreadable or empty `--report-file` has no stated refusal.\n- **Dirty tree after a dispatch failure.** A dispatch crash or a `cost_cap` stop leaves the agent's changes in the tree, and the next run refuses on the dirty-tree precondition. D4 states this for `blocked` and report defects. Walkthrough step 5 says \"commits nothing\" and does not mention the leftover tree.\n- **Observability tests.** The architecture's review rule requires each failure mode to emit a WARNING or higher signal, and one test to assert it. The test list covers refusals but does not assert the log signal.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#Patterns and Conventions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Prompt identity claim depends on how the template is hashed",
+      "description": "D8 says 424 and 425 can tell prompt versions apart through `prompt_identity.py`. The assembled prompt contains the per-issue text, so identity must be computed from the template, or from the prompt with the issue text excluded. Otherwise each case would get a different identity. State which input is hashed so results stay comparable across cases.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:191"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Fix pipeline satisfies the architecture's sandbox and replay requirements",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "Production fetch path depends on benchmark-owned code, contradicting the slice plan",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope-deviation",
+      "raw_category": null,
+      "summary": "Plan success criterion \"CLI, slash command and MCP identical\" is dropped",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Self-report gate can pre-empt objective grading and mischarge configs",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:146-158",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design is heavier than the slice requires",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:344",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for the commit step, report file and dirty tree are not enumerated",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#Patterns and Conventions",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Prompt identity claim depends on how the template is hashed",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:191",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/423-slice.fix-pipeline.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/423-design"
+  },
+  "timestamp": "2026-11-15T15:33:02.034132",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 421319,
+  "cached_tokens": 308278,
+  "cache_write_tokens": 113031,
+  "completion_tokens": 9002,
+  "reasoning_tokens": null,
+  "duration_seconds": 74.53353441599756,
+  "cost_usd": 0.5737624,
+  "cost_basis": "provider"
+}

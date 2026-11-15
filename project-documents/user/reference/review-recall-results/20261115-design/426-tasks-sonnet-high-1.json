@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage and sequencing",
+      "description": "- **Build and fixtures:** Build, qualified-case fields and all five fixture rejections map to Tasks 6, 13\u201320.\n- **Runner and cf:** The P6 replay and the unchanged cf project list map to Tasks 24\u201326.\n- **Normalize and judge:** Normalization maps to Task 7. Forfeits, over-size, bound, cap and resume map to Tasks 27\u201335.\n- **Report and integration:** The reference line, per-kind tables, mixed fix and slice run, and yield rows map to Tasks 36\u201339 and 22.\n- **Failure paths:** Each design failure path has a test that asserts an observable signal.\n- **Sequencing:** Tasks 2\u20137 do not depend on 421\u2013425 and come before the Task 8 gate. Dependencies run forward with no cycles. Test tasks sit with their implementation tasks. `**Commit**:` markers fall at tested points. The conditional markers in Tasks 23, 26 and 41 correctly say to skip when nothing changed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:58-343"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice index and landing sha have no structured source on a `BenchmarkCase`",
+      "description": "- Task 24 runs `sq run P6 <index>`. Task 25's `requalify` and Task 15's `slice_qualification_for` key on (project, index, landing, digest). Both need the slice index and `landing_after_sha` from a `BenchmarkCase`.\n- Task 18 stores them only inside `CaseProvenance.source_ref = \"slice:<index>@<sha>\"` plus the slice name. No task says where they are read back from.\n- An implementer will parse that display string. That breaks the project rule against using labels as logical structure, and the parsing rules (lenient, tested against real input).\n- Name the source in Task 18 or Task 24: a structured provenance field if 421 has one, otherwise one parse and format pair defined once. Add a round-trip test over a realistic `source_ref`.\n- Task 15's `slice_qualification_for(store, case, environment)` also differs from the design's `(case, environment)`. Task 1's design corrections should list that signature change.",
+      "file_ref": null,
+      "category": "design-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:168"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Yield-row wiring into the build command belongs to no task",
+      "description": "- Task 21 prints the yield rows \"until then print the lines only\" and says Task 22 supplies them. Task 22's only implementation step edits `yield_report.py`.\n- Task 22's success line is \"Task 21's command prints the rows\". Nothing edits `benchmark_slice.py` to call them, and no test covers the build command's output with rows.\n- Add an explicit step to Task 22 to call the rows from `slice-cases build`, with a CLI test asserting the rows appear after the candidate lines. Alternatively move yield rows before Task 21.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:201-209"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Live-chain tasks have no dead end when no case qualifies",
+      "description": "- Task 23 passes when zero cases qualify, because it only requires recording the rejection counts.\n- Task 26 then needs `--case <case-id>`, and Task 41 steps 4\u20137 need Task 26's benchmark. No task says what to do with no qualified case.\n- Add a `BLOCKED:` line in Task 26 for the case where Task 23 produced no qualified case. Name the yield finding as evidence, so the PM can decide on relaxing a rejection rule, as the design's mitigation section says. Without it, the implementer will improvise or loop.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:216"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task file is overweight: fine-grained splits and extra load tests",
+      "description": "- **Load tests:** The design restates no NFR, so no `tests/load/` task is required. Context Summary line 53 adds two load tests anyway: the eight-way concurrent `invoke` in Task 24 (line 223) and the 200-pair slow-dispatcher plan in Task 33 (line 276). No success criterion needs either.\n  - Keep the hung-dispatcher and timeout assertions, which trace to the failure-mode criterion.\n  - Drop the 200-pair run, and fold the concurrency check into Task 24's ordinary isolation tests (distinct homes, no shared registry path).\n- **Qualification tasks:** Tasks 15\u201319 build one function (`qualify_slice_candidate`) across five tasks with five test files. Merge Task 17 (repeats) into Task 18 (selection and case). Merge Task 19 (harness errors) into the wrapper step of the earlier stages, keeping its four-failure test.\n- **Judge-plan tasks:** Tasks 31 and 32 both build `plan_judge` and can be one task. Tasks 33 and 34 (bound, cap, lock, resume, over-size records) can also be one.\n- **Step detail:** Several steps prescribe layout the design does not need. Examples are the conditional \"if the file would pass ~300 lines, put it in a sibling module\" notes in Tasks 3, 11 and 12, and the Task 14 temp-directory mechanics. Task 42's line-count check already covers file splitting.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Case-set membership rule and its test disagree",
+      "description": "- Task 20 says \"existing members of the set kept\". Its test asserts the case set \"holds exactly the qualified ids\".\n- These agree only when the set starts empty. A previously qualified case that later becomes a `harness_error` stays in the set under the stated rule.\n- State which behavior is intended, and make the test cover a pre-populated set.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:196-197"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria coverage and sequencing",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:58-343",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "design-gap",
+      "raw_category": null,
+      "summary": "Slice index and landing sha have no structured source on a `BenchmarkCase`",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:168",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Yield-row wiring into the build command belongs to no task",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:201-209",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Live-chain tasks have no dead end when no case qualifies",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:216",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task file is overweight: fine-grained splits and extra load tests",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Case-set membership rule and its test disagree",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:196-197",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/426-tasks.slice-cases.md",
+    "against": "project-documents/user/slices/426-slice.slice-cases.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/426-tasks"
+  },
+  "timestamp": "2026-11-15T15:36:09.196083",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 136949,
+  "cached_tokens": 8950,
+  "cache_write_tokens": 127995,
+  "completion_tokens": 8523,
+  "reasoning_tokens": null,
+  "duration_seconds": 69.1953223340679,
+  "cost_usd": 0.5988827,
+  "cost_basis": "provider"
+}

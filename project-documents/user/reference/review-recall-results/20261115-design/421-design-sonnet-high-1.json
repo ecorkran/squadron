@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Layering and dependency direction match the architecture",
+      "description": "`benchmark/` depends on `metrology/` and `replay/sandbox.py`, and neither depends back. Concrete adapters are reached only through `registry.py`. The 177 extraction (D4) keeps `ReplaySandbox`'s public surface and its tests unchanged. Case records follow the architecture's \"extend 320's store\" rule: optional sibling payloads on `MetrologyRecord`, no `schema_version` change. The envelope has no required `project_id`, so a `CaseSet` with no project fits. All five bullets the slice plan assigns to 421 are covered, and the plan's open questions (lockfile-less projects, adapter shape beyond Python) are answered explicitly.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Component Structure"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Auth probe may not exercise the path a producer run uses",
+      "description": "The slice exists largely to answer whether auth survives the redirected `HOME`, and 424's replays depend on that answer. The hidden `_auth-probe` \"sends one fixed minimal prompt through the same agent-creation path a dispatch uses.\" The architecture's effort audit (420) says dispatch paths differ: the SDK pipeline session, one-shot runners and OpenAI-compatible runners. The slice never says which path the probe takes. A probe that goes through a one-shot runner could answer yes while a `sq run` producer step on the SDK session fails, or the reverse. Name the specific agent-creation entry point the probe calls, and state that it must be the one `sq run` uses for a pipeline producer step for that profile. Without that, the yes/no is not evidence for 424.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D8 \u2014 Auth carryover and the auth check"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Symlinked credentials combined with directory sweeps have no stated safe-deletion rule",
+      "description": "D8 symlinks the user's real `~/.codex/auth.json` and `~/.claude/.credentials.json` into `<id>.home/`. Cleanup on exit, `keep()` teardown and the orphan sweep all remove that directory, and the sweep also runs on dead owners' directories. The doc never says deletion must unlink and never follow the link. It also has no test that the user's real credential file survives cleanup and sweep. A recursive delete that follows links would destroy the user's login. Add a requirement, plus a test, that cleanup and sweep leave the symlink targets intact. The failure-path tests listed under Technical Requirements don't cover this.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D8 \u2014 Auth carryover and the auth check"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Case-id canonicalization is ambiguous for nested lists",
+      "description": "D1 says \"Lists are sorted before hashing.\" `grader_commands` is a list of `GraderCommand` (kind plus argv), and `hidden_fixtures` is a list of structured items. Applied literally, sorting would also reorder argv, so `[\"pytest\",\"-x\"]` and `[\"-x\",\"pytest\"]` would hash the same. Sorting grader commands could also drop meaningful ordering. A wrong canonicalization here breaks the \"case is immutable and identified by content\" principle in a way that only shows up later. State which lists are sorted: top-level sets of node ids and fixtures. State that argv order is preserved. State whether `grader_commands` order is identity. Add one test for each.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D1 \u2014 Case content identity and id"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Proportionality: the slice carries six sub-systems at 3/5 effort",
+      "description": "The slice delivers records and a versioned store module, a 177 extraction, uv environment resolution and identity, the scrubbed environment (including a symlinked tool `bin` and a seeded home), a per-profile carryover table with an empirical probe and symlink-replacement detection, an adapter protocol and registry, a pytest reporter plugin with mock-introspection, a five-way failure classifier, two CLI commands plus a hidden one, and three config keys. The plan rates it High risk, so its content should be tightly scoped to what 422 to 425 consume. Candidates to cut or defer:\n- **`registry.py`/`adapter_for`.** There is one adapter, and D9 itself says language detection waits for a second. A direct construction at the single call site meets the requirement. Add the registry in Future Work 1.\n- **\"yes, but carryover replaced\" detection.** Keep it only if the spike shows a runtime rewriting auth by rename. Otherwise it is speculative. The Risk section frames it as a possibility.\n- **`list_case_sets()` and `get_case_set(version=...)`.** Nothing in 422 to 427 is stated as consuming them. Defer until a consumer exists.\n- **`sq benchmark sandbox` as a user CLI.** The walkthrough needs a driver, but a test-only helper would meet it. The slash command is already deferred, and the same reasoning applies to the CLI surface.\n\nThe mock-patch target recovery in the reporter plugin (reading `_patch` from the innermost frame) is the most fragile piece. It is justified by the fairness rule, but it is a pytest/mock-internals dependency. Keep it, but flag it in the risks.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Technical Scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Install step runs project history code under the full harness environment",
+      "description": "D5 runs `uv sync` under \"the harness environment\" in the tree. That environment still holds `GH_TOKEN`, `SSH_AUTH_SOCK` and the real `HOME`, and the install can run build backends and sdist build scripts from historical dependencies. The architecture accepts P6's trust level, and OS containment is #213's job. But the architecture's own argument is that the scrub is what keeps a replay valid and credentials out. The install is the one step that runs project-controlled code with credentials present, and it gets no mitigation or acknowledgment. At minimum, add it to Special Considerations as an accepted exposure with its rationale. Better, run the install under the scrubbed environment plus only the variables uv needs, such as the cache dir and index settings. The doc should justify why that is not done, if it isn't.",
+      "file_ref": null,
+      "category": "security",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D5 \u2014 Environment resolution for Python: uv lockfile only"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`reference_sha` added to case identity, and case sets keyed by name",
+      "description": "Two deliberate departures from the architecture's wording, both justified in the slice.\n- **`reference_sha` in identity.** The architecture's identity list omits it. The slice gives a sound reason: hidden test source is read from the reference at grading time. The architecture and slice plan should be amended so later slices (422) don't rebuild identity from the older list.\n- **Case sets keyed by name, not `ProjectId`.** This supports the pooled-case option the architecture itself raises in Technical Considerations, and each case still carries its `project_id`.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D1, #D2"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for new I/O paths are enumerated",
+      "description": "Install timeout, missing `uv`, stale lock, probe hang, suite timeout, and missing or unparseable JSONL each have a named reason or error type and a test requirement. All of them are logged at ERROR and none falls back to a default. Timeouts are config keys, not inline values. Process-group kill via `ProcessRunner` covers orphaned children. This meets the failure-mode enumeration criterion.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D5, #D8, #D10, #D12"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Layering and dependency direction match the architecture",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Component Structure",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Auth probe may not exercise the path a producer run uses",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D8 \u2014 Auth carryover and the auth check",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "Symlinked credentials combined with directory sweeps have no stated safe-deletion rule",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D8 \u2014 Auth carryover and the auth check",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Case-id canonicalization is ambiguous for nested lists",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D1 \u2014 Case content identity and id",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality: the slice carries six sub-systems at 3/5 effort",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "security",
+      "raw_category": null,
+      "summary": "Install step runs project history code under the full harness environment",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D5 \u2014 Environment resolution for Python: uv lockfile only",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "`reference_sha` added to case identity, and case sets keyed by name",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D1, #D2",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "Failure modes for new I/O paths are enumerated",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D5, #D8, #D10, #D12",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/421-design"
+  },
+  "timestamp": "2026-11-15T15:29:58.127580",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 554098,
+  "cached_tokens": 429366,
+  "cache_write_tokens": 124720,
+  "completion_tokens": 8718,
+  "reasoning_tokens": null,
+  "duration_seconds": 79.52988670789637,
+  "cost_usd": 0.629789,
+  "cost_basis": "provider"
+}

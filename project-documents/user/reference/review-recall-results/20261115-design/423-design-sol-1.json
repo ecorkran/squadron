@@ -1,0 +1,111 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Production and replay share the intended fix workflow",
+      "description": "The shared prompt, dispatch and commit sequence matches the architecture\u2019s production-pipeline reuse principle. Frozen issue input and current-branch commits support replay without GitHub or Context Forge; objective grading remains with 425.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:79-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "MCP parity assigned by the slice plan is dropped",
+      "description": "The parent slice plan\u2019s 423 entry explicitly requires identical CLI, slash-command and MCP results. D9 excludes MCP instead. The absence of an existing pipeline MCP server explains the mismatch but does not satisfy that requirement. Reconcile the parent plan\u2019s scope explicitly rather than silently narrowing its acceptance criterion.",
+      "file_ref": null,
+      "category": "scope-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:38-43"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New prompt-only I/O paths lack explicit failure handling",
+      "description": "The GitHub fetch has a concrete timeout and failure policy, but the new prompt/report handoff does not. Specify handling for a missing, unreadable or partially written report file, and a disconnected consumer while `_fix-prompt` prints its output. Also identify the inherited timeout and cleanup policy for a stalled commit subprocess or hook. Generic error logging does not establish these behaviors. These gaps leave the promised unattended execution and CLI/slash-command refusal parity under-specified.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:193-198"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Production and replay share the intended fix workflow",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:79-100",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope-coverage",
+      "raw_category": null,
+      "summary": "MCP parity assigned by the slice plan is dropped",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:38-43",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "New prompt-only I/O paths lack explicit failure handling",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:193-198",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/423-slice.fix-pipeline.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/423-design"
+  },
+  "timestamp": "2026-11-15T15:31:54.740949",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 62370,
+  "cached_tokens": 59136,
+  "cache_write_tokens": null,
+  "completion_tokens": 592,
+  "reasoning_tokens": 177,
+  "duration_seconds": 52.55973341688514,
+  "cost_usd": 0.0183016,
+  "cost_basis": "alias_pricing"
+}

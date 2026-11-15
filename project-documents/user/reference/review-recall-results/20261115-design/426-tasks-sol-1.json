@@ -1,0 +1,147 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Discovery rejections lack a persistence task",
+      "description": "Task 13 returns discovery rejections, but Task 20 only explicitly qualifies candidates. Neither requires writing `SliceQualification` records for `multiple_landings`, `branch_contains_merges`, or discovery harness errors. Add persistence and record assertions for these outcomes to satisfy the design\u2019s requirement that every processed index has a recorded outcome.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:153-156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Prompt sizing precedes normalization",
+      "description": "Task 32 applies `check_size` during planning, while Task 30 normalizes diffs inside the execution loop. Explicitly normalize before constructing and sizing planned prompts, then reuse those exact contents during dispatch. Otherwise dropped lockfile or documentation changes can incorrectly exclude a case as oversized.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:269-271"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Load tests have no CI gate",
+      "description": "Tasks 24 and 33 introduce environment- and network-layer load tests, but place them under `tests/benchmark/` and provide no CI-wiring task. Put the load coverage in `tests/load/` and explicitly wire CI to gate on it.",
+      "file_ref": null,
+      "category": "validation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:274-277"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Qualification is split too finely",
+      "description": "Tasks 15\u201319 incrementally build one function across five tasks and five test files, with error handling deferred until the last stage. Merge these into two cohesive implementation-with-tests tasks: reuse/prechecks, then sandbox qualification and case creation including failures. Consolidate the corresponding test files. This preserves coverage while reducing fragmented, partially working stages.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-193"
+    },
+    {
+      "severity": "PASS",
+      "title": "Remaining success criteria have explicit coverage",
+      "description": "The plan otherwise covers case fields and rejection fixtures, scrubbed P6 execution, grading, normalization, reference presentation, forfeits, refusals, caps/resume, real fixtures, hand-computed reductions, mixed-kind integration, and yield rows. Tests accompany implementation, dependencies are explicit without cycles, and commit markers are plain lines with useful grouped checkpoints.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Discovery rejections lack a persistence task",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:153-156",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Prompt sizing precedes normalization",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:269-271",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "validation",
+      "raw_category": null,
+      "summary": "Load tests have no CI gate",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:274-277",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Qualification is split too finely",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-193",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Remaining success criteria have explicit coverage",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/426-tasks.slice-cases.md",
+    "against": "project-documents/user/slices/426-slice.slice-cases.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/426-tasks"
+  },
+  "timestamp": "2026-11-15T15:34:54.560529",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 67069,
+  "cached_tokens": 56192,
+  "cache_write_tokens": null,
+  "completion_tokens": 827,
+  "reasoning_tokens": 237,
+  "duration_seconds": 43.418331667082384,
+  "cost_usd": 0.0356432,
+  "cost_basis": "alias_pricing"
+}

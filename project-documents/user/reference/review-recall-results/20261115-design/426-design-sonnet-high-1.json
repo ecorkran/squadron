@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Core architecture constraints are carried through",
+      "description": "The design matches the architecture's slice-case rules:\n- There is no hidden set.\n- The superseded set comes from closure digests.\n- Slice cases are graded on regressions and kept in separate tables from fix cases.\n- Diffs are normalized before judging.\n- The reference appears as a line that is never ranked.\n- Oversized cases are excluded and counted, with no truncation (D14).\n- Replays run producer-only `P6`.\n- The judge is never folded into the objective grade, and no composite is computed.\n\nDependencies point downward (426 consumes 421\u2013425, 177 and 403). The one extension of 424 goes through the `CaseKindRunner` seam 424 provides, which 424 D-seam (line 208) built so that 426 would not have to edit `bench_runner.py`.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"No edits to 424 or 425\" contradicts the rest of the document",
+      "description": "Line 42 says there are \"No edits to 424 or 425\", and line 312 says \"No change to 425\". Other parts of the document say otherwise:\n- Component Structure lists `bench_report.py` (425's module) as modified, and \"Consumes from Other Slices\" says \"`bench_report` gains the per-kind grouping and the pairwise section\".\n- Patterns and Conventions widens 424's `CaseDrop.reason`.\n- Technical Requirements (line 451) lists \"D17 extracts the interval\" as a change to `tests/benchmark/`. 425 D14 already defines `bootstrap_mean_interval(values, seed)` in `paired_stats.py` as a public function, so nothing needs extracting.\n- `ScrubbedEnvironment.with_tools` is an addition to 421.\n- `judge_pair` and `CfRegistration` are extracted from 177.\n\nFix: restate the actual cross-slice edits in one list: 421 (`with_tools`), 424 (`CaseDrop.reason`), 425 (`bench_report` per-kind grouping), 177 (two extractions) and 422 (yield rows). Drop the \"no edits\" claims and the \"extracts the interval\" wording. 425 also names `review_flag` in `bench_report.py` as the function 427 changes. The slice should state that the per-kind refactor leaves that signature alone.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight design: several mechanisms exceed what the slice plan assigns",
+      "description": "The plan entry for 426 asks for four things: cases from slice ranges, grading without a hidden set, normalization with judging against the reference, and a stated over-size rule. The design carries about 17 decisions, 4 new record types, 7 store methods, 9 modules and edits to five other slices (effort 3/5). Things to cut or defer:\n- **Qualification record plumbing (D6).** It adds a `rule_version` constant, a dual-environment key, and a 12-character record id with a `\"pre\"` sentinel. Reuse 422's qualification key and record shape, or make the record a thin sibling of 422's.\n- **`OverSizeCase` as its own record type, with its own id scheme and store methods (D15, D16).** Fold it into `DiffJudgment` as an outcome variant, or into the judge-run summary. This removes one record, two store methods and one id format.\n- **`--judge-cost` plus \"max observed\" per-call logic (D16).** The cost figure could come from the per-call estimate 425 already uses for `grade`. That keeps one cost-bound mechanism instead of two.\n- **`uv.lock` dropping (D11).** The design admits this goes beyond the plan. It is small, but it widens the normalized-path list that the architecture states explicitly.\n- **Yield-report slice rows and the `/sq:benchmark` mirrored subcommands.** Neither is in the plan entry. Defer them unless the yield report is needed to decide on pooling. 422's yield report already decides that for fix cases.\n- **\"Provides to Other Slices\" for `normalize`, `CfRegistration` and `judge_pair`.** No consumer is named, so these are speculative reuse claims.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Technical Decisions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reference diff is `tip_sha`, but the architecture and plan name the landing commit",
+      "description": "The architecture (Envisioned State) and the plan entry both say \"the landing commit is the reference\". D2 uses the slice branch's `tip_sha` instead, so that merge-landing diffs do not pick up unrelated target work. The rationale is sound and correct for a merge landing. It silently changes a parent-document definition, though. Add a note to the architecture or plan saying \"reference = branch tip at landing\", or state in D2 that this refines the parent's wording, so 427 and report readers do not assume the landing commit. Also, `Interfaces Required` says nothing about how a fast-forward landing differs, and the two cases are only mentioned in the test fixtures.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "cf-under-scrubbed-home is a keystone risk, but only the spike gates it",
+      "description": "The design depends on cf working with `HOME` redirected, and states it has not been checked. The spike (step 1) and the `BLOCKED:` line are the right mitigation. The BLOCKED outcome leaves nothing for the slice to do instead. D9 and the Risk section should say what the fallback is if the answer is no, since the plan names slice cases as the fallback if fix-case yield is low. Possible fallbacks: register cf in a per-sandbox config dir, or re-scope the slice to case building only. The cf install location is also a leak path. The spike checks that 424's leak scan covers it, and the design should say the scan list is extended in this slice if it does not.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D9 \u2014 cf registration inside the scrubbed home"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Judge I/O failure modes are only partly enumerated",
+      "description": "Failed calls are logged at ERROR and left unrecorded (D15). The design does not cover these cases:\n- A hang or timeout mid-pair, where the first order succeeds and the second fails. `judge_pair` returns `None`, which discards the first call's cost and usage. Say whether that spend counts against the cap.\n- A `git diff` or `git show` failure when reading the reference diff for the judge.\n- A sidecar write failure for the normalized diff.\n\nEach failure needs an observable signal. For the judge-call failures the design says ERROR logs and a summary count, which is fine. The first-call spend handling in particular affects whether the printed bound holds.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D15 \u2014 Absences in judging"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Judge cost bound can understate spend because prompt size varies widely",
+      "description": "The architecture requires a stated dollar bound before dispatch. The per-call figure is \"the largest observed judge-call cost among stored `DiffJudgment`s\" or `--judge-cost`. On a first run there are no observations, so the user must supply a figure. Pair prompts are repeated task text plus two diffs, and can differ by orders of magnitude, up to 400k characters. A single `--judge-cost` could be well below the cost of an oversized-but-allowed prompt. The design should tie the per-call figure to the size limit (for example cost per character at the limit) or derive the per-pair bound from the built prompt lengths. It already builds every prompt before dispatch (D14), so it has the data. As written, the \"at most $3.88\" line can be wrong.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:289"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Qualification and discovery reuse 422 correctly",
+      "description": "Reusing `test_sets`, the repeat-and-exclude step, `QualificationOutcome` and the adapter registry without a new protocol (D7) keeps this slice within the architecture's rule that language checks are written once per adapter. Rejecting `multiple_landings` and `branch_contains_merges` as counted reasons, rather than splicing, is a reasonable scope limit that is named in the Excluded list.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D5 \u2014 Test sets and exclusions reuse 422"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Verification walkthrough is explicitly draft",
+      "description": "The walkthrough states that the commands do not exist yet. This is acceptable for a design document. Step 7 uses a changed `--samples` value to force a fresh benchmark id. That is an indirect way to get a new id. If 425 has a plain option for this, use it.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Verification Walkthrough"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Core architecture constraints are carried through",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Overview",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "\"No edits to 424 or 425\" contradicts the rest of the document",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight design: several mechanisms exceed what the slice plan assigns",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Technical Decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Reference diff is `tip_sha`, but the architecture and plan name the landing commit",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:178",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "cf-under-scrubbed-home is a keystone risk, but only the spike gates it",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D9 \u2014 cf registration inside the scrubbed home",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Judge I/O failure modes are only partly enumerated",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D15 \u2014 Absences in judging",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Judge cost bound can understate spend because prompt size varies widely",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:289",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Qualification and discovery reuse 422 correctly",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D5 \u2014 Test sets and exclusions reuse 422",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Verification walkthrough is explicitly draft",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Verification Walkthrough",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/426-slice.slice-cases.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/426-design"
+  },
+  "timestamp": "2026-11-15T15:34:58.629499",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 542119,
+  "cached_tokens": 425911,
+  "cache_write_tokens": 116196,
+  "completion_tokens": 5057,
+  "reasoning_tokens": null,
+  "duration_seconds": 45.70503941690549,
+  "cost_usd": 0.5587360000000001,
+  "cost_basis": "provider"
+}

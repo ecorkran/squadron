@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The dispatch fallback won't pick up `fix-context` output unless `DispatchAction` changes",
+      "description": "D2 says the assembled prompt is stored \"under the same keys `cf-op(build_context)` uses (`operation: build_context`, `context`)\" and that \"`DispatchAction` does not change\". Two things in `DispatchAction._resolve_prompt` make that false:\n- The fallback only accepts a prior result where `result.action_type == ActionType.CF_OP` **and** `outputs[\"operation\"] == \"build_context\"` **and** `outputs[\"stdout\"]` is set. The key is `stdout`, not `context`.\n- A `FIX_CONTEXT` result fails the action-type check whatever keys it carries. The dispatch then falls through to the review-findings fallback, finds nothing, and raises `KeyError`.\n\nEven if this were worked around, the dispatch would record `PromptSource.BUILD_CONTEXT`. That mislabels the prompt identity D8 depends on for 424 and 425. Also, `replay/outcome.py:_build_context_text` filters on the same `operation == build_context` output to get `task_prompt`, so the fix prompt would be invisible to replay records there too.\n\nFix:\n- Revise D2 and the Interfaces Required list so `DispatchAction` gains one branch that accepts `ActionType.FIX_CONTEXT` output.\n- Add `PromptSource.FIX_CONTEXT`.\n- Name the output key (`stdout` or a constant).\n- Note for 424 that its task-prompt lookup must accept this source.\n\nDon't pretend the output is a cf-op result.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:139"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "MCP parity from the slice plan is dropped, but the plan still lists it",
+      "description": "The slice plan entry for 423 has the success criterion \"CLI, slash command and MCP give identical results\". The slice excludes MCP. Its reason is correct: squadron has no MCP server. `server/daemon.py` serves uvicorn HTTP/UDS, not MCP, and `tools/mcp_bridge.py` is client-side only. But this is still scope the plan gave to this slice. The fix is to change the 423 entry in `420-slices.model-benchmark.md` to \"CLI and slash command\", so the plan and the slice agree. Building an MCP server isn't needed, and the slice is right not to.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure handling is missing for commit failures and the prompt-only report file",
+      "description": "Two failure modes in the new paths have no stated handling:\n1. **`git commit` fails after staging.** For example, the project's pre-commit hook rejects the commit (this repo runs ruff in pre-commit). The commit step has already staged everything. The design doesn't say:\n   - whether the index is left staged or reset\n   - what `failure_kind` is used\n   - that the next `sq run fix` will then refuse the dirty tree\n\n   The user needs that last point the same way D4 spells it out for `blocked`.\n2. **`--report-file` in prompt-only mode** (D9). If the session never writes the temp file, or writes something unreadable, the outcome isn't specified. `parse_fix_report` covers \"no JSON object\", but a missing or unreadable file happens before that.\n\nState the refusal for each, with the logged level and message, and add one unit test for each to the Technical Requirements list.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D5 \u2014 Commit destination and preconditions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The dependency on 422 differs from the slice plan, but it is justified and limited",
+      "description": "The plan says 423 has no dependencies in this initiative. The slice depends on 422, but only for fetch mode (`CodeHost.get_issue` and the renderer with an optional cutoff). The 422 slice does provide that renderer: \"The renderer takes an optional cutoff. With no cutoff (423's live fix) \u2026\". File mode and the parts 424 needs don't depend on 422, and the development order (fetch at step 4) keeps them independent. No action needed. The plan's ordering note could mention the partial dependency.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:49"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fits the architecture's \"replays run production pipelines\" principle",
+      "description": "The slice gives 424 a single production producer step with no embedded review to strip. It doesn't fork a benchmark-only prompt (D8: one data file for both modes). The sandbox needs are met by `issue-file`, `commit-to: current` and `--io-dir`, with no extra code paths. This matches the architecture's \"The fix pipeline in a sandbox\" consideration and its no-GitHub-credentials principle (D7).",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D1 \u2014 A `fix` step type, not a pipeline of generic steps"
+    },
+    {
+      "severity": "PASS",
+      "title": "Doesn't take the agent's report as evidence, and doesn't take over grading",
+      "description": "The report is checked for shape only. The slice says plainly that 425 re-grades on its own, which matches \"A producer's claim that tests pass is never evidence\". A refused or `blocked` report results in no commit. Under the architecture's \"Absent is not zero\" rule, that counts as a fail for the config.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D4 \u2014 The agent runs the gates and reports them; the pipeline checks the report"
+    },
+    {
+      "severity": "PASS",
+      "title": "NFR restated, size is reasonable",
+      "description": "The architecture's only NFR on this path is the cost cap. It is restated with all three sources and has a success criterion and a walkthrough step. The fetch timeout (the existing 30-second host timeout, no retry) is explicit. The new pieces (a step type, one action, a report model, a commit plan, one hidden command) each trace back to a plan requirement. Prompt-only parity explains the effort going from 2/5 to 3/5. Nothing here needs cutting.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:58"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The dispatch fallback won't pick up `fix-context` output unless `DispatchAction` changes",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:139",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "MCP parity from the slice plan is dropped, but the plan still lists it",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure handling is missing for commit failures and the prompt-only report file",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D5 \u2014 Commit destination and preconditions",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The dependency on 422 differs from the slice plan, but it is justified and limited",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:49",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Fits the architecture's \"replays run production pipelines\" principle",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D1 \u2014 A `fix` step type, not a pipeline of generic steps",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Doesn't take the agent's report as evidence, and doesn't take over grading",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D4 \u2014 The agent runs the gates and reports them; the pipeline checks the report",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "NFR restated, size is reasonable",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:58",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/423-slice.fix-pipeline.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/423-design"
+  },
+  "timestamp": "2026-11-15T15:34:52.362900",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 858059,
+  "cached_tokens": 749553,
+  "cache_write_tokens": 108486,
+  "completion_tokens": 6483,
+  "reasoning_tokens": null,
+  "duration_seconds": 83.65334129193798,
+  "cost_usd": 1.1483092,
+  "cost_basis": "provider"
+}

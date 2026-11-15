@@ -2,7 +2,7 @@
 docType: reference
 project: squadron
 dateCreated: 20261113
-dateUpdated: 20261114
+dateUpdated: 20261115
 status: draft
 ---
 
@@ -270,3 +270,21 @@ Notes:
 - cf5e840c B1 (state persisted `in_progress` before `renderFacts` throws): partial hit, **counted** (PM decision 2026-11-14, may be tightened later). sol runs 2 and 3 and sol-high run 1 point at the exact lines and say the failure comes after state was persisted, but propose only wrapping the error in `AdoptionError`, which leaves `in_progress` on disk. Graded as `cf5e840c-S2` (REAL, low confidence, known B1). The other N2 findings from other configs are about malformed TOML or guide reads and are not hits.
 - New REAL issues: cfe984ce-S1 (the fence bug, known), cf5e840c-S2 (the counted partial B1 hit) and 307-S1 (stale stored dataset edge refuses the cutover with a misleading message; low confidence, not verified).
 - sol-xhigh is one review. Not ranked.
+
+## 14. Design review, first pass (2026-11-15)
+
+**Method:** 9 cases from `../design-review-recall-cases.md` (8 slice designs and the 426 task breakdown), 25 known flaws. Each case was exported at its reviewed commit into a scratch repo with no history and no saved reviews. `sq review slice` (or `tasks`) ran with read tools against the parent document, once per model. Outputs, scripts and the graded hits: `20261115-design/` (`hits.json`). Hits were graded by reading each finding against the flaw list, by the same person who knew which model wrote it.
+
+| Model | Flaws found (of 25) | Needing code (of 11) | Document alone (of 12) | Concern and fail findings | Cost for 9 reviews | Median time |
+|---|---|---|---|---|---|---|
+| haiku-xhigh | 6 | 4 | 2 | 79 | $3.09 sub | 273 s |
+| opus-high | 5 | 3 | 2 | 30 | $10.20 sub | 96 s |
+| sonnet-high | 2 | 0 | 2 | 43 | $5.23 sub | 69 s |
+| sol | 2 | 0 | 2 | 31 | $0.21 | 56 s |
+
+Notes:
+- Found by any model: 8 of 25. haiku-xhigh with sol, or haiku-xhigh with opus-high, reach 7. Nobody found the two uncompletable tasks in the 426 breakdown.
+- Only haiku-xhigh and opus-high found flaws that need the code. They also made the most tool calls.
+- sol found one flaw nobody else did (425's rules hash inside a one-per-benchmark identity).
+- **Selection bias:** sonnet was the original reviewer of the six 42x designs, and haiku of the 426 task file. Those documents were committed after their review findings were addressed, so the flaws left in them are ones the original reviewer did not get fixed. On the two cases neither model first reviewed (915 and 302, 3 flaws): haiku-xhigh 3, opus-high 2, sonnet-high 0, sol 0.
+- One run per model, 9 cases, six of them from one initiative. Precision is not graded.
