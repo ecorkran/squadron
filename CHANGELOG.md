@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `sq run fix <issue>` reads the issue from GitHub (every comment included) and fixes it the way the fix rule says: a test that fails for the reported reason, the change, the project's own format, lint, typecheck and test gates, and one `fix:` commit with `Fixes #<issue>`. `-p issue-file=PATH` uses frozen issue text instead. It refuses a dirty tree up front, never pushes or posts, and works from `/sq:run fix` too.
 - `sq review slice <path>` and `sq review tasks <path>` now save the review when the file name follows the naming convention (`104-slice.name.md`) and Context Forge lists that file under that slice, exactly as `sq review slice 104` would. Other names still run unsaved, with the warning saying why (#142).
+- `sq runs list --json` entries now carry each run's `params` (slice, models), `started_at`, and the `active_step` of a running run (#192).
 - `-p commit-to=current` makes the fix commit on the checked-out branch instead of the integration target, so a fix can run in a repository that Context Forge does not know.
 
 - `sq run <pipeline> <slice> --producer-only` runs only the step that writes the code (for `P6`, `implement`) and stops after its commit, with no review, close-out or merge. It refuses a pipeline with several such steps, and runs from the slice's own branch only. It also works with `--prompt-only` and from `/sq:run`.

@@ -725,7 +725,10 @@ sq runs list [OPTIONS]
 |---|---|
 | `run_id` | The run |
 | `pipeline` | Pipeline name |
+| `params` | The run's parameters as given (`slice`, `model`, `review-model` and so on) |
 | `status` | The status the run recorded: `running`, `completed`, `paused`, `failed` |
+| `started_at` | When the run started, ISO 8601 |
+| `active_step` | The step a running run is in; `null` otherwise |
 | `working_directory` | Absolute directory the run started in, kept across resumes. Resume from there. `null` for runs started before it was recorded |
 | `checkpoint` | When paused, the same object `sq runs wait --json` prints under `checkpoint`; else `null` |
 

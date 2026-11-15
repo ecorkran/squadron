@@ -187,7 +187,10 @@ def listing_document(listing: RunListing) -> list[dict[str, object]]:
         {
             "run_id": row.run_id,
             "pipeline": row.pipeline,
+            "params": row.params,
             "status": row.status,
+            "started_at": row.started_at.isoformat(),
+            "active_step": row.active_step,
             "working_directory": row.working_directory,
             "checkpoint": row.checkpoint,
         }

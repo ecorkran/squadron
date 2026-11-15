@@ -124,9 +124,21 @@ class TestRunsListJson:
 
         [entry] = self._list_json()
 
-        assert set(entry) == {"run_id", "pipeline", "status", "working_directory", "checkpoint"}
+        assert set(entry) == {
+            "run_id",
+            "pipeline",
+            "params",
+            "status",
+            "started_at",
+            "active_step",
+            "working_directory",
+            "checkpoint",
+        }
         assert entry["run_id"] == run_id
         assert entry["pipeline"] == "steps"
+        assert entry["params"] == {"slice": "199"}
+        assert isinstance(entry["started_at"], str) and entry["started_at"]
+        assert entry["active_step"] is None  # set only while a run is running
         assert entry["status"] == ExecutionStatus.PAUSED.value
         assert entry["working_directory"] == str(Path.cwd())
         checkpoint = entry["checkpoint"]
