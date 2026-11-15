@@ -227,8 +227,11 @@ class TestRun:
         app = typer.Typer()
         app.command("grade")(make_grade_command(lambda root: None))  # type: ignore[arg-type,return-value]
         app.callback()(lambda: None)
-        text = CliRunner().invoke(app, ["grade", "--help"], terminal_width=200).output
-        for option in (
+        # Read the options off the command: CI forces colour, which splits option names in
+        # the rendered --help text.
+        command = typer.main.get_command(app).commands["grade"]  # type: ignore[attr-defined]
+        options = {opt for param in command.params for opt in param.opts}
+        assert options >= {
             "--max-cost",
             "--review-model",
             "--review-cost",
@@ -236,5 +239,4 @@ class TestRun:
             "--case",
             "--retry-harness",
             "--keep",
-        ):
-            assert option in text
+        }

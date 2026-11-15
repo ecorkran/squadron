@@ -228,12 +228,14 @@ def test_help_lists_every_option() -> None:
     app = typer.Typer()
     app.command("run")(make_run_command(lambda root: pytest.fail("no services for --help")))
     app.callback()(lambda: None)
-    output = CliRunner().invoke(app, ["run", "--help"]).output
-    for option in (
+    # Read the options off the command: CI forces colour, which splits option names in
+    # the rendered --help text.
+    command = typer.main.get_command(app).commands["run"]  # type: ignore[attr-defined]
+    options = {opt for param in command.params for opt in param.opts}
+    assert options >= {
         "--set", "--set-version", "--model", "--samples", "--max-cost",
         "--max-cost-per-replay", "--case", "--retry-harness", "--keep",
-    ):  # fmt: skip
-        assert option in output
+    }  # fmt: skip
 
 
 class TestOutput:
