@@ -13,9 +13,9 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261115
 
-### Release 0.24.30
+### Release 0.24.31
 
-- **Contents:** (0.24.29 was tagged but never published: CI's repo-wide `ruff check` failed on the archived review-recall scripts, now excluded.) slice 425 (grading and paired report) with its round-4 review fixes; slice 424; #325 (SDK API-error replies), #142 (review slice/tasks save by file name), #192 and its liveness follow-up (`sq runs list --json`), #320 (`/sq:monitor`).
+- **Contents:** (0.24.29 and 0.24.30 were tagged but never published: CI's repo-wide `ruff check` failed on the archived review-recall scripts, now excluded, then two benchmark help tests failed under CI's forced colour, now read from the command.) slice 425 (grading and paired report) with its round-4 review fixes; slice 424; #325 (SDK API-error replies), #142 (review slice/tasks save by file name), #192 and its liveness follow-up (`sq runs list --json`), #320 (`/sq:monitor`).
 
 
 **p6: devlog-4**

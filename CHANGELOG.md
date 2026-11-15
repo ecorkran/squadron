@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.24.30] - 20261115
+## [0.24.31] - 20261115
 
 ### Added
 - `sq run fix <issue>` reads the issue from GitHub (every comment included) and fixes it the way the fix rule says: a test that fails for the reported reason, the change, the project's own format, lint, typecheck and test gates, and one `fix:` commit with `Fixes #<issue>`. `-p issue-file=PATH` uses frozen issue text instead. It refuses a dirty tree up front, never pushes or posts, and works from `/sq:run fix` too.
