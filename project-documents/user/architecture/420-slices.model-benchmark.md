@@ -144,39 +144,58 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
    - **Risk Level:** Medium
    - **Relative Effort:** 3/5
 
-8. [ ] **(427) Reviewer Recall** — Planted-defect cases: real diffs with known defects injected. Each defect has ground truth: location, category in 402's vocabulary, and a failing test that shows it breaks something. Each reviewer config reviews each case several times. Findings are matched to planted defects by a stated rule, giving recall per config plus the count of findings that matched nothing. When recall data exists for 425's grading config, 425's report drops its unmeasured-reviewer flag.
-   - **Value:** Developer value. Code-review model choice gets a measured basis, and the grader's reviewer gets a measured recall.
+8. [x] **(427) Reviewer Recall** — ⏪ Dropped 20261115, superseded by 430. It planted mutations in real commits and proved each with a test, which measures synthetic defects in a no-tools review and needed a mutation engine. The hand-run real-bug benchmark answered the same question at cents per review. Never implemented; its design and task file are archived.
+
+9. [x] **(428) Design Review Recall** — ⏪ Dropped 20261115, superseded by 432. Planted flaws are replaced by flaws that were really corrected later.
+
+10. [x] **(429) Task Breakdown Review Recall** — ⏪ Dropped 20261115, superseded by 432.
+
+## Measurement Slices (re-plan 20261115)
+
+PM decision after 426. The replay stack (421–426) stays as built and gets no further work: each data point costs dollars and hours, and few cases qualify. These slices measure with what is cheap and already recorded. Two rules apply to all of them. No task runs against squadron's own history or needs hours; live checks use small fixture projects. Every measured run prints its cost bound first and stops at a cap.
+
+11. [ ] **(430) Real-Bug Review Recall** — The hand-run code-review benchmark (`user/reference/review-recall-runbook.md`, results in `user/reference/review-recall-results/`) as a command. A case is a real merged diff (repo, base, head) with the bugs a later fix commit or issue proved real. A reviewer config is a recipe: one or more reviewers run in parallel (fan-out), an optional pool to pick from at random, and zero or more comb stages that mark each finding KEEP or DROP. Each stage's output is stored once per case and run, and a recipe is scored from stored outputs wherever no new call is needed (a union for fan-out, the member mean for a pool, stored comb decisions). Reviewers run as they are used, with tools, in 421's history-free sandbox at `head`, so the later fix cannot be read. The report gives known-bug recall, finding counts, graded-real share and cost per recipe, with the number of cases and runs.
+   - **Value:** User-facing. Answers "which code review setup, and is a replacement better or worse" with a repeatable command. The recipe that wins becomes the pipeline review step's configuration.
    - **Success Criteria:**
-     - Each planted defect has location, category and a test that fails with the defect and passes without it.
-     - The matching rule is defined and tested on findings that match and findings that don't.
-     - The report gives recall and unmatched-finding counts per reviewer config, with n.
-     - 425's report reads recall for its grading config and flags the review columns only when that recall is missing.
-   - **Dependencies:** [421, 425]; 400 normalized findings, 300 review template. It imports 425's `ReviewerRef`, review call and bootstrap, and does not depend on 424 or 426.
-   - **Interfaces:** Provides planted-defect cases, recall records and the recall report. Consumes 421's records and sandbox, and 400's normalization.
-   - **Risk Level:** Medium (how defects are planted and how loose the matcher is decide whether the number means anything)
+     - The existing cases and their known bugs load as stored cases. A new case is added as a record, not as code.
+     - The existing hand-run results import as stored stage outputs, and the report reproduces the hand-run recall table for haiku-xhigh, sol, sonnet-high and sonnet from them with no new calls.
+     - A recipe of two reviewers plus a comb is scored from stored single-review and comb records.
+     - `run` prints its cost bound before the first call, stops at its cap with exit 2, and resumes.
+     - The rule for when a finding hits a known bug is stated and tested. Findings it cannot decide are listed for a person and not counted.
+   - **Dependencies:** [421, 425] (sandbox, record store, cap and bound code, review call); 402 normalized findings.
+   - **Interfaces:** Provides stored real-bug cases, per-stage review and comb records, recipe scoring and the recall report. Consumed by 432 and 433.
+   - **Risk Level:** Medium (the hit rule; the graded-real share is agent-graded and needs a human-checked sample)
    - **Relative Effort:** 3/5
 
-9. [ ] **(428) Design Review Recall** — Planted-flaw benchmark for slice designs and concepts. Known flaws (a dropped requirement, a contradicted decision, an unstated interface, unrealistic scope) are planted into a trusted design. Each reviewer config reviews the planted copy and the clean copy. Recall is matched to planted flaws by 427's rule. Precision and false alarms are graded against the design text.
-   - **Value:** Shows which review config catches design-level problems before code is written. Code-review results can't say that.
+12. [ ] **(431) Implementation Report from Run Records** — A report over pipeline runs already recorded: per producer model and step (design, tasks, implement), the first-review verdict and finding counts by severity, revise rounds, pauses by kind, cost and turns, split by the slice's effort rating. No replay and no model calls. It is not controlled, since slice difficulty differs between runs, so each row shows its run count and no row is ranked below a stated floor.
+   - **Value:** User-facing. Answers "which implementation model" from work already done. Alternating models across real slices turns it into a comparison at no extra cost.
    - **Success Criteria:**
-     - Each planted flaw records its location (section), its category, and the edit that plants it. The clean copy is reviewed too.
-     - Recall per reviewer config, with n, using 427's matching rule.
-     - Findings on the clean copy are reported as false alarms.
-     - Precision is graded against the design text, since no fix commit exists to check against.
-   - **Dependencies:** [427, 402]. Shares 427's matcher and recall report; uses 402's finding vocabulary.
-   - **Interfaces:** Provides design-review recall records and report. Consumes 427's matcher and 421's records.
-   - **Risk Level:** Medium (planted flaws must be realistic, not obvious; precision is semantic). Planted cases are curated expected outputs. 427 already does this for code, so this follows 427; the non-goal on curated datasets (300) needs a PM check.
-   - **Relative Effort:** 3/5
+     - Rows per step, model and effort sent, with the run count, from the run records and review files of every project with recorded runs.
+     - Runs with no review, and runs whose records cannot be read, are counted and named, never dropped silently.
+     - Finding categories are right for current reviews (needs #338 fixed).
+   - **Dependencies:** 199 run listings, 175 usage records, review frontmatter; #338.
+   - **Interfaces:** Provides the implementation rows 433 reads.
+   - **Risk Level:** Low
+   - **Relative Effort:** 2/5
 
-10. [ ] **(429) Task Breakdown Review Recall** — The same method for task breakdowns, reviewed against their slice design. Planted flaws: a criterion with no task, a task that contradicts a decision, dependencies out of order, a task with no test. The design is the reference, so recall is exact. Only precision is semantic.
-   - **Value:** Shows which config catches breakdown gaps that would otherwise surface during implementation.
+13. [ ] **(432) Design and Task Review Recall from Real Corrections** — 430's method on documents. A case is a slice design or task file as its review passed it, plus the flaws corrected later (a "correct the design" commit, a task rewrite after a blocked run). It starts with a spike: mine ten candidate cases by hand under the runbook's validity rule, and count how many are flaws a review of that document could have caught. Fewer than five stops the slice, with the counts recorded as the result.
+   - **Value:** Shows which model reviews designs and task breakdowns, the checks that run before code is written.
    - **Success Criteria:**
-     - Each planted flaw is checked against the design text, so the planted list is exact.
-     - Recall per reviewer config, with n, using 428's report.
-     - False alarms on the clean breakdown are reported.
-   - **Dependencies:** [428].
-   - **Interfaces:** Consumes 428's planting method, matcher and report.
-   - **Risk Level:** Low (the design is the reference, so recall is exact; precision is the only semantic part)
+     - The spike's counts are recorded, with the go or stop decision they give.
+     - If it goes on: cases are stored as 430 cases of a document kind, reviewed with the slice and tasks templates, and scored by 430's report.
+   - **Dependencies:** [430].
+   - **Interfaces:** Consumes 430's case records, recipes and report.
+   - **Risk Level:** High (yield is unknown until the spike)
+   - **Relative Effort:** 3/5 (the spike alone is 1/5)
+
+14. [ ] **(433) Model Answers Report** — One table per category (code review, design review, task review, design writer, task writer, implementation): the configured default, the best measured config, the evidence count and its date, each row naming its source report (430, 432, `sq replay report`, 431). A category with no data says "unmeasured".
+   - **Value:** User-facing. "Which model for this job, and how do I know" in one place.
+   - **Success Criteria:**
+     - Every category has a row, measured or "unmeasured".
+     - A measured row names its source and count, and a row below the evidence floor says so.
+   - **Dependencies:** [430, 431]; 177 replay report.
+   - **Interfaces:** Consumes the reports of 430, 431, 432 and 177.
+   - **Risk Level:** Low
    - **Relative Effort:** 2/5
 
 ---
@@ -192,12 +211,16 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
 **Ordering decided by measurement:**
 - 422's yield report decides what comes after 423. If qualified fix cases can separate two configs, the order stands. If not, either discovery is pooled across cf projects (422 already runs on any project) or 426's case-building part moves ahead of 424, and 424 and 425 are built against slice cases first.
 
+**Re-plan 20261115 (PM decision):**
+- Slices 427–429 are dropped and 430–433 added (section "Measurement Slices"). The design and task writer comparison stays with 177's `sq replay`; it needs no new slice.
+- The live runs on squadron in 426 were deleted and replaced by end-to-end tests on a fixture project.
+
 **Open for slice design:**
 - The producer-only mode's flag name and how it reports the stop (424).
 - How the language-adapter seam is shaped beyond Python (421; only Python is implemented).
 - How sandbox environment resolution handles projects without a lockfile (421).
 - The diff-size rule for the judge (426).
-- How defects are planted, and the finding-to-defect matching rule (427).
+- The rule for when a finding hits a known bug, and how recipes are stored and scored (430).
 - The sample count, measured in 425 before any large run.
 
 ---
