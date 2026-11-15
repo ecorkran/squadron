@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import shutil
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
@@ -161,20 +161,23 @@ class BenchmarkSandbox:
         """The environment for any child process in this sandbox."""
         return self._environment.variables(self._adapter.path_entries(self._context()))
 
-    def producer_env(self, profile: ProfileName) -> dict[str, str]:
+    def producer_env(self, profile: ProfileName, tools: Sequence[str] = ()) -> dict[str, str]:
         """The environment for a producer child: ``process_env`` plus *profile*'s credentials.
 
         The producer's run state and transcripts are read from this same home, so its login
         must live in it. The grant is linked into the existing home (nothing already built is
-        redone); ``process_env`` stays credential-free for suite runs.
+        redone); ``process_env`` stays credential-free for suite runs. ``tools`` are extra
+        executables the producer needs (a slice case's ``cf`` and ``node``, slice 426 D9),
+        linked into the home the same way; a suite run never gets them.
         """
         environment = ScrubbedEnvironment(
             self._root,
             self._sandbox_id,
             CredentialGrant.for_profiles([profile]),
             self._harness_env,
-        )
+        ).with_tools(tools)
         environment.grant_carryover_into_home()
+        environment.link_extra_tools_into_home()
         return environment.variables(self._adapter.path_entries(self._context()))
 
     def _context(self) -> SandboxContext:

@@ -208,3 +208,36 @@ class TestReadFromTheState:
         detail = result.failure_detail or ""
         assert detail.endswith("THE-CAUSE")
         assert len(detail) < STDERR_TAIL_CHARS + 200
+
+
+class TestRunWithoutAFrozenText:
+    """A ``P6`` slice-case run has no frozen issue file (slice 426): ``None`` skips that check."""
+
+    def p6_run(self, actions: list[dict[str, object]], *, status: str = "completed") -> RunState:
+        return run(
+            RECORD_ID,
+            [step("implement-1", "implement", actions, status=status)],
+            pipeline="P6",
+            status=status,
+        )
+
+    def test_a_run_with_no_fix_context_is_not_a_mismatch(self) -> None:
+        state = self.p6_run([dispatch(), action("commit")])
+
+        result = classify_producer_run(process(), state, BEFORE, AFTER, None)
+
+        assert (result.outcome, result.absence) == (ProducerOutcome.COMMITTED, None)
+
+    def test_the_other_rows_still_apply(self) -> None:
+        state = self.p6_run([dispatch()])
+
+        result = classify_producer_run(process(), state, BEFORE, BEFORE, None)
+
+        assert result.outcome == ProducerOutcome.NO_COMMIT
+
+    def test_a_fix_run_still_checks_its_text(self) -> None:
+        state = fix_run([dispatch(), action("commit")])
+
+        assert classify_producer_run(process(), state, BEFORE, AFTER, ISSUE_SHA).outcome == (
+            ProducerOutcome.FROZEN_TEXT_MISMATCH
+        )

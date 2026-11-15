@@ -13,6 +13,39 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261115
 
+
+**p6: devlog-4**
+- branch-0:branch-0: PASS
+- implement-1:cf-op-0: PASS
+- implement-1:cf-op-1: PASS
+- implement-1:cf-op-2: PASS
+- implement-1:cf-op-3: PASS
+- implement-1:dispatch-4: PASS
+- implement-1:review-5: PASS (verdict: CONCERNS)
+- implement-1:checkpoint-6: PASS
+- implement-1:commit-7: PASS
+- close-out:dispatch-0: PASS
+- revise-code:dispatch-0: PASS
+- revise-code:review-1: PASS (verdict: CONCERNS)
+- revise-code:commit-2: PASS
+- revise-code:dispatch-3: PASS
+- revise-code:review-4: PASS (verdict: CONCERNS)
+- revise-code:commit-5: PASS
+
+### Slice 426: Slice Cases — complete
+
+- **Delivered:** `sq benchmark slice-cases build` (discovery over 403's `slice_ranges`, fork task text, two-sandbox qualification, case set, yield rows), `SliceCaseRunner` on 424's seam (cf registration in the scrubbed home, producer-only `P6`), `sq benchmark judge` (normalized diffs, sample-matched pairs, forfeits, over-size rule, bound, per-call cap, lock, resume) and the report's per-kind tables with a pairwise section (Bradley-Terry strengths, paired interval per config pair, counts). Extractions: `judge_pair`, `CfRegistration`, public artifact patterns; two config keys (`benchmark.judge_model`, `benchmark.judge_max_prompt_chars`); `/sq:benchmark` mirrors.
+- **PM decision 20261115:** no task runs against squadron's history or calls a model. One suite run at slice 400's fork exceeded 400 s, a candidate needs three at its tip and 9 of the record's 15 slices pass the pre-sandbox checks, so the live build and replay were deleted and replaced by fixture end-to-end tests (Tasks 23, 26, 41). Task 23's earlier probe wrote real records to the user's store (`multiple_landings` for 172 and 305, `harness_error` for 400; a rerun overwrites it). Discovery over squadron's 15 recorded slices sorted them: 3 `multiple_landings` (172, 305, 940), 1 `branch_contains_merges` (422), 1 `no_tasks_at_fork` (402), 9 reach the sandboxes (400, 401, 403, 420, 421, 423, 424, 425, 946, 947); their case counts are not known.
+- **End-to-end tests, fixture project `tests/benchmark/fixtures/slice_project/`** (uv project, 3 tests; history built by `slice_project_history`: a code slice 511 and a docs-only slice 512, both merge-landed). Real sandboxes, git, uv, pytest and, for replays, cf registration under the scrubbed home; no model is called.
+  - Task 23, `test_slice_build_end_to_end.py` (5 tests): slice 511 qualifies (3 regression nodes, `start_sha` the fork, `reference_sha` the tip, task text = design then task file as of the fork), 512 is `no_code_change`, case set v1, a second build runs no suite and keeps v1, the yield row counts 2 candidates / 1 qualified / 1 `no_code_change`.
+  - Task 26, `test_slice_pipeline_end_to_end.py` (replays): three configs through the real `SliceCaseRunner`; only the `sq run P6 511 --producer-only` call is scripted. Two commit (one the reference change, one breaking `test_sub`) with diffs against the fork, one commits nothing (`no_commit`, config absence); `cf project list` names are identical before and after. The fixture needed a `500-arch.*` file because `cf set arch 500` resolves against it; the registry check compares names only because other sessions move the slice column while the test runs. The leak scan reports a transcript with no tool calls as unavailable (harness absence), so the scripted transcript holds one harmless command.
+  - Task 41, same file (grade, judge, report): reference `pass`, good replay pass, breaking replay fail (1 regression, `tests/test_calc.py::test_sub`); 6 pairs, the 3 with the silent replay are forfeits with no dispatcher call, the other 3 are judged (6 calls); the report has the `slice cases` table, the pairwise section, the reference line marked not ranked, `opus vs sol d +1.00 too few cases (1)` and the count line. Only the grading review and the judge's model are scripted.
+  - Observation, not changed: a config with no graded replay has no table label, so the pairwise section labels it with its model name (`m-astra`) beside the other configs' aliases.
+- **Task 10 spike:** a `BenchmarkSandbox` at slice 403's fork, the scrubbed home with `cf` and `node` linked, `CfRegistration(...).register(...)`, then under that environment: `cf set slice 403`, `cf set phase 6`, `cf build --json`, `sq run P6 403 --producer-only --dry-run`, `cf project list`. Every command exit 0 with `HOME` redirected; `cf init` wrote its registry to `<home>/.config/context-forge/projects.json`; the dry run listed `implement-1`. Corrections found: `CF_TOOLS` is `("cf", "node")` (cf is a node script), and `--producer-only` refuses a branch that does not parse as `{index}-slice.{name}`, so a detached tree gets `{index}-slice.` + `SLICE_BRANCH_SUFFIX` + the sandbox id; the extra tools are linked into an existing home. Leak-scan coverage: 424's protected roots (real home, checkout, installed package, uv cache) cover every real path of `cf`, `node` and the cf registry directory (all under the real home), and the scan over all five commands' output was clean. A `cf` installed outside the user's home would not be covered.
+- **Defects and gaps found by implementing** (details in the design's last section): cf needs `node`; `--producer-only` needs a slice-named branch; `P6` has no frozen text to classify against; a slice case needs its leak-rule owner from the checkout's remote; the judge's cap is per call. The real 424 seam differs from the task text in names (`run`, not `invoke`; `requalify` returns a union; `AbsenceClass` is `harness`/`config`).
+- **Gates:** `uv run ruff format --check .`, `ruff check .`, `pyright` clean. Full suite by directory: all pass except the two tests that fail on main before this slice (#336: the report golden's grader digest, `test_grade_ids [bumped grader version]`) and `tests/cli/test_review_pr.py::test_pr_review_no_longer_reports_persistence_unavailable`, which failed in one chunk and passes alone. Files over 300 lines added or changed by the slice: none new (`yield_report.py` was split into `yield_measured.py`; `keys.py`, `planning_docs.py` and `benchmark_grade.py` were over before; `tests/benchmark/slice_repos.py` is a test helper at 369).
+- **Next:** 427.
+
 ### Release 0.24.31
 
 - **Contents:** (0.24.29 and 0.24.30 were tagged but never published: CI's repo-wide `ruff check` failed on the archived review-recall scripts, now excluded, then two benchmark help tests failed under CI's forced colour, now read from the command.) slice 425 (grading and paired report) with its round-4 review fixes; slice 424; #325 (SDK API-error replies), #142 (review slice/tasks save by file name), #192 and its liveness follow-up (`sq runs list --json`), #320 (`/sq:monitor`).

@@ -20,14 +20,17 @@ _SPLIT_SUFFIX = re.compile(r"-(\d+)$")
 
 
 @dataclass(frozen=True)
-class _ArtifactKind:
+class ArtifactKind:
+    """Where one slice artifact lives and how its file is named."""
+
     directory: str
     stem: str  # the file-name segment after the index: ``{index}-{stem}.{name}.md``
 
 
-_KINDS: dict[ReplayPhase, _ArtifactKind] = {
-    ReplayPhase.DESIGN: _ArtifactKind(f"{DOCS_ROOT}/user/slices", "slice"),
-    ReplayPhase.TASKS: _ArtifactKind(f"{DOCS_ROOT}/user/tasks", "tasks"),
+#: The artifact each replay phase starts from, defined once for every consumer.
+ARTIFACT_KINDS: dict[ReplayPhase, ArtifactKind] = {
+    ReplayPhase.DESIGN: ArtifactKind(f"{DOCS_ROOT}/user/slices", "slice"),
+    ReplayPhase.TASKS: ArtifactKind(f"{DOCS_ROOT}/user/tasks", "tasks"),
 }
 
 
@@ -73,8 +76,8 @@ class StartPoint:
 
 def resolve_start_point(phase: ReplayPhase, index: int, history: GitHistory) -> StartPoint:
     """The start point for replaying ``phase`` of slice ``index``; ``history`` must be loaded."""
-    kind = _KINDS[phase]
-    pattern = f"{kind.directory}/{index}-{kind.stem}.*.md"
+    kind = ARTIFACT_KINDS[phase]
+    pattern = artifact_pattern(phase, index)
     adding = _adding_commit(history, pattern, kind.directory)
     if not adding.parents:
         raise RootCommitError(adding.sha)
@@ -91,11 +94,17 @@ def resolve_start_point(phase: ReplayPhase, index: int, history: GitHistory) -> 
     )
 
 
+def artifact_pattern(phase: ReplayPhase, index: int) -> str:
+    """The repo-relative glob for ``phase``'s artifact of slice ``index``."""
+    kind = ARTIFACT_KINDS[phase]
+    return f"{kind.directory}/{index}-{kind.stem}.*.md"
+
+
 def artifact_files(phase: ReplayPhase, index: int, root: Path) -> list[Path]:
     """The artifact's files in the working tree under ``root``, split files in suffix order."""
-    kind = _KINDS[phase]
-    found = (root / kind.directory).glob(f"{index}-{kind.stem}.*.md")
-    return sorted(found, key=lambda path: _suffix_order(path.as_posix()))
+    kind = ARTIFACT_KINDS[phase]
+    found = (root / kind.directory).glob(PurePosixPath(artifact_pattern(phase, index)).name)
+    return sorted(found, key=lambda path: suffix_order(path.as_posix()))
 
 
 def _adding_commit(history: GitHistory, pattern: str, directory: str) -> Commit:
@@ -118,10 +127,10 @@ def _added_paths(commit: Commit, pattern: str, directory: str) -> list[str]:
         and PurePosixPath(change.path).parent.as_posix() == directory
         and path_matches(change.path, pattern)
     ]
-    return sorted(paths, key=_suffix_order)
+    return sorted(paths, key=suffix_order)
 
 
-def _suffix_order(path: str) -> tuple[str, int]:
+def suffix_order(path: str) -> tuple[str, int]:
     """Sort split files numerically (``-2`` before ``-10``), not lexically."""
     stem = PurePosixPath(path).stem
     match = _SPLIT_SUFFIX.search(stem)

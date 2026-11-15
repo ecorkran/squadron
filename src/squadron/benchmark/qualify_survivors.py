@@ -97,10 +97,11 @@ def _apply_reference_runs(
     return tuple(updated)
 
 
-def _excluded(unchanged: Sequence[str], runs: Runs) -> tuple[tuple[str, TestRejection], ...]:
+def excluded_unchanged(unchanged: Sequence[str], runs: Runs) -> tuple[tuple[str, TestRejection], ...]:
     """Unchanged tests that are flaky or fail at the reference: they charge every config alike.
 
     Superseded tests are never excluded for failing: they leave the regression set anyway.
+    Shared with slice-case qualification (slice 426 D5).
     """
     found: list[tuple[str, TestRejection]] = []
     for node_id in unchanged:
@@ -136,7 +137,7 @@ def qualify_survivors(
         run_selection(deps.suite_runner, ctx, SuiteSelection.all_tests()) for _ in range(deps.repeats)
     ]
     verdicts = _apply_reference_runs(verdicts, runs)
-    excluded = _excluded(sets.unchanged, runs)
+    excluded = excluded_unchanged(sets.unchanged, runs)
     qualified = tuple(v.node_id for v in verdicts if v.kind is HiddenTestVerdictKind.QUALIFIED)
     if not qualified:
         return record_outcome(

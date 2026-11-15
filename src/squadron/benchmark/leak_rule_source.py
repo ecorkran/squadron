@@ -17,10 +17,16 @@ from squadron.benchmark.case_runners import ReplaySandbox
 from squadron.benchmark.fix_case_candidate import candidate_from_case
 from squadron.benchmark.fix_discovery import DiscoveryRejection, resolve_locator
 from squadron.benchmark.leak_rules import LeakRules, build_leak_rules
+from squadron.codehost.errors import (
+    AmbiguousHostRemoteError,
+    ForeignRepositoryError,
+    NoHostRemoteError,
+)
 from squadron.codehost.protocol import CodeHost
-from squadron.codehost.remotes import list_remotes
+from squadron.codehost.remotes import list_remotes, select_remote
+from squadron.codehost.targets import PullRequestTarget, TargetForm
 from squadron.core.process_runner import ProcessNotFoundError, ProcessRunner, ProcessTimedOutError
-from squadron.metrology.benchmark_models import BenchmarkCase
+from squadron.metrology.benchmark_models import BenchmarkCase, CaseKind
 
 PYPROJECT = "pyproject.toml"
 UV_QUERY_TIMEOUT_S = 30
@@ -84,21 +90,45 @@ class LeakRuleSource:
         self._timeout_s = timeout_s
         self._names: dict[str, str] = {}
         self._hosts: dict[str, tuple[str, str]] = {}
+        self._project: tuple[str, str] | None = None
 
     def _owner_and_name(self, case: BenchmarkCase) -> tuple[str, str]:
         if case.case_id not in self._hosts:
-            try:
-                candidate = candidate_from_case(case, self._runner, self._repo_root, self._timeout_s)
-            except BuildHalted as exc:
-                raise BenchmarkRefusal(f"case {case.case_id}: {exc}") from exc
-            remotes = list_remotes(self._runner, str(self._repo_root))
-            located = resolve_locator(candidate, remotes, self._host)
-            if isinstance(located, DiscoveryRejection):
-                raise BenchmarkRefusal(
-                    f"case {case.case_id}: no code host repository: {located.detail}"
-                )
-            self._hosts[case.case_id] = (located.owner, located.repository)
+            self._hosts[case.case_id] = (
+                self._project_repository()
+                if case.kind is CaseKind.SLICE
+                else self._issue_repository(case)
+            )
         return self._hosts[case.case_id]
+
+    def _issue_repository(self, case: BenchmarkCase) -> tuple[str, str]:
+        """The repository holding a fix case's issue, from its provenance reference."""
+        try:
+            candidate = candidate_from_case(case, self._runner, self._repo_root, self._timeout_s)
+        except BuildHalted as exc:
+            raise BenchmarkRefusal(f"case {case.case_id}: {exc}") from exc
+        remotes = list_remotes(self._runner, str(self._repo_root))
+        located = resolve_locator(candidate, remotes, self._host)
+        if isinstance(located, DiscoveryRejection):
+            raise BenchmarkRefusal(f"case {case.case_id}: no code host repository: {located.detail}")
+        return located.owner, located.repository
+
+    def _project_repository(self) -> tuple[str, str]:
+        """The checkout's own code host repository, for a slice case (it has no issue reference).
+
+        A bare target needs exactly one remote on a host the code host serves, the rule a bare
+        pull-request target uses; anything else refuses naming the selection's message.
+        """
+        if self._project is None:
+            remotes = list_remotes(self._runner, str(self._repo_root))
+            try:
+                located = select_remote(
+                    PullRequestTarget(form=TargetForm.CURRENT_BRANCH), remotes, self._host.serves_host
+                )
+            except (ForeignRepositoryError, NoHostRemoteError, AmbiguousHostRemoteError) as exc:
+                raise BenchmarkRefusal(f"no code host repository for the checkout: {exc}") from exc
+            self._project = (located.owner, located.repository)
+        return self._project
 
     def _name(self, case: BenchmarkCase) -> str:
         if case.start_sha not in self._names:

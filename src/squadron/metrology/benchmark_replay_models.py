@@ -24,6 +24,7 @@ from squadron.metrology.benchmark_replay_enums import (
     ProducerOutcome,
 )
 from squadron.metrology.replay_models import ProducerConfigRef, PromptIdentity
+from squadron.metrology.slice_case_models import SliceCandidateRejection
 
 #: Every implementation-replay record id starts with this; grade ids derive from the rest.
 REPLAY_ID_PREFIX = "implreplay-"
@@ -113,7 +114,7 @@ class CaseDrop(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     case_id: str
-    reason: CandidateRejection | str
+    reason: CandidateRejection | SliceCandidateRejection | str
     environment_digest: str
 
 

@@ -143,14 +143,18 @@ class TestRefusals:
         with pytest.raises(BenchmarkRefusal, match="no passing auth check"):
             _check(auth={})
 
-    def test_case_kind_without_a_runner_is_refused_naming_kind_and_slice(self) -> None:
+    def test_case_kind_without_a_runner_is_refused_naming_the_case_and_kind(self) -> None:
         slice_case = fix_case().model_copy(update={"kind": CaseKind.SLICE})
         with pytest.raises(BenchmarkRefusal) as raised:
             _check(cases=[slice_case])
         message = str(raised.value)
         assert slice_case.case_id in message
         assert "'slice'" in message
-        assert "426" in message
+        assert "no case runner" in message
+
+    def test_slice_cases_plan_once_their_kind_has_a_runner(self) -> None:
+        slice_case = fix_case().model_copy(update={"kind": CaseKind.SLICE})
+        _check(cases=[fix_case(), slice_case], runners=_runners(CaseKind.FIX, CaseKind.SLICE))
 
     @pytest.mark.parametrize("source_ref", ["", " ", "issue-1", "owner/repo"])
     def test_fix_case_without_a_usable_issue_ref_is_refused_naming_the_case(

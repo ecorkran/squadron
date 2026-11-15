@@ -39,6 +39,7 @@ from squadron.benchmark.sandbox import (
     sweep_benchmark_orphans,
 )
 from squadron.benchmark.scrubbed_env import MissingHarnessHomeError, MissingHarnessToolError
+from squadron.benchmark.slice_runner_wiring import register_slice_runner
 from squadron.benchmark.transcripts import transcript_source_for
 from squadron.codehost.git_refs import GIT_QUERY_TIMEOUT_SECONDS
 from squadron.codehost.github_cli import build_github_host
@@ -225,6 +226,16 @@ def build_production_services(repo_root: Path) -> RunServices:
     )
     _register_fix_runner(
         sq_path=sq_path, repo_root=repo_root, runner=runner, host=host, store=store, sandboxes=sandboxes
+    )
+    register_slice_runner(
+        sq_path=sq_path,
+        repo_root=repo_root,
+        runner=runner,
+        store=store,
+        sandbox_at=sandboxes.at,
+        language=CASE_LANGUAGE,
+        repeats=_positive_int(BENCHMARK_QUALIFICATION_REPEATS_KEY, repo_root),
+        git_timeout_s=GIT_QUERY_TIMEOUT_SECONDS,
     )
     return RunServices(
         repo_root=repo_root,

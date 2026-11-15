@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq benchmark slice-cases build --set NAME` turns a project's completed slices (recorded by `sq metrology slice-ranges`) into benchmark cases: the slice design and task file as they stood at the fork are the task and the landed branch is the reference. A slice that cannot be a case (landed twice, merged the target into its branch, no task file, no code change, no regression tests left) is counted by reason in `sq benchmark yield`, which now shows slice-case rows beside the fix-case rows.
+- `sq benchmark run` replays slice cases through `sq run P6 --producer-only` in a scrubbed sandbox registered with cf inside the sandbox's own home, so your cf project list is untouched.
+- `sq benchmark judge BENCHMARK_ID --max-cost USD` judges slice-case implementations pairwise from their diffs (bookkeeping files removed), each pair in both orders and each replay against the reference. It states its cost bound first, stops at the run cap, and skips pairs already judged. A case whose prompt is over `benchmark.judge_max_prompt_chars` is not judged and is counted.
+- `sq benchmark report` shows slice cases in their own table (headed `no regressions`) and, once judged, a pairwise section: a strength per config, the reference as a line that is never ranked, and a verdict per pair of configs.
+- Config keys `benchmark.judge_model` (the judge's alias, no default) and `benchmark.judge_max_prompt_chars` (default 400000).
+
 ### Fixed
 - `sq benchmark grade`'s review now sees a producer's edits to `*.toml`, `*.yaml` and `*.yml` files (dependencies, tool settings). Lockfiles, docs, data and images are still left out. Grades made before this are a different grader version, so the report treats them as older (#335).
 - `sq run fix` with a Codex model can now change files. The fix step ran Codex read-only and ended "fix blocked: The workspace is read-only". A fix now gets the same project rules as an implementation (#330).

@@ -9,6 +9,8 @@ import pytest
 from squadron.benchmark.grading_config import check_review_floor_runs
 from squadron.config.keys import (
     BENCHMARK_GRADING_REVIEW_MODEL_KEY,
+    BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY,
+    BENCHMARK_JUDGE_MODEL_KEY,
     BENCHMARK_REVIEW_FLOOR_RUNS_KEY,
     BENCHMARK_REVIEW_TIMEOUT_KEY,
     CONFIG_KEYS,
@@ -253,3 +255,30 @@ class TestBenchmarkGradingKeys:
     def test_floor_runs_of_two_is_accepted(self, patch_config_paths: dict[str, Path]) -> None:
         set_config(BENCHMARK_REVIEW_FLOOR_RUNS_KEY, "2")
         assert check_review_floor_runs(get_config(BENCHMARK_REVIEW_FLOOR_RUNS_KEY)) == 2
+
+
+class TestSliceCaseJudgeKeys:
+    """Keys added by slice 426 (D12, D14): the judge alias and the prompt-size limit."""
+
+    def test_unset_judge_model_reads_as_unset_never_a_value(
+        self, patch_config_paths: dict[str, Path]
+    ) -> None:
+        assert CONFIG_KEYS[BENCHMARK_JUDGE_MODEL_KEY].type_ is str
+        assert CONFIG_KEYS[BENCHMARK_JUDGE_MODEL_KEY].default is None
+        assert get_config(BENCHMARK_JUDGE_MODEL_KEY) is None
+
+    def test_limit_defaults_to_400000(self, patch_config_paths: dict[str, Path]) -> None:
+        assert CONFIG_KEYS[BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY].type_ is int
+        assert get_positive_int_config(BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY) == 400000
+
+    @pytest.mark.parametrize("value", ["0", "-5"])
+    def test_limit_of_zero_or_less_is_rejected_naming_the_key(
+        self, patch_config_paths: dict[str, Path], value: str
+    ) -> None:
+        set_config(BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY, value)
+        with pytest.raises(ValueError, match=BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY):
+            get_positive_int_config(BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY)
+
+    def test_a_set_limit_is_returned(self, patch_config_paths: dict[str, Path]) -> None:
+        set_config(BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY, "1000")
+        assert get_positive_int_config(BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY) == 1000

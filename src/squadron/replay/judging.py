@@ -155,7 +155,14 @@ async def judge_replay_set(
     task = _task_prompt(job)
     for first, second in plan.pairs:
         label = f"{first.ref} vs {second.ref}"
-        calls = await _judge_pair(first, second, task, dispatcher, timeout_s, label, summary)
+        calls = await judge_pair(
+            _prompt(task, first.draft, second.draft),
+            _prompt(task, second.draft, first.draft),
+            dispatcher,
+            timeout_s,
+            label,
+            on_call=lambda: _count_call(summary),
+        )
         if calls is None:
             summary.failed += 1
             continue
@@ -166,11 +173,42 @@ async def judge_replay_set(
     return summary
 
 
-async def _call(
-    prompt: str, dispatcher: JudgeDispatcher, timeout_s: float, label: str, summary: JudgeSummary
+def _count_call(summary: JudgeSummary) -> None:
+    summary.calls += 1
+
+
+async def judge_pair(
+    prompt_a_first: str,
+    prompt_b_first: str,
+    dispatcher: JudgeDispatcher,
+    timeout_s: float,
+    label: str,
+    on_call: Callable[[], None],
+) -> tuple[JudgeReply, JudgeReply] | None:
+    """Judge one pair in both orders; ``None`` after logging when either call fails.
+
+    Each call is bounded by ``timeout_s``. ``on_call`` runs once before each dispatch, so a
+    caller can count calls; the second call is never dispatched after a failed first.
+    """
+    one = await _bounded_call(prompt_a_first, dispatcher, timeout_s, label, on_call)
+    if one is None:
+        return None
+    two = await _bounded_call(prompt_b_first, dispatcher, timeout_s, label, on_call)
+    if two is None:
+        _logger.warning("pair %s left unjudged after its first call returned; %s", label, _spent(one))
+        return None
+    return one, two
+
+
+async def _bounded_call(
+    prompt: str,
+    dispatcher: JudgeDispatcher,
+    timeout_s: float,
+    label: str,
+    on_call: Callable[[], None],
 ) -> JudgeReply | None:
     """One bounded judge call; ``None`` after logging when it raised or timed out."""
-    summary.calls += 1
+    on_call()
     try:
         return await asyncio.wait_for(dispatcher(prompt), timeout=timeout_s)
     except TimeoutError:
@@ -178,25 +216,6 @@ async def _call(
     except JudgeCallError as exc:
         _logger.error("judge call for %s failed: %s", label, exc)
     return None
-
-
-async def _judge_pair(
-    first: Contestant,
-    second: Contestant,
-    task: str,
-    dispatcher: JudgeDispatcher,
-    timeout_s: float,
-    label: str,
-    summary: JudgeSummary,
-) -> tuple[JudgeReply, JudgeReply] | None:
-    one = await _call(_prompt(task, first.draft, second.draft), dispatcher, timeout_s, label, summary)
-    if one is None:
-        return None
-    two = await _call(_prompt(task, second.draft, first.draft), dispatcher, timeout_s, label, summary)
-    if two is None:
-        _logger.warning("pair %s left unjudged after its first call returned; %s", label, _spent(one))
-        return None
-    return one, two
 
 
 def _spent(reply: JudgeReply) -> str:

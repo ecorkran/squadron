@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated
 
@@ -11,7 +12,6 @@ import typer
 from squadron.benchmark.build_errors import BuildHalted
 from squadron.benchmark.case_build import BuildDeps, build_fix_cases
 from squadron.benchmark.qualify_sandbox import qualify_in_sandbox
-from squadron.benchmark.qualify_types import SandboxFactory
 from squadron.benchmark.registry import adapter_for
 from squadron.benchmark.sandbox import (
     BenchmarkSandbox,
@@ -37,6 +37,7 @@ from squadron.metrology.errors import MetrologyIdentityError, MetrologyStoreErro
 from squadron.metrology.grade_store import GradeRecordStore
 from squadron.metrology.identity import derive_project_id
 from squadron.metrology.project_id import ProjectId
+from squadron.metrology.slice_case_store import SliceCaseRecordStore
 from squadron.metrology.snapshot_models import SourceLanguage
 
 fix_cases_app = typer.Typer(
@@ -52,8 +53,12 @@ RepoOption = Annotated[
 
 def make_sandbox_factory(
     repo_root: Path, runner: ProcessRunner, *, keep: bool, install_timeout_s: int, suite_timeout_s: int
-) -> SandboxFactory:
-    """A factory of sandboxes at a commit of ``repo_root``; ``keep`` leaves each one in place."""
+) -> Callable[[str], BenchmarkSandbox]:
+    """A factory of sandboxes at a commit of ``repo_root``; ``keep`` leaves each one in place.
+
+    The return type is the concrete sandbox, so the fix-case and slice-case qualifiers can each
+    take it as the narrower protocol they use.
+    """
 
     def factory(start_sha: str) -> BenchmarkSandbox:
         sandbox = BenchmarkSandbox(
@@ -226,13 +231,22 @@ def yield_command(
     store = open_store(anchor)
     samples, target = _report_inputs(anchor)
     try:
+        slice_records = SliceCaseRecordStore(store).list_slice_qualifications()
         if repo:
             wanted = {_project(repo_root_for(runner, path)).value for path in repo}
             records = [r for r in store.list_fix_qualifications() if r.project_id.value in wanted]
+            slice_records = [r for r in slice_records if r.project_id.value in wanted]
         else:
             records = store.list_fix_qualifications()
         grades = GradeRecordStore(store)
-        report = build_yield(records, store.list_case_sets(), samples, target, grades.latest_estimate)
+        report = build_yield(
+            records,
+            store.list_case_sets(),
+            samples,
+            target,
+            grades.latest_estimate,
+            slice_qualifications=slice_records,
+        )
     except MetrologyStoreError as exc:
         raise stderr_exit(str(exc)) from exc
     typer.echo(render_json(report) if as_json else render_text(report), nl=as_json)

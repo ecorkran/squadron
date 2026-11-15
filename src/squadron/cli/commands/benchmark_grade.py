@@ -42,6 +42,7 @@ from squadron.metrology.benchmark_models import BenchmarkCase
 from squadron.metrology.benchmark_replay_models import BenchmarkRun, ImplementationReplay
 from squadron.metrology.errors import MetrologyStoreError
 from squadron.metrology.grade_models import ReviewerRef
+from squadron.metrology.slice_case_store import SliceCaseRecordStore
 from squadron.models.aliases import UnknownModelAliasError
 
 GradeServicesFactory = Callable[[Path], GradeServices]
@@ -266,6 +267,7 @@ def _report(
     services = services_factory(repo_root_for(SubprocessRunner(), repo))
     loaded = load_benchmark(services, benchmark_id)
     grades = [grade for _, grade in services.grade_store.grades_for(benchmark_id)]
+    slice_store = SliceCaseRecordStore(services.store)
     grader = latest_grader(grades)
     if grader is None:
         raise GradeRefusal(
@@ -282,6 +284,8 @@ def _report(
             case_id, grader.digest, digest
         ),
         estimate=services.grade_store.estimate_for(benchmark_id),
+        judgments=slice_store.diff_judgments_for(benchmark_id),
+        over_size=slice_store.over_size_cases_for(benchmark_id),
     )
     return render_json(report) if as_json else render_text(report)
 

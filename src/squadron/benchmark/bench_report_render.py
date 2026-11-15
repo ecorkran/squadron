@@ -6,6 +6,7 @@ The text follows D13's section order: objective grade, paired comparison, checks
 
 from __future__ import annotations
 
+from squadron.benchmark.pairwise_render import pairwise_lines
 from squadron.benchmark.report_models import BenchmarkReport, CostRow, ReviewPair
 from squadron.benchmark.report_rows import (
     NO_VALUE,
@@ -138,6 +139,8 @@ def render_text(report: BenchmarkReport) -> str:
     for table in report.tables:
         lines += ["", *table.lines]
     lines += _findings(report)
+    if report.pairwise is not None:
+        lines += pairwise_lines(report.pairwise)
     lines += _cost(report)
     lines += _absences(report)
     lines += _sample_count(report)
@@ -146,4 +149,6 @@ def render_text(report: BenchmarkReport) -> str:
 
 def render_json(report: BenchmarkReport) -> str:
     """The ``BenchmarkReport`` model as JSON; it loads back into the model."""
-    return report.model_dump_json(indent=2)
+    # The pairwise key exists only for a report with slice-case judgments, so another report's
+    # JSON is what it was before slice 426.
+    return report.model_dump_json(indent=2, exclude=None if report.pairwise else {"pairwise"})

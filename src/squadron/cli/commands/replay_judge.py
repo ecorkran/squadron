@@ -10,6 +10,7 @@ from rich import get_console
 
 from squadron.cli.commands import replay_common as common
 from squadron.cli.replay_views import DECLINED, render_judge_plan, render_judge_summary
+from squadron.config.keys import METROLOGY_JUDGE_TIMEOUT_KEY
 from squadron.metrology.replay_models import JudgeRef, ReplayPhase
 from squadron.metrology.store import MetrologyStore, resolve_store_dir
 from squadron.pipeline.resolver import ModelResolutionError
@@ -18,7 +19,6 @@ from squadron.replay.judge_dispatch import judge_effort_sent, one_shot_judge_dis
 from squadron.replay.judge_jobs import build_jobs, judge_jobs, total_calls
 from squadron.replay.judging import JudgeCallError, JudgeInputError
 
-JUDGE_TIMEOUT_KEY = "metrology.judge_timeout_s"
 NO_REPLAYS = "No replays for this slice and phase; run `sq replay run` first."
 NOTHING_TO_JUDGE = "Every pair has already been judged by this judge."
 
@@ -35,7 +35,7 @@ def replay_judge(
         raise common.fail("not interactive: pass --yes to confirm the judge calls")
     judge_model = common.model_ref(judge)
     repo_root = Path.cwd()
-    timeout_s = common.int_config(JUDGE_TIMEOUT_KEY, repo_root)
+    timeout_s = common.int_config(METROLOGY_JUDGE_TIMEOUT_KEY, repo_root)
     project_id = common.resolve_project_id(repo_root)
     store = MetrologyStore(store_dir=resolve_store_dir(cwd=str(repo_root)))
     try:

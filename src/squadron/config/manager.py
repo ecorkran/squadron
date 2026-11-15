@@ -146,12 +146,16 @@ def get_typed_config(
     return float(value)
 
 
-def get_positive_int_config(key: str, cwd: str = ".") -> int:
-    """Get an integer config value that must be ``> 0``; raise ``ValueError`` naming *key*."""
-    value = get_typed_config(key, int, cwd=cwd)
-    if value <= 0:
+def check_positive_int(key: str, value: object) -> int:
+    """*value* as the integer ``> 0`` config *key* requires; ``ValueError`` naming *key* if not."""
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ValueError(f"{key} must be a positive integer, got {value!r}")
     return value
+
+
+def get_positive_int_config(key: str, cwd: str = ".") -> int:
+    """Get an integer config value that must be ``> 0``; raise ``ValueError`` naming *key*."""
+    return check_positive_int(key, get_typed_config(key, int, cwd=cwd))
 
 
 def get_open_unit_interval_config(key: str, cwd: str = ".") -> float:

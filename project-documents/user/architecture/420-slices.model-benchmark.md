@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 420-arch.model-benchmark.md
 project: squadron
 dateCreated: 20261104
-dateUpdated: 20261113
+dateUpdated: 20261115
 status: not_started
 ---
 
@@ -132,7 +132,7 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
    - **Risk Level:** Medium
    - **Relative Effort:** 4/5
 
-7. [ ] **(426) Slice Cases** — Cases from 400 slice-range records: the fork commit is the start, the design and task file at the fork are the task, and the slice branch tip (`tip_sha`) is the reference, so a merge landing does not bring in unrelated work. They have no hidden set. The superseded set comes from the reference diff. They are qualified with the same environment-keyed records. Slice cases are graded on regressions, check and snapshot deltas and review findings. Before judging, diffs are normalized (DEVLOG, CHANGELOG, task files, review files and slice documents dropped). The 177 pairwise judge then compares replay diffs within a case, Bradley-Terry ranks configs, and the reference appears as a reference line, not a ranked config. Diffs too large for the judge's context follow a stated rule, never silent truncation.
+7. [x] **(426) Slice Cases** — Cases from 400 slice-range records: the fork commit is the start, the design and task file at the fork are the task, and the slice branch tip (`tip_sha`) is the reference, so a merge landing does not bring in unrelated work. They have no hidden set. The superseded set comes from the reference diff. They are qualified with the same environment-keyed records. Slice cases are graded on regressions, check and snapshot deltas and review findings. Before judging, diffs are normalized (DEVLOG, CHANGELOG, task files, review files and slice documents dropped). The 177 pairwise judge then compares replay diffs within a case, Bradley-Terry ranks configs, and the reference appears as a reference line, not a ranked config. Diffs too large for the judge's context follow a stated rule, never silent truncation.
    - **Value:** Developer value. Benchmarks the full-slice implementation work where most P6 spend goes.
    - **Success Criteria:**
      - Slice cases build from squadron's 400 slice ranges with recorded exclusion reasons.

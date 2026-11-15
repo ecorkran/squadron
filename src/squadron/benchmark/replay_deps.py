@@ -11,16 +11,11 @@ from pathlib import Path
 from typing import Protocol
 
 from squadron.benchmark.bench_plan import BenchConfig, Caps
-from squadron.benchmark.case_runners import CaseKindRunner, ReplaySandbox
+from squadron.benchmark.case_runners import CaseKindRunner, ReplaySandbox, Requalification
 from squadron.benchmark.leak_scan import LeakRules
 from squadron.benchmark.transcripts import TranscriptSource
 from squadron.core.process_runner import ProcessRunner
-from squadron.metrology.benchmark_models import (
-    BenchmarkCase,
-    CandidateRejection,
-    CaseKind,
-    FixQualification,
-)
+from squadron.metrology.benchmark_models import BenchmarkCase, CaseKind
 from squadron.metrology.benchmark_replay_models import ImplementationReplay
 from squadron.metrology.diff_sidecars import DiffSidecars
 from squadron.metrology.replay_models import ProducerConfigRef
@@ -45,7 +40,7 @@ class RunStateReader(Protocol):
 
 
 #: ``(case id, environment digest)`` -> what re-qualification said; shared across replays.
-RequalifyCache = dict[tuple[str, str], FixQualification | CandidateRejection]
+RequalifyCache = dict[tuple[str, str], Requalification]
 
 
 @dataclass(frozen=True)

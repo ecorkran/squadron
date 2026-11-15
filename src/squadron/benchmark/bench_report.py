@@ -22,6 +22,7 @@ from squadron.benchmark.grade_matrix import (
     build_matrix,
 )
 from squadron.benchmark.leak_scan import LEAK_RULES_VERSION
+from squadron.benchmark.pairwise_report import build_pairwise
 from squadron.benchmark.report_fix_table import FixCaseTable as FixCaseTable  # registers on import
 from squadron.benchmark.report_models import (
     AbsenceCount,
@@ -37,12 +38,16 @@ from squadron.benchmark.report_rows import (
     reference_of,
     sorted_rows,
 )
+from squadron.benchmark.report_slice_table import (
+    SliceCaseTable as SliceCaseTable,
+)  # registers on import
 from squadron.benchmark.report_tables import ReportInputs, build_tables
 from squadron.metrology.audit_delta import is_within_floor
 from squadron.metrology.benchmark_models import BenchmarkCase
 from squadron.metrology.benchmark_replay_models import BenchmarkRun, ImplementationReplay
 from squadron.metrology.grade_models import GRADE_ABSENCE_CLASS, GraderIdentity, ReviewerRef
 from squadron.metrology.grade_records import ImplementationGrade, SampleSizeEstimate
+from squadron.metrology.slice_case_models import DiffJudgment, OverSizeCase
 
 
 def review_flag(reviewer: ReviewerRef) -> str:
@@ -192,8 +197,14 @@ def build_report(
     grader: GraderIdentity,
     reference_for: ReferenceLookup,
     estimate: SampleSizeEstimate | None,
+    judgments: Sequence[DiffJudgment] = (),
+    over_size: Sequence[OverSizeCase] = (),
 ) -> BenchmarkReport:
-    """Assemble the report of one benchmark under *grader* from its stored records."""
+    """Assemble the report of one benchmark under *grader* from its stored records.
+
+    ``judgments`` and ``over_size`` are the slice-case judge's records for the benchmark; they
+    add the pairwise section, and without them the report is the 425 report.
+    """
     matrix = build_matrix(
         case_ids=case_ids,
         samples=run.samples,
@@ -234,4 +245,12 @@ def build_report(
         unstamped_replays=dict(matrix.unstamped),
         # One estimate is stored per benchmark; one made under another grader is out of date.
         estimate=estimate if estimate is not None and estimate.grader_digest == grader.digest else None,
+        pairwise=build_pairwise(
+            benchmark_id=run.benchmark_id,
+            matrix=matrix,
+            cases=cases,
+            replays=replays,
+            judgments=judgments,
+            over_size=over_size,
+        ),
     )

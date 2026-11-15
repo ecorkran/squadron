@@ -36,6 +36,12 @@ BENCHMARK_REVIEW_TIMEOUT_KEY = "benchmark.review_timeout_s"
 BENCHMARK_REVIEW_FLOOR_RUNS_KEY = "benchmark.review_floor_runs"
 # A noise floor is a min and a max over runs, so it needs at least two.
 REVIEW_FLOOR_RUNS_MINIMUM = 2
+# Slice 426 D12, D14: the slice-case diff judge. The alias has no default and reads as
+# unset (None) until configured; `judge` refuses naming it. The limit is read through
+# get_positive_int_config.
+BENCHMARK_JUDGE_MODEL_KEY = "benchmark.judge_model"
+BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY = "benchmark.judge_max_prompt_chars"
+METROLOGY_JUDGE_TIMEOUT_KEY = "metrology.judge_timeout_s"
 # Read by pipeline.run_spend.read_cost_cap (slice 947 D3); unset means no cap.
 COST_CAP_KEY = "pipeline.max_cost_usd"
 # Read by pipeline.pause_hook.start_pause_command (#302); unset means no command.
@@ -406,8 +412,8 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "which on a large fanned-out repo are legitimately slow."
         ),
     ),
-    "metrology.judge_timeout_s": ConfigKey(
-        name="metrology.judge_timeout_s",
+    METROLOGY_JUDGE_TIMEOUT_KEY: ConfigKey(
+        name=METROLOGY_JUDGE_TIMEOUT_KEY,
         type_=int,
         default=600,
         description=(
@@ -628,6 +634,26 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "How many times each case's reference diff is reviewed to measure the "
             "grading review's noise floor. At least 2: a floor never comes from "
             "fewer runs."
+        ),
+    ),
+    BENCHMARK_JUDGE_MODEL_KEY: ConfigKey(
+        name=BENCHMARK_JUDGE_MODEL_KEY,
+        type_=str,
+        default=None,
+        description=(
+            "Model alias for the pairwise judge that 'sq benchmark judge' runs over "
+            "slice-case diffs. No default: judging refuses until an alias is set "
+            "here or passed as --judge-model."
+        ),
+    ),
+    BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY: ConfigKey(
+        name=BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY,
+        type_=int,
+        default=400000,
+        description=(
+            "Largest judge prompt, in characters (about 100k tokens at four per token), "
+            "'sq benchmark judge' will send. A slice case whose longest pair prompt is "
+            "over it is not judged and is counted as over size; nothing is truncated."
         ),
     ),
     "codex.turn_timeout_s": ConfigKey(
