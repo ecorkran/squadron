@@ -47,6 +47,7 @@ from squadron.pipeline.actions.judge import judge_verdict
 from squadron.project_rules.errors import ProjectRulesError
 from squadron.providers.errors import ProviderError
 from squadron.review.addressed.judge import JUDGE_TEMPLATE_NAME
+from squadron.review.document_target import DocumentKind, slice_for_document
 from squadron.review.git_utils import (
     DiffRangeUnresolvedError,
     DiffSpecError,
@@ -565,6 +566,22 @@ def _resolve_slice_number(num: str) -> SliceInfo:
         raise typer.Exit(code=1) from exc
 
 
+def _slice_for_path(path: str, kind: DocumentKind) -> SliceInfo | None:
+    """The slice a conventionally named input path belongs to (#142), or None.
+
+    None leaves the review unsaved, which the save step reports as not persistable.
+    """
+    try:
+        return slice_for_document(
+            path, kind, lambda index: resolve_slice_info(ContextForgeClient(), index)
+        )
+    except (ContextForgeNotAvailable, ContextForgeError, ValueError) as exc:
+        # The review still runs and its result still prints; only the save is lost,
+        # and this says why.
+        _logger.warning("Could not match %s to a slice, so the review will not be saved: %s", path, exc)
+        return None
+
+
 def _reject_unknown_alias(
     name: str,
     profile_flag: str | None,
@@ -933,6 +950,8 @@ def review_slice(
             raise typer.Exit(code=1)
         input_file = slice_info["design_file"]
         against = slice_info["arch_file"]
+    else:
+        slice_info = _slice_for_path(input_file, DocumentKind.SLICE)
 
     if not against:
         rprint("[red]Error: --against is required when not using a slice number.[/red]")
@@ -1159,6 +1178,7 @@ def review_tasks(
         against = slice_info["design_file"]
     else:
         task_file_paths = [input_file]
+        slice_info = _slice_for_path(input_file, DocumentKind.TASKS)
 
     if not against:
         rprint("[red]Error: --against is required when not using a slice number.[/red]")
