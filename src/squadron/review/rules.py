@@ -43,6 +43,23 @@ class RulesSource(StrEnum):
     NONE = "none"
 
 
+#: Where a project keeps its own rules, in resolution order.
+PROJECT_RULES_CANDIDATES = ("rules", ".claude/rules")
+
+
+def project_rules_dir(cwd: str) -> Path | None:
+    """The project's own rules directory under *cwd*, ``None`` when it has none.
+
+    Never consults config, flags or the user's home: the benchmark grading review (slice 425
+    D7) must see exactly the rules the graded tree carries, whoever runs it.
+    """
+    for candidate in PROJECT_RULES_CANDIDATES:
+        directory = Path(cwd) / candidate
+        if directory.is_dir():
+            return directory
+    return None
+
+
 def resolve_rules_dir(
     cwd: str,
     config_rules_dir: str | None,
@@ -70,11 +87,9 @@ def resolve_rules_dir(
         p = Path(config_rules_dir)
         return (p, RulesSource.CONFIG) if p.is_dir() else (None, RulesSource.NONE)
 
-    cwd_path = Path(cwd)
-    for candidate in ("rules", ".claude/rules"):
-        p = cwd_path / candidate
-        if p.is_dir():
-            return p, RulesSource.PROJECT
+    project_dir = project_rules_dir(cwd)
+    if project_dir is not None:
+        return project_dir, RulesSource.PROJECT
 
     user_rules = Path.home() / ".config" / "squadron" / "rules"
     if user_rules.is_dir():

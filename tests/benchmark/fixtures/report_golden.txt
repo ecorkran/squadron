@@ -1,0 +1,29 @@
+benchmark bench-3f9c  set fixes v1  grader e1189265 (gpt-review, floor runs 3)
+cases: 6 in set · 6 compared · 0 dropped
+
+objective grade                        n   k  pass frac  hidden   regr  new tests  config absences
+  opus (sdk, effort high)              6   2       0.67  32/36      2  0/0  –
+  sol (openai-oauth, effort medium)    6   2       0.17  26/36      0  0/0  –
+  reference (never ranked)             6   –             18/18      0
+
+paired (95% bootstrap over cases)
+  opus − sol  +0.50  [+0.25, +0.75]  opus ahead
+
+checks vs baseline                   lint Δ  types Δ  config edits  test edits  suppressions  reinstalls
+  opus (sdk, effort high)             +1.00         +0.00             0           0             0           0
+  sol (openai-oauth, effort medium)   +3.00  not measured             0           0             0           0
+
+review findings (unmeasured reviewer: no recall data for gpt-review)
+  opus (sdk, effort high)            per replay: 2.00 total (CONCERN 2.00)  over 12 replays
+  sol (openai-oauth, effort medium)  per replay: 2.00 total (CONCERN 2.00)  over 12 replays
+  opus vs sol: beyond floor on 0 cases (opus more 0, sol more 0), within 6, no floor 0
+
+cost / turns / time               producer $ (mean/total)  grading $ (mean/total)  turns  wall s (mean/total)
+  opus (sdk, effort high)            $0.42/$5.04  $0.10/$1.20  14.0  182/2178
+  sol (openai-oauth, effort medium)  $0.42/$5.04  $0.10/$1.20  14.0  182/2178
+
+absences and exclusions
+  absences: –
+  cases dropped: 0
+  cases not compared: –
+  replays scanned under an older leak-rule version: 24

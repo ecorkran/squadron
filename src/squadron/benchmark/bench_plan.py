@@ -14,12 +14,12 @@ from dataclasses import asdict, dataclass
 
 from squadron.config.keys import COST_CAP_KEY
 from squadron.metrology.benchmark_models import CASE_ID_PREFIX
+from squadron.metrology.benchmark_replay_models import REPLAY_ID_PREFIX
 from squadron.pipeline.run_spend import positive_usd
 from squadron.providers.base import ProfileName
 
 BENCHMARK_ID_PREFIX = "bench-"
 BENCHMARK_ID_HEX_DIGITS = 16
-REPLAY_ID_PREFIX = "implreplay-"
 #: Hex digits of the benchmark id and of the case id that a replay record id carries.
 BENCHMARK_SEGMENT_DIGITS = 12
 CASE_SEGMENT_DIGITS = 12

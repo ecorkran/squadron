@@ -25,6 +25,8 @@ from squadron.metrology.benchmark_replay_enums import (
 )
 from squadron.metrology.replay_models import ProducerConfigRef, PromptIdentity
 
+#: Every implementation-replay record id starts with this; grade ids derive from the rest.
+REPLAY_ID_PREFIX = "implreplay-"
 MAX_LEAK_HITS = 20
 MAX_LEAK_EXCERPT_CHARS = 300
 

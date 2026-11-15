@@ -221,3 +221,22 @@ def test_disclaimer_present_unconditionally(
 def test_is_within_floor_boundaries(delta: int, floor: FloorStat | None, expected: bool | None) -> None:
     """A zero-width floor (min == max) admits no delta as within noise."""
     assert is_within_floor(delta, floor) is expected
+
+
+@pytest.mark.parametrize(
+    ("delta", "floor", "expected"),
+    [
+        (1.5, FloorStat(min=4, max=6, mean=5.0, stddev=1.0), True),
+        (-1.5, FloorStat(min=4, max=6, mean=5.0, stddev=1.0), True),
+        (2.0, FloorStat(min=4, max=6, mean=5.0, stddev=1.0), False),
+        (2.5, FloorStat(min=4, max=6, mean=5.0, stddev=1.0), False),
+        (-2.5, FloorStat(min=4, max=6, mean=5.0, stddev=1.0), False),
+        (0.0, FloorStat(min=5, max=5, mean=5.0, stddev=0.0), False),
+        (0.5, None, None),
+    ],
+)
+def test_is_within_floor_float_deltas(
+    delta: float, floor: FloorStat | None, expected: bool | None
+) -> None:
+    """Below the spread is within, at or above it is not, and no floor is None."""
+    assert is_within_floor(delta, floor) is expected

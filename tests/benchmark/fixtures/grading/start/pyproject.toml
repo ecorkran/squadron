@@ -1,0 +1,21 @@
+[project]
+name = "grading-fixture"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv]
+managed = true
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.pyright]
+typeCheckingMode = "strict"
+include = ["tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

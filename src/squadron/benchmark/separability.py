@@ -30,7 +30,8 @@ ASSUMPTION = (
 )
 
 
-def _z_total() -> float:
+def z_total() -> float:
+    """``z(1 - SIGNIFICANCE / 2) + z(POWER)``: shared by the analytic bound and 425's measured one."""
     standard = NormalDist()
     return standard.inv_cdf(1 - SIGNIFICANCE / 2) + standard.inv_cdf(POWER)
 
@@ -52,14 +53,14 @@ def minimum_detectable_difference(qualified_cases: int, samples_per_case: int) -
         raise ValueError(f"qualified cases cannot be negative, got {qualified_cases}")
     if qualified_cases == 0:
         return None
-    return _z_total() * math.sqrt(WORST_CASE_VARIANCE / samples_per_case) / math.sqrt(qualified_cases)
+    return z_total() * math.sqrt(WORST_CASE_VARIANCE / samples_per_case) / math.sqrt(qualified_cases)
 
 
 def cases_needed(target_difference: float, samples_per_case: int) -> int:
     """The qualified cases needed to detect ``target_difference``."""
     _check_samples(samples_per_case)
     _check_target(target_difference)
-    needed = _z_total() ** 2 * WORST_CASE_VARIANCE / samples_per_case / target_difference**2
+    needed = z_total() ** 2 * WORST_CASE_VARIANCE / samples_per_case / target_difference**2
     return math.ceil(needed)
 
 

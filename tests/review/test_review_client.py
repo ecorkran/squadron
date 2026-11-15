@@ -20,6 +20,7 @@ from squadron.review.models import ReviewResult, Verdict, VerdictSource
 
 # The log writer's format is asserted directly, so the test reaches the private helper.
 from squadron.review.review_client import (
+    NO_TOOLS_NOTICE,
     InjectedPrompt,
     _write_prompt_log,  # pyright: ignore[reportPrivateUsage]
     run_review_with_profile,
@@ -1090,6 +1091,57 @@ class TestDefaultSystemPromptPreset:
         # The template prompt is unchanged — it now rides `append` rather than replacing.
         assert config.instructions is not None
         assert template.system_prompt in config.instructions
+
+    @pytest.mark.asyncio
+    async def test_sdk_review_without_tools_leaves_preset_flag_off(self) -> None:
+        """A no-tools SDK review gets no preset: its tool-use text makes a model write tool
+        calls it cannot make and end its turn with no review (slice 425 walkthrough)."""
+        template = _make_template()
+        mock_provider = _make_mock_provider(can_read_files=True)
+
+        with (
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+        ):
+            from squadron.providers.base import AuthType, ProfileName, ProviderType
+            from squadron.providers.profiles import ProviderProfile
+
+            mock_get_profile.return_value = ProviderProfile(
+                name=ProfileName.SDK,
+                provider=ProviderType.SDK,
+                auth_type=AuthType.SESSION,
+            )
+            await run_review_with_profile(template, {"input": "file.md"}, profile="sdk", no_tools=True)
+
+        config = mock_provider.create_agent.call_args[0][0]
+        assert config.allowed_tools == []
+        assert config.use_default_system_prompt is False
+        assert template.system_prompt in (config.instructions or "")
+        assert NO_TOOLS_NOTICE in (config.instructions or "")
+
+    @pytest.mark.asyncio
+    async def test_review_with_tools_has_no_no_tools_notice(self) -> None:
+        template = _make_template()
+        mock_provider = _make_mock_provider(can_read_files=True)
+
+        with (
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+        ):
+            from squadron.providers.base import AuthType, ProfileName, ProviderType
+            from squadron.providers.profiles import ProviderProfile
+
+            mock_get_profile.return_value = ProviderProfile(
+                name=ProfileName.SDK,
+                provider=ProviderType.SDK,
+                auth_type=AuthType.SESSION,
+            )
+            await run_review_with_profile(template, {"input": "file.md"}, profile="sdk")
+
+        config = mock_provider.create_agent.call_args[0][0]
+        assert NO_TOOLS_NOTICE not in (config.instructions or "")
 
     @pytest.mark.asyncio
     async def test_non_sdk_review_leaves_preset_flag_off(self) -> None:

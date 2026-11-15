@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261114
+dateUpdated: 20261115
 ---
 
 # Development Log
@@ -10,6 +10,40 @@ dateUpdated: 20261114
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261115
+
+
+**p6: devlog-4**
+- branch-0:branch-0: PASS
+- implement-1:cf-op-0: PASS
+- implement-1:cf-op-1: PASS
+- implement-1:cf-op-2: PASS
+- implement-1:cf-op-3: PASS
+- implement-1:dispatch-4: PASS
+- implement-1:review-5: PASS (verdict: CONCERNS)
+- implement-1:checkpoint-6: PASS
+- implement-1:commit-7: PASS
+- close-out:dispatch-0: PASS
+- revise-code:dispatch-0: PASS
+- revise-code:review-1: PASS (verdict: FAIL)
+- revise-code:commit-2: PASS
+- revise-code:dispatch-3: PASS
+- revise-code:review-4: PASS (verdict: FAIL)
+- revise-code:commit-5: PASS
+
+### Slice 425: Grading and Paired Report — Complete
+
+- **Delivered:** `sq benchmark grade` (planned bound, run cap with exit 2, lock, resume, `--retry-harness`, `--keep`, `--review-model`), `sq benchmark report [--json]` and the `/sq:benchmark` grade and report mirrors; `PythonGradingAdapter` (hidden-test injection as sibling modules, tool-config restoration by section, dependency-change reinstall, test-edit and suppression counts); the fixed grading review with its noise floor; the paired bootstrap and measured sample-count estimate (`paired_stats.py`); the measured line in `sq benchmark yield`. Branch `425-slice.grading-and-paired-report`; `ContentSidecars`, `measure_snapshot` and `is_within_floor(float)` were generalized on the way (D11–D13).
+- **Task 31 live result:** reference of `2101361510f4` (`case-85c975f100d51ec1`) passed: hidden 1/1, regressions 0, `reinstalled` false, injected `tests/providers/test_sqhidden_test_capabilities.py`. Two live failures were fixed with tests (the failed-reference detail did not name ids; the baseline node ids must keep collection order, not sorted).
+- **Walkthrough (one case; squadron qualified 1 of 95):** 10 replay records over two benchmarks (opus/sol k=3; opus-high/opus-medium k=2, three of its replays rerun after leaks). Reference `pass`; every committed, non-leaked opus replay `pass`; `sol` made no commit (#330). The report printed all sections with n and k, the unmeasured-reviewer flag and `too few cases (1)`; the cap stopped after one review with exit 2 and resumed over the stored grades; the kept tree held the hidden test beside the producer's and no `pyproject.toml` change. Full steps in the slice design.
+- **Measured estimate:** not producible: five included cases are needed and one exists. Its live check is #333; yield shows no measured line until then.
+- **Defects found by the walkthrough, fixed with tests:** (1) the SDK sent the Claude Code preset even with `no_tools`, so models wrote tool calls as text and the grading review returned nothing (`review_failed`, most reviews); (2) the `code` template's "confirm the working directory" still led haiku and sonnet to write tool markup; a `NO_TOOLS_NOTICE` is appended to no-tools reviews, after which 4 of 4 haiku-xhigh reviews succeeded (about half before). Both also change `sq review --no-tools` (CHANGELOG); (3) a failed grading review logged no cause: it now logs the first 1500 characters of the model's output; (4) `yield_report._needed_at` fell back silently to the largest projected k; it raises now.
+- **Surprises:** `ruff format` run on the whole repository rewrites ten unrelated scripts under `project-documents/user/reference/review-recall-results/`; format `src` and `tests` only. The first 600 s foreground limit moves long grades to the background; a grade is minutes per subject (sandbox build and install). Squadron's own history is a poor case source: opus replays leaked the checkout in 4 of 10 runs (harness absence, rerun with `sq benchmark run --retry-harness`). `.venv is out of sync with uv.lock` in a sandbox's snapshot environment check leaves the type total "not measured" (400's check).
+- **Gates:** `uv run ruff format --check src tests`, `ruff check`, `pyright` clean; full suite 10835 passed, 6 skipped. `grade_models.py` (308), `python_injection.py` (302) and `benchmark_grade.py` (313) are slightly over ~300 lines.
+- **Code review (CONCERNS) answered:** a failed grading review is charged to the run cap (its reported cost, else the per-review figure); a git timeout reading a tree is `reference_unreadable`; the review's rules come from the start commit, not the producer's edit; regression and producer-new counts treat an unreported id as `not_run`; the three "minimum 2" constants collapsed onto `REVIEW_FLOOR_RUNS_MINIMUM`, `MIN_SAMPLES_FOR_VARIANCE` and a new `MIN_COMPARED_CONFIGS` (one was compared against the wrong quantity); the no-tools notice is built inside `assemble_system_prompt`; a producer-deleted `pyproject.toml` stays deleted instead of becoming a partial file. LF endings of restored files deferred to #334.
+- **Code review round 2 (CONCERNS) answered:** the report reads this benchmark's own estimate (`estimate_for`), not the newest one for the case set; a sample recorded twice for one config is an error, not an overwrite; a failed review's spend is on the grade record as well as the budget; non-UTF-8 bytes in a producer's `pyproject.toml` are `producer_env_unresolvable` and in a producer's test file or conftest record no clash; the `type: ignore[no-untyped-def]` comments on this slice's test helpers are replaced by annotations; `read_review_floor_runs` (unused) removed; one `_profile_and_effort` formats a config name for the report and the yield line; estimate pairs with no report row are named readably; `GRADER_VERSION` moved to `grade_models` so the planner no longer imports the executor; `BenchmarkSandbox.reinstall()` returns nothing (nothing used the identity; the grade records `reinstalled`).
+- **Next:** 426 (slice cases), which registers its case-kind table in `report_tables.py`; 427 changes `review_flag` alone.
 
 ## 20261114
 

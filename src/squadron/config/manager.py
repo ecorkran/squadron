@@ -39,9 +39,13 @@ def user_config_path() -> Path:
     return _config_dir() / "config.toml"
 
 
+#: The project-level config file, at the repository root.
+PROJECT_CONFIG_FILE = ".squadron.toml"
+
+
 def project_config_path(cwd: str = ".") -> Path:
     """Return the project-level config file path."""
-    return Path(cwd).resolve() / ".squadron.toml"
+    return Path(cwd).resolve() / PROJECT_CONFIG_FILE
 
 
 def _read_toml(path: Path) -> dict[str, object]:

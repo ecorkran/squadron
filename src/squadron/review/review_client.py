@@ -111,13 +111,29 @@ confirmation unless a rule you were given names it as required.
 """
 
 
-def assemble_system_prompt(template: ReviewTemplate, rules_content: str | None) -> str:
+# Appended when the caller asked for no tools (slice 425 walkthrough): templates open with
+# "confirm the working directory" and "read the files", and a model that is not told it has
+# no tools writes those calls as text and ends its turn with no review.
+NO_TOOLS_NOTICE = """
+
+## No Tools In This Session
+
+You have no tools: no shell, no file reader, no search. Do not call any. The request
+contains the diff and the file contents you will get. Write the review now, from that text.
+"""
+
+
+def assemble_system_prompt(
+    template: ReviewTemplate, rules_content: str | None, *, no_tools: bool = False
+) -> str:
     """The one place a review's system prompt is built, for every non-judge and judge alike."""
     system_prompt = template.system_prompt + _STRUCTURED_OUTPUT_INSTRUCTIONS
     if not template.is_judge:
         system_prompt += NO_INVENTED_GATES_CRITERION
     if rules_content:
         system_prompt += f"\n\n## Additional Review Rules\n\n{rules_content}"
+    if no_tools:
+        system_prompt += NO_TOOLS_NOTICE
     return system_prompt
 
 
@@ -197,7 +213,7 @@ async def run_review_with_profile(
 
     # Build prompts
     prompt = template.build_prompt(inputs)
-    system_prompt = assemble_system_prompt(template, rules_content)
+    system_prompt = assemble_system_prompt(template, rules_content, no_tools=no_tools)
 
     resolved_model = model if model is not None else template.model
 
@@ -264,7 +280,10 @@ async def run_review_with_profile(
     # replacing the CLI's own and with it the tool-use discipline a review depends on.
     # The flag makes the provider send the preset with the template appended. Non-SDK
     # providers never read it; setting it False there keeps the intent explicit.
-    uses_preset = provider_profile.provider == ProviderType.SDK
+    # A caller that asked for no tools gets no preset, as a declared no-tools dispatch does
+    # (#299): the preset's tool-use text makes a model write tool calls it cannot make and end
+    # its turn with no review (slice 425 walkthrough, haiku and sonnet).
+    uses_preset = provider_profile.provider == ProviderType.SDK and not no_tools
 
     # Build agent config from profile and template settings
     config = AgentConfig(

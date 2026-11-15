@@ -27,6 +27,15 @@ BENCHMARK_QUALIFICATION_REPEATS_KEY = "benchmark.qualification_repeats"
 BENCHMARK_PLANNED_SAMPLES_KEY = "benchmark.planned_samples"
 # Read through get_open_unit_interval_config: a float strictly between 0 and 1.
 BENCHMARK_TARGET_PASS_RATE_DIFFERENCE_KEY = "benchmark.target_pass_rate_difference"
+# Slice 425 D7, D8: the benchmark grading review. The first two have no default and
+# read as unset (None) until configured; `grade` refuses naming each one.
+BENCHMARK_GRADING_REVIEW_MODEL_KEY = "benchmark.grading_review_model"
+BENCHMARK_REVIEW_TIMEOUT_KEY = "benchmark.review_timeout_s"
+# Read by `sq benchmark grade` through GradeServices.read_config (get_config for the repo),
+# then held to REVIEW_FLOOR_RUNS_MINIMUM by benchmark.grading_config.check_review_floor_runs.
+BENCHMARK_REVIEW_FLOOR_RUNS_KEY = "benchmark.review_floor_runs"
+# A noise floor is a min and a max over runs, so it needs at least two.
+REVIEW_FLOOR_RUNS_MINIMUM = 2
 # Read by pipeline.run_spend.read_cost_cap (slice 947 D3); unset means no cap.
 COST_CAP_KEY = "pipeline.max_cost_usd"
 # Read by pipeline.pause_hook.start_pause_command (#302); unset means no command.
@@ -590,6 +599,35 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "Smallest pass-rate difference between two configs, strictly between "
             "0 and 1, that is big enough to change which alias you configure. The "
             "yield report checks the qualified case count against it."
+        ),
+    ),
+    BENCHMARK_GRADING_REVIEW_MODEL_KEY: ConfigKey(
+        name=BENCHMARK_GRADING_REVIEW_MODEL_KEY,
+        type_=str,
+        default=None,
+        description=(
+            "Model alias for the fixed code review that 'sq benchmark grade' runs on "
+            "every graded diff. No default: grading refuses until an alias is set "
+            "here or passed as --review-model."
+        ),
+    ),
+    BENCHMARK_REVIEW_TIMEOUT_KEY: ConfigKey(
+        name=BENCHMARK_REVIEW_TIMEOUT_KEY,
+        type_=float,
+        default=None,
+        description=(
+            "Wall-clock cap in seconds, a positive number, on one grading review "
+            "call. No default: grading refuses until it is set."
+        ),
+    ),
+    BENCHMARK_REVIEW_FLOOR_RUNS_KEY: ConfigKey(
+        name=BENCHMARK_REVIEW_FLOOR_RUNS_KEY,
+        type_=int,
+        default=3,
+        description=(
+            "How many times each case's reference diff is reviewed to measure the "
+            "grading review's noise floor. At least 2: a floor never comes from "
+            "fewer runs."
         ),
     ),
     "codex.turn_timeout_s": ConfigKey(

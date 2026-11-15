@@ -110,7 +110,7 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
    - **Risk Level:** High (stripping the embedded review without forking the step, and leak detection)
    - **Relative Effort:** 4/5
 
-6. [ ] **(425) Grading and Paired Report** — The grader runs after the producer finishes, in a fresh sandbox rebuilt from the start commit plus the producer's diff, with its own commands. It:
+6. [x] **(425) Grading and Paired Report** — The grader runs after the producer finishes, in a fresh sandbox rebuilt from the start commit plus the producer's diff, with its own commands. It:
    - injects the hidden set without removing producer tests, renaming on a clash and recording it;
    - runs the start commit's suite minus the superseded set and the exclusion list;
    - runs the producer's new tests as a separate signal;

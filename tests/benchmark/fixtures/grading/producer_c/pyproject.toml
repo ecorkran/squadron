@@ -1,0 +1,22 @@
+[project]
+name = "grading-fixture"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["tomli-w>=1.0"]
+
+[tool.uv]
+managed = true
+package = false
+
+[tool.ruff]
+line-length = 200
+
+[tool.ruff.lint]
+select = ["F"]
+
+[tool.pyright]
+typeCheckingMode = "basic"
+include = ["tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

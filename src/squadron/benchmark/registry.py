@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable
+
 from squadron.benchmark.adapter import BenchmarkAdapter
 from squadron.benchmark.fairness import FixCaseAdapter
+from squadron.benchmark.grading_adapter import GradingAdapter
 from squadron.benchmark.python_adapter import PythonBenchmarkAdapter
 from squadron.benchmark.python_fairness import PythonFixCaseAdapter
+from squadron.benchmark.python_grading import PythonGradingAdapter
 from squadron.metrology.snapshot_models import SourceLanguage
+
+_logger = logging.getLogger(__name__)
 
 
 class UnsupportedLanguageError(Exception):
@@ -29,3 +36,19 @@ def fix_case_adapter_for(language: SourceLanguage) -> FixCaseAdapter:
     if language is SourceLanguage.PYTHON:
         return PythonFixCaseAdapter()
     raise UnsupportedLanguageError(language)
+
+
+#: Grading adapters by language (slice 425). Each entry is a factory, so every lookup
+#: returns a fresh adapter.
+_GRADING_ADAPTERS: dict[SourceLanguage, Callable[[], GradingAdapter]] = {
+    SourceLanguage.PYTHON: PythonGradingAdapter,
+}
+
+
+def grading_adapter_for(language: SourceLanguage) -> GradingAdapter:
+    """The grading adapter for ``language``; a language with none is logged and raises."""
+    factory = _GRADING_ADAPTERS.get(language)
+    if factory is None:
+        _logger.error("no grading adapter registered for language '%s'", language.value)
+        raise UnsupportedLanguageError(language)
+    return factory()
