@@ -53,12 +53,15 @@ def config(alias: str, **update: Any) -> ProducerConfigRef:
 
 
 def review(
-    total: int = 2, cost: float | None = 0.1, severities: dict[str, int] | None = None
+    total: int = 2,
+    cost: float | None = 0.1,
+    severities: dict[str, int] | None = None,
+    unnormalized: int = 0,
 ) -> ReviewSummary:
     return ReviewSummary(
         severity_counts=severities if severities is not None else {"CONCERN": total},
         total=total,
-        unnormalized_count=0,
+        unnormalized_count=unnormalized,
         cost_usd=cost,
         rules_hash=None,
         findings_sha256=HASH,

@@ -9,6 +9,7 @@ import pytest
 
 from squadron.benchmark.adapter import NodeOutcome, NodeResult, SuiteRun, SuiteSelection
 from squadron.benchmark.grade_checks import (
+    count_added_suppressions,
     load_baseline,
     restore_tests,
     run_producer_new,
@@ -241,3 +242,13 @@ def test_an_empty_regression_selection_never_calls_run_suite(
     assert run.regression_selected == 0
     assert run.regression_failure_count == 0
     assert not any(entry.startswith("suite") for entry in world.factory.log)
+
+
+def test_counting_suppressions_before_the_diff_is_committed_raises(
+    tmp_path: Path, grading_repo: GradingRepo
+) -> None:
+    world, diff = build(tmp_path, grading_repo)
+    with world.factory(world.case) as sandbox:
+        run = world.run(world.replay_target(diff), sandbox)
+        with pytest.raises(ValueError, match="committed"):
+            count_added_suppressions(run)

@@ -185,7 +185,8 @@ def review_tree_diff(
     The ``code`` template runs with no tools, so the diff and file contents are injected and
     the reviewer cannot read outside the sandbox. The call is bounded by *timeout_s*
     (``benchmark.review_timeout_s``, which the caller reads). A call that raises, times out,
-    or returns verdict ``UNKNOWN`` with no findings raises ``ReviewFailed`` after an ERROR log;
+    or returns verdict ``UNKNOWN`` with no findings, or saw only part of the diff, raises
+    ``ReviewFailed`` after an ERROR log;
     a review that ran and found nothing is a valid outcome with zero findings.
     """
     rules = _tree_rules(tree, base_sha)
@@ -213,6 +214,14 @@ def review_tree_diff(
             result.raw_output[:RAW_OUTPUT_EXCERPT_CHARS],
         )
         raise _fail("the review returned verdict UNKNOWN with no findings", result.cost_usd)
+    injection = result.diff_injection
+    if injection is not None and injection.truncated:
+        # Findings on part of a diff must not be graded as findings on the whole of it.
+        raise _fail(
+            f"only {injection.injected_chars} of {injection.total_chars} diff characters "
+            f"reached the model; cut files: {[f.path for f in injection.cut_files]}",
+            result.cost_usd,
+        )
     normalize_result_categories(result)
     findings, unnormalized = _findings(result)
     return ReviewOutcome(

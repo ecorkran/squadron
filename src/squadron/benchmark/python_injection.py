@@ -27,6 +27,8 @@ INJECTED_PREFIX = "test_sqhidden_"
 NODE_ID_SEPARATOR = "::"
 _FUTURE_MODULE = "__future__"
 PARAMETER_OPEN = "["
+REFERENCE_TREE = "the reference"
+START_TREE = "the start commit"
 
 
 class ClashKind(StrEnum):
@@ -51,12 +53,13 @@ class _ImportLine:
     bound_names: frozenset[str]
 
 
-def _parse(source: str, path: str) -> ast.Module:
+def _parse(source: str, path: str, tree_name: str) -> ast.Module:
+    """Parse *source*; *tree_name* ("the reference", "the start commit") names where it came from."""
     try:
         return ast.parse(source)
     except SyntaxError as exc:
-        _logger.error("%s at the reference does not parse: %s", path, exc)
-        raise TreeReadError(f"parse {path} at the reference", str(exc)) from exc
+        _logger.error("%s at %s does not parse: %s", path, tree_name, exc)
+        raise TreeReadError(f"parse {path} at {tree_name}", str(exc)) from exc
 
 
 def _read_text(reader: TreeReader, paths: frozenset[str], path: str) -> str | None:
@@ -113,10 +116,15 @@ def _added_imports(
     reference_source = _read_text(reference, reference_paths, conftest_path)
     if reference_source is None:
         return []
-    reference_lines = _import_lines(reference_source, _parse(reference_source, conftest_path))
+    reference_lines = _import_lines(
+        reference_source, _parse(reference_source, conftest_path, REFERENCE_TREE)
+    )
     start_source = _read_text(start, start_paths, conftest_path)
     have = (
-        {line.key for line in _import_lines(start_source, _parse(start_source, conftest_path))}
+        {
+            line.key
+            for line in _import_lines(start_source, _parse(start_source, conftest_path, START_TREE))
+        }
         if start_source is not None
         else set[str]()
     )
@@ -150,7 +158,7 @@ def build_module(
     """The injected module's text for one hidden test file."""
     reference_paths = frozenset(reference.list_paths())
     body = reference.read(file_path).decode("utf-8")
-    body_module = _parse(body, file_path)
+    body_module = _parse(body, file_path, REFERENCE_TREE)
     have = {line.key for line in _import_lines(body, body_module)}
     conftests = conftests_on_path(file_path)
     hosted = [fixture for fixture in fixtures if fixture.conftest_path in conftests]
@@ -162,7 +170,7 @@ def build_module(
         wanted.update({line.key: line for line in added})
     for fixture in hosted:
         conftest_source = reference.read(fixture.conftest_path).decode("utf-8")
-        conftest_module = _parse(conftest_source, fixture.conftest_path)
+        conftest_module = _parse(conftest_source, fixture.conftest_path, REFERENCE_TREE)
         node = _find_fixture(conftest_module, fixture.fixture_name)
         if node is None:
             _logger.error(

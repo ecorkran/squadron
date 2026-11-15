@@ -13,18 +13,11 @@ from squadron.benchmark.adapter import NodeResult
 from squadron.benchmark.grade_deps import GradeDeps, GradeSandbox, GradeTarget
 from squadron.benchmark.grading_adapter import GradingAdapter
 from squadron.benchmark.replay_outcome import STDERR_TAIL_CHARS
-from squadron.benchmark.tree_reader import TreeReader
-from squadron.core.process_runner import (
-    ProcessCwdNotFoundError,
-    ProcessNotFoundError,
-    ProcessTimedOutError,
-)
+from squadron.benchmark.tree_reader import PROCESS_FAILURES, TreeReader
 from squadron.metrology.benchmark_models import BenchmarkCase
 from squadron.metrology.floor_stat import FloorStat
 from squadron.metrology.grade_models import ReviewSummary, SnapshotRef, SuppressionCounts
 from squadron.metrology.grade_records import ReferenceGrade
-
-_PROCESS_FAILURES = (ProcessNotFoundError, ProcessCwdNotFoundError, ProcessTimedOutError)
 
 
 class GitFailure(Exception):
@@ -111,7 +104,7 @@ def run_git(
             result = deps.process_runner.run(
                 ["git", *args], cwd=cwd, timeout=deps.git_timeout_s, stdin=stdin
             )
-    except _PROCESS_FAILURES as exc:
+    except PROCESS_FAILURES as exc:
         raise GitFailure(f"git {' '.join(args)}: {exc}") from exc
     if result.returncode != 0:
         tail = result.stderr.strip()[-STDERR_TAIL_CHARS:]

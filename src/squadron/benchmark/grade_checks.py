@@ -117,11 +117,17 @@ def measure_and_store(run: GradeRun, commit_sha: str) -> tuple[SnapshotRef, int 
     )
 
 
+def _committed_head(run: GradeRun, step: str) -> str:
+    """The subject's commit; *step* names what needs it, for the error."""
+    if run.head_sha is None:
+        raise ValueError(f"{step} after the subject's diff is committed")
+    return run.head_sha
+
+
 def take_snapshot(run: GradeRun) -> None:
     """Measure the tree as the producer left it, under the start config, and store it (D12)."""
-    if run.head_sha is None:
-        raise ValueError("the snapshot is taken after the subject's diff is committed")
-    run.snapshot, run.lint_total, run.type_total = measure_and_store(run, run.head_sha)
+    head_sha = _committed_head(run, "the snapshot is taken")
+    run.snapshot, run.lint_total, run.type_total = measure_and_store(run, head_sha)
 
 
 def record_baseline(run: GradeRun) -> None:
@@ -168,7 +174,7 @@ def count_added_suppressions(run: GradeRun) -> None:
     """Count suppressions the subject added in ``start..HEAD``; they stay in the tree (D6)."""
     diff = run_git(
         run,
-        ["diff", "--binary", run.case.start_sha, run.head_sha or "HEAD"],
+        ["diff", "--binary", run.case.start_sha, _committed_head(run, "suppressions are counted")],
         cwd=str(run.sandbox.tree),
         in_sandbox=True,
     )

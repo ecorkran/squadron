@@ -196,3 +196,20 @@ def test_an_estimate_pair_with_no_report_row_is_named_readably_not_by_its_json(
     line = next(line for line in shown.splitlines() if line.startswith("sample count"))
     assert "luna (openai-oauth, effort not sent)" in line
     assert "[" not in line
+
+
+def test_findings_dropped_as_off_scale_are_counted_and_shown(tmp_path: Path) -> None:
+    world = make_world(tmp_path)
+    case = world.add_case("case-0")
+    for sample in range(2):
+        world.add_sample(case, config("opus"), sample, reviews=(review(total=2, unnormalized=3),))
+    report = world.build()
+    assert report.findings[0].unnormalized == 6
+    assert "6 dropped as off-scale" in render_text(report)
+
+
+def test_no_dropped_findings_adds_nothing_to_the_line(tmp_path: Path) -> None:
+    world = make_world(tmp_path)
+    case = world.add_case("case-0")
+    world.add_sample(case, config("opus"), 0, reviews=(review(total=2),))
+    assert "off-scale" not in render_text(world.build())

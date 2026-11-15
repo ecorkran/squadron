@@ -12,7 +12,7 @@ import pytest
 
 from squadron.benchmark.grade_review import ReviewFailed, review_tree_diff
 from squadron.core.finding_categories import ReviewCategory
-from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
+from squadron.review.models import DiffInjection, ReviewFinding, ReviewResult, Severity, Verdict
 from tests.benchmark.test_grade_identity import make_reviewer
 from tests.conftest import run_test_git
 
@@ -23,6 +23,7 @@ def make_result(
     findings: list[ReviewFinding] | None = None,
     verdict: Verdict = Verdict.CONCERNS,
     cost_usd: float | None = 0.2,
+    diff_injection: DiffInjection | None = None,
 ) -> ReviewResult:
     return ReviewResult(
         verdict=verdict,
@@ -31,6 +32,7 @@ def make_result(
         template_name="code",
         input_files={},
         cost_usd=cost_usd,
+        diff_injection=diff_injection,
     )
 
 
@@ -236,3 +238,20 @@ def test_a_failed_review_carries_the_cost_it_reported(tmp_path: Path) -> None:
     with pytest.raises(ReviewFailed) as raised:
         run(tmp_path, review)
     assert raised.value.cost_usd == 0.07
+
+
+def test_a_diff_that_did_not_fully_reach_the_model_fails_the_review_and_logs_error(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    cut = DiffInjection(total_chars=1000, injected_chars=400)
+    review = FakeReview(make_result([finding()], cost_usd=0.11, diff_injection=cut))
+    with caplog.at_level(logging.ERROR), pytest.raises(ReviewFailed, match="400 of 1000") as raised:
+        run(tmp_path, review)
+    assert raised.value.cost_usd == 0.11
+    assert any("400 of 1000" in record.getMessage() for record in caplog.records)
+
+
+def test_a_fully_injected_diff_is_a_valid_outcome(tmp_path: Path) -> None:
+    whole = DiffInjection(total_chars=1000, injected_chars=1000)
+    outcome = run(tmp_path, FakeReview(make_result([finding()], diff_injection=whole)))
+    assert len(outcome.findings) == 1

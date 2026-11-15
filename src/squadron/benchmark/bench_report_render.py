@@ -48,9 +48,10 @@ def _findings(report: BenchmarkReport) -> list[str]:
             f"{sev} {mean:.2f}" for sev, mean in sorted(row.mean_by_severity.items())
         )
         total = NO_VALUE if row.mean_total is None else f"{row.mean_total:.2f}"
+        dropped = f"; {row.unnormalized} dropped as off-scale" if row.unnormalized else ""
         lines.append(
             f"  {config_text(row.config):<{width}}  per replay: {total} total"
-            f"{f' ({severities})' if severities else ''}  over {row.replays} replays"
+            f"{f' ({severities})' if severities else ''}  over {row.replays} replays{dropped}"
         )
     for pair in report.review_pairs:
         lines.append(_review_pair_text(pair))

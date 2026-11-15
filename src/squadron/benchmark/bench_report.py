@@ -78,6 +78,7 @@ def _findings_rows(matrix: GradeMatrix, cases: Sequence[str]) -> tuple[FindingsR
                     for sev in severities
                 },
                 mean_total=mean_or_none([float(s.total) for s in summaries]),
+                unnormalized=sum(s.unnormalized_count for s in summaries),
             )
         )
     return tuple(rows)

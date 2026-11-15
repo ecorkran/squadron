@@ -114,6 +114,8 @@ class FindingsRow(BaseModel):
     replays: int
     mean_by_severity: dict[str, float]
     mean_total: float | None
+    # Findings the review returned with an off-scale severity; the means exclude them.
+    unnormalized: int
 
 
 class ReviewPair(BaseModel):

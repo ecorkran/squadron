@@ -8,7 +8,13 @@ from pathlib import Path
 import pytest
 
 from squadron.benchmark.tree_reader import GitTreeReader, TreeReadError
-from squadron.core.process_runner import ProcessResult, ProcessTimedOutError, SubprocessRunner
+from squadron.core.process_runner import (
+    ProcessCwdNotFoundError,
+    ProcessNotFoundError,
+    ProcessResult,
+    ProcessTimedOutError,
+    SubprocessRunner,
+)
 from tests.conftest import run_test_git
 
 
@@ -66,6 +72,31 @@ class _HungRunner:
 
     def run(self, argv: list[str], **kwargs: object) -> ProcessResult:
         raise ProcessTimedOutError(argv, 30.0)
+
+
+class _MissingCheckoutRunner:
+    """A runner whose working directory has vanished."""
+
+    def run(self, argv: list[str], **kwargs: object) -> ProcessResult:
+        raise ProcessCwdNotFoundError(str(kwargs["cwd"]))
+
+
+class _NoGitRunner:
+    """A runner that cannot start git."""
+
+    def run(self, argv: list[str], **kwargs: object) -> ProcessResult:
+        raise ProcessNotFoundError(argv[0])
+
+
+@pytest.mark.parametrize("runner", [_MissingCheckoutRunner(), _NoGitRunner()])
+def test_a_process_start_failure_is_a_tree_read_error_and_logs_error(
+    repo_sha: tuple[Path, str], runner: object, caplog: pytest.LogCaptureFixture
+) -> None:
+    repo, sha = repo_sha
+    reader = GitTreeReader(runner, repo, sha)  # type: ignore[arg-type]
+    with caplog.at_level(logging.ERROR), pytest.raises(TreeReadError):
+        reader.list_paths()
+    assert any(r.levelno == logging.ERROR for r in caplog.records)
 
 
 def test_a_git_timeout_is_a_tree_read_error_and_logs_error(

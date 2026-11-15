@@ -13,7 +13,14 @@ from typing import NoReturn, Protocol
 
 from squadron.benchmark.replay_outcome import STDERR_TAIL_CHARS
 from squadron.codehost.git_refs import GIT_QUERY_TIMEOUT_SECONDS
-from squadron.core.process_runner import ProcessRunner, ProcessTimedOutError
+from squadron.core.process_runner import (
+    ProcessCwdNotFoundError,
+    ProcessNotFoundError,
+    ProcessRunner,
+    ProcessTimedOutError,
+)
+
+PROCESS_FAILURES = (ProcessNotFoundError, ProcessCwdNotFoundError, ProcessTimedOutError)
 
 _logger = logging.getLogger(__name__)
 #: What ``errors="replace"`` decoding leaves where a byte was not valid UTF-8.
@@ -71,9 +78,10 @@ class GitTreeReader:
             result = self._runner.run(
                 ["git", *args], cwd=str(self._repo_root), timeout=GIT_QUERY_TIMEOUT_SECONDS
             )
-        except ProcessTimedOutError as exc:
-            # Logged by _fail; a hung read is a commit unreadable in the checkout, which
-            # grade_one records as an absence like any other read failure.
+        except PROCESS_FAILURES as exc:
+            # Logged by _fail; a hung read, a vanished checkout or a git that cannot
+            # start all leave the commit unreadable, which grade_one records as an
+            # absence like any other read failure.
             self._fail(action, str(exc))
         if result.returncode != 0:
             self._fail(action, result.stderr.strip()[-STDERR_TAIL_CHARS:])
