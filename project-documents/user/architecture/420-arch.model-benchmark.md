@@ -7,7 +7,7 @@ project: squadron
 parent: ../project-guides/001-initiative-plan.squadron.md
 dependencies: [140, 300, 320, 400]
 dateCreated: 20261104
-dateUpdated: 20261104
+dateUpdated: 20261115
 status: not_started
 ---
 
@@ -23,11 +23,15 @@ This component answers "does model X at effort Y do this job as well as model Z,
 - **A fixed, versioned case set.** Cases drawn from completed work: fix commits first (the parent commit plus the issue text), completed slices second (the fork commit plus the slice design and task file).
 - **Implementation replay.** A case is run per config in a history-free sandbox, and the result is graded by running the tests and checks there.
 - **Scoring with repeated samples.** Objective signals first (hidden test, regressions, lint, type checks, 400 snapshot deltas), then normalized code-review findings, then the existing pairwise judge over slice-case diffs. Cost, turns and wall time sit beside them. Each config runs several times per case, and configs are compared on paired per-case differences.
-- **Reviewer recall.** Known defects are planted in real diffs, and each reviewer config is scored on how many it finds.
+- **Reviewer recall.** Real bugs that got past review and were fixed later are the cases. Each reviewer setup (one reviewer, several in parallel, with or without a comb pass) is scored on how many it finds.
 
 **Scope.** The case record and case qualification, the implementation replay runner, the grader, the reviewer-recall harness, the new metrology record types, and the reports. Replay's start-point and sandbox machinery (177), the metrology store (320), snapshots and normalized review findings (400), and the pairwise judge with Bradley-Terry aggregation (177) are reused, not rebuilt.
 
 **Motivation.** Implementation and code review are where most of the money goes. Choosing their models by impression costs real money in one direction and quality in the other, and the data to decide properly is already in git.
+
+## Amendment (20261115)
+
+PM decision after slices 420–426. The implementation replay stack is built and stays, with no further work on it: each data point costs dollars and hours and few cases qualify (squadron's own suite takes about 18 minutes a run), so its reports say "too few cases". The second half measures with what is cheap and already recorded: reviewer recall on real escaped bugs (430), a report over recorded pipeline runs (431), the same recall method on documents (432), and one answers table per category (433). Two rules follow. No task runs against squadron's own history or needs hours. Every measured run prints its cost bound first and stops at a cap.
 
 ## Design Goals
 
@@ -94,7 +98,7 @@ For slice cases, the pairwise judge from 177 compares diffs from the same case, 
 
 Reports put the objective grade first, then review findings and pairwise strength, with cost, turns and time beside them, all per config with n. Configs run on the same cases, so two configs are compared on paired per-case differences: each config's samples on a case reduce to one value (the pass fraction for the objective grade), and the paired bootstrap interval is taken over cases; a pair whose interval spans zero is shown as not distinguishable, not ranked. 320's noise floor applies to the LLM signals (review finding counts), not to pass rates.
 
-Reviewer recall runs separately. A planted-defect case is a real diff with known defects injected. Each reviewer config reviews it several times, and its findings are matched to the planted defects to give recall, plus the count of findings that matched nothing.
+Reviewer recall runs separately. A real-bug case is a merged diff with the bugs a later fix commit or issue proved real. Each reviewer setup reviews it several times in a history-free sandbox at the diff's head, and its findings are matched to the known bugs to give recall, plus the count of findings that matched nothing.
 
 Effort is part of every config's identity as sent, so "sonnet at high" and "sonnet at xhigh" are two rows only when the effort really differed on the wire.
 
@@ -124,7 +128,7 @@ Effort is part of every config's identity as sent, so "sonnet at high" and "sonn
 
 - **Diffs for the judge.** Implementation diffs can be far larger than a slice design. The judge compares diffs within one case, with the task text. Diffs above the judge's context need a stated rule (excluded and counted, or judged on a bounded view), not silent truncation.
 
-- **Planting defects.** Planted defects need ground truth: where the defect is, what kind it is (in 402's category vocabulary), and that it really breaks something, ideally shown by a test that fails. Who writes the defects (hand, mutation tool, or an LLM with verification) and how a finding is matched to a defect (file and line window plus category, or a judge call) are open slice decisions. A loose matcher inflates recall; a strict one deflates it.
+- **Known bugs as ground truth.** A bug counts only when a later commit or issue shows it was real. Mining finds many false cases, so each case is checked against a validity rule. How a finding is matched to a known bug is a slice decision. A loose matcher inflates recall; a strict one deflates it. (Amended 20261115: planted defects were dropped. They measure synthetic mutations in a no-tools review and needed a mutation engine, while the hand-run real-bug benchmark gave answers at cents per review.)
 
 - **Record size and count.** Diffs live in content-addressed sidecar files from the start, so records stay small. Normalized review findings stay inline; they are short. 400's coarse-record rule still holds.
 
@@ -137,12 +141,13 @@ Exploratory. The fix-case path is the keystone: it is the cheapest objective uni
 - **Fix pipeline.** `sq run fix <issue>` as a production pipeline, runnable in a sandbox with frozen issue text.
 - **Implementation replay and grading.** The `sq run` producer-only mode, running the producer step of `P6` and `fix` in the sandbox, the scrubbed producer environment and leak scan, the grader (hidden set, pinned suite and tool config, checks, snapshot, fixed review), repeated samples, the replay record with diff sidecars, the run-level dollar cap, and the paired report. Resume: a rerun of the same benchmark skips (case, config, sample) runs that already have records, detects orphaned sandboxes, and marks an interrupted run as such.
 - **Slice cases.** Cases from 400 slice ranges, grading without a hidden test, diff normalization, pairwise judging over diffs with the reference as a reference line.
-- **Reviewer recall.** Planted-defect cases, the matching rule, and a recall report per reviewer config.
+- **Reviewer recall.** Real-bug cases, the matching rule, compound reviewer setups (fan-out, pool, comb), and a recall report per setup.
+- **Reports from recorded work.** An implementation report over pipeline run records, and one answers table per category.
 
 ## Non-Goals
 
 - **No public or general-purpose benchmark.** Cases come from the project's own history.
-- **No curated input and expected-output datasets.** 300's non-goal stands. The exception is planted-defect cases (427, 428, 429): the planted defect is the ground truth, by design.
+- **No curated input and expected-output datasets.** 300's non-goal stands. Real-bug cases (430, 432) are records of history, not curated expected outputs: the ground truth is a fix commit or issue.
 - **No slice tests as hidden tests.** They are coupled to the original implementation.
 - **No per-case human review, and no per-project boundary declaration.** Qualification is mechanical and reads only what projects already maintain.
 - **No automatic model selection.** Results inform the PM's alias configuration; nothing reads them at run time.
