@@ -13,6 +13,7 @@ import pytest
 from squadron.benchmark.grade_review import ReviewFailed, review_tree_diff
 from squadron.core.finding_categories import ReviewCategory
 from squadron.review.models import DiffInjection, ReviewFinding, ReviewResult, Severity, Verdict
+from squadron.review.review_client import _run_git_diff_filenames  # pyright: ignore[reportPrivateUsage]
 from tests.benchmark.test_grade_identity import make_reviewer
 from tests.conftest import run_test_git
 
@@ -255,3 +256,16 @@ def test_a_fully_injected_diff_is_a_valid_outcome(tmp_path: Path) -> None:
     whole = DiffInjection(total_chars=1000, injected_chars=1000)
     outcome = run(tmp_path, FakeReview(make_result([finding()], diff_injection=whole)))
     assert len(outcome.findings) == 1
+
+
+def test_the_review_sees_config_edits_but_not_lockfiles(tmp_path: Path) -> None:
+    base = commit_tree(tmp_path)
+    for name in ("mod.py", "pyproject.toml", "uv.lock", "notes.md"):
+        (tmp_path / name).write_text("changed")
+    run_test_git(tmp_path, "add", "-A")
+    run_test_git(tmp_path, "commit", "-q", "-m", "producer")
+    review = FakeReview(make_result([finding()]))
+    run(tmp_path, review, base=base)
+    template = review.args[0]
+    seen = _run_git_diff_filenames(base, str(tmp_path), template.diff_exclude_patterns)
+    assert seen == {"mod.py", "pyproject.toml"}

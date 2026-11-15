@@ -127,7 +127,8 @@ class ReviewerRef(BaseModel):
 
 
 #: Bumped whenever any grading step changes: a new version is a new grader identity (D10).
-GRADER_VERSION = 1
+#: 2: the grading review shows producer edits to *.toml, *.yaml and *.yml (#335).
+GRADER_VERSION = 2
 
 
 class GraderIdentity(BaseModel):

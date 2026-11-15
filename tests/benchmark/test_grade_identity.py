@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from squadron.metrology.benchmark_replay_enums import AbsenceClass
 from squadron.metrology.grade_models import (
     GRADE_ABSENCE_CLASS,
+    GRADER_VERSION,
     GradeAbsence,
     GraderIdentity,
     ReviewerRef,
@@ -36,7 +37,7 @@ def make_reviewer(**override: Any) -> ReviewerRef:
 
 def make_identity(**override: Any) -> GraderIdentity:
     fields: dict[str, Any] = {
-        "grader_version": 1,
+        "grader_version": GRADER_VERSION,
         "reviewer": make_reviewer(),
         "review_floor_runs": 3,
         **override,
@@ -74,7 +75,7 @@ class TestGraderIdentity:
             {"reviewer": make_reviewer(model="other-model")},
             {"reviewer": make_reviewer(effort="low")},
             {"reviewer": make_reviewer(template_hash="b" * 64)},
-            {"grader_version": 2},
+            {"grader_version": GRADER_VERSION + 1},
             {"review_floor_runs": 4},
         ],
     )

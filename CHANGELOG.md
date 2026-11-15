@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `sq benchmark grade`'s review now sees a producer's edits to `*.toml`, `*.yaml` and `*.yml` files (dependencies, tool settings). Lockfiles, docs, data and images are still left out. Grades made before this are a different grader version, so the report treats them as older (#335).
+
 ## [0.24.31] - 20261115
 
 ### Added

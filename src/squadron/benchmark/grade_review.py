@@ -9,6 +9,7 @@ reference diff to a noise floor.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import difflib
 import hashlib
 import logging
@@ -53,6 +54,25 @@ def code_template() -> ReviewTemplate:
             f"review template '{BuiltinReviewTemplate.CODE.value}' is not registered"
         )
     return template
+
+
+#: Config files the ``code`` template hides from a diff but a producer can legitimately change
+#: (dependencies, tool settings). Grading shows them: the template's other exclusions (docs,
+#: lockfiles, data, images) stay, since lockfiles are huge and a cut diff fails the review.
+GRADING_VISIBLE_PATTERNS = ("*.toml", "*.yaml", "*.yml")
+
+
+def grading_template() -> ReviewTemplate:
+    """The ``code`` template with its diff exclusions narrowed for grading (#335)."""
+    template = code_template()
+    return dataclasses.replace(
+        template,
+        diff_exclude_patterns=[
+            pattern
+            for pattern in template.diff_exclude_patterns or []
+            if pattern not in GRADING_VISIBLE_PATTERNS
+        ],
+    )
 
 
 def code_template_text() -> str:
@@ -191,7 +211,7 @@ def review_tree_diff(
     """
     rules = _tree_rules(tree, base_sha)
     call = review(
-        code_template(),
+        grading_template(),
         {"diff": base_sha, "cwd": str(tree)},
         profile=reviewer.profile,
         rules_content=rules,
