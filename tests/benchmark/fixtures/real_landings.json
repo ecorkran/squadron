@@ -1,0 +1,33 @@
+{
+  "record_id": "sliceranges-a12c1f529ad3",
+  "project_id": {
+    "value": "github.com/ecorkran/squadron",
+    "source": "remote"
+  },
+  "slices": {
+    "402": [
+      {
+        "method": "merge_commit",
+        "target_ref": "main",
+        "before_sha": "91ce338363b8be500123df0e4c0233893aa888b8",
+        "after_sha": "095151d6d77157ce30754560ecedf5c266ee4466",
+        "fork_sha": "cf3707995e9df8a068365003254f7f96556188af",
+        "tip_sha": "acf189623c17736c51aefe7ff32d7a70c15e539a",
+        "merge_sha": "095151d6d77157ce30754560ecedf5c266ee4466",
+        "resolved_at": "2026-11-15T17:13:07.678065Z"
+      }
+    ],
+    "420": [
+      {
+        "method": "fast_forward",
+        "target_ref": "main",
+        "before_sha": "1b710c4e5ac75606ea9c4ba733fdf2c3c1896652",
+        "after_sha": "c9bc878caca1acc789c3dbf351c94e0805ffcab6",
+        "fork_sha": "1b710c4e5ac75606ea9c4ba733fdf2c3c1896652",
+        "tip_sha": "c9bc878caca1acc789c3dbf351c94e0805ffcab6",
+        "merge_sha": null,
+        "resolved_at": "2026-11-15T17:13:08.004802Z"
+      }
+    ]
+  }
+}

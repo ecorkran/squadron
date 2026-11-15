@@ -148,9 +148,13 @@ def classify_producer_run(
     state: RunState | None,
     head_before: str,
     head_after: str,
-    issue_sha256: str,
+    issue_sha256: str | None,
 ) -> ProducerClassification:
-    """Map one finished producer run to its D10 outcome, absence class and detail."""
+    """Map one finished producer run to its D10 outcome, absence class and detail.
+
+    ``issue_sha256`` is the hash of the frozen issue file a fix run must have used; a run of a
+    pipeline with no frozen text (a slice case's ``P6``, slice 426) passes ``None``.
+    """
     if state is None or state.status == RUNNING_STATUS:
         what = "no readable run state" if state is None else "run state still 'running'"
         return _result(
@@ -158,7 +162,7 @@ def classify_producer_run(
             _detail(f"sq exited {process.returncode} with {what}", None, process),
             state,
         )
-    if (problem := _frozen_text_problem(state, issue_sha256)) is not None:
+    if issue_sha256 is not None and (problem := _frozen_text_problem(state, issue_sha256)):
         return _result(ProducerOutcome.FROZEN_TEXT_MISMATCH, _detail(problem, None, process), state)
     kinds = _failed_kinds(state)
     if FailureKind.COST_CAP in kinds:

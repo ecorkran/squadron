@@ -12,8 +12,9 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from squadron.benchmark.pair_row import PairRow
+from squadron.benchmark.pairwise_models import PairwiseSection
 from squadron.metrology.benchmark_models import CaseKind
-from squadron.metrology.grade_models import PairVerdict
 from squadron.metrology.grade_records import SampleSizeEstimate
 
 
@@ -58,18 +59,6 @@ class ReferenceLine(BaseModel):
     hidden_passed: int
     hidden_total: int
     regressions: int
-
-
-class PairRow(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    label_a: str
-    label_b: str
-    n_cases: int
-    mean_difference: float
-    low: float | None
-    high: float | None
-    verdict: PairVerdict
 
 
 class CheckRow(BaseModel):
@@ -181,3 +170,5 @@ class BenchmarkReport(BaseModel):
     stale_leak_scans: int
     unstamped_replays: dict[str, int]
     estimate: SampleSizeEstimate | None
+    #: Slice cases only (slice 426); ``None`` leaves the text and JSON of other reports unchanged.
+    pairwise: PairwiseSection | None = None

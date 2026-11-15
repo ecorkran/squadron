@@ -26,6 +26,7 @@ from squadron.metrology.benchmark_models import (
     CaseKind,
     FixQualification,
 )
+from squadron.metrology.slice_case_models import SliceQualification
 from squadron.pipeline.state import RunState
 from squadron.providers.base import ProfileName
 
@@ -61,7 +62,7 @@ class ReplaySandbox(Protocol):
 
     def keep(self) -> None: ...
 
-    def producer_env(self, profile: ProfileName) -> dict[str, str]: ...
+    def producer_env(self, profile: ProfileName, tools: Sequence[str] = ()) -> dict[str, str]: ...
 
     def checkout_branch(self, name: str) -> None: ...
 
@@ -74,14 +75,16 @@ class SqInvoker(Protocol):
     ) -> ProcessResult: ...
 
 
+#: What re-qualifying a case gives: a stored or fresh qualification record of its kind, or the
+#: rejection that ends it (fix cases only; slice cases record their rejection).
+Requalification = FixQualification | SliceQualification | CandidateRejection
+
 #: What running the producer returns: the finished ``sq`` process.
 ProducerRun = ProcessResult
 
 
 class CaseKindRunner(Protocol):
-    def requalify(
-        self, case: BenchmarkCase, environment: EnvironmentIdentity
-    ) -> FixQualification | CandidateRejection:
+    def requalify(self, case: BenchmarkCase, environment: EnvironmentIdentity) -> Requalification:
         """The case's qualification in *environment*, or the rejection that ends it."""
         ...
 
@@ -155,9 +158,7 @@ class FixCaseRunner:
         self._deps = qualify_deps
         self._candidate_for = candidate_for
 
-    def requalify(
-        self, case: BenchmarkCase, environment: EnvironmentIdentity
-    ) -> FixQualification | CandidateRejection:
+    def requalify(self, case: BenchmarkCase, environment: EnvironmentIdentity) -> Requalification:
         existing = qualification_for(case, environment, self._deps.store, self._deps.repeats)
         if existing is not None:
             return existing

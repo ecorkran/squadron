@@ -6,8 +6,8 @@ parent: user/architecture/420-slices.model-benchmark.md
 dependencies: [421, 422, 424, 425]
 interfaces: []
 dateCreated: 20261104
-dateUpdated: 20261105
-status: not_started
+dateUpdated: 20261115
+status: complete
 ---
 
 # Slice Design: Slice Cases
@@ -39,7 +39,7 @@ Slice cases are weaker evidence than fix cases, since there is no hidden test. K
 - Report: a table set per case kind, and the pairwise section for slice cases (D17).
 - Slice-case rows in 422's `sq benchmark yield`.
 - CLI `sq benchmark slice-cases build` and `sq benchmark judge`, with matching `/sq:benchmark` subcommands.
-- No edits to 425: it provides `bootstrap_mean_interval` (D17). Two edits to 424: `CaseDrop.reason` widens to accept `SliceCandidateRejection` (Patterns and Conventions), and the refusal of case sets with slice cases is removed (D8). 424 already provides `CaseKindRunner.requalify`.
+- No edits to 425: it provides `bootstrap_mean_interval` (D17). Edits to 424: `CaseDrop.reason` widens to accept `SliceCandidateRejection` (Patterns and Conventions), and the refusal of case sets with slice cases is removed (D8: only the "until slice 426" hint, since the seam's refusal of a kind with no runner stays). Three more were found by implementing the runner against the real seam, and each is small: `CaseKindRunner.requalify` returns a `Requalification` that also admits a `SliceQualification`; `classify_producer_run` takes `issue_sha256: str | None` and `None` skips the frozen-text check (a `P6` run has no `fix-context`, so every slice replay would otherwise classify as `frozen_text_mismatch`); and `ReplaySandbox.producer_env(profile, tools=())` links the named tools into the existing home (D9). `LeakRuleSource` also gets its owner and repository for a slice case from the checkout's own remote, since a slice case has no issue reference.
 
 **Excluded**
 
@@ -130,7 +130,7 @@ sq benchmark slice-cases build --set slices [--repo PATH]
 BenchmarkSandbox(fork_sha) → EnvironmentIdentity
 SliceCaseRunner.requalify(case, env)          slice_qualification_for, else qualify again
 SliceCaseRunner.invoke:
-   env = ScrubbedEnvironment(grant=profile).with_tools(("cf",))
+   env = ScrubbedEnvironment(grant=profile).with_tools(CF_TOOLS)   # ("cf", "node")
    CfRegistration(env).register(tree, name=<sandbox id>, branch, slice index)
    <installed sq> run P6 <index> -m <alias> --producer-only --max-cost <cap> --run-id <rid>
       cwd=tree, env=env
@@ -231,10 +231,10 @@ Status: decided
 - P6's `implement` step runs cf-ops (`set_slice`, `set_phase`, `build_context`), so the tree must be a registered cf project. The producer runs with `HOME=<id>.home` (421 D7), so cf reads its registry from the scrubbed home. Registration therefore runs under the producer's environment, not the harness's.
 - `CfRegistration(runner, env)` is extracted from `ReplaySandbox._register_with_cf`: `cf init --lite --no-ide --name <name>`, `cf config set git.integration_branch <branch>`, then `cf set arch <initiative>` (the initiative from `plan_file_for` at the start commit, resolved before `cf init`, so a slice in no plan leaves nothing registered; `UnknownSliceError` becomes `CfRegistrationError`). `ReplaySandbox` composes it with the harness environment and keeps its behavior and tests. `SliceCaseRunner` uses it with the scrubbed environment.
 - Cleanup state: `ReplaySandbox._registered` is set after `cf init` succeeds, so cleanup removes a half-registered project. `CfRegistration` exposes a `registered` property (true once `cf init` succeeded) and raises `CfRegistrationError` on a non-zero exit, a process failure or a timeout; its message is the command and its stderr, and it is logged at ERROR. `ReplaySandbox` sets `_registered` from `registration.registered` even when `register` raised, and re-raises the error as `SandboxError` with the message it gave before.
-- Registration branch: `register` takes a `branch`. cf's branch guard compares the checkout to `git.integration_branch`, so the branch is the one the sandbox tree is on (`git branch --show-current`). On a detached HEAD the runner first creates `SLICE_BRANCH_PREFIX + <sandbox id>`, as `ReplaySandbox` does for its own branch. 424 reads the diff as `start..HEAD`, so the branch does not change it.
+- Registration branch: `register` takes a `branch`. cf's branch guard compares the checkout to `git.integration_branch`, so the branch is the one the sandbox tree is on (`git branch --show-current`). The tree starts detached, and `--producer-only` refuses a branch that does not parse as `{index}-slice.{name}` (`parse_slice_branch`; the Task 10 spike found this), so the runner first creates `{index}-slice.` + `SLICE_BRANCH_SUFFIX` + `<sandbox id>`, a branch that parses as the slice's own. 424 reads the diff as `start..HEAD`, so the branch does not change it.
 - A failed or timed-out cf step is a harness absence (424 D10), logged at ERROR with the step and its stderr. The producer never ran, so it is not charged to the config.
 - Removal: the registry is inside the scrubbed home, so removing the home removes the project. The slice-case runner calls no `cf project rm`, and the user's cf registry is never touched.
-- `cf` is not on the scrubbed `PATH` (421's `HARNESS_TOOL_ALLOWLIST` is `git` and `uv`). `ScrubbedEnvironment.with_tools(tools)` returns a copy whose `<id>.home/bin` also links each named tool as resolved on the harness's `PATH`. The slice runner asks for `("cf",)`, a constant in `slice_runner.py`. Suite runs and fix-case producers never get it. The tool links are not part of `EnvironmentIdentity`, which describes the installed project, so the grade sandbox's digest still matches the replay's (425 D1). cf's version is already part of prompt identity (177's `PromptIdentity.cf_version`).
+- `cf` is not on the scrubbed `PATH` (421's `HARNESS_TOOL_ALLOWLIST` is `git` and `uv`). `ScrubbedEnvironment.with_tools(tools)` returns a copy whose `<id>.home/bin` also links each named tool as resolved on the harness's `PATH`. The slice runner asks for `CF_TOOLS = ("cf", "node")`, a constant in `slice_runner.py`: cf is a node script, and under the scrubbed `PATH` `cf init` fails with `env: node: No such file or directory` without `node` (Task 10 spike). The sandbox has already prepared its home, so the tools are linked into the existing home. Suite runs and fix-case producers never get it. The tool links are not part of `EnvironmentIdentity`, which describes the installed project, so the grade sandbox's digest still matches the replay's (425 D1). cf's version is already part of prompt identity (177's `PromptIdentity.cf_version`).
 - Implementation step 1 is a spike. It confirms that cf registers, sets the slice and builds context under a scrubbed home, and that 424's leak-scan path list covers the cf install location and anything cf reads outside the home. A no is written as `BLOCKED:` in the task file for the PM, the same way 421's auth spike works.
 
 ### D10 — Grading slice cases
@@ -298,7 +298,7 @@ pairs 54 (6 forfeits) → 96 calls × $0.04 (max observed) = $3.84, capped at ru
        + one call of overshoot $0.04 → at most $3.88
 ```
 
-- The cap is checked before each call. Hitting it stops judging, keeps every record, and exits 2.
+- The cap is checked before each call. Hitting it stops judging, keeps every record, and exits 2. A call that reports no cost, fails or times out counts at the per-call figure, so no call is counted as free.
 - Record ids:
   - pair: `diffjudge-<benchmark_id[6:18]>-<case_id[5:17]>-<sha256(sorted refs, judge prompt hash, judge alias)[:12]>`
   - over-size case: `oversize-<benchmark_id[6:18]>-<case_id[5:17]>-<sha256(judge prompt hash, judge alias)[:8]>`
@@ -443,7 +443,7 @@ class OverSizeCase(BaseModel, frozen=True):
 
 ### Functional Requirements
 
-- `sq benchmark slice-cases build --set slices` on squadron reads its `slice_ranges` record, writes a `SliceQualification` for every slice index in it, and writes a case for each qualified slice. Every rejected slice has a `SliceCandidateRejection` or `harness_error` with detail. None is silently dropped.
+- `sq benchmark slice-cases build --set slices` in a cf project reads its `slice_ranges` record, writes a `SliceQualification` for every slice index in it, and writes a case for each qualified slice. Every rejected slice has a `SliceCandidateRejection` or `harness_error` with detail. None is silently dropped.
 - A qualified slice case has `start_sha = fork_sha`, `reference_sha = tip_sha`, a `task_text` holding the design and task file as of the fork, an empty hidden set, a superseded set from closure digests, and an exclusion list from the repeats.
 - Fixture slices produce each rejection: two landings, a merge on the branch, no task file at the fork, a docs-only slice, and an empty regression selection.
 - `sq benchmark run` on a set with slice cases replays them through `sq run P6 <index> --producer-only` in a scrubbed sandbox registered with cf in the scrubbed home. The user's cf project list is the same before and after.
@@ -470,7 +470,33 @@ class OverSizeCase(BaseModel, frozen=True):
 
 ### Verification Walkthrough
 
-These are draft commands. `slice-cases build` and `judge` do not exist until this slice is implemented. The steps need `sq benchmark auth-check` yes answers for the aliases used, `benchmark.grading_review_model` and `benchmark.judge_model` set, and caps as in 424 and 425.
+Steps 1 and 8 were run as written. Steps 2–7 are **not run on squadron** (PM decision 20261115): squadron's full suite took 18 minutes in the 0.24.31 release run, and a build runs it `benchmark.qualification_repeats` times at each candidate's tip, so the walkthrough took hours for a one-case result. The same path is verified end to end on a small fixture project (`tests/benchmark/fixtures/slice_project/`), with real sandboxes, git, cf registration, uv installs and pytest, a scripted producer command and scripted model replies. Step 7 is covered by the over-size tests. Not covered by any test: a model implementing a slice inside the sandbox. That first happens when the manual steps below are run on a real project.
+
+#### Automated walkthrough (run 20261115)
+
+Needs network access (uv installs the fixture project), `cf` and `node` on `PATH`, and a `cf project list` that works under the real home.
+
+```bash
+uv run pytest tests/benchmark/test_slice_build_end_to_end.py tests/benchmark/test_slice_pipeline_end_to_end.py tests/benchmark/test_diff_normalize.py -v
+```
+
+Expected: every test `PASSED`, 45 in all (5 build, 8 pipeline, 32 normalize), under a minute with a warm uv cache. What each file shows:
+
+- `test_slice_build_end_to_end.py` — steps 2 (build, yield): on the fixture history (a code slice 511 and a docs-only slice 512, both landed by merge commit) `build_slice_cases` prints one line per index, `slice 511 qualified case-… (3 regression nodes, …)` and `slice 512 no_code_change: …`, writes case set `e2e-slices` v1 with the one case (`start_sha` the fork, `reference_sha` the tip, task text = the design then the task file as of the fork), a second build runs no suite and leaves the set at v1, and the yield row counts 2 candidates, 1 qualified, 1 `no_code_change`.
+- `test_slice_pipeline_end_to_end.py` — steps 3–6 (replay, grade, judge, report): three configs replay the case through the real `SliceCaseRunner` in real sandboxes registered with cf under the scrubbed home; only the `sq run P6 511 --producer-only` call is scripted. `opus` commits the reference change and `sol` commits a change that breaks `tests/test_calc.py::test_sub`, both `committed` with a diff against the fork; `astra` commits nothing (`no_commit`, config absence). `cf project list` under the real home names the same projects before and after. Grading: reference `pass`, `opus` pass, `sol` fail with 1 regression, and `astra` is not graded. Judging prints the bound first (`pairs 6 (3 forfeits) → 6 calls × $0.04 (--judge-cost) = $0.24, under run cap $2.00`), every pair with `astra` is `forfeit B` with no dispatcher call, and `opus vs sol` is `A`, `opus vs reference` `TIE`, `sol vs reference` `B`. The report has a `slice cases` table headed `no regressions`, the pairwise section (`strength`, `reference  1.00  (reference line, not ranked)`, `opus vs sol   d +1.00  too few cases (1)`) and `judged 1 · over size 0 · harness-absent 0 · pending 0`.
+- `test_diff_normalize.py` — step 8.
+
+Deviations from the manual steps: the registry check compares project names only (other sessions change a project's slice column while a test runs); the judge dispatcher and the grading review are scripted, so no cost is incurred; `benchmark.judge_model` and `benchmark.grading_review_model` are not needed.
+
+#### Manual steps on a real project
+
+The steps below are how to run slice cases on a project whose suite is short, with `uv run sq` (or an `sq` installed from this branch: the `sq` on a developer's `PATH` may predate the commands). They need `sq benchmark auth-check` yes answers for the aliases used, `benchmark.grading_review_model` and `benchmark.judge_model` set, and caps as in 424 and 425.
+
+Caveats found while implementing:
+
+- A build runs the project's full test suite `benchmark.qualification_repeats` (default 3) times at each candidate's tip, in two installed sandboxes. One suite run at slice 400's fork did not finish in 400 s, and 9 of the 15 slices in squadron's record pass the pre-sandbox checks, so a full build takes hours. A rerun reuses finished candidates; a `harness_error` one runs again.
+- A harness error stops the build: the stopping slice is recorded `harness_error` and every later index prints `slice <n> not attempted (build stopped at slice <m>)` with no record.
+- `judge` refuses until it has a per-call figure: pass `--judge-cost` the first time, after which the largest observed call cost for the judge alias is used.
 
 1. **Record landings.** `sq metrology slice-ranges <indices>` for squadron's merged slices (for example the 400-initiative slices). The output lists each landing with fork and tip.
 
@@ -479,7 +505,7 @@ These are draft commands. `slice-cases build` and `judge` do not exist until thi
    sq benchmark slice-cases build --set slices
    sq benchmark yield
    ```
-   One line per slice: qualified with regression, superseded and excluded counts, or a rejection reason. `yield` shows slice-case rows beside fix-case rows.
+   One line per slice index in the record, for example `slice 403 qualified case-… (412 regression nodes, 3 superseded, 1 excluded)`, `slice 402 no_tasks_at_fork: no project-documents/user/tasks/402-tasks.*.md at cf3707995e9d`, `slice 172 multiple_landings: 2 landings: 8a0a27fa7c74, 8f43b31f0ea9`, or `slice 400 harness_error: <detail>`. Then `case set slices v1` (or `no qualified cases: no case set written`), then the yield rows (`slice cases  candidates  qualified  top rejections`). `yield` shows the same rows beside the fix-case rows. Verified live: discovery over the real record, both sandboxes installing, collection, and the harness-error stop.
 
 3. **Replay one case under two configs.**
    ```bash
@@ -497,9 +523,16 @@ These are draft commands. `slice-cases build` and `judge` do not exist until thi
    ```bash
    sq benchmark judge <bench-id> --max-cost 3 --judge-cost 0.05
    ```
-   The bound prints first, with the limit and pair count (1 cross-config pair and 2 reference pairs for two configs at k = 1). Each pair prints its outcome.
+   The bound prints first, with the limit and pair count (1 cross-config pair and 2 reference pairs for two configs at k = 1):
+   ```
+   judge bench-… judge gpt-judge (openai-oauth)  limit 400000 chars
+   slice cases 1: 1 to judge · 0 over size · 0 harness-absent
+   pairs 3 (0 forfeits) → 6 calls × $0.05 (--judge-cost) = $0.30, under run cap $3.00
+          no per-call cap: a call can cost more than its figure
+   ```
+   Each pair prints `case-… opus s1 vs sol s1: A` (or `… vs reference: B`, or `forfeit B`), then `judged 3 pairs, 0 forfeits, 0 failed; over size 0, harness-absent 0` and the spend line. Exit 0, or 2 at the run cap.
 
-6. **Report.** `sq benchmark report <bench-id>`. A `slice cases` table appears separately from any fix-case table, then the pairwise section with strengths, the reference line marked as not ranked, the pair verdict (`too few cases (1)` at this size), and the count line.
+6. **Report.** `sq benchmark report <bench-id>`. A `slice cases` table appears separately from any fix-case table, then (after the review findings) the pairwise section with strengths, the reference line marked `(reference line, not ranked)`, the pair verdict (`too few cases (1)` at this size), and the count line `judged 1 · over size 0 · harness-absent 0 · pending 0`.
 
 7. **Over-size rule.** Set `benchmark.judge_max_prompt_chars` below the case's prompt length (`sq config set benchmark.judge_max_prompt_chars 1000`) and rerun step 5 on a fresh benchmark id (another `--samples` value). The case is reported `over_size` with its length, no judge call is made, and the report counts it. Unset the key afterwards.
 
@@ -524,11 +557,11 @@ These are draft commands. `slice-cases build` and `judge` do not exist until thi
 1. Extract `CfRegistration` and `judge_pair`, make `start_point.py`'s patterns public, add the config keys, the fixtures and `normalize`, with 177's tests passing. These need nothing from 421–425 and are committed before the precondition gate.
 2. **cf spike**, the first task after the gate, since it needs 421's sandbox. In a 421 scrubbed sandbox at a squadron fork commit, register with cf under the scrubbed home and run `sq run P6 <index> --producer-only --dry-run`. Record the answer in the DEVLOG.
 3. Records, enums and store methods.
-4. `slice_discovery`, `slice_task` and the no-code check against fixture repositories, then `slice_qualify` and `slice_case_build` with injected doubles. Then a live build on squadron.
-5. `SliceCaseRunner`, `with_tools` and re-qualification routing. Live replay of one case (walkthrough step 3).
+4. `slice_discovery`, `slice_task` and the no-code check against fixture repositories, then `slice_qualify` and `slice_case_build` with injected doubles. Then an end-to-end build test on a fixture project.
+5. `SliceCaseRunner`, `with_tools` and re-qualification routing. An end-to-end replay test on the fixture case, with the producer command scripted.
 6. `normalize` with the real-slice fixture.
 7. `diff_judge` and `diff_judge_runner`: pairing, forfeits, over-size, bound, cap, resume.
-8. Report grouping and the pairwise section, the yield rows, the CLI and the slash command. Run walkthrough steps 1–8 on squadron.
+8. Report grouping and the pairwise section, the yield rows, the CLI and the slash command. Extend the end-to-end test through grade, judge and report.
 
 Effort: 3/5.
 
@@ -537,3 +570,23 @@ Effort: 3/5.
 - The producer sees the guide and instruction files as of the fork, and the current installed cf and squadron. That matches 424's split: the pipeline under test is today's, the code under change is the start commit's. Prompt identity records cf and guide versions.
 - The reference diff includes whatever the original slice's review loop fixed, while replays run with no review. This is why the reference is a reference line and is never ranked (architecture).
 - Slice-case task text can run to tens of KB, and it is repeated in every judge prompt for the case. That is the main reason pair prompts reach the over-size limit, and the bound accounts for it through the observed per-call cost.
+
+### Names and gaps found while implementing
+
+Task 1 wrote the gaps found reading the code. Implementing found these, each handled as small as it could be:
+
+- **cf needs `node`** (Task 10 spike). `cf` is a node script, so `CF_TOOLS = ("cf", "node")` (`slice_runner.py`). The sandbox has already built its home, so `ReplaySandbox.producer_env(profile, tools=())` links the tools into the existing home (`ScrubbedEnvironment.link_extra_tools_into_home`).
+- **The producer-only branch check** (Task 10 spike). `--producer-only` refuses a branch that does not parse as `{index}-slice.{name}`, so a detached tree is put on `{index}-slice.` + `SLICE_BRANCH_SUFFIX` + the sandbox id (the tasks called the constant `SLICE_BRANCH_PREFIX`).
+- **`P6` has no frozen issue text.** `classify_producer_run` takes `issue_sha256: str | None`, and `None` skips the frozen-text check (a 424 edit).
+- **Leak rules for a slice case.** `LeakRuleSource` takes the owner and repository from the checkout's own remote for a slice case (a 424 edit): a slice case has no issue reference.
+- **`requalify` return type.** `CaseKindRunner.requalify` returns `Requalification = FixQualification | SliceQualification | CandidateRejection` (a 424 type edit).
+- **The judge's cap is checked before each call.** `judge_case` no longer takes a `may_judge` callable: `JudgeContext.before_call` raises `JudgeCapReached`, and `metered` charges every returned call to the `JudgeBudget`, so a pair the cap stops between its two calls is unrecorded but its first call is counted.
+- **Reference diffs** are read by `ReferenceDiffReader`; a commit the checkout lacks refuses naming the case and the sha, and a git call that does not answer is `JudgeHalted`.
+- **`slice_qualification_for`** returns a record only when `can_skip` holds, so a `harness_error` record is never an answer. **Realistic raw tails** are 177's 400-character tails: two 2 KB tails alone would be 4096 bytes, so the 4 KB bound is checked with those.
+- **Store.** The slice records' methods are on `SliceCaseRecordStore` (composition over `BenchmarkRecordStore`, as `GradeRecordStore` does), not on `BenchmarkRecordStore`.
+
+- **Judged diffs lose CRLF** (deferred, #337). `ProcessRunner` captures child output in text mode, so `\r\n` becomes `\n` in `git diff --binary` before `normalize` and the judge see it. The reference diff and the stored replay diffs are treated alike, so pairs are not skewed. Fixing it means a bytes-capable runner call or a decoding change for every runner user, which this slice's plan does not require.
+
+Names added: `CfRegistrationError`, `SliceNotInPlanError`, `CfRegistration.registered`, `ARTIFACT_KINDS`, `artifact_pattern`, `suffix_order`, `judge_pair(..., on_call)`, `row_key_of`, `SLICE_PLAN_GLOB`, `excluded_unchanged` (422's helper, made public), `SliceCandidate`, `DiscoveryResult` (candidates, rejections, harness failures), `SliceHarnessError`, `TaskText`, `SliceQualifyDeps`, `SLICE_RULE_VERSION`, `OverSize`, `SliceBuildDeps`, `build_deps` (in `benchmark_slice.py`), `judge_deps` (in `benchmark_judge.py`), `JudgeServices`, `JudgePlan`, `JudgeRefusal`, `JudgeHalted`, `SliceYieldRow`, `SliceCaseTable`, `PairwiseSection`.
+
+Modules split to stay near 300 lines: `slice_git.py`, `slice_qualify_types.py`, `slice_qualify_run.py`, `slice_runner_wiring.py`, `slice_yield.py`, `diff_pairs.py`, `diff_prompt.py`, `diff_judge_plan.py`, `diff_judge_budget.py`, `diff_judge_reference.py`, `diff_judge_runner.py`, `diff_judge_services.py`, `pairwise_models.py`, `pairwise_report.py`, `pairwise_render.py`, `report_slice_table.py`, `yield_measured.py` (out of `yield_report.py`), `metrology/slice_case_models.py` and `slice_case_store.py`, and `cli/commands/benchmark_judge.py` beside `benchmark_slice.py`.

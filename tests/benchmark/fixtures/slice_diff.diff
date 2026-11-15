@@ -1,0 +1,3535 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 430a7bc5..403bdeaa 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ## [Unreleased]
+ 
++### Added
++
++- `sq metrology ingest-reviews` writes one record per code-review file into the metrology store, so review findings can be counted. Re-running it is safe: it replaces each file's record.
++- `sq review code` now asks for a category on every finding from the same ten-value vocabulary the tech-debt audit uses, plus `correctness`. A category outside it is recorded as `other` with the model's own wording kept as `rawCategory`, and the review file is marked `categoriesNormalized: true`. Older reviews are mapped to the same vocabulary when ingested.
++
+ ## [0.24.1] - 20261024
+ 
+ ### Added
+diff --git a/DEVLOG.md b/DEVLOG.md
+index e1908284..8267f27c 100644
+--- a/DEVLOG.md
++++ b/DEVLOG.md
+@@ -2,15 +2,36 @@
+ docType: devlog
+ project: squadron
+ dateCreated: 20260218
+-dateUpdated: '20261024'
++dateUpdated: '20261025'
+ ---
+ 
+ # Development Log
+ 
+ A lightweight, append-only record of development activity. Newest entries first.
+ 
++## 20261025
++
++### Slice 402: Code-Review Normalization and Ingest — Implementation Complete (Phase 6)
++
++- Branch `402-slice.code-review-normalization-and-ingest`. `sq review code` findings now carry a category from `ReviewCategory` (the ten audit values plus `correctness`), normalized in the review client for templates that set `normalize_categories` (only `code.yaml`). New `sq metrology ingest-reviews` writes one `code_review` record per code-review file; historical reviews are mapped through a fixed 16-string table and marked `read_side_mapped`. `AuditCategory` moved to `core/finding_categories.py`; the arch, slice and tasks review output is unchanged.
++- Live check: ingest over squadron's own reviews gave 89 records (591 findings: 102 `other`, 113 missing, 55 `correctness`), re-run replaces all 89. A live `sq review code 402 --model sonnet` wrote `categoriesNormalized: true` with every category canonical.
++- Surprises:
++  - The corpus drifted since the design: `103-review.code.cli-foundation.md`, `0-review.code.review-1.md` and the PR review are all `UNKNOWN` now, so they are skipped. Fixtures use 156 and a synthetic PR review instead.
++  - A tasks review with verdict `RESOLVED` failed the first real ingest, because the verdict was validated before the review type. Non-code reviews are now skipped whatever their verdict.
++  - `resolve_reviews_dir` needs host, owner and repository, not just `cwd`; ingest takes them from the project id.
++  - `review-verdict-gate` refuses to commit a `docType: review` file without a verdict, so the missing-verdict fixture has no `docType`.
++  - The pipeline's structured `findings` output gained a null `raw_category` key; one golden test was updated.
++- Code review (sonnet) found one real gap, dropped findings with an unrecognized severity were silent. Fixed with a WARNING and a `Dropped:` summary line.
++
+ ## 20261024
+ 
++### Slice 402: Code-Review Normalization and Ingest — Task Breakdown Complete (Phase 5)
++
++- Tasks: `project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md`, 29 tasks, test-with ordering, one commit per implementation and test pair.
++- Order: `AuditCategory` move to `core/finding_categories.py` → template flag → `code.yaml` vocabulary and sync test → `normalize_category` → model fields, client hook, frontmatter → findings-addressed mixed-round test → record models and store → read-side alias table → fixtures, ingest module, CLI → walkthrough 1–3, CHANGELOG, live step 4.
++- Ingest fixtures copy real frontmatter from `103-review.code.cli-foundation.md` (no `reviewedSha`), the 947 code review, the PR #116 review and `0-review.code.review-1.md`.
++- `review_path` is relative to `--cwd` when inside it, else absolute; identity's `_relative_review_path` falls back to the bare filename, so ingest doesn't reuse it.
++
+ ### Release 0.24.1
+ 
+ - **Contents:** slice 401 (complexity, duplication and coverage metrics); fixes #256, #265, #266, #267, and the non-interactive checkpoint warning text.
+diff --git a/docs/COMMANDS.md b/docs/COMMANDS.md
+index c8f7107b..8a07fd46 100644
+--- a/docs/COMMANDS.md
++++ b/docs/COMMANDS.md
+@@ -543,6 +543,35 @@ Coverage comes from a report your project already produces (for example `pytest
+ 
+ Tools are resolved from the measured project (`.venv/bin`, `node_modules/.bin`) before `PATH`, and never installed. **Snapshotting a repository runs executables and config from that repository: its `.venv/bin/ruff`, `.venv/bin/pyright` and `.venv/bin/python`, its `node_modules/.bin/eslint` and its JavaScript config. That executes the repository's code with your full environment inherited, secrets included.** Only snapshot repositories you trust. Exit 1 on a dirty tree, a missing project identity, a repository change during measurement, or a store write failure.
+ 
++## metrology ingest-reviews
++
++Write one `code_review` record per code-review file into the metrology store, with the findings inline, so review findings can be counted next to the audit's.
++
++```
++sq metrology ingest-reviews [PATHS]... [--cwd PATH]
++```
++
++| Option | Type | Required | Default | Description |
++|--------|------|----------|---------|-------------|
++| `PATHS` | files or directories | no | the project's reviews directory | Review files, or directories searched for `*.md`; relative paths are relative to the current directory, not `--cwd` |
++| `--cwd` | path | no | current directory | Project root; its git remote (or `metrology.project_id`) names the project |
++
++Output is three counts, then each failed file with its reason:
++
++```
++Ingested <n> code reviews into <store dir> (<n> replaced)
++Skipped: <n> not code reviews, <n> unknown verdict
++Failed: <n>
++```
++
++A record is keyed on project and file path, so running the command again replaces the record of a file that was ingested before; it never adds a second one. Arch, slice and tasks reviews are skipped, and so are reviews with an `UNKNOWN` verdict (an unparsed review would otherwise count as zero findings). A file whose frontmatter can't be read, or that lacks `reviewType` or `verdict`, is listed as failed and the rest are still ingested.
++
++Each finding's category is one of the ten audit categories or `correctness`, or missing. Reviews written by `sq review code` carry `categoriesNormalized: true` and are recorded as written. Older reviews carry free-form categories; a fixed table maps the common ones (`error-handling`, `testing`, `design`, ...), everything else becomes `other`, and the record is marked `read_side_mapped`. The model's original string is kept as `raw_category`. The commit is the review's `reviewedSha` when it has one; the slice is read from the `sourceDocument` name (`{n}-slice.` or `{n}-tasks.`).
++
++A finding whose severity isn't a review severity is dropped from its record with a WARNING and a `Dropped:` line in the summary. A record is never removed: a review file that was deleted or renamed leaves its old record behind.
++
++Exit 1 if any file failed, a path doesn't exist, the reviews directory is missing, the project has no identity, or a store write fails (the counts so far are printed first).
++
+ ## spawn
+ 
+ Spawn a new agent instance.
+diff --git a/project-documents/user/architecture/400-slices.code-quality-measurement.md b/project-documents/user/architecture/400-slices.code-quality-measurement.md
+index 13058341..f6f53847 100644
+--- a/project-documents/user/architecture/400-slices.code-quality-measurement.md
++++ b/project-documents/user/architecture/400-slices.code-quality-measurement.md
+@@ -56,7 +56,7 @@ Ordering:
+    - **Risk Level:** Medium. Tool definitions of complexity and duplication differ, and that difference has to land in the tool identity.
+    - **Relative Effort:** 3/5
+ 
+-3. [ ] **(402) Code-Review Normalization and Ingest**: The `code` review template emits categories from the audit vocabulary plus the review-only `correctness`, keeping the model's raw string beside it. An ingest command reads code-review files into the store, one record per review file with findings inline. Historical reviews are mapped read-side and marked as mapped. Arch, slice and tasks reviews are untouched.
++3. [x] **(402) Code-Review Normalization and Ingest**: The `code` review template emits categories from the audit vocabulary plus the review-only `correctness`, keeping the model's raw string beside it. An ingest command reads code-review files into the store, one record per review file with findings inline. Historical reviews are mapped read-side and marked as mapped. Arch, slice and tasks reviews are untouched.
+    - **Value:** Developer value. Review findings become countable next to audit findings for the first time.
+    - **Success Criteria:**
+      - New `code` reviews carry a category from the closed set, with the raw string kept. Out-of-vocabulary categories normalize to `other`.
+diff --git a/project-documents/user/reviews/402-review.code.code-review-normalization-and-ingest.md b/project-documents/user/reviews/402-review.code.code-review-normalization-and-ingest.md
+new file mode 100644
+index 00000000..162fe272
+--- /dev/null
++++ b/project-documents/user/reviews/402-review.code.code-review-normalization-and-ingest.md
+@@ -0,0 +1,128 @@
++---
++docType: review
++layer: project
++reviewType: code
++slice: code-review-normalization-and-ingest
++targetKind: slice
++rulesSource: project
++conventionsSource: AGENTS.md
++projectRules: [python.md, sql.md, testing.md]
++project: squadron
++verdict: CONCERNS
++verdictSource: stated
++sourceDocument: project-documents/user/slices/402-slice.code-review-normalization-and-ingest.md
++aiModel: claude-sonnet-5-5
++aiProfile: sdk
++status: complete
++dateCreated: 20261024
++dateUpdated: 20261024
++reviewedSha: ff99da8d689b1bdd39603d8c6a4ebba8313d0b6f
++toolsGiven: [read_file, list_files, grep]
++toolCallsMade: 0
++diffTruncated: false
++turns: 1
++promptTokens: 63453
++cachedTokens: 2921
++cacheWriteTokens: 60530
++completionTokens: 3108
++durationSeconds: 26.5
++costUsd: 0.306417
++costBasis: provider
++squadronVersion: 0.24.1
++categoriesNormalized: true
++findings:
++  - id: F001
++    severity: concern
++    category: error-handling-observability
++    summary: "Findings with an unrecognized severity are dropped without a warning or a summary count"
++    location: "src/squadron/metrology/review_ingest.py#_finding"
++  - id: F002
++    severity: note
++    category: consistency-rot
++    summary: "Relative `PATHS` resolve against the process directory, not `--cwd`"
++    location: "src/squadron/cli/commands/metrology_review_ingest.py#ingest_reviews_command"
++  - id: F003
++    severity: note
++    category: architectural-decay
++    summary: "Duplicated record-id hashing"
++    location: "src/squadron/metrology/store.py#code_review_record_id"
++  - id: F004
++    severity: note
++    category: other
++    summary: "Re-ingest never prunes records for deleted review files"
++    location: "src/squadron/metrology/review_ingest.py#ingest_reviews"
++  - id: F005
++    severity: note
++    category: type-contract-debt
++    summary: "Test helper `record_for` lacks a return annotation"
++    location: "tests/metrology/test_review_store.py:28"
++  - id: F006
++    severity: pass
++    category: other
++    summary: "Design, exception handling and test coverage"
++    location: "src/squadron/review/categories.py"
++---
++
++# Review: code — slice 402
++
++**Verdict:** CONCERNS
++**Model:** claude-sonnet-5-5
++
++## Findings
++
++### [CONCERN] Findings with an unrecognized severity are dropped without a warning or a summary count
++
++`_finding` returns `None` when a finding's severity isn't on the review scale. `_findings` counts the drop in `unnormalized_count`. Nothing logs it at WARNING or higher, and `_echo_summary` in `src/squadron/cli/commands/metrology_review_ingest.py` doesn't report it. The count is visible only by reading the stored JSON, so a review can lose findings and still show as ingested cleanly. That undercounts findings, and the project's failure-mode rule says each failure must be observable. Log a warning with the file path and finding id. Also add the dropped count to the CLI summary line. The existing test `test_an_unrecognized_severity_is_counted_and_dropped` should then assert the log.
++
++### [NOTE] Relative `PATHS` resolve against the process directory, not `--cwd`
++
++`--cwd` is documented as the "Project root", but relative `PATHS` are used as given, so they resolve against the shell's current directory. `_review_path` resolves them the same way before computing the repo-relative key. Running `sq metrology ingest-reviews reviews --cwd /other/project` therefore finds the wrong directory, or stores absolute paths and so different record ids. Either resolve relative paths against `repo_root` or document that they are relative to the shell.
++
++### [NOTE] Duplicated record-id hashing
++
++`code_review_record_id` repeats the project-digest and path-digest pattern of `snapshot_record_id`. Two uses are tolerable. If a third deterministic id appears, extract a shared `_digest(value)` helper.
++
++### [NOTE] Re-ingest never prunes records for deleted review files
++
++A record is keyed on project and path, so a review file that was deleted or renamed leaves a stale `code_review` record behind. Renamed files produce duplicates. This is acceptable for now, but note it as a limit if the records feed baseline counts.
++
++### [NOTE] Test helper `record_for` lacks a return annotation
++
++`record_for` has no return type. The Python rules put tests under strict pyright and require hints on all signatures. Annotate it as `-> CodeReviewRecord`.
++
++### [PASS] Design, exception handling and test coverage
++
++The shared vocabulary lives in a leaf module, and sync tests guard the vocabulary across the enums and the `code` template. Strict write-time matching is kept separate from the read-side historical map. Exception handling follows the rules: `_FileProblem` is raised narrowly and reported with a WARNING, and store errors surface the partial result at the CLI process boundary. Tests cover the fixture classification, the re-ingest replacement, the partial-write failure and the CLI exit codes.
++
++## Response
++
++Addressed 20261025.
++
++- **F001 (unrecognized severity dropped silently): fixed.** Each drop now logs a WARNING with the file and finding id, `IngestResult.dropped_findings` totals them, and the CLI prints a `Dropped:` line when it is non-zero. The ingest test asserts the log and the count.
++- **F002 (relative `PATHS` vs `--cwd`): documented.** Relative paths are relative to the shell's current directory, which is the usual CLI meaning, and record ids are computed from the resolved absolute path either way. The option help and `docs/COMMANDS.md` say so.
++- **F003 (duplicated id hashing): not changed.** The reviewer calls two uses tolerable; a shared helper waits for a third.
++- **F004 (no pruning of deleted files): documented, not changed.** Slice design D5 keys a record on project and path and the architecture says one record per file. `docs/COMMANDS.md` states that a deleted or renamed review leaves its record behind.
++- **F005 (test helper annotation): fixed.**
++
++### Run Digest
++
++- Response length: 3240 chars
++- Response is newline-free: no
++- Tool calls made: 0
++- Tool calls failed: 0
++- Stop reason: end_turn
++- Output budget: backend default
++- System prompt: preset+append
++- Settings sources: project
++- Reasoning characters: 0
++- Effort: backend default
++- Turns: 1
++- Tokens — prompt / cached / cache write / completion / reasoning: 63453 / 2921 / 60530 / 3108 / not computed
++- Duration: 26.5 s
++- Cost: $0.31 (provider)
++- `## Summary` located: yes
++- `## Findings` located: yes
++- Finding-shaped matches — whole response: 6
++- Finding-shaped matches — inside fences: 0
++- Finding-shaped matches — in findings section: 6
++- Finding-shaped matches — surviving validation: 6
+diff --git a/project-documents/user/reviews/402-review.tasks.code-review-normalization-and-ingest.md b/project-documents/user/reviews/402-review.tasks.code-review-normalization-and-ingest.md
+new file mode 100644
+index 00000000..a8e2c1c3
+--- /dev/null
++++ b/project-documents/user/reviews/402-review.tasks.code-review-normalization-and-ingest.md
+@@ -0,0 +1,137 @@
++---
++docType: review
++layer: project
++reviewType: tasks
++slice: code-review-normalization-and-ingest
++conventionsSource: AGENTS.md
++projectRules: []
++project: squadron
++verdict: PASS
++verdictSource: stated
++sourceDocument: project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md
++aiModel: claude-sonnet-5-5
++aiProfile: sdk
++status: complete
++dateCreated: 20261024
++dateUpdated: 20261024
++reviewedSha: a8639308800797456533dd75d301d88320b39a68
++revision_number: 1
++toolsGiven: [read_file, list_files, grep]
++toolCallsMade: 2
++turns: 3
++promptTokens: 102490
++cachedTokens: 11222
++cacheWriteTokens: 91264
++completionTokens: 5165
++durationSeconds: 42.5
++costUsd: 0.418569
++costBasis: provider
++runId: run-20261025-p5-b605399d
++squadronVersion: 0.24.1
++findings:
++  - id: F001
++    severity: pass
++    category: coverage
++    summary: "Success criteria coverage is complete"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:43-247"
++  - id: F002
++    severity: pass
++    category: sequencing
++    summary: "Sequencing and dependencies are sound"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:47-231"
++  - id: F003
++    severity: note
++    category: process
++    summary: "Commits are batched across several tasks, against the \"commit at least once per task\" rule"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:127"
++  - id: F004
++    severity: note
++    category: proportionality
++    summary: "Task 3/4 and the other implementation/test pairs are fine-grained"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:56-63"
++  - id: F005
++    severity: note
++    category: test-robustness
++    summary: "Vocabulary-block extraction may pick up stray backticks"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:66-74"
++  - id: F006
++    severity: note
++    category: clarity
++    summary: "Result field names and ingest skip-reason labels differ"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:178-197"
++---
++
++# Review: tasks — slice 402
++
++**Verdict:** PASS
++**Model:** claude-sonnet-5-5
++
++## Findings
++
++### [PASS] Success criteria coverage is complete
++
++Every functional and technical requirement maps to at least one task:
++- **FR1:** Tasks 5, 11, 13 and 29 (live check).
++- **FR2:** Tasks 7, 8 and 11.
++- **FR3 and FR4:** Tasks 16–18 (store, replace-by-id) and 22–24 (ingest, re-ingest test).
++- **FR5:** Tasks 22, 24 and 26 cover the whole failure-mode table, including the nonexistent path, missing directory, empty directory, malformed file, non-UTF-8 file and store error.
++- **FR6:** Tasks 19, 20 and 23.
++- **FR7:** Task 12 asserts the `arch` template is unchanged.
++- **Sync test (D8):** Task 6.
++- **Disjoint-severity test unchanged:** Task 6.
++- **Integration requirement (findings-addressed mixed pair):** Task 15.
++- **CHANGELOG:** Task 28.
++- **Verification walkthrough steps 1–4:** Task 6 (step 1), Task 27 (steps 2–3) and Task 29 (step 4).
++
++The slice states no NFR, so no load-test or CI-gating task is needed.
++
++### [PASS] Sequencing and dependencies are sound
++
++There are no circular dependencies, and each dependency is built before it is used:
++- The leaf module (Task 2) comes before everything that imports it.
++- `lenient_category_key` (Task 7) comes before the alias table (Task 19).
++- The record models (Task 16) come before the store (Task 17).
++- The alias table and fixtures (Tasks 19 and 21) come before ingest (Tasks 22–23).
++- Ingest comes before the CLI (Task 25).
++- Live verification (Task 29) is last.
++
++Each implementation task is followed by its own test task (3→4, 7→8, 9→10, 11→12, 13→14, 16/17→18, 19→20, 22/23→24, 25→26). Task 5 is the exception: the prompt block's test is Task 6, which is the sync test.
++
++### [NOTE] Commits are batched across several tasks, against the "commit at least once per task" rule
++
++Commit lines appear only at group ends. Tasks 7–14 (normalizer, model fields, client hook, persistence and their tests) share one commit at Task 14. Tasks 21–24 share one at Task 24. The project CLAUDE.md says to commit at least once per task. Checkpoints are spread through the file and not saved for the end, so this does not block progress. A junior implementer reading the file literally might still batch eight tasks into one commit. If you want per-task commits, add an intermediate commit after Task 10 and after Task 12.
++
++### [NOTE] Task 3/4 and the other implementation/test pairs are fine-grained
++
++Tasks 3 and 4 are Effort 2 and Effort 1. The same applies to Tasks 9/10 and 7/8. They could be merged without loss. Keeping them separate does follow the test-with pattern, and each is small enough for a junior to complete. There is no scope creep: every task traces to a success criterion, and nothing extra is added beyond the tests the slice requires.
++
++### [NOTE] Vocabulary-block extraction may pick up stray backticks
++
++Task 5 copies the ten audit definitions from the skill into the `code.yaml` block. Task 6 item 2 compares every backticked token in that block to `ReviewCategory`, in both directions. If a copied definition contains an extra backticked token, the sync test will fail on legitimate prose. The implementer would need to reword the definition or narrow the extraction. Consider adding a line to Task 5: "definitions contain no backticked tokens other than the category value".
++
++### [NOTE] Result field names and ingest skip-reason labels differ
++
++Task 22 names the counters `skipped_not_code` and `skipped_unknown_verdict`. Task 24 asserts "`not-code-review`" and "`unknown-verdict`", which are the slice's labels for the summary. The mapping is obvious, but Task 24 should say it asserts the counters. Task 25 should say it prints the labels from the API Contracts.
++
++### Run Digest
++
++- Response length: 4490 chars
++- Response is newline-free: no
++- Tool calls made: 2
++- Tool calls failed: 0
++- Stop reason: end_turn
++- Output budget: backend default
++- System prompt: preset+append
++- Settings sources: project
++- Reasoning characters: 0
++- Effort: backend default
++- Turns: 3
++- Tokens — prompt / cached / cache write / completion / reasoning: 102490 / 11222 / 91264 / 5165 / not computed
++- Duration: 42.5 s
++- Cost: $0.42 (provider)
++- `## Summary` located: yes
++- `## Findings` located: yes
++- Finding-shaped matches — whole response: 6
++- Finding-shaped matches — inside fences: 0
++- Finding-shaped matches — in findings section: 6
++- Finding-shaped matches — surviving validation: 6
+diff --git a/project-documents/user/reviews/archive/402-review.tasks.code-review-normalization-and-ingest.md b/project-documents/user/reviews/archive/402-review.tasks.code-review-normalization-and-ingest.md
+new file mode 100644
+index 00000000..254135dc
+--- /dev/null
++++ b/project-documents/user/reviews/archive/402-review.tasks.code-review-normalization-and-ingest.md
+@@ -0,0 +1,160 @@
++---
++docType: review
++layer: project
++reviewType: tasks
++slice: code-review-normalization-and-ingest
++conventionsSource: AGENTS.md
++projectRules: []
++project: squadron
++verdict: CONCERNS
++verdictSource: stated
++sourceDocument: project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md
++aiModel: claude-sonnet-5-5
++aiProfile: sdk
++status: complete
++dateCreated: 20261024
++dateUpdated: 20261024
++reviewedSha: df5485be677355545407258fc2e81be6ef8a748c
++toolsGiven: [read_file, list_files, grep]
++toolCallsMade: 3
++turns: 4
++promptTokens: 188169
++cachedTokens: 91403
++cacheWriteTokens: 96760
++completionTokens: 5591
++durationSeconds: 44.7
++costUsd: 0.452837
++costBasis: provider
++runId: run-20261025-p5-b605399d
++squadronVersion: 0.24.1
++findings:
++  - id: F001
++    severity: concern
++    category: sequencing
++    summary: "Partial-progress reporting conflicts with the ingest return design"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:181"
++  - id: F002
++    severity: concern
++    category: completeness
++    summary: "`replaced` count has no source in the store API"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:135"
++  - id: F003
++    severity: concern
++    category: test-coverage
++    summary: "Ingest behaviors in the design have no test in Task 21"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:185-195"
++  - id: F004
++    severity: concern
++    category: sequencing
++    summary: "Stale cross-reference in Task 7"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:87"
++  - id: F005
++    severity: concern
++    category: task-sizing
++    summary: "Task 20 is oversized"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:170-182"
++  - id: F006
++    severity: concern
++    category: sequencing
++    summary: "Test-with pattern is batched for Tasks 9–11"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:95-112"
++  - id: F007
++    severity: note
++    category: proportionality
++    summary: "Overlap between Task 4 and Task 6 item 3"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:61"
++  - id: F008
++    severity: note
++    category: task-format
++    summary: "Task 26 mixes a step with success criteria"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:232"
++  - id: F009
++    severity: pass
++    category: coverage
++    summary: "Coverage of success criteria"
++    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md"
++---
++
++# Review: tasks — slice 402
++
++**Verdict:** CONCERNS
++**Model:** claude-sonnet-5-5
++
++## Findings
++
++### [CONCERN] Partial-progress reporting conflicts with the ingest return design
++
++Task 20 returns a result dataclass only on completion, and `MetrologyStoreError` propagates. Task 22 requires that on `MetrologyStoreError` the CLI "print what was written so far". Task 23 tests that the partial count is printed. Once the exception propagates, the counts accumulated inside the ingest function are gone, so Task 22 cannot meet this. Task 20 needs a mechanism, for example a caller-supplied result object that is mutated as it goes, or an exception that carries the partial result. A junior would otherwise have to invent one.
++
++### [CONCERN] `replaced` count has no source in the store API
++
++Task 20 counts `replaced` when "a record with that id already existed". Task 15's `write_code_review(record) -> str` does not say what it returns or how existence is reported. Ingest could list existing records first, but no task says to. Specify one mechanism. For example, have `write_code_review` report whether it replaced a record, or have ingest read the project's existing ids once before the loop. Task 16 should then test it.
++
++### [CONCERN] Ingest behaviors in the design have no test in Task 21
++
++Two behaviors that Task 20 implements are untested:
++- Dropping a finding whose severity is outside `Severity` and counting it in `unnormalized_count` (D6).
++- A write-time file whose stored category isn't a `ReviewCategory` value, which must fail the file.
++
++Task 19 has no fixture for either. Add a synthetic fixture for each and one assertion each in Task 21.
++
++### [CONCERN] Stale cross-reference in Task 7
++
++Task 7 says `lenient_category_key` is exposed "so Task 15 reuses it". Task 15 is the envelope and store task. The alias table in Task 17 is the consumer. A junior following the pointer would look in the wrong place. Change it to Task 17.
++
++### [CONCERN] Task 20 is oversized
++
++Task 20 is rated Effort 4 and bundles input resolution, per-file parsing and failure collection, skip classification, slice-index extraction, severity and category handling for two file formats, and replace counting. It must also stay within the ~50-line function limit. Split it into two tasks:
++- Path and directory resolution, plus the per-file read, parse and classify step.
++- Record building: slice index, findings, categories and the replace count.
++
++Both would sit under the existing Task 21 test checkpoint.
++
++### [CONCERN] Test-with pattern is batched for Tasks 9–11
++
++Tasks 9, 10 and 11 are three implementation tasks. Their tests all land in Task 12, with no verification between them except the existing suites. Task 12 is Effort 3 and covers models, persistence and the client. Move the model and persistence tests next to Tasks 9 and 11. Keep the client tests with Task 10. Each task then follows the test-with pattern.
++
++### [NOTE] Overlap between Task 4 and Task 6 item 3
++
++Task 4 asserts that the built-in `code` template loads with the flag true and `arch`/`slice`/`tasks` load with it false. Task 6 item 3 asserts the same facts from the YAML files. Keep the absent-key and non-bool cases in Task 4 and drop the built-in assertions. Task 6 already covers them and also fails on drift.
++
++### [NOTE] Task 26 mixes a step with success criteria
++
++The "ingest again; `read_side_mapped` is false" item is written as an action line. It is really a success criterion from the walkthrough. Mark it as `Success:`.
++
++### [PASS] Coverage of success criteria
++
++- FR1 and FR2: Tasks 5, 10, 11, 12 and 26.
++- FR3 and FR4: Tasks 20–23.
++- FR5: Tasks 21 and 23 (failure-mode table).
++- FR6: Tasks 17, 18 and 21.
++- FR7: the `arch` case in Task 12 and the flag tests in Tasks 4 and 6.
++- Integration requirement: the findings-addressed test in Task 13.
++- Sync test: Task 6.
++- Walkthrough steps 1–4: Tasks 24 and 26.
++- CHANGELOG and validation: Task 25.
++
++No task is scope creep. The slice states no NFR, so no load test or CI-gating task is needed. The four fixture files that Task 19 copies exist under `project-documents/user/reviews/`.
++
++### Run Digest
++
++- Response length: 5327 chars
++- Response is newline-free: no
++- Tool calls made: 3
++- Tool calls failed: 0
++- Stop reason: end_turn
++- Output budget: backend default
++- System prompt: preset+append
++- Settings sources: project
++- Reasoning characters: 0
++- Effort: backend default
++- Turns: 4
++- Tokens — prompt / cached / cache write / completion / reasoning: 188169 / 91403 / 96760 / 5591 / not computed
++- Duration: 44.7 s
++- Cost: $0.45 (provider)
++- `## Summary` located: yes
++- `## Findings` located: yes
++- Finding-shaped matches — whole response: 9
++- Finding-shaped matches — inside fences: 0
++- Finding-shaped matches — in findings section: 9
++- Finding-shaped matches — surviving validation: 9
+diff --git a/project-documents/user/slices/402-slice.code-review-normalization-and-ingest.md b/project-documents/user/slices/402-slice.code-review-normalization-and-ingest.md
+index 6f1fd218..75796005 100644
+--- a/project-documents/user/slices/402-slice.code-review-normalization-and-ingest.md
++++ b/project-documents/user/slices/402-slice.code-review-normalization-and-ingest.md
+@@ -9,8 +9,8 @@ dependencies:
+ interfaces:
+ - 403
+ dateCreated: 20261022
+-dateUpdated: 20261023
+-status: not_started
++dateUpdated: 20261025
++status: complete
+ turns: 38
+ promptTokens: 2796590
+ cachedTokens: 2695294
+@@ -64,7 +64,7 @@ This slice puts code-review findings into the same buckets. The `code` template
+ ### Interfaces Required
+ - `squadron.metrology.identity.derive_project_id(cwd)` for the record's project key.
+ - `squadron.documents.frontmatter.parse_frontmatter(text)` to parse frontmatter from the text read once per file (D5, failure-mode table).
+-- `squadron.review.reviews_dir.resolve_reviews_dir(cwd)` for the default ingest location.
++- `squadron.review.reviews_dir.resolve_reviews_dir(...)` for the default ingest location. It also needs host, owner and repository, which ingest takes from the project id (`host/owner/.../repository`); a project id with fewer than three segments fails with a message asking for `PATHS`.
+ - `ReviewTemplate` loading in `squadron/review/templates/__init__.py`, which gets one new optional field.
+ - The parse closure in `squadron/review/review_client.py`, the only call site of `parse_review_output`.
+ 
+@@ -235,6 +235,7 @@ Ingested <n> code reviews into <store dir> (<n> replaced)
+ Skipped: <n> not code reviews, <n> unknown verdict
+ Failed: <n>
+ ```
++- A `Dropped: <n> findings with a severity outside the review scale` line follows the skipped line when any finding was dropped (each drop also logs a WARNING with the file and finding id). Relative `PATHS` are relative to the shell's current directory, not `--cwd`.
+ - Exit codes are in the failure-mode table under Data Flow.
+ 
+ **Review output additions**
+@@ -317,6 +318,23 @@ Run from the squadron repo root.
+ 
+ 4. **A new code review is categorized at write time.** Once the slice is implemented, run `sq review code 402 --model <alias>` with a model alias from the Project Manager's configuration. The frontmatter has `categoriesNormalized: true`, and every finding `category` is one of the eleven values or `uncategorized`. Ingest again and open the new record: `read_side_mapped` is false.
+ 
++### Walkthrough Results
++
++Run 20261025 on the slice branch.
++
++| Step | Result |
++|---|---|
++| 1 | `test_review_category_sync.py`, `test_audit_skill_sync.py` and `test_audit_models.py`: 18 passed. With the `correctness` line deleted from `code.yaml`'s vocabulary block: `AssertionError: ReviewCategory values missing from code.yaml: ['correctness']`. Reverted |
++| 2 | `sq metrology ingest-reviews`: `Ingested 89 code reviews ... (0 replaced)`, `Skipped: 289 not code reviews, 7 unknown verdict`, `Failed: 1`. The failure was a tasks review with the verdict `RESOLVED`, checked before its review type; fixed so a non-code review is skipped whatever its verdict. Second run: `Ingested 89 ... (89 replaced)`, `Failed: 0`, and 89 `codereview-*` files in the store before and after |
++| 3 | The 947 record: `record_type: code_review`, `slice_index: 947`, `commit_sha` equal to the file's `reviewedSha`, `error-handling` mapped to `error-handling-observability` (raw kept), `read_side_mapped: true`. Across all 89 records: 591 findings, 102 `other`, 113 missing, 55 `correctness`, 99 `error-handling-observability` |
++| 4 | `sq review code 402 --model sonnet`: frontmatter has `categoriesNormalized: true` and every finding category is a `ReviewCategory` value. After ingest the 402 record has `read_side_mapped: false` and `commit_sha` of the reviewed commit |
++
++Caveats found while running it:
++- **The corpus changed since the design.** `103-review.code.cli-foundation.md`, `0-review.code.review-1.md` and the PR review now have verdict `UNKNOWN`, so they are skipped. The ingest fixtures use `156-review.code.pipeline-executor-hardening.md` for the no-`reviewedSha` case and a synthetic PR review with a known verdict.
++- **`resolve_reviews_dir` needs host, owner and repository** (see Interfaces Required).
++- **The saved structured findings gained a null `raw_category` key** (pipeline `findings` output), so one golden test was updated. The review file itself is unchanged for non-normalizing templates.
++- **A review file deleted or renamed leaves its record behind.** Ingest never prunes; documented in `docs/COMMANDS.md`.
++
+ ## Risk Assessment
+ 
+ ### Technical Risks
+diff --git a/project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md b/project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md
+new file mode 100644
+index 00000000..e8affb8e
+--- /dev/null
++++ b/project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md
+@@ -0,0 +1,247 @@
++---
++docType: tasks
++slice: code-review-normalization-and-ingest
++project: squadron
++lld: user/slices/402-slice.code-review-normalization-and-ingest.md
++dependencies:
++- 320
++- 323
++projectState: 0.24.1 released with slice 401 merged; slice 402 design complete, all
++  decisions decided
++dateCreated: 20261024
++dateUpdated: 20261025
++status: complete
++turns: 27
++promptTokens: 1828370
++cachedTokens: 1736785
++cacheWriteTokens: 91533
++completionTokens: 25656
++durationSeconds: 245.7
++costUsd: 1.593255
++usageRounds: 2
++pricedRounds: 2
++usageByModel:
++  claude-opus-5-5:
++    rounds: 2
++    costUsd: 1.5932549000000003
++    completionTokens: 25656
++revision_number: 1
++---
++
++# Tasks: Code-Review Normalization and Ingest
++
++## Context Summary
++- Slice 402 puts `sq review code` findings into the audit category buckets. The `code` template asks for a category from a closed vocabulary (`ReviewCategory`: the ten `AuditCategory` values plus `correctness`), the review client normalizes what comes back, and a new `sq metrology ingest-reviews` command writes one `code_review` record per code-review file into the metrology store. Historical reviews are mapped read-side through a fixed alias table.
++- All decisions live in the slice design (the `lld` above), D1–D9. Each task cites its decision. Read it before starting the task. The module table is under Architecture → Component Structure, the data flow and the ingest failure-mode table are under Data Flow, and the record schema is under Database / Storage Schema.
++- Prerequisites on `main`: `AuditCategory` in `metrology/models.py` (re-exported by `metrology/audit_models.py`), `tests/metrology/test_audit_skill_sync.py`, the disjoint-severity test in `tests/metrology/test_audit_models.py`, `MetrologyStore` with `write_snapshot` / `snapshot_record_id` as the replace-by-id pattern, and `cli/commands/metrology_snapshot.py` as the sub-command pattern.
++- Contract freeze: `parse_review_output` doesn't change. Arch, slice, tasks and judge templates and their output don't change. `AuditCategory` values, the audit parser and the tech-debt-audit skill don't change. `schema_version` doesn't move.
++- Branch: `402-slice.code-review-normalization-and-ingest`, forked from the target (`cf config get git.integration_branch`, or `main` if empty).
++- Every commit: `.venv/bin/ruff format`, `.venv/bin/ruff check`, `.venv/bin/pyright` (zero errors project-wide), and the tests for the touched area. Don't use `pytest -n`.
++- New modules stay at ~300 lines or less. Live runs (ingest over squadron's reviews directory, one live `sq review code`) are pre-authorized.
++- Next slices: 403 (rollups, reads `list_code_reviews`) and 420 (scores implementation replays).
++
++## Task 1: Slice branch — Effort 1
++- [x] Create `402-slice.code-review-normalization-and-ingest` from the target
++- [x] Success: `git branch --show-current` prints the slice branch
++
++## Task 2: Vocabulary leaf module (D1, D2) — Effort 2
++- [x] Create `src/squadron/core/finding_categories.py`. It imports only `enum`
++- [x] Move `AuditCategory` there from `metrology/models.py`, unchanged: same members, values, docstring
++- [x] Add `ReviewCategory(StrEnum)` in the same module: the ten `AuditCategory` members with identical names and values, plus `CORRECTNESS = "correctness"`. Docstring states why `correctness` is review-only (D1)
++- [x] `metrology/models.py` imports `AuditCategory` from the leaf and keeps it importable from there (and in `__all__` if the module has one). `metrology/audit_models.py` keeps its existing re-export working
++- [x] Success: `grep -rn "class AuditCategory" src/` finds only the leaf module
++- [x] Success: the full `tests/metrology/` suite and `tests/pipeline/actions/test_dispatch_pre_emption.py` pass with no test edits
++- [x] Commit: `refactor(core): move AuditCategory to a finding_categories leaf module`
++
++## Task 3: Template flag (D3) — Effort 2
++- [x] Add `normalize_categories: bool = False` to `ReviewTemplate` in `squadron/review/templates/__init__.py`, read from the YAML key `normalize_categories`. An absent key is `False`. A non-bool value fails template loading with the existing validation error, never a coerced value
++- [x] Set `normalize_categories: true` in `data/templates/code.yaml` only. Don't touch `arch.yaml`, `slice.yaml`, `tasks.yaml` or the judge templates
++- [x] Success: `tests/review/test_templates.py` and `tests/review/test_user_templates.py` pass
++
++## Task 4: Template flag tests — Effort 1
++- [x] In `tests/review/test_templates.py`: a YAML without the key loads `False`; a YAML with `normalize_categories: "yes"` fails to load. The built-in templates' values are asserted by Task 6 item 3
++- [x] Success: tests pass
++
++## Task 5: `code.yaml` category vocabulary block (D3, Mitigation Strategies) — Effort 2
++- [x] Add a block to the `code.yaml` prompt, placed before the output structure block, that starts with a line `Category vocabulary:` and lists all eleven `ReviewCategory` values, each backticked with a one-line definition. The definitions contain no backticked tokens other than the category value (Task 6 compares every backticked token in the block). Take the ten audit definitions from the tech-debt-audit skill that `test_audit_skill_sync.py` reads. `correctness`: the code behaves wrongly (wrong result, broken contract, crash)
++- [x] Make the per-finding `category:` tag required in the prompt, following the arch template's `category:` tag pattern
++- [x] The output structure block's category fill slot is the placeholder `<one value from the category vocabulary>`. No concrete category value appears in or near any fill slot (CLAUDE.md "Hallucination traps")
++- [x] Success: `tests/review/test_builtin_code.py` passes; fix any assertion that pinned the old prompt text only where the prompt text itself changed
++
++## Task 6: Review category sync test (D8) — Effort 2
++- [x] Create `tests/metrology/test_review_category_sync.py` asserting:
++  1. `{m.value for m in ReviewCategory} == {m.value for m in AuditCategory} | {"correctness"}`
++  2. The backticked values in `code.yaml`'s vocabulary block equal the `ReviewCategory` values in both directions. Locate the block from the `Category vocabulary:` line through the next blank-line-separated heading. Reuse the lenient backtick matching from `test_audit_skill_sync.py` (import or extract a shared helper; don't copy it). Failure messages name the missing and the extra values
++  3. `code.yaml` sets `normalize_categories: true`; `arch.yaml`, `slice.yaml`, `tasks.yaml` don't
++- [x] `test_audit_skill_sync.py` and the disjoint-severity test stay unchanged, apart from a helper extraction if item 2 needs one
++- [x] Success: deleting `` `correctness` `` from `code.yaml` makes the test fail naming `correctness`; revert, and it passes
++- [x] Success: `tests/metrology/test_review_category_sync.py tests/metrology/test_audit_skill_sync.py tests/metrology/test_audit_models.py` pass
++- [x] Commit: `feat(review): add category vocabulary and normalization flag to code template`
++
++## Task 7: `normalize_category` (D4) — Effort 2
++- [x] Create `squadron/review/categories.py` with a frozen dataclass `NormalizedCategory(category: ReviewCategory | None, raw_category: str | None)` and `normalize_category(raw: str | None) -> NormalizedCategory`
++- [x] Rules, per the Data Flow write-time block:
++  - [x] `None` or blank → `(None, None)`. Never `other`
++  - [x] exact `ReviewCategory` value → `(member, None)`
++  - [x] matches after lenient normalization (casefold, trim, strip backticks and quotes, spaces and underscores to hyphens) → `(member, raw as emitted)`
++  - [x] anything else → `(OTHER, raw as emitted)`
++- [x] Expose the lenient-normalization step as a public function (`lenient_category_key(raw) -> str`) so Task 19 reuses it. No alias table here (D4)
++- [x] Success: module imports only stdlib and `squadron.core.finding_categories`
++
++## Task 8: `normalize_category` tests — Effort 1
++- [x] Create `tests/review/test_categories.py`, parametrized over: `None`, `""`, every `ReviewCategory` value, `` `Correctness` ``, `"Test Debt"`, `"test_debt"`, `'"security-hygiene"'`, `"error-handling"` (→ `other`, raw kept, D4: the alias table is read-side only), `"design/typing"` (→ `other`)
++- [x] Assert `raw_category is None` exactly when the input was already canonical or missing
++- [x] Success: tests pass
++
++## Task 9: Finding and result fields — Effort 2
++- [x] In `squadron/review/models.py` add `raw_category: str | None = None` to `ReviewFinding` and `StructuredFinding`, and `categories_normalized: bool = False` to `ReviewResult`
++- [x] `ReviewResult.to_dict()`: `categories_normalized` always present (bool); `raw_category` present per finding and per structured finding, `None` when not set (API Contracts → Review output additions)
++- [x] Where `models.py` builds `StructuredFinding` from `ReviewFinding` (the `category=f.category or "uncategorized"` site), carry `raw_category` across
++- [x] Success: `tests/review/test_models.py` passes
++
++## Task 10: Finding and result field tests — Effort 1
++- [x] `tests/review/test_models.py`: `to_dict()` carries `categories_normalized` and per-finding `raw_category` (null and set); a `StructuredFinding` built from a `ReviewFinding` keeps `raw_category`
++- [x] Success: tests pass
++
++## Task 11: Client normalization hook and write-time WARNING — Effort 3
++- [x] In the parse closure in `squadron/review/review_client.py` (the only `parse_review_output` call site), when `template.normalize_categories` is true: replace each finding's `category` with `normalize_category(...).category` (its value, or `None`), set its `raw_category`, and set `result.categories_normalized = True`. When false, change nothing
++- [x] Write-time failure mode (Data Flow): when the flag is set, the result has at least one finding, and no finding carried a `category:` tag, log a WARNING naming the template and the finding count. The review is still produced, every category stays `None` (`uncategorized`), none becomes `other`
++- [x] Keep the hook a small helper function (in `categories.py` or the client), not inline growth of the closure
++- [x] Verbose finding display shows the normalized category through the existing field; add no new verbose output
++- [x] Success: `tests/review/test_review_client.py` passes unchanged
++
++## Task 12: Client hook tests — Effort 2
++- [x] `tests/review/test_review_client.py`, using a canned model response with one canonical, one non-canonical (`Test Debt`), one out-of-vocabulary (`error-handling`) and one untagged finding:
++  - [x] with the `code` template: categories are `test-debt`, `test-debt` (raw `Test Debt`), `other` (raw `error-handling`), `None`; `categories_normalized` is true
++  - [x] with the `arch` template: categories are exactly the raw strings, no `raw_category`, `categories_normalized` false (Functional Requirement 7)
++- [x] A second canned response with findings and no `category:` tags, `code` template: `caplog` has the WARNING naming the template and count, and no category is `other`. A response with zero findings logs no WARNING
++- [x] Success: tests pass
++
++## Task 13: Frontmatter writer — Effort 2
++- [x] In `squadron/review/persistence.py`: write `categoriesNormalized: true` at file level only when `result.categories_normalized` is true; write `rawCategory: "<yaml_escape(raw)>"` under a finding only when `raw_category` is set. Finding `category` keeps the existing `uncategorized` sentinel for `None`
++- [x] Success: `tests/review/test_persistence.py` and `tests/review/test_persistence_migration.py` pass unchanged
++
++## Task 14: Frontmatter writer tests — Effort 1
++- [x] `tests/review/test_persistence.py`: a normalized result writes `categoriesNormalized: true` and a quoted `rawCategory` only on the finding that has one; a result with a raw string containing a quote round-trips through `parse_frontmatter`; a non-normalized result writes neither key
++- [x] Success: `tests/review/` passes
++- [x] Commit: `feat(review): normalize code-review finding categories at write time`
++
++## Task 15: Findings-addressed mixed-round test (Integration Requirements) — Effort 1
++- [x] In `tests/pipeline/test_findings_addressed.py`, add a test with a round-1 finding categorized `error-handling` and a round-2 finding at the same location categorized `error-handling-observability`. Assert the screen in `pipeline/actions/findings_addressed/screens.py` doesn't settle it as re-found and doesn't raise. No production change
++- [x] Success: test passes
++- [x] Commit: `test(pipeline): cover mixed pre- and post-normalization finding categories`
++
++## Task 16: Review record models (Storage Schema, D6) — Effort 2
++- [x] Create `squadron/metrology/review_models.py` with `CodeReviewFinding` and `CodeReviewRecord` exactly as in Database / Storage Schema. `severity` is `review.models.Severity`; `category` is `ReviewCategory | None`; `verdict` is `review.models.Verdict`
++- [x] A validator rejects `verdict == UNKNOWN` (D6)
++- [x] Success: module imports `ReviewCategory` from `squadron.core.finding_categories`, not from metrology
++
++## Task 17: Envelope and store methods (D5, Patterns and Conventions) — Effort 3
++- [x] Add `RECORD_TYPE_CODE_REVIEW = "code_review"` beside the other record-type constants and `code_review: CodeReviewRecord | None = None` on `MetrologyRecord`
++- [x] In `store.py` add `code_review_record_id(project_id, review_path) -> str` returning `codereview-{sha256(project_id)[:12]}-{sha256(review_path)[:12]}`, the same shape as `snapshot_record_id`
++- [x] `write_code_review(record) -> str`: raises `MetrologyStoreError` if `record.record_id` doesn't equal the derived id; otherwise writes atomically, replacing any record with that id, as `write_snapshot` does
++- [x] `list_code_reviews(project_id) -> list[CodeReviewRecord]`: only that project's `code_review` records, newest `reviewed_at` first, unreadable siblings skipped with a WARNING like the other list methods
++- [x] Success: `tests/metrology/test_store.py` and `tests/metrology/test_models.py` pass unchanged (existing record types load)
++
++## Task 18: Record and store tests — Effort 2
++- [x] Create `tests/metrology/test_review_models.py`: a valid record round-trips through JSON; `UNKNOWN` verdict is rejected; a `None` category serializes as null, not `other`
++- [x] Create `tests/metrology/test_review_store.py`: id derivation is stable and differs by path and by project; writing twice with the same id leaves one file and the second content; a mismatched id raises `MetrologyStoreError`; listing filters by project, sorts newest first, and skips a corrupt sibling with a WARNING (`caplog`); an existing sample record still loads beside a code-review record
++- [x] Success: tests pass
++- [x] Commit: `feat(metrology): add code_review record type and store methods`
++
++## Task 19: Read-side alias table (D7) — Effort 2
++- [x] Create `squadron/metrology/review_category_map.py` with a module-level `dict[str, ReviewCategory]` holding exactly the D7 table rows, keyed by `lenient_category_key` of each historical string
++- [x] `map_historical_category(raw: str | None) -> NormalizedCategory`:
++  - [x] `None`, blank or `uncategorized` → `(None, None)`
++  - [x] key in the table → `(member, raw)`, with `raw` set only when it differs from the member value
++  - [x] otherwise → `(OTHER, raw)`. Compound strings like `design/typing` aren't split
++- [x] Success: the table has 16 historical strings plus no others
++
++## Task 20: Alias table tests — Effort 1
++- [x] Create `tests/metrology/test_review_category_map.py`, parametrized over every D7 string (including `correctness` → `correctness`), `Error Handling` (lenient key), `uncategorized` → `None`, `None`, `style` and `code-quality` → `other`, `design/typing` → `other` with raw kept
++- [x] Assert every table value is a `ReviewCategory` member and every key is already in lenient form
++- [x] Success: tests pass
++- [x] Commit: `feat(metrology): add read-side category map for historical code reviews`
++
++## Task 21: Ingest fixture directory (Technical Requirements) — Effort 2
++- [x] Create `tests/metrology/fixtures/review_ingest/` with frontmatter copied verbatim from `project-documents/user/reviews/` (body may be truncated to one line): (deviation: 103, the PR review and 0-review all have verdict UNKNOWN now, so they are skip cases; 156-review.code.pipeline-executor-hardening.md stands in for the no-reviewedSha case and synthetic-pr-review.code.md for the PR source with a known verdict)
++  - [x] `103-review.code.cli-foundation.md` (no `reviewedSha`, no `targetKind`)
++  - [x] `947-review.code.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md` (`targetKind: slice`)
++  - [x] `github.com-ecorkran-squadron-116-review.code.md` (PR review)
++  - [x] `0-review.code.review-1.md` (blank `sourceDocument`, `slice: unknown`)
++  - [x] one arch review of your choice
++- [x] Add synthetic files, each named for what it tests: a code review with `verdict: UNKNOWN`, a file with malformed frontmatter, a code review missing `verdict`, a code review written in the new format (`categoriesNormalized: true`, one finding with `rawCategory`), a code review with one finding whose severity isn't a `Severity` value, and a new-format code review with a stored category that isn't a `ReviewCategory` value (deviation: no synthetic UNKNOWN file, the real UNKNOWN files cover it; synthetic-missing-verdict.code.md has no docType: review because the repo's verdict gate refuses to commit a review without a verdict)
++- [x] The non-UTF-8 file is created at test time in `tmp_path`, not committed
++- [x] Success: files exist; nothing outside `tests/` changes
++
++## Task 22: Ingest input resolution and per-file classification (Data Flow, D6) — Effort 2
++- [x] Create `squadron/metrology/review_ingest.py` with a result dataclass holding `ingested`, `replaced`, `skipped_not_code`, `skipped_unknown_verdict`, and `failed: list[tuple[Path, str]]`. The ingest function takes the project id, repo root, the list of file paths, the store, and a caller-supplied result object that it updates as each file is processed, so the counts so far survive a `MetrologyStoreError`
++- [x] A separate function resolves inputs: each `PATHS` entry is a file or a directory (its `*.md`); a nonexistent entry raises an error naming it before anything is written. With no `PATHS`, use `resolve_reviews_dir(cwd)`; a missing directory raises naming the resolved path (resolve_reviews_dir needs host/owner/repository, so the default directory is derived from the project id; a project id that isn't host/owner/repository fails with a message asking for PATHS)
++- [x] Per file, read the bytes once and parse frontmatter with `parse_frontmatter` from that text. Unreadable, not UTF-8, no frontmatter, or missing `reviewType` / `verdict` → WARNING with the path, appended to `failed`, continue
++- [x] `reviewType != code` → `skipped_not_code`; `verdict: UNKNOWN` → `skipped_unknown_verdict`
++- [x] Success: module imports cleanly and `pyright` passes
++
++## Task 23: Ingest record building and writes (Data Flow, D5, D6) — Effort 3
++- [x] In `review_ingest.py`, build the record for each classified code review:
++  - [x] `review_path`: posix path relative to the repo root when inside it, else absolute
++  - [x] `commit_sha` = `reviewedSha` or `None`; `reviewed_at` = `dateCreated`
++  - [x] `slice_index` from the `sourceDocument` basename only, matched by one module constant pattern for `{n}-slice.` / `{n}-tasks.` (D6). The review filename is never used
++  - [x] `read_side_mapped = not categoriesNormalized`
++  - [x] findings: severity outside `Severity` → `unnormalized_count += 1`, dropped. Write-time files: `uncategorized`/absent → `None`, else the stored value must be a `ReviewCategory` value (a value that isn't → the file fails, listed under `failed`), `rawCategory` carried. Read-side files: `map_historical_category`
++- [x] Before the loop, read the project's existing record ids once with `list_code_reviews(project_id)`. A write whose id is in that set counts as `replaced`. The store API doesn't change
++- [x] `MetrologyStoreError` propagates to the caller (the CLI aborts)
++- [x] Success: module ≤ ~300 lines, functions ≤ ~50 lines
++
++## Task 24: Ingest tests — Effort 3
++- [x] Create `tests/metrology/test_review_ingest.py` over the Task 21 fixtures with a `MetrologyStore` in `tmp_path`:
++  - [x] the four real code reviews and the new-format file are ingested; the arch review counts in `skipped_not_code` (label `not-code-review`); the UNKNOWN file counts in `skipped_unknown_verdict` (label `unknown-verdict`) (deviation: see Task 21; the fixture set ingests five files)
++  - [x] malformed and missing-`verdict` files are in `failed`, each logs a WARNING with its path (`caplog`), and the other files are still written
++  - [x] the 947 record has `slice_index == 947`, `commit_sha` equal to the file's `reviewedSha`, `error-handling` mapped to `error-handling-observability`, `read_side_mapped` true
++  - [x] the 103 record has `commit_sha is None`; the PR and `0-review` records have `slice_index is None` (deviation: 103 and 0-review are UNKNOWN and skipped; the slice-index parametrized test covers the 0-review blank sourceDocument, the PR-source record is synthetic-pr-review.code.md)
++  - [x] the new-format record has `read_side_mapped` false and keeps `raw_category`
++  - [x] the unrecognized-severity file's record has `unnormalized_count == 1` and that finding isn't in `findings`
++  - [x] the new-format file with a non-`ReviewCategory` stored category is in `failed`
++  - [x] a non-UTF-8 file in `tmp_path` is in `failed`
++  - [x] re-ingesting after editing the 947 copy's findings in `tmp_path` leaves one record for that path with the new findings, and `replaced` counts it
++  - [x] a nonexistent path raises and writes nothing
++  - [x] a store stub raising `MetrologyStoreError` on the second write leaves the caller's result showing one ingested file
++- [x] Parametrized slice-index test: a `{n}-slice.` source, a `{n}-tasks.` source, a PR URL, and the blank `sourceDocument` of `0-review.code.review-1.md`
++- [x] Success: tests pass
++- [x] Commit: `feat(metrology): ingest code-review files into the metrology store`
++
++## Task 25: `ingest-reviews` command (D9, API Contracts) — Effort 2
++- [x] Create `squadron/cli/commands/metrology_review_ingest.py` with `register_review_ingest_command(metrology_app)`, following `metrology_snapshot.py`: `PATHS` arguments (optional, multiple) and `--cwd`
++- [x] Mount it in `cli/commands/metrology.py` beside `register_snapshot_command`
++- [x] Derive the project id first; `MetrologyIdentityError` → error, exit 1, nothing written
++- [x] Print the three summary lines from API Contracts (the counters print under the labels `not-code-review` and `unknown-verdict`), then each failed path with its reason. Zero files found → `Ingested 0`, a WARNING naming the directory, exit 0
++- [x] Exit codes per the Data Flow failure-mode table. On `MetrologyStoreError`, print the counts from the result object it passed in (what was written so far) and the error, exit 1
++- [x] Success: `sq metrology ingest-reviews --help` lists `PATHS` and `--cwd`
++
++## Task 26: Command tests — Effort 2
++- [x] Create `tests/metrology/test_review_ingest_cli.py` with Typer's `CliRunner` and the store directory redirected to `tmp_path`:
++  - [x] fixture directory: summary counts match, exit 1 because of the failed files
++  - [x] only good files: exit 0
++  - [x] nonexistent `PATHS` entry: exit 1, store empty
++  - [x] missing default reviews directory: exit 1, message names it
++  - [x] empty directory: `Ingested 0`, WARNING, exit 0
++  - [x] store write error (store stub raising `MetrologyStoreError`): exit 1, partial count printed
++  - [x] identity failure: exit 1, store empty
++- [x] Success: tests pass
++- [x] Commit: `feat(cli): add sq metrology ingest-reviews`
++
++## Task 27: Walkthrough steps 1–3 (Verification Walkthrough) — Effort 2
++- [x] Run steps 1–3 from the repo root against the real reviews directory, in order. Step 3 reads the record file under `~/.config/squadron/metrology/`
++- [x] Success: step 1 passes and fails as described; step 2 reports every `*review.code*` file as ingested (`read-side mapped`) or skipped with a reason, and a second run reports the same count, all replaced, with no new record files; step 3's record matches every stated field
++- [x] A defect found here is fixed with a test before checking this off
++
++## Task 28: CHANGELOG and full validation — Effort 1
++- [x] Add `[Unreleased]` bullets: the new `sq metrology ingest-reviews` command, and code reviews now categorized into the audit vocabulary. User-facing, short
++- [x] Run `ruff format`, `ruff check`, `pyright` (zero errors) and the full `tests/` suite
++- [x] Success: all pass
++- [x] Commit: `docs: add CHANGELOG entries for code-review categories and ingest`
++
++## Task 29: Walkthrough step 4, live review — Effort 2
++- [x] Pick a model alias from `sq models list` and run `sq review code 402 --model <alias>`, then run `sq metrology ingest-reviews`
++- [x] Success: the review file has `categoriesNormalized: true`, every finding `category` is a `ReviewCategory` value or `uncategorized`, and any non-canonical emitted category carries `rawCategory`
++- [x] Success: the new 402 record has `read_side_mapped` false
++- [x] Commit the review file: `review: add slice 402 code review from live verification`
+diff --git a/src/squadron/cli/commands/metrology.py b/src/squadron/cli/commands/metrology.py
+index 9ff9745f..185be874 100644
+--- a/src/squadron/cli/commands/metrology.py
++++ b/src/squadron/cli/commands/metrology.py
+@@ -20,6 +20,7 @@ from rich import print as rprint
+ from rich.markup import escape
+ 
+ from squadron.cli.commands.metrology_preemption import preempt_app, register_delta_command
++from squadron.cli.commands.metrology_review_ingest import register_review_ingest_command
+ from squadron.cli.commands.metrology_snapshot import register_snapshot_command
+ from squadron.config.manager import get_config, get_typed_config
+ from squadron.metrology.audit import (
+@@ -94,6 +95,7 @@ metrology_app.add_typer(audit_app)
+ metrology_app.add_typer(preempt_app)
+ register_delta_command(audit_app)
+ register_snapshot_command(metrology_app)
++register_review_ingest_command(metrology_app)
+ 
+ _VERDICT_CHOICES = "/".join(v.value for v in (Verdict.PASS, Verdict.CONCERNS, Verdict.FAIL))
+ 
+diff --git a/src/squadron/cli/commands/metrology_review_ingest.py b/src/squadron/cli/commands/metrology_review_ingest.py
+new file mode 100644
+index 00000000..fa6edcb3
+--- /dev/null
++++ b/src/squadron/cli/commands/metrology_review_ingest.py
+@@ -0,0 +1,86 @@
++"""``sq metrology ingest-reviews`` (slice 402).
++
++A thin Typer shell over ``squadron.metrology.review_ingest``, kept in its own module and
++mounted onto ``metrology_app`` by the parent (the ``snapshot`` pattern).
++"""
++
++from __future__ import annotations
++
++import logging
++from pathlib import Path
++
++import typer
++
++from squadron.metrology.errors import (
++    MetrologyIdentityError,
++    MetrologyStoreError,
++    ReviewIngestInputError,
++)
++from squadron.metrology.identity import derive_project_id
++from squadron.metrology.review_ingest import IngestResult, ingest_reviews, resolve_review_files
++from squadron.metrology.store import MetrologyStore, resolve_store_dir
++
++_logger = logging.getLogger(__name__)
++
++_INPUT_FAILURES = (MetrologyIdentityError, ReviewIngestInputError)
++
++
++def _echo_summary(result: IngestResult, store_dir: Path) -> None:
++    typer.echo(f"Ingested {result.ingested} code reviews into {store_dir} ({result.replaced} replaced)")
++    typer.echo(
++        f"Skipped: {result.skipped_not_code} not code reviews, "
++        f"{result.skipped_unknown_verdict} unknown verdict"
++    )
++    if result.dropped_findings:
++        typer.echo(
++            f"Dropped: {result.dropped_findings} findings with a severity outside the review scale"
++        )
++    typer.echo(f"Failed: {len(result.failed)}")
++    for path, reason in result.failed:
++        typer.echo(f"  {path}: {reason}")
++
++
++def register_review_ingest_command(metrology_app: typer.Typer) -> None:
++    """Mount ``ingest-reviews`` onto the parent module's existing metrology app."""
++
++    @metrology_app.command("ingest-reviews")
++    def ingest_reviews_command(  # pyright: ignore[reportUnusedFunction]
++        paths: list[Path] | None = typer.Argument(
++            None,
++            help=(
++                "Review files or directories, relative to the current directory "
++                "(default: the project's reviews directory)"
++            ),
++        ),
++        cwd: str | None = typer.Option(
++            None, "--cwd", help="Project root (default: the current directory)"
++        ),
++    ) -> None:
++        """Write one code_review record per code-review file into the metrology store.
++
++        Re-running is safe: a record is keyed on project and path, so ingesting a file
++        again replaces its record. Arch, slice and tasks reviews and reviews with an
++        UNKNOWN verdict are skipped and counted. Reviews written before categories were
++        normalized are mapped through a fixed table and marked read-side mapped.
++        """
++        repo_root = Path(cwd).expanduser().resolve() if cwd else Path.cwd().resolve()
++        store_dir = resolve_store_dir(cwd=str(repo_root))
++        result = IngestResult()
++        try:
++            project_id = derive_project_id(str(repo_root))
++            files, directories = resolve_review_files(paths or [], project_id, repo_root)
++            if not files:
++                searched = ", ".join(str(directory) for directory in directories)
++                _logger.warning("No review files (*.md) found in %s", searched)
++            ingest_reviews(project_id, repo_root, files, MetrologyStore(store_dir=store_dir), result)
++        except _INPUT_FAILURES as exc:
++            typer.echo(f"Error: {exc}", err=True)
++            raise typer.Exit(code=1) from exc
++        except MetrologyStoreError as exc:
++            _logger.error("Could not write a code review to %s: %s", store_dir, exc)
++            _echo_summary(result, store_dir)
++            typer.echo(f"Store error: {exc}", err=True)
++            raise typer.Exit(code=1) from exc
++        _echo_summary(result, store_dir)
++        if result.failed:
++            raise typer.Exit(code=1)
+diff --git a/src/squadron/core/finding_categories.py b/src/squadron/core/finding_categories.py
+new file mode 100644
+index 00000000..6d000b29
+--- /dev/null
++++ b/src/squadron/core/finding_categories.py
+@@ -0,0 +1,64 @@
++"""The closed finding-category vocabularies, a leaf module (slice 402, D1, D2).
++
++Both ``squadron.review`` (write-time normalization) and ``squadron.metrology`` (audit
++parsing, ingest) need these enums. They live here, importing nothing but ``enum``, so
++neither package has to import the other to get them. ``squadron.metrology.models`` and
++``squadron.metrology.audit_models`` re-export ``AuditCategory`` for existing imports.
++"""
++
++from __future__ import annotations
++
++from enum import StrEnum
++
++
++class AuditCategory(StrEnum):
++    """The closed issue-class vocabulary audit findings normalize into (323).
++
++    Nine values mirror the audit skill's nine prose dimensions; ``OTHER`` is
++    the tenth and is **load-bearing, not a dumping ground**. A finding whose
++    category the model invents outside this vocabulary normalizes to
++    ``OTHER`` with its original string retained on
++    ``AuditFinding.raw_category`` — nothing is discarded. A rising ``other``
++    share is evidence the vocabulary does not fit a codebase, which the
++    baseline report surfaces rather than hides.
++
++    The skill file enumerates these same ten values. That duplication spans
++    a process boundary (a markdown prompt and a Python enum cannot import
++    from each other) and is held in sync by
++    ``tests/metrology/test_audit_skill_sync.py``, so drift fails CI.
++    """
++
++    ARCHITECTURAL_DECAY = "architectural-decay"
++    CONSISTENCY_ROT = "consistency-rot"
++    TYPE_CONTRACT_DEBT = "type-contract-debt"
++    TEST_DEBT = "test-debt"
++    DEPENDENCY_CONFIG_DEBT = "dependency-config-debt"
++    PERFORMANCE_RESOURCE = "performance-resource"
++    ERROR_HANDLING_OBSERVABILITY = "error-handling-observability"
++    SECURITY_HYGIENE = "security-hygiene"
++    DOCUMENTATION_DRIFT = "documentation-drift"
++    OTHER = "other"
++
++
++class ReviewCategory(StrEnum):
++    """The closed category vocabulary code-review findings normalize into (402).
++
++    The ten ``AuditCategory`` members with identical names and values, plus
++    ``CORRECTNESS``. ``correctness`` is review-only: the audit's tech-debt taxonomy
++    has no slot for "this code behaves wrongly", which is a code review's main
++    output, and adding it to ``AuditCategory`` would change the vocabulary the audit
++    parser and noise floor are built on. ``tests/metrology/test_review_category_sync.py``
++    keeps this enum, the audit skill and the ``code`` template in step.
++    """
++
++    ARCHITECTURAL_DECAY = AuditCategory.ARCHITECTURAL_DECAY.value
++    CONSISTENCY_ROT = AuditCategory.CONSISTENCY_ROT.value
++    TYPE_CONTRACT_DEBT = AuditCategory.TYPE_CONTRACT_DEBT.value
++    TEST_DEBT = AuditCategory.TEST_DEBT.value
++    DEPENDENCY_CONFIG_DEBT = AuditCategory.DEPENDENCY_CONFIG_DEBT.value
++    PERFORMANCE_RESOURCE = AuditCategory.PERFORMANCE_RESOURCE.value
++    ERROR_HANDLING_OBSERVABILITY = AuditCategory.ERROR_HANDLING_OBSERVABILITY.value
++    SECURITY_HYGIENE = AuditCategory.SECURITY_HYGIENE.value
++    DOCUMENTATION_DRIFT = AuditCategory.DOCUMENTATION_DRIFT.value
++    OTHER = AuditCategory.OTHER.value
++    CORRECTNESS = "correctness"
+diff --git a/src/squadron/data/templates/code.yaml b/src/squadron/data/templates/code.yaml
+index 87b2d121..01ae6d76 100644
+--- a/src/squadron/data/templates/code.yaml
++++ b/src/squadron/data/templates/code.yaml
+@@ -20,8 +20,10 @@ system_prompt: |
+   - If verdict is CONCERNS or FAIL, include at least one finding with that severity.
+   - If no CONCERN or FAIL findings exist, verdict MUST be PASS.
+   - Every finding MUST use the exact format: ### [SEVERITY] Title
++  - Every finding MUST include a `category:` tag on its own line immediately
++    after the title, with one value from the category vocabulary below.
+   - Every finding MUST include a `location:` tag on its own line immediately
+-    after the title. This applies to PASS findings too.
++    after the `category:` tag. This applies to PASS findings too.
+ 
+   Choosing the `location:` value (use the most specific form you can verify):
+   1. `path:line` or `path:start-end` — preferred when you can pin the issue
+@@ -39,6 +41,23 @@ system_prompt: |
+   describe the others in the prose body. The `location:` field is the
+   primary anchor for deduplication, not a complete listing.
+ 
++  Choose each finding's `category:` from this closed vocabulary. If a finding fits
++  none of them, use `other`; do not invent a value. Pick the value for what is wrong
++  with the code, not for where it sits.
++
++  Category vocabulary:
++  - `architectural-decay`: circular dependencies, layering violations, god files or functions, duplicated logic, unused abstractions, dead code
++  - `consistency-rot`: several ways of doing the same thing, naming drift, structure that no longer matches what the code does
++  - `type-contract-debt`: loose or missing types, untyped API boundaries, missing schema validation at trust boundaries
++  - `test-debt`: missing or weak tests on critical paths, tests that assert implementation rather than behavior, skipped or flaky tests
++  - `dependency-config-debt`: vulnerable, unused or duplicate dependencies, undocumented or inconsistent configuration
++  - `performance-resource`: N+1 queries, blocking work on hot paths, leaked handles or listeners, wasted serialization
++  - `error-handling-observability`: swallowed exceptions, blanket catches, errors logged but not handled, missing logs on critical paths
++  - `security-hygiene`: hardcoded secrets, string-built SQL, missing input validation, permissive auth, weak crypto
++  - `documentation-drift`: docs or comments that contradict the code, public APIs without docstrings
++  - `correctness`: the code behaves wrongly (wrong result, broken contract, crash)
++  - `other`: real, but fits none of the values above
++
+   Report your findings using severity levels:
+ 
+   Use exactly this structure; do not repeat this block in your response.
+@@ -50,6 +69,7 @@ system_prompt: |
+   ## Findings
+ 
+   ### [PASS|CONCERN|FAIL] Finding title
++  category: <one value from the category vocabulary>
+   location: <path:line | path:start-end | path#symbol | path | unverified>
+   Description with specific file and line references in prose.
+   ```
+@@ -59,6 +79,10 @@ permission_mode: bypassPermissions
+ model: sonnet
+ setting_sources: [project]
+ 
++# Findings carry a category from the closed vocabulary below; the review client
++# normalizes what the model returns (slice 402). Other templates leave this unset.
++normalize_categories: true
++
+ inputs:
+   required: []
+   optional:
+diff --git a/src/squadron/metrology/errors.py b/src/squadron/metrology/errors.py
+index c1daa750..545873e4 100644
+--- a/src/squadron/metrology/errors.py
++++ b/src/squadron/metrology/errors.py
+@@ -85,3 +85,8 @@ class SnapshotAdapterContractError(MetrologyError):
+     This is a bug in the adapter, not in the measured project, so it fails the whole
+     snapshot rather than being recorded as an absent metric.
+     """
++
++
++class ReviewIngestInputError(MetrologyError):
++    """An ingest input can't be used: a named path doesn't exist, or the default reviews
++    directory is missing or can't be resolved. Raised before anything is written."""
+diff --git a/src/squadron/metrology/models.py b/src/squadron/metrology/models.py
+index 5cdb8056..c7870fc0 100644
+--- a/src/squadron/metrology/models.py
++++ b/src/squadron/metrology/models.py
+@@ -17,10 +17,12 @@ from enum import StrEnum
+ 
+ from pydantic import BaseModel
+ 
++from squadron.core.finding_categories import AuditCategory as AuditCategory  # re-exported
+ from squadron.metrology.levels import ArtifactLevel
+ from squadron.metrology.project_id import ProjectId as ProjectId  # re-exported
+ from squadron.metrology.project_id import ProjectIdSource as ProjectIdSource  # re-exported
+ from squadron.metrology.replay_models import PairwiseJudgment, ProducerReplay
++from squadron.metrology.review_models import CodeReviewRecord
+ from squadron.metrology.snapshot_models import CodeSnapshot
+ from squadron.review.models import Verdict
+ 
+@@ -38,6 +40,8 @@ RECORD_TYPE_PRODUCER_REPLAY = "producer_replay"
+ RECORD_TYPE_PAIRWISE_JUDGMENT = "pairwise_judgment"
+ #: Written by 400's code snapshot: one record per (project, commit).
+ RECORD_TYPE_CODE_SNAPSHOT = "code_snapshot"
++#: Written by 402's review ingest: one record per code-review file.
++RECORD_TYPE_CODE_REVIEW = "code_review"
+ 
+ 
+ class JudgeResultRef(BaseModel):
+@@ -119,35 +123,6 @@ class GraduatedConfig(BaseModel):
+     graduated_at: datetime
+ 
+ 
+-class AuditCategory(StrEnum):
+-    """The closed issue-class vocabulary audit findings normalize into (323).
+-
+-    Nine values mirror the audit skill's nine prose dimensions; ``OTHER`` is
+-    the tenth and is **load-bearing, not a dumping ground**. A finding whose
+-    category the model invents outside this vocabulary normalizes to
+-    ``OTHER`` with its original string retained on
+-    ``AuditFinding.raw_category`` — nothing is discarded. A rising ``other``
+-    share is evidence the vocabulary does not fit a codebase, which the
+-    baseline report surfaces rather than hides.
+-
+-    The skill file enumerates these same ten values. That duplication spans
+-    a process boundary (a markdown prompt and a Python enum cannot import
+-    from each other) and is held in sync by
+-    ``tests/metrology/test_audit_skill_sync.py``, so drift fails CI.
+-    """
+-
+-    ARCHITECTURAL_DECAY = "architectural-decay"
+-    CONSISTENCY_ROT = "consistency-rot"
+-    TYPE_CONTRACT_DEBT = "type-contract-debt"
+-    TEST_DEBT = "test-debt"
+-    DEPENDENCY_CONFIG_DEBT = "dependency-config-debt"
+-    PERFORMANCE_RESOURCE = "performance-resource"
+-    ERROR_HANDLING_OBSERVABILITY = "error-handling-observability"
+-    SECURITY_HYGIENE = "security-hygiene"
+-    DOCUMENTATION_DRIFT = "documentation-drift"
+-    OTHER = "other"
+-
+-
+ class AuditSeverity(StrEnum):
+     """The audit's own severity scale.
+ 
+@@ -281,3 +256,4 @@ class MetrologyRecord(BaseModel):
+     producer_replay: ProducerReplay | None = None
+     pairwise_judgment: PairwiseJudgment | None = None
+     code_snapshot: CodeSnapshot | None = None
++    code_review: CodeReviewRecord | None = None
+diff --git a/src/squadron/metrology/review_category_map.py b/src/squadron/metrology/review_category_map.py
+new file mode 100644
+index 00000000..c4ec39aa
+--- /dev/null
++++ b/src/squadron/metrology/review_category_map.py
+@@ -0,0 +1,49 @@
++"""Read-side category map for code reviews written before slice 402 (D7).
++
++Historical reviews carry whatever category string the model chose. This fixed table maps
++the frequent ones whose meaning clearly matches a ``ReviewCategory`` value; every other
++string becomes ``other`` with the raw string kept. It is applied only at ingest, never at
++write time (D4), and every record built through it is marked ``read_side_mapped``. The
++table can grow without a migration, because ingest re-derives every record.
++
++An entry exists only for a string with four or more findings in the corpus counted on
++20261023. ``style`` and ``code-quality`` are deliberately absent (they go to ``other``).
++"""
++
++from __future__ import annotations
++
++from squadron.core.finding_categories import ReviewCategory
++from squadron.review.categories import NormalizedCategory, lenient_category_key
++
++#: The sentinel the review frontmatter writes for a finding with no category.
++UNCATEGORIZED = "uncategorized"
++
++_ROWS: dict[ReviewCategory, tuple[str, ...]] = {
++    ReviewCategory.ERROR_HANDLING_OBSERVABILITY: ("error-handling", "observability"),
++    ReviewCategory.TEST_DEBT: ("testing", "test-coverage"),
++    ReviewCategory.ARCHITECTURAL_DECAY: ("design", "design-principles", "structure"),
++    ReviewCategory.CONSISTENCY_ROT: ("dry", "project-conventions", "consistency"),
++    ReviewCategory.TYPE_CONTRACT_DEBT: ("typing",),
++    ReviewCategory.PERFORMANCE_RESOURCE: ("performance",),
++    ReviewCategory.SECURITY_HYGIENE: ("security",),
++    ReviewCategory.DOCUMENTATION_DRIFT: ("documentation",),
++    ReviewCategory.CORRECTNESS: ("correctness", "concurrency"),
++}
++
++#: Historical string (already in lenient form) to category.
++HISTORICAL_CATEGORIES: dict[str, ReviewCategory] = {
++    historical: member for member, strings in _ROWS.items() for historical in strings
++}
++
++
++def map_historical_category(raw: str | None) -> NormalizedCategory:
++    """Map one historical category string; a missing or ``uncategorized`` one stays missing."""
++    if raw is None or not raw.strip():
++        return NormalizedCategory(None, None)
++    key = lenient_category_key(raw)
++    if key == UNCATEGORIZED:
++        return NormalizedCategory(None, None)
++    member = HISTORICAL_CATEGORIES.get(key)
++    if member is None:
++        return NormalizedCategory(ReviewCategory.OTHER, raw)
++    return NormalizedCategory(member, None if raw == member.value else raw)
+diff --git a/src/squadron/metrology/review_ingest.py b/src/squadron/metrology/review_ingest.py
+new file mode 100644
+index 00000000..5ac96c12
+--- /dev/null
++++ b/src/squadron/metrology/review_ingest.py
+@@ -0,0 +1,288 @@
++"""Ingest code-review files into the metrology store (slice 402, D5, D6, D7).
++
++One ``code_review`` record per code-review file, findings inline. The review files stay
++the source; a record is a derived copy keyed on project and path, so ingest always writes
++and re-running replaces in place. Everything that can't be counted honestly is skipped
++with a reason or listed as failed, never defaulted.
++"""
++
++from __future__ import annotations
++
++import logging
++import re
++from collections.abc import Sequence
++from dataclasses import dataclass, field
++from datetime import UTC, date, datetime
++from pathlib import Path, PurePosixPath
++from typing import cast
++
++from squadron.core.finding_categories import ReviewCategory
++from squadron.documents.frontmatter import parse_frontmatter
++from squadron.metrology.errors import ReviewIngestInputError
++from squadron.metrology.project_id import ProjectId
++from squadron.metrology.review_category_map import UNCATEGORIZED, map_historical_category
++from squadron.metrology.review_models import CodeReviewFinding, CodeReviewRecord
++from squadron.metrology.store import MetrologyStore, code_review_record_id
++from squadron.review.models import Severity, Verdict
++from squadron.review.reviews_dir import resolve_reviews_dir
++
++_logger = logging.getLogger(__name__)
++
++#: The project's document-naming convention for a review's source: ``{n}-slice.`` or
++#: ``{n}-tasks.`` at the start of the ``sourceDocument`` basename (D6).
++SLICE_SOURCE_PATTERN = re.compile(r"^(\d+)-(?:slice|tasks)\.")
++
++CODE_REVIEW_TYPE = "code"
++_REVIEW_FILE_GLOB = "*.md"
++_SEVERITIES = {severity.value.lower(): severity for severity in Severity}
++_DATE_FORMAT = "%Y%m%d"
++
++
++@dataclass
++class IngestResult:
++    """What an ingest run did. The caller passes it in so the counts survive an abort."""
++
++    ingested: int = 0
++    replaced: int = 0
++    skipped_not_code: int = 0
++    skipped_unknown_verdict: int = 0
++    #: Findings dropped for a severity outside the review scale, across all ingested files.
++    dropped_findings: int = 0
++    failed: list[tuple[Path, str]] = field(default_factory=list[tuple[Path, str]])
++
++
++class _FileProblem(Exception):
++    """A file can't be ingested; the message is the reason listed under ``failed``."""
++
++
++def default_reviews_dir(project_id: ProjectId, cwd: Path) -> Path:
++    """The reviews directory for *cwd*, by the same rules ``sq review`` writes with."""
++    parts = project_id.value.split("/")
++    if len(parts) < 3:  # noqa: PLR2004 - host/owner/repository is the identity shape
++        raise ReviewIngestInputError(
++            f"Can't resolve the default reviews directory: project id {project_id.value!r} "
++            "isn't host/owner/repository. Pass the review files or directory as PATHS."
++        )
++    directory, _rule = resolve_reviews_dir(
++        flag=None,
++        cwd=str(cwd),
++        host=parts[0],
++        owner="/".join(parts[1:-1]),
++        repository=parts[-1],
++    )
++    if not directory.is_dir():
++        raise ReviewIngestInputError(
++            f"The reviews directory {directory} doesn't exist. "
++            "Pass the review files or directory as PATHS."
++        )
++    return directory
++
++
++def resolve_review_files(
++    paths: Sequence[Path], project_id: ProjectId, cwd: Path
++) -> tuple[list[Path], list[Path]]:
++    """The review files to ingest and the directories searched for them.
++
++    Each path is a file or a directory (its ``*.md``). A nonexistent path raises before
++    anything is written. With no paths, the default reviews directory is searched.
++    """
++    roots = list(paths) if paths else [default_reviews_dir(project_id, cwd)]
++    files: list[Path] = []
++    directories: list[Path] = []
++    for root in roots:
++        if root.is_dir():
++            directories.append(root)
++            files.extend(sorted(root.glob(_REVIEW_FILE_GLOB)))
++        elif root.is_file():
++            files.append(root)
++        else:
++            raise ReviewIngestInputError(f"{root} doesn't exist. Check the PATHS argument.")
++    return files, directories
++
++
++def _read_frontmatter(path: Path) -> dict[str, object]:
++    try:
++        raw = path.read_bytes()
++    except OSError as exc:
++        raise _FileProblem(f"can't be read: {exc}") from exc
++    try:
++        text = raw.decode("utf-8")
++    except UnicodeDecodeError as exc:
++        raise _FileProblem(f"isn't valid UTF-8: {exc}") from exc
++    frontmatter = parse_frontmatter(text)
++    if frontmatter is None:
++        raise _FileProblem("has no readable frontmatter")
++    return frontmatter
++
++
++def _slice_index(source_document: object) -> int | None:
++    if not isinstance(source_document, str) or not source_document.strip():
++        return None
++    match = SLICE_SOURCE_PATTERN.match(PurePosixPath(source_document.strip()).name)
++    return int(match.group(1)) if match else None
++
++
++def _reviewed_at(value: object) -> date:
++    if isinstance(value, datetime):
++        return value.date()
++    if isinstance(value, date):
++        return value
++    try:
++        return datetime.strptime(str(value), _DATE_FORMAT).replace(tzinfo=UTC).date()
++    except ValueError as exc:
++        raise _FileProblem(f"has an unreadable dateCreated {value!r}") from exc
++
++
++def _review_path(path: Path, repo_root: Path) -> str:
++    resolved = path.resolve()
++    try:
++        return resolved.relative_to(repo_root.resolve()).as_posix()
++    except ValueError:
++        return resolved.as_posix()
++
++
++def _text_or_none(value: object) -> str | None:
++    return None if value is None else str(value)
++
++
++def _stored_category(raw: object, raw_category: object) -> tuple[ReviewCategory | None, str | None]:
++    """A write-time file's stored category, which must already be a ``ReviewCategory``."""
++    if raw is None or str(raw) == UNCATEGORIZED:
++        return None, None
++    try:
++        return ReviewCategory(str(raw)), _text_or_none(raw_category)
++    except ValueError as exc:
++        raise _FileProblem(f"stores category {raw!r}, which isn't a ReviewCategory value") from exc
++
++
++def _finding(entry: object, *, read_side: bool, path: Path) -> CodeReviewFinding | None:
++    """One finding, or None (with a WARNING) when its severity isn't on the review scale."""
++    if not isinstance(entry, dict):
++        raise _FileProblem("has a finding that isn't a mapping")
++    fields = {str(key): value for key, value in cast("dict[object, object]", entry).items()}
++    severity = _SEVERITIES.get(str(fields.get("severity", "")).strip().lower())
++    if severity is None:
++        _logger.warning(
++            "%s: finding %s has severity %r, which isn't a review severity; dropped",
++            path,
++            fields.get("id"),
++            fields.get("severity"),
++        )
++        return None
++    if fields.get("id") is None or fields.get("summary") is None:
++        raise _FileProblem("has a finding with no id or summary")
++    raw = fields.get("category")
++    if read_side:
++        mapped = map_historical_category(None if raw is None else str(raw))
++        category, raw_category = mapped.category, mapped.raw_category
++    else:
++        category, raw_category = _stored_category(raw, fields.get("rawCategory"))
++    return CodeReviewFinding(
++        finding_id=str(fields["id"]),
++        severity=severity,
++        category=category,
++        raw_category=raw_category,
++        location=_text_or_none(fields.get("location")),
++        summary=str(fields["summary"]),
++    )
++
++
++def _findings(
++    frontmatter: dict[str, object], *, read_side: bool, path: Path
++) -> tuple[list[CodeReviewFinding], int]:
++    entries = frontmatter.get("findings")
++    if entries is None:
++        return [], 0
++    if not isinstance(entries, list):
++        raise _FileProblem("has a findings entry that isn't a list")
++    kept: list[CodeReviewFinding] = []
++    dropped = 0
++    for entry in cast("list[object]", entries):
++        finding = _finding(entry, read_side=read_side, path=path)
++        if finding is None:
++            dropped += 1
++        else:
++            kept.append(finding)
++    return kept, dropped
++
++
++def _build_record(
++    frontmatter: dict[str, object],
++    verdict: Verdict,
++    path: Path,
++    review_path: str,
++    project_id: ProjectId,
++) -> CodeReviewRecord:
++    read_side = frontmatter.get("categoriesNormalized") is not True
++    findings, unnormalized = _findings(frontmatter, read_side=read_side, path=path)
++    return CodeReviewRecord(
++        record_id=code_review_record_id(project_id, review_path),
++        project_id=project_id,
++        review_path=review_path,
++        commit_sha=_text_or_none(frontmatter.get("reviewedSha")),
++        slice_index=_slice_index(frontmatter.get("sourceDocument")),
++        verdict=verdict,
++        read_side_mapped=read_side,
++        reviewed_at=_reviewed_at(frontmatter.get("dateCreated")),
++        ingested_at=datetime.now(UTC),
++        findings=findings,
++        unnormalized_count=unnormalized,
++    )
++
++
++def _review_type(frontmatter: dict[str, object]) -> str:
++    review_type = frontmatter.get("reviewType")
++    if review_type is None:
++        raise _FileProblem("is missing reviewType")
++    return str(review_type)
++
++
++def _verdict(frontmatter: dict[str, object]) -> Verdict:
++    """The review's verdict; a missing or unrecognized one is a failure."""
++    raw = frontmatter.get("verdict")
++    if raw is None:
++        raise _FileProblem("is missing verdict")
++    try:
++        return Verdict(str(raw))
++    except ValueError as exc:
++        raise _FileProblem(f"has an unrecognized verdict {raw!r}") from exc
++
++
++def ingest_reviews(
++    project_id: ProjectId,
++    repo_root: Path,
++    files: Sequence[Path],
++    store: MetrologyStore,
++    result: IngestResult,
++) -> None:
++    """Ingest *files*, updating *result* as each is processed.
++
++    A file that can't be ingested is listed under ``result.failed`` with a WARNING and the
++    run continues. ``MetrologyStoreError`` from a write propagates; *result* then shows
++    what was written before it.
++    """
++    known_ids = {review.record_id for review in store.list_code_reviews(project_id)}
++    for path in files:
++        try:
++            frontmatter = _read_frontmatter(path)
++            if _review_type(frontmatter) != CODE_REVIEW_TYPE:
++                # Other review types use their own verdict vocabulary; they aren't checked.
++                result.skipped_not_code += 1
++                continue
++            verdict = _verdict(frontmatter)
++            if verdict is Verdict.UNKNOWN:
++                result.skipped_unknown_verdict += 1
++                continue
++            record = _build_record(
++                frontmatter, verdict, path, _review_path(path, repo_root), project_id
++            )
++        except _FileProblem as exc:
++            _logger.warning("Can't ingest %s: it %s", path, exc)
++            result.failed.append((path, str(exc)))
++            continue
++        store.write_code_review(record)
++        result.ingested += 1
++        result.dropped_findings += record.unnormalized_count
++        if record.record_id in known_ids:
++            result.replaced += 1
++        known_ids.add(record.record_id)
+diff --git a/src/squadron/metrology/review_models.py b/src/squadron/metrology/review_models.py
+new file mode 100644
+index 00000000..a098e2bb
+--- /dev/null
++++ b/src/squadron/metrology/review_models.py
+@@ -0,0 +1,58 @@
++"""The ``code_review`` record: one ingested code-review file, findings inline (slice 402).
++
++A record is a derived copy of a review file, keyed on project and path (D5). It sits
++behind the metrology envelope as an optional sibling payload, so ``schema_version`` does
++not move. Severity is the review scale (``review.models.Severity``) and is never mapped
++to the audit's scale.
++"""
++
++from __future__ import annotations
++
++from datetime import date, datetime
++
++from pydantic import BaseModel, model_validator
++
++from squadron.core.finding_categories import ReviewCategory
++from squadron.metrology.project_id import ProjectId
++from squadron.review.models import Severity, Verdict
++
++
++class CodeReviewFinding(BaseModel):
++    """One finding of an ingested code review."""
++
++    finding_id: str
++    severity: Severity
++    #: None means the finding had no category (uncategorized), never ``other``.
++    category: ReviewCategory | None
++    #: The string the model (or an older review) used, when it differs from ``category``.
++    raw_category: str | None = None
++    location: str | None
++    summary: str
++
++
++class CodeReviewRecord(BaseModel):
++    """One code-review file as the metrology store holds it."""
++
++    record_id: str
++    project_id: ProjectId
++    #: Relative to the repo root when inside it, else absolute.
++    review_path: str
++    #: None when the file has no ``reviewedSha``; that is the only reason one is absent.
++    commit_sha: str | None
++    #: None for PR reviews and anything whose ``sourceDocument`` names no slice or tasks file.
++    slice_index: int | None
++    verdict: Verdict
++    #: True when the categories came from the historical alias table, not from the prompt.
++    read_side_mapped: bool
++    reviewed_at: date
++    ingested_at: datetime
++    findings: list[CodeReviewFinding]
++    #: Findings dropped because their severity isn't on the review scale.
++    unnormalized_count: int = 0
++
++    @model_validator(mode="after")
++    def _verdict_is_known(self) -> CodeReviewRecord:
++        """An unparsed review with no findings would read as a clean one (D6)."""
++        if self.verdict is Verdict.UNKNOWN:
++            raise ValueError("a code review with an UNKNOWN verdict is not recorded")
++        return self
+diff --git a/src/squadron/metrology/store.py b/src/squadron/metrology/store.py
+index 43ba16f5..2c42dd59 100644
+--- a/src/squadron/metrology/store.py
++++ b/src/squadron/metrology/store.py
+@@ -23,6 +23,7 @@ from squadron.metrology.errors import MetrologyStoreError
+ from squadron.metrology.models import (
+     RECORD_TYPE_AUDIT_FINDING,
+     RECORD_TYPE_AUDIT_NOISE_FLOOR,
++    RECORD_TYPE_CODE_REVIEW,
+     RECORD_TYPE_CODE_SNAPSHOT,
+     RECORD_TYPE_GRADUATED_CONFIG,
+     RECORD_TYPE_PAIRWISE_JUDGMENT,
+@@ -42,6 +43,7 @@ from squadron.metrology.replay_models import (
+     ProducerReplay,
+     ReplayPhase,
+ )
++from squadron.metrology.review_models import CodeReviewRecord
+ from squadron.metrology.snapshot_models import CodeSnapshot
+ 
+ _logger = logging.getLogger(__name__)
+@@ -112,6 +114,13 @@ def generate_judgment_id(now: datetime | None = None) -> str:
+     return f"pair-{stamp}-{uuid.uuid4().hex[:8]}"
+ 
+ 
++def code_review_record_id(project_id: ProjectId, review_path: str) -> str:
++    """The deterministic record id of an ingested code review: one per (project, path)."""
++    project_digest = hashlib.sha256(project_id.value.encode("utf-8")).hexdigest()[:12]
++    path_digest = hashlib.sha256(review_path.encode("utf-8")).hexdigest()[:12]
++    return f"codereview-{project_digest}-{path_digest}"
++
++
+ def snapshot_record_id(project_id: ProjectId, commit_sha: str) -> str:
+     """The deterministic record id of a code snapshot: one per (project, commit)."""
+     project_digest = hashlib.sha256(project_id.value.encode("utf-8")).hexdigest()[:12]
+@@ -464,6 +473,44 @@ class MetrologyStore:
+         snapshots.sort(key=lambda snap: snap.measured_at, reverse=True)
+         return snapshots
+ 
++    def write_code_review(self, review: CodeReviewRecord) -> str:
++        """Envelope and persist an ingested code review; return its record id.
++
++        The id is deterministic per (project, review path), so re-ingesting a file
++        replaces its record in place (402 D5).
++        """
++        record_id = code_review_record_id(review.project_id, review.review_path)
++        if review.record_id != record_id:
++            raise MetrologyStoreError(
++                f"Code review id {review.record_id!r} does not match the record id "
++                f"{record_id!r} for this project and path"
++            )
++        record = MetrologyRecord(
++            schema_version=_SCHEMA_VERSION,
++            record_type=RECORD_TYPE_CODE_REVIEW,
++            code_review=review,
++        )
++        self._write_atomic(
++            self._record_path(record_id), json.dumps(record.model_dump(mode="json"), indent=2)
++        )
++        return record_id
++
++    def list_code_reviews(self, project_id: ProjectId) -> list[CodeReviewRecord]:
++        """Return a project's ingested code reviews, newest ``reviewed_at`` first.
++
++        Tolerantly skips an unreadable sibling with a WARNING, like the other list methods.
++        """
++        reviews: list[CodeReviewRecord] = []
++        for _, record in self._iter_records():
++            review = record.code_review
++            if review is None or record.record_type != RECORD_TYPE_CODE_REVIEW:
++                continue
++            if review.project_id.value != project_id.value:
++                continue
++            reviews.append(review)
++        reviews.sort(key=lambda item: item.reviewed_at, reverse=True)
++        return reviews
++
+     def load_record(self, sample_id: str) -> MetrologyRecord:
+         """Load and validate one record by id.
+ 
+diff --git a/src/squadron/review/categories.py b/src/squadron/review/categories.py
+new file mode 100644
+index 00000000..49778d45
+--- /dev/null
++++ b/src/squadron/review/categories.py
+@@ -0,0 +1,76 @@
++"""Write-time category normalization for code reviews (slice 402, D3, D4).
++
++The ``code`` template asks for a category from the closed ``ReviewCategory``
++vocabulary. What the model actually returns is normalized here. Matching is strict:
++the historical alias table (``error-handling`` and friends) is read-side only, so a
++prompted model that still emits one of those is recorded as out-of-vocabulary
++(``other``, raw string kept) instead of being quietly corrected.
++"""
++
++from __future__ import annotations
++
++import logging
++import re
++from dataclasses import dataclass
++
++from squadron.core.finding_categories import ReviewCategory
++from squadron.review.models import ReviewResult
++
++_logger = logging.getLogger(__name__)
++
++#: Characters stripped from the ends of an emitted category before matching.
++_WRAPPING = "`'\" \t"
++_SEPARATORS = re.compile(r"[\s_]+")
++
++
++@dataclass(frozen=True)
++class NormalizedCategory:
++    """A finding's category after normalization.
++
++    ``category`` is None when the model gave none (never ``other``). ``raw_category`` is
++    set only when the emitted string differs from the canonical value.
++    """
++
++    category: ReviewCategory | None
++    raw_category: str | None
++
++
++def lenient_category_key(raw: str) -> str:
++    """The comparison form of *raw*: trimmed, unwrapped, casefolded, hyphen-separated."""
++    return _SEPARATORS.sub("-", raw.strip(_WRAPPING).casefold())
++
++
++def normalize_category(raw: str | None) -> NormalizedCategory:
++    """Normalize one emitted category against ``ReviewCategory``."""
++    if raw is None or not raw.strip():
++        return NormalizedCategory(None, None)
++    members = {member.value: member for member in ReviewCategory}
++    exact = members.get(raw)
++    if exact is not None:
++        return NormalizedCategory(exact, None)
++    lenient = members.get(lenient_category_key(raw))
++    if lenient is not None:
++        return NormalizedCategory(lenient, raw)
++    return NormalizedCategory(ReviewCategory.OTHER, raw)
++
++
++def normalize_result_categories(result: ReviewResult) -> None:
++    """Normalize every finding's category in place and mark the result as normalized.
++
++    A missing category stays missing (never ``other``). When the result has findings and
++    none carried a ``category:`` tag, the prompt change didn't take: that is logged at
++    WARNING and the review is still produced with every category uncategorized.
++    """
++    emitted = [finding.category for finding in result.findings]
++    for finding in result.findings:
++        normalized = normalize_category(finding.category)
++        finding.category = normalized.category.value if normalized.category is not None else None
++        finding.raw_category = normalized.raw_category
++    result.categories_normalized = True
++    if emitted and all(category is None or not category.strip() for category in emitted):
++        _logger.warning(
++            "Template '%s' asks for finding categories but none of its %d findings carried one; "
++            "every category is uncategorized",
++            result.template_name,
++            len(emitted),
++        )
+diff --git a/src/squadron/review/models.py b/src/squadron/review/models.py
+index 0e092e07..0d4e2b61 100644
+--- a/src/squadron/review/models.py
++++ b/src/squadron/review/models.py
+@@ -71,6 +71,8 @@ class StructuredFinding:
+     location: str | None = None
+     # Carried from ReviewFinding so JSON consumers see it (slice 195 D12, #139).
+     location_verified: bool | None = None
++    # The model's own category string when normalization changed it (slice 402).
++    raw_category: str | None = None
+ 
+ 
+ @dataclass
+@@ -96,6 +98,9 @@ class ReviewFinding:
+     # non-code templates. Written, never read — nothing in this slice consumes
+     # it, and it is absent from StructuredFinding, to_dict, and frontmatter.
+     location_verified: bool | None = None
++    # The category string the model emitted, kept when write-time normalization
++    # changed it (slice 402, D4). None when the emitted string was already canonical.
++    raw_category: str | None = None
+ 
+ 
+ @dataclass(frozen=True)
+@@ -198,6 +203,10 @@ class ReviewResult:
+     output_budget_exhausted: bool = False
+     # Slice 924 D4: the per-request output budget sent. None means no budget was sent.
+     max_output_tokens: int | None = None
++    # Slice 402: finding categories were normalized against ReviewCategory at write time
++    # (the template set normalize_categories). Ingest reads this to tell prompted
++    # categories from historical free-form ones.
++    categories_normalized: bool = False
+     # Parse-scan facts (slice 917 Part 3). None means "not produced by the
+     # parser" — a hand-built result — the same convention provenance uses.
+     # These feed the artifact's run digest (Part 6); no gate reads them, and they
+@@ -315,6 +324,7 @@ class ReviewResult:
+                     "description": f.description,
+                     "file_ref": f.file_ref,
+                     "category": f.category,
++                    "raw_category": f.raw_category,
+                     "location": f.location,
+                 }
+                 for f in self.findings
+@@ -324,6 +334,7 @@ class ReviewResult:
+                     "id": sf.id,
+                     "severity": sf.severity,
+                     "category": sf.category,
++                    "raw_category": sf.raw_category,
+                     "summary": sf.summary,
+                     "location": sf.location,
+                     "location_verified": sf.location_verified,
+@@ -339,6 +350,7 @@ class ReviewResult:
+             "provenance": self.provenance,
+             "tools_given": self.tools_given,
+             "tool_calls_made": self.tool_calls_made,
++            "categories_normalized": self.categories_normalized,
+             # Slice 918: additive and always present, null when the provider stamped
+             # nothing, exactly as the two telemetry keys above behave. Emitted
+             # unconditionally rather than only-when-set so a consumer can tell "reported
+@@ -402,6 +414,7 @@ class ReviewResult:
+                     summary=f.title,
+                     location=f.location or f.file_ref,
+                     location_verified=f.location_verified,
++                    raw_category=f.raw_category,
+                 )
+             )
+         return result
+diff --git a/src/squadron/review/persistence.py b/src/squadron/review/persistence.py
+index c5476414..b28067f0 100644
+--- a/src/squadron/review/persistence.py
++++ b/src/squadron/review/persistence.py
+@@ -624,12 +624,20 @@ def format_review_markdown(
+         for name, value in result.criteria.items():
+             lines.append(f"  {name}: {value}")
+ 
++    if result.categories_normalized:
++        # Slice 402: marks the categories below as prompted and normalized, so ingest
++        # doesn't map them through the historical alias table. Only when set, so every
++        # other review's frontmatter is unchanged.
++        lines.append("categoriesNormalized: true")
++
+     if result.findings:
+         lines.append("findings:")
+         for sf in result.structured_findings:
+             lines.append(f"  - id: {sf.id}")
+             lines.append(f"    severity: {sf.severity}")
+             lines.append(f"    category: {sf.category}")
++            if sf.raw_category is not None:
++                lines.append(f'    rawCategory: "{yaml_escape(sf.raw_category)}"')
+             lines.append(f'    summary: "{yaml_escape(sf.summary)}"')
+             if sf.location:
+                 # location and summary are the only fields in this hand-built
+diff --git a/src/squadron/review/review_client.py b/src/squadron/review/review_client.py
+index df94120d..60060c20 100644
+--- a/src/squadron/review/review_client.py
++++ b/src/squadron/review/review_client.py
+@@ -34,6 +34,7 @@ from squadron.providers.errors import EmptyFinalTurnError, ProviderError
+ from squadron.providers.loader import ensure_provider_loaded
+ from squadron.providers.profiles import get_profile, profile_credentials
+ from squadron.providers.registry import get_provider
++from squadron.review.categories import normalize_result_categories
+ from squadron.review.coverage import impose_diff_coverage, impose_output_coverage
+ from squadron.review.git_utils import EmptyDiffError
+ from squadron.review.models import DiffInjection, ReviewResult
+@@ -308,7 +309,7 @@ async def run_review_with_profile(
+     cwd_for_checks = Path(inputs.get("cwd", "."))
+ 
+     def parse(raw_output: str) -> ReviewResult:
+-        return parse_review_output(
++        result = parse_review_output(
+             raw_output=raw_output,
+             template_name=template.name,
+             input_files=inputs,
+@@ -317,6 +318,9 @@ async def run_review_with_profile(
+             cwd=cwd_for_checks,
+             score_decides_verdict=template.is_judge,
+         )
++        if template.normalize_categories:
++            normalize_result_categories(result)
++        return result
+ 
+     # Create agent, send prompt, collect response, shut down
+     # The budget the request actually carries. SDK and Codex agents cannot send one (they
+diff --git a/src/squadron/review/templates/__init__.py b/src/squadron/review/templates/__init__.py
+index 661168c5..6132c895 100644
+--- a/src/squadron/review/templates/__init__.py
++++ b/src/squadron/review/templates/__init__.py
+@@ -57,6 +57,8 @@ class ReviewTemplate:
+     diff_exclude_patterns: list[str] | None = None
+     tool_exclude_patterns: list[str] | None = None
+     judge: dict[str, object] | None = None
++    # Opt-in write-time category normalization (402 D3). Only the code template sets it.
++    normalize_categories: bool = False
+ 
+     # Prompt construction — exactly one of these is set (validated at load time)
+     prompt_template: str | None = None
+@@ -117,6 +119,15 @@ def _resolve_setting_sources(raw: object) -> list[str]:
+     return [str(source) for source in cast(list[object], raw)]
+ 
+ 
++def _resolve_normalize_categories(raw: object) -> bool:
++    """Absent → False; anything but a YAML bool is an error, never coerced."""
++    if raw is None:
++        return False
++    if not isinstance(raw, bool):
++        raise TemplateValidationError(f"normalize_categories must be true or false, got {raw!r}")
++    return raw
++
++
+ def load_template(path: Path) -> ReviewTemplate:
+     """Load a ReviewTemplate from a YAML file."""
+     with open(path, encoding="utf-8") as f:
+@@ -179,6 +190,7 @@ def load_template(path: Path) -> ReviewTemplate:
+             else None
+         ),
+         judge=dict(judge_raw) if isinstance(judge_raw, dict) else None,  # type: ignore[arg-type]
++        normalize_categories=_resolve_normalize_categories(data.get("normalize_categories")),
+         prompt_template=(str(data["prompt_template"]) if "prompt_template" in data else None),
+         prompt_builder=builder,
+     )
+diff --git a/tests/metrology/fixtures/review_ingest/0-review.code.review-1.md b/tests/metrology/fixtures/review_ingest/0-review.code.review-1.md
+new file mode 100644
+index 00000000..4587e990
+--- /dev/null
++++ b/tests/metrology/fixtures/review_ingest/0-review.code.review-1.md
+@@ -0,0 +1,15 @@
++---
++docType: review
++layer: project
++reviewType: code
++slice: unknown
++project: squadron
++verdict: UNKNOWN
++sourceDocument: 
++aiModel: minimax/minimax-m2.7
++status: complete
++dateCreated: 20260426
++dateUpdated: 20260426
++---
++
++# Review (fixture: frontmatter copied verbatim, body omitted)
+diff --git a/tests/metrology/fixtures/review_ingest/156-review.code.pipeline-executor-hardening.md b/tests/metrology/fixtures/review_ingest/156-review.code.pipeline-executor-hardening.md
+new file mode 100644
+index 00000000..68651cc3
+--- /dev/null
++++ b/tests/metrology/fixtures/review_ingest/156-review.code.pipeline-executor-hardening.md
+@@ -0,0 +1,66 @@
++---
++docType: review
++layer: project
++reviewType: code
++slice: pipeline-executor-hardening
++project: squadron
++verdict: CONCERNS
++sourceDocument: project-documents/user/slices/156-slice.pipeline-executor-hardening.md
++aiModel: minimax/minimax-m2.7
++status: complete
++dateCreated: 20260415
++dateUpdated: 20260415
++findings:
++  - id: F001
++    severity: concern
++    category: error-handling
++    summary: "Overly broad exception handling masks unrelated errors"
++    location: src/squadron/cli/commands/run.py:851-853
++  - id: F002
++    severity: note
++    category: user-experience
++    summary: "Checkpoint trigger error message shows hyphenated format instead of enum values"
++    location: src/squadron/pipeline/actions/checkpoint.py:96
++  - id: F003
++    severity: note
++    category: code-organization
++    summary: "Pipeline name normalization is applied at multiple entry points"
++    location: src/squadron/cli/commands/run.py:640, 680, 701, 753, 808
++  - id: F004
++    severity: note
++    category: testing
++    summary: "Test file `test_run_pipeline.py` mocks `load_pipeline` to return test fixture"
++    location: tests/cli/commands/test_run_pipeline.py
++  - id: F005
++    severity: pass
++    category: code-quality
++    summary: "ExecutionMode enum is properly implemented"
++    location: src/squadron/pipeline/state.py:43-50
++  - id: F006
++    severity: pass
++    category: data-integrity
++    summary: "Schema version incremented appropriately"
++    location: src/squadron/pipeline/state.py:34
++  - id: F007
++    severity: pass
++    category: security
++    summary: "Fail-fast validation before SDK session connection"
++    location: src/squadron/cli/commands/run.py:236-241
++  - id: F008
++    severity: pass
++    category: error-handling
++    summary: "Checkpoint invalid trigger returns ActionResult with error details"
++    location: src/squadron/pipeline/actions/checkpoint.py:82-99
++  - id: F009
++    severity: pass
++    category: robustness
++    summary: "Review action validates required inputs after auto-resolution"
++    location: src/squadron/pipeline/actions/review.py:117-126
++  - id: F010
++    severity: pass
++    category: testing
++    summary: "Tests cover the core new functionality comprehensively"
++    location: tests/cli/commands/test_run_pipeline.py, tests/pipeline/test_state.py
++---
++
++# Review (fixture: frontmatter copied verbatim, body omitted)
+diff --git a/tests/metrology/fixtures/review_ingest/320-review.arch.judge-calibration-quality-metrology.md b/tests/metrology/fixtures/review_ingest/320-review.arch.judge-calibration-quality-metrology.md
+new file mode 100644
+index 00000000..af159d30
+--- /dev/null
++++ b/tests/metrology/fixtures/review_ingest/320-review.arch.judge-calibration-quality-metrology.md
+@@ -0,0 +1,71 @@
++---
++docType: review
++layer: project
++reviewType: arch
++slice: judge-calibration-quality-metrology
++project: squadron
++verdict: CONCERNS
++sourceDocument: project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md
++aiModel: claude-fable-5
++status: complete
++dateCreated: 20260717
++dateUpdated: 20260717
++findings:
++  - id: F001
++    severity: concern
++    category: consistency
++    summary: "Judge-configuration identity cannot be satisfied read-side — the persisted record has no template version"
++    location: project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:79
++  - id: F002
++    severity: concern
++    category: completeness
++    summary: "The calibration loop destroys its own evidence source at graduation"
++    location: unverified
++  - id: F003
++    severity: concern
++    category: completeness
++    summary: "Human-verdict anchoring is unaddressed and inflates the number that loosens gates"
++    location: project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations
++  - id: F004
++    severity: concern
++    category: dependencies
++    summary: "`fan_out` is attributed to 140 but belongs to 180, which 320 claims independence from"
++    location: project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:81
++  - id: F005
++    severity: concern
++    category: dependencies
++    summary: "Frontmatter dependencies omit 340, on which two of five slices depend"
++    location: project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:8
++  - id: F006
++    severity: concern
++    category: completeness
++    summary: "The cross-project metrology store is named keystone yet left architecturally unconstrained"
++    location: project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:87
++  - id: F007
++    severity: concern
++    category: dependencies
++    summary: "Pre-emption prompt's data path into dispatch is unspecified and risks an upward dependency"
++    location: project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:97
++  - id: F008
++    severity: concern
++    category: feasibility
++    summary: "The pre-emption delta is measured against an oracle whose noise floor is never measured"
++    location: project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:83-85
++  - id: F009
++    severity: note
++    category: extension-points
++    summary: "Per-model calibration has no expression point in the threshold config it feeds"
++    location: project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:36
++  - id: F010
++    severity: note
++    category: abstraction
++    summary: "\"One metrology shape, reporting built once\" overstates what the two oracles share"
++    location: project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:69
++  - id: F011
++    severity: note
++    category: consistency
++    summary: "Skill name drift: \"tech-debt-audit\" vs. the actual `tech-debt-analyze` skill"
++    location: project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:22
++---
++
++# Review (fixture: frontmatter copied verbatim, body omitted)
+diff --git a/tests/metrology/fixtures/review_ingest/947-review.code.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md b/tests/metrology/fixtures/review_ingest/947-review.code.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md
+new file mode 100644
+index 00000000..a1e225c6
+--- /dev/null
++++ b/tests/metrology/fixtures/review_ingest/947-review.code.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md
+@@ -0,0 +1,70 @@
++---
++docType: review
++layer: project
++reviewType: code
++slice: unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells
++targetKind: slice
++rulesSource: project
++conventionsSource: AGENTS.md
++projectRules: [python.md, sql.md, testing.md]
++project: squadron
++verdict: CONCERNS
++verdictSource: stated
++sourceDocument: project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md
++aiModel: claude-sonnet-5-5
++aiProfile: sdk
++status: complete
++dateCreated: 20261019
++dateUpdated: 20261019
++reviewedSha: c85beb2d702dc43fc194085d0dae47286cb805c2
++toolsGiven: [read_file, list_files, grep]
++toolCallsMade: 0
++diffTruncated: false
++turns: 1
++promptTokens: 79339
++cachedTokens: 3232
++cacheWriteTokens: 76105
++completionTokens: 3555
++durationSeconds: 34.9
++costUsd: 0.346213
++costBasis: provider
++squadronVersion: 0.23.2
++findings:
++  - id: F001
++    severity: concern
++    category: error-handling
++    summary: "Cost cap fails open on an unreadable usage record"
++    location: "src/squadron/pipeline/run_spend.py#RunSpend.add"
++  - id: F002
++    severity: concern
++    category: testing
++    summary: "No load or concurrency test for the shared `RunSpend` tally"
++    location: "tests/pipeline/test_executor_cost_cap.py"
++  - id: F003
++    severity: concern
++    category: design
++    summary: "Tests patch private methods to isolate behaviour"
++    location: "tests/conftest.py:138-150"
++  - id: F004
++    severity: note
++    category: style
++    summary: "Redundant and loosely typed checks in turn handling"
++    location: "src/squadron/pipeline/sdk_turns.py#DispatchTurns.collect"
++  - id: F005
++    severity: note
++    category: style
++    summary: "`assert isinstance` used for type narrowing in an event action"
++    location: "src/squadron/events/builtin/blocked_tasks.py#BlockedTasksAction.execute"
++  - id: F006
++    severity: note
++    category: design
++    summary: "Resume flag lifecycle relies on mutate-and-pop of the shared params dict"
++    location: "src/squadron/pipeline/executor.py:625-657"
++  - id: F007
++    severity: pass
++    category: uncategorized
++    summary: "Parser, config validation and failure-kind plumbing"
++    location: "src/squadron/pr/tasks.py#parse_blocked_markers"
++---
++
++# Review (fixture: frontmatter copied verbatim, body omitted)
+diff --git a/tests/metrology/fixtures/review_ingest/README.txt b/tests/metrology/fixtures/review_ingest/README.txt
+new file mode 100644
+index 00000000..d3fd647b
+--- /dev/null
++++ b/tests/metrology/fixtures/review_ingest/README.txt
+@@ -0,0 +1,19 @@
++Review ingest fixtures (a .txt so a directory ingest does not pick it up)
++
++Frontmatter copied verbatim from squadron's own reviews (body omitted), plus synthetic files named for what each tests.
++
++| File | What it is |
++|---|---|
++| `156-review.code.pipeline-executor-hardening.md` | Real. No `reviewedSha`, no `targetKind`, free-form categories (read-side mapped) |
++| `947-review.code.*` | Real. `targetKind: slice`, `reviewedSha`, slice 947 |
++| `github.com-ecorkran-squadron-116-review.code.md` | Real. A PR review whose verdict is `UNKNOWN` (degraded) |
++| `0-review.code.review-1.md` | Real. Blank `sourceDocument`, `slice: unknown`, verdict `UNKNOWN` |
++| `320-review.arch.*` | Real. An arch review, not a code review |
++| `synthetic-pr-review.code.md` | PR source, known verdict: the record has no slice index |
++| `synthetic-new-format.code.md` | `categoriesNormalized: true`, one `rawCategory`, one `uncategorized` |
++| `synthetic-bad-severity.code.md` | One finding whose severity isn't a review severity |
++| `synthetic-new-format-bad-category.code.md` | A normalized file storing a category that isn't a `ReviewCategory` |
++| `synthetic-missing-verdict.code.md` | No `verdict` key (and no `docType: review`, which the repo's verdict gate would refuse to commit) |
++| `synthetic-malformed-frontmatter.code.md` | Frontmatter that isn't valid YAML |
++
++The non-UTF-8 file is created at test time, not committed.
+diff --git a/tests/metrology/fixtures/review_ingest/github.com-ecorkran-squadron-116-review.code.md b/tests/metrology/fixtures/review_ingest/github.com-ecorkran-squadron-116-review.code.md
+new file mode 100644
+index 00000000..0b04d4f4
+--- /dev/null
++++ b/tests/metrology/fixtures/review_ingest/github.com-ecorkran-squadron-116-review.code.md
+@@ -0,0 +1,24 @@
++---
++docType: review
++layer: project
++reviewType: code
++pr:
++  host: github.com
++  owner: ecorkran
++  repository: squadron
++  number: 116
++  url: https://github.com/ecorkran/squadron/pull/116
++targetKind: pr
++rulesSource: project
++project: squadron
++verdict: UNKNOWN
++sourceDocument: https://github.com/ecorkran/squadron/pull/116
++aiModel: minimax/minimax-m3
++status: complete
++dateCreated: 20260918
++dateUpdated: 20260918
++reviewedSha: 8c1675f03b659a51d8b680362330429f7d03bbb1
++toolsSuppressedReason: run-suppressed
++---
++
++# Review (fixture: frontmatter copied verbatim, body omitted)
+diff --git a/tests/metrology/fixtures/review_ingest/synthetic-bad-severity.code.md b/tests/metrology/fixtures/review_ingest/synthetic-bad-severity.code.md
+new file mode 100644
+index 00000000..045186d3
+--- /dev/null
++++ b/tests/metrology/fixtures/review_ingest/synthetic-bad-severity.code.md
+@@ -0,0 +1,26 @@
++---
++docType: review
++layer: project
++reviewType: code
++slice: synthetic
++project: squadron
++verdict: CONCERNS
++sourceDocument: project-documents/user/slices/777-slice.synthetic.md
++aiModel: test-model
++status: complete
++dateCreated: 20261020
++dateUpdated: 20261020
++findings:
++  - id: F001
++    severity: concern
++    category: testing
++    summary: "finding 1"
++    location: "src/a.py:1"
++  - id: F002
++    severity: blocker
++    category: testing
++    summary: "finding 2"
++    location: "src/a.py:2"
++---
++
++# Review: code (synthetic fixture)
+diff --git a/tests/metrology/fixtures/review_ingest/synthetic-malformed-frontmatter.code.md b/tests/metrology/fixtures/review_ingest/synthetic-malformed-frontmatter.code.md
+new file mode 100644
+index 00000000..4ab0f081
+--- /dev/null
++++ b/tests/metrology/fixtures/review_ingest/synthetic-malformed-frontmatter.code.md
+@@ -0,0 +1,8 @@
++---
++docType: review
++reviewType: code
++verdict: [unclosed
++findings: {oops
++---
++
++# Review: code (synthetic fixture, malformed frontmatter)
+diff --git a/tests/metrology/fixtures/review_ingest/synthetic-missing-verdict.code.md b/tests/metrology/fixtures/review_ingest/synthetic-missing-verdict.code.md
+new file mode 100644
+index 00000000..acc7ff5f
+--- /dev/null
++++ b/tests/metrology/fixtures/review_ingest/synthetic-missing-verdict.code.md
+@@ -0,0 +1,13 @@
++---
++layer: project
++reviewType: code
++slice: synthetic
++project: squadron
++sourceDocument: project-documents/user/slices/777-slice.synthetic.md
++aiModel: test-model
++status: complete
++dateCreated: 20261020
++dateUpdated: 20261020
++---
++
++# Review: code (synthetic fixture)
+diff --git a/tests/metrology/fixtures/review_ingest/synthetic-new-format-bad-category.code.md b/tests/metrology/fixtures/review_ingest/synthetic-new-format-bad-category.code.md
+new file mode 100644
+index 00000000..f859bc1e
+--- /dev/null
++++ b/tests/metrology/fixtures/review_ingest/synthetic-new-format-bad-category.code.md
+@@ -0,0 +1,22 @@
++---
++docType: review
++layer: project
++reviewType: code
++slice: synthetic
++project: squadron
++verdict: CONCERNS
++sourceDocument: project-documents/user/slices/777-slice.synthetic.md
++aiModel: test-model
++status: complete
++dateCreated: 20261020
++dateUpdated: 20261020
++categoriesNormalized: true
++findings:
++  - id: F001
++    severity: concern
++    category: style
++    summary: "finding 1"
++    location: "src/a.py:1"
++---
++
++# Review: code (synthetic fixture)
+diff --git a/tests/metrology/fixtures/review_ingest/synthetic-new-format.code.md b/tests/metrology/fixtures/review_ingest/synthetic-new-format.code.md
+new file mode 100644
+index 00000000..16bfd0af
+--- /dev/null
++++ b/tests/metrology/fixtures/review_ingest/synthetic-new-format.code.md
+@@ -0,0 +1,34 @@
++---
++docType: review
++layer: project
++reviewType: code
++slice: synthetic
++project: squadron
++verdict: CONCERNS
++sourceDocument: project-documents/user/slices/777-slice.synthetic.md
++aiModel: test-model
++status: complete
++dateCreated: 20261020
++dateUpdated: 20261020
++reviewedSha: 2222222222222222222222222222222222222222
++categoriesNormalized: true
++findings:
++  - id: F001
++    severity: concern
++    category: other
++    rawCategory: "error-handling"
++    summary: "finding 1"
++    location: "src/a.py:1"
++  - id: F002
++    severity: note
++    category: security-hygiene
++    summary: "finding 2"
++    location: "src/a.py:2"
++  - id: F003
++    severity: concern
++    category: uncategorized
++    summary: "finding 3"
++    location: "src/a.py:3"
++---
++
++# Review: code (synthetic fixture)
+diff --git a/tests/metrology/fixtures/review_ingest/synthetic-pr-review.code.md b/tests/metrology/fixtures/review_ingest/synthetic-pr-review.code.md
+new file mode 100644
+index 00000000..097bc4e3
+--- /dev/null
++++ b/tests/metrology/fixtures/review_ingest/synthetic-pr-review.code.md
+@@ -0,0 +1,23 @@
++---
++docType: review
++layer: project
++reviewType: code
++slice: synthetic
++project: squadron
++verdict: CONCERNS
++sourceDocument: https://github.com/ecorkran/squadron/pull/999
++aiModel: test-model
++status: complete
++dateCreated: 20261020
++dateUpdated: 20261020
++targetKind: pr
++reviewedSha: 1111111111111111111111111111111111111111
++findings:
++  - id: F001
++    severity: concern
++    category: testing
++    summary: "finding 1"
++    location: "src/a.py:1"
++---
++
++# Review: code (synthetic fixture)
+diff --git a/tests/metrology/sync_helpers.py b/tests/metrology/sync_helpers.py
+new file mode 100644
+index 00000000..88054dc4
+--- /dev/null
++++ b/tests/metrology/sync_helpers.py
+@@ -0,0 +1,10 @@
++"""Shared by the vocabulary sync tests (slices 323 and 402)."""
++
++from __future__ import annotations
++
++import re
++
++#: Category values are backticked kebab-case tokens. Matching backticked tokens (rather
++#: than a fixed table or list layout) keeps the sync tests lenient about formatting:
++#: reflowing a table into a bullet list must not break the guard.
++BACKTICKED = re.compile(r"`([a-z][a-z-]*[a-z])`")
+diff --git a/tests/metrology/test_audit_skill_sync.py b/tests/metrology/test_audit_skill_sync.py
+index 6f99b460..cd9ffb36 100644
+--- a/tests/metrology/test_audit_skill_sync.py
++++ b/tests/metrology/test_audit_skill_sync.py
+@@ -27,12 +27,7 @@ import pytest
+ from squadron.metrology.audit import INDEPENDENT_RUN_MARKER
+ from squadron.metrology.audit_models import AuditCategory
+ from squadron.skills.resolver import _resolve_bundled  # pyright: ignore[reportPrivateUsage]
+-
+-#: The vocabulary is enumerated in the skill's category table as backticked
+-#: kebab-case values. Matching backticked tokens (rather than a fixed table
+-#: layout) keeps this lenient about formatting: reflowing the table, or
+-#: switching it to a bullet list, must not break the guard.
+-_BACKTICKED = re.compile(r"`([a-z][a-z-]*[a-z])`")
++from tests.metrology.sync_helpers import BACKTICKED
+ 
+ 
+ @pytest.fixture
+@@ -51,7 +46,7 @@ def test_category_vocabulary_matches_enum(skill_text: str) -> None:
+     adding one to the enum without syncing the fork, both break it.
+     """
+     expected = {member.value for member in AuditCategory}
+-    found = set(_BACKTICKED.findall(skill_text))
++    found = set(BACKTICKED.findall(skill_text))
+ 
+     missing = expected - found
+     assert not missing, (
+@@ -63,7 +58,7 @@ def test_category_vocabulary_matches_enum(skill_text: str) -> None:
+     # direction is scoped to the category table itself.
+     table = skill_text.split("### Category vocabulary", 1)
+     assert len(table) == 2, "skill file has no '### Category vocabulary' section"
+-    table_values = set(_BACKTICKED.findall(table[1].split("## Phase 3", 1)[0]))
++    table_values = set(BACKTICKED.findall(table[1].split("## Phase 3", 1)[0]))
+     extra = table_values - expected
+     assert not extra, (
+         f"skill file enumerates categories absent from AuditCategory: {sorted(extra)}. "
+diff --git a/tests/metrology/test_review_category_map.py b/tests/metrology/test_review_category_map.py
+new file mode 100644
+index 00000000..96500072
+--- /dev/null
++++ b/tests/metrology/test_review_category_map.py
+@@ -0,0 +1,72 @@
++"""The read-side category map for historical code reviews (slice 402, D7)."""
++
++from __future__ import annotations
++
++import pytest
++
++from squadron.core.finding_categories import ReviewCategory
++from squadron.metrology.review_category_map import HISTORICAL_CATEGORIES, map_historical_category
++from squadron.review.categories import lenient_category_key
++
++D7_TABLE = {
++    "error-handling": ReviewCategory.ERROR_HANDLING_OBSERVABILITY,
++    "observability": ReviewCategory.ERROR_HANDLING_OBSERVABILITY,
++    "testing": ReviewCategory.TEST_DEBT,
++    "test-coverage": ReviewCategory.TEST_DEBT,
++    "design": ReviewCategory.ARCHITECTURAL_DECAY,
++    "design-principles": ReviewCategory.ARCHITECTURAL_DECAY,
++    "structure": ReviewCategory.ARCHITECTURAL_DECAY,
++    "dry": ReviewCategory.CONSISTENCY_ROT,
++    "project-conventions": ReviewCategory.CONSISTENCY_ROT,
++    "consistency": ReviewCategory.CONSISTENCY_ROT,
++    "typing": ReviewCategory.TYPE_CONTRACT_DEBT,
++    "performance": ReviewCategory.PERFORMANCE_RESOURCE,
++    "security": ReviewCategory.SECURITY_HYGIENE,
++    "documentation": ReviewCategory.DOCUMENTATION_DRIFT,
++    "correctness": ReviewCategory.CORRECTNESS,
++    "concurrency": ReviewCategory.CORRECTNESS,
++}
++
++
++def test_the_table_is_exactly_the_d7_rows() -> None:
++    assert HISTORICAL_CATEGORIES == D7_TABLE
++    assert len(HISTORICAL_CATEGORIES) == 16
++
++
++@pytest.mark.parametrize(("raw", "expected"), list(D7_TABLE.items()))
++def test_every_d7_string_maps_and_keeps_the_raw_string_when_it_differs(
++    raw: str, expected: ReviewCategory
++) -> None:
++    result = map_historical_category(raw)
++
++    assert result.category is expected
++    assert result.raw_category == (None if raw == expected.value else raw)
++
++
++def test_the_lenient_key_applies() -> None:
++    result = map_historical_category("Error Handling")
++
++    assert result.category is ReviewCategory.ERROR_HANDLING_OBSERVABILITY
++    assert result.raw_category == "Error Handling"
++
++
++@pytest.mark.parametrize("raw", [None, "", "uncategorized", "Uncategorized"])
++def test_missing_and_uncategorized_stay_missing(raw: str | None) -> None:
++    result = map_historical_category(raw)
++
++    assert result.category is None
++    assert result.raw_category is None
++
++
++@pytest.mark.parametrize("raw", ["style", "code-quality", "naming", "design/typing"])
++def test_everything_else_is_other_with_the_raw_string_kept(raw: str) -> None:
++    result = map_historical_category(raw)
++
++    assert result.category is ReviewCategory.OTHER
++    assert result.raw_category == raw
++
++
++def test_table_values_are_members_and_keys_are_in_lenient_form() -> None:
++    for key, member in HISTORICAL_CATEGORIES.items():
++        assert isinstance(member, ReviewCategory)
++        assert lenient_category_key(key) == key
+diff --git a/tests/metrology/test_review_category_sync.py b/tests/metrology/test_review_category_sync.py
+new file mode 100644
+index 00000000..0db3eaba
+--- /dev/null
++++ b/tests/metrology/test_review_category_sync.py
+@@ -0,0 +1,57 @@
++"""The vocabulary stays in step across the enums and the ``code`` template (slice 402, D8).
++
++Three copies of the review vocabulary exist: ``AuditCategory`` (with the audit skill,
++guarded by ``test_audit_skill_sync.py``), ``ReviewCategory``, and the category block in
++``code.yaml``'s prompt. A prompt and a Python enum cannot import from each other, so this
++test is what makes drift in any one of them fail CI.
++"""
++
++from __future__ import annotations
++
++from squadron.core.finding_categories import AuditCategory, ReviewCategory
++from squadron.data import data_dir
++from squadron.review.templates import ReviewTemplate, load_template
++from tests.metrology.sync_helpers import BACKTICKED
++
++#: The line that opens the vocabulary list in the prompt; the list runs to the next blank line.
++VOCABULARY_HEADING = "Category vocabulary:"
++
++
++def builtin(name: str) -> ReviewTemplate:
++    return load_template(data_dir() / "templates" / f"{name}.yaml")
++
++
++def vocabulary_block(prompt: str) -> str:
++    """The lines from the vocabulary heading to the next blank line."""
++    lines = prompt.splitlines()
++    assert VOCABULARY_HEADING in (line.strip() for line in lines), (
++        f"code.yaml's prompt has no '{VOCABULARY_HEADING}' line"
++    )
++    start = next(i for i, line in enumerate(lines) if line.strip() == VOCABULARY_HEADING)
++    end = next((i for i in range(start + 1, len(lines)) if not lines[i].strip()), len(lines))
++    return "\n".join(lines[start:end])
++
++
++def test_review_categories_are_the_audit_categories_plus_correctness() -> None:
++    assert {m.value for m in ReviewCategory} == {m.value for m in AuditCategory} | {"correctness"}
++    assert "correctness" not in {m.value for m in AuditCategory}
++
++
++def test_code_template_vocabulary_block_matches_the_enum_in_both_directions() -> None:
++    block = vocabulary_block(builtin("code").system_prompt)
++
++    found = set(BACKTICKED.findall(block))
++    expected = {m.value for m in ReviewCategory}
++
++    assert not expected - found, (
++        f"ReviewCategory values missing from code.yaml: {sorted(expected - found)}"
++    )
++    assert not found - expected, (
++        f"code.yaml lists values not in ReviewCategory: {sorted(found - expected)}"
++    )
++
++
++def test_only_the_code_template_normalizes_categories() -> None:
++    assert builtin("code").normalize_categories is True
++    for name in ("arch", "slice", "tasks"):
++        assert builtin(name).normalize_categories is False, name
+diff --git a/tests/metrology/test_review_ingest.py b/tests/metrology/test_review_ingest.py
+new file mode 100644
+index 00000000..b5797e81
+--- /dev/null
++++ b/tests/metrology/test_review_ingest.py
+@@ -0,0 +1,248 @@
++"""Ingest of code-review files into the metrology store (slice 402, D5-D7)."""
++
++from __future__ import annotations
++
++import logging
++import shutil
++from datetime import date
++from pathlib import Path
++
++import pytest
++
++from squadron.core.finding_categories import ReviewCategory
++from squadron.metrology.errors import MetrologyStoreError, ReviewIngestInputError
++from squadron.metrology.review_ingest import (
++    IngestResult,
++    _slice_index,  # pyright: ignore[reportPrivateUsage]
++    ingest_reviews,
++    resolve_review_files,
++)
++from squadron.metrology.review_models import CodeReviewRecord
++from squadron.metrology.store import MetrologyStore
++from squadron.review.models import Severity, Verdict
++from tests.metrology.snapshot.builders import make_project_id
++
++FIXTURES = Path(__file__).parent / "fixtures" / "review_ingest"
++SLICE_947 = next(FIXTURES.glob("947-review.code.*")).name
++SLICE_947_SHA = "c85beb2d702dc43fc194085d0dae47286cb805c2"
++
++
++@pytest.fixture
++def store(tmp_path: Path) -> MetrologyStore:
++    return MetrologyStore(store_dir=tmp_path / "review-store")
++
++
++@pytest.fixture
++def reviews(tmp_path: Path) -> Path:
++    """A writable copy of the fixture directory."""
++    target = tmp_path / "reviews"
++    shutil.copytree(FIXTURES, target)
++    return target
++
++
++def run(
++    reviews: Path, store: MetrologyStore, repo_root: Path | None = None
++) -> tuple[IngestResult, dict[str, CodeReviewRecord]]:
++    project = make_project_id()
++    result = IngestResult()
++    files, _ = resolve_review_files([reviews], project, reviews)
++    ingest_reviews(project, repo_root or reviews, files, store, result)
++    records = {Path(r.review_path).name: r for r in store.list_code_reviews(project)}
++    return result, records
++
++
++def test_the_fixture_directory_is_classified(reviews: Path, store: MetrologyStore) -> None:
++    result, records = run(reviews, store)
++
++    assert set(records) == {
++        "156-review.code.pipeline-executor-hardening.md",
++        SLICE_947,
++        "synthetic-pr-review.code.md",
++        "synthetic-new-format.code.md",
++        "synthetic-bad-severity.code.md",
++    }
++    assert result.ingested == 5
++    assert result.skipped_not_code == 1  # the arch review
++    assert result.skipped_unknown_verdict == 2  # the degraded PR review and 0-review
++    assert {path.name for path, _ in result.failed} == {
++        "synthetic-malformed-frontmatter.code.md",
++        "synthetic-missing-verdict.code.md",
++        "synthetic-new-format-bad-category.code.md",
++    }
++
++
++def test_failures_log_a_warning_with_the_path_and_the_rest_are_still_written(
++    reviews: Path, store: MetrologyStore, caplog: pytest.LogCaptureFixture
++) -> None:
++    with caplog.at_level(logging.WARNING):
++        result, records = run(reviews, store)
++
++    for name in ("synthetic-malformed-frontmatter.code.md", "synthetic-missing-verdict.code.md"):
++        assert any(name in record.getMessage() for record in caplog.records), name
++    assert records, "the other files were still written"
++    assert all(reason for _, reason in result.failed)
++
++
++def test_the_947_record_carries_commit_slice_and_mapped_categories(
++    reviews: Path, store: MetrologyStore
++) -> None:
++    _, records = run(reviews, store)
++    record = records[SLICE_947]
++
++    assert record.slice_index == 947
++    assert record.commit_sha == SLICE_947_SHA
++    assert record.read_side_mapped is True
++    assert record.verdict is Verdict.CONCERNS
++    categories = {f.raw_category: f.category for f in record.findings}
++    assert categories["error-handling"] is ReviewCategory.ERROR_HANDLING_OBSERVABILITY
++
++
++def test_a_historical_file_without_reviewed_sha_has_no_commit(
++    reviews: Path, store: MetrologyStore
++) -> None:
++    _, records = run(reviews, store)
++    record = records["156-review.code.pipeline-executor-hardening.md"]
++
++    assert record.commit_sha is None
++    assert record.slice_index == 156
++    assert record.reviewed_at == date(2026, 4, 15)
++    uncategorized = [f for f in record.findings if f.category is None]
++    assert all(f.raw_category is None for f in uncategorized)
++
++
++def test_a_pr_review_has_no_slice_index(reviews: Path, store: MetrologyStore) -> None:
++    _, records = run(reviews, store)
++    record = records["synthetic-pr-review.code.md"]
++
++    assert record.slice_index is None
++    assert record.commit_sha == "1" * 40
++
++
++def test_new_format_file_keeps_write_time_categories(reviews: Path, store: MetrologyStore) -> None:
++    _, records = run(reviews, store)
++    record = records["synthetic-new-format.code.md"]
++
++    assert record.read_side_mapped is False
++    assert [(f.category, f.raw_category) for f in record.findings] == [
++        (ReviewCategory.OTHER, "error-handling"),
++        (ReviewCategory.SECURITY_HYGIENE, None),
++        (None, None),
++    ]
++
++
++def test_an_unrecognized_severity_is_counted_dropped_and_logged(
++    reviews: Path, store: MetrologyStore, caplog: pytest.LogCaptureFixture
++) -> None:
++    with caplog.at_level(logging.WARNING):
++        result, records = run(reviews, store)
++    record = records["synthetic-bad-severity.code.md"]
++
++    assert record.unnormalized_count == 1
++    assert result.dropped_findings == 1
++    assert [f.finding_id for f in record.findings] == ["F001"]
++    assert record.findings[0].severity is Severity.CONCERN
++    assert any(
++        "synthetic-bad-severity.code.md" in r.getMessage() and "F002" in r.getMessage()
++        for r in caplog.records
++    )
++
++
++def test_a_non_code_review_is_skipped_whatever_its_verdict_but_a_code_review_is_checked(
++    reviews: Path, store: MetrologyStore
++) -> None:
++    (reviews / "tasks-resolved.md").write_text(
++        "---\nreviewType: tasks\nverdict: RESOLVED\n---\n", encoding="utf-8"
++    )
++    (reviews / "code-resolved.code.md").write_text(
++        "---\nreviewType: code\nverdict: RESOLVED\ndateCreated: 20261001\n---\n", encoding="utf-8"
++    )
++
++    result, _ = run(reviews, store)
++
++    assert result.skipped_not_code == 2
++    failed = {path.name: reason for path, reason in result.failed}
++    assert "unrecognized verdict" in failed["code-resolved.code.md"]
++    assert "tasks-resolved.md" not in failed
++
++
++def test_a_non_utf8_file_is_failed(reviews: Path, store: MetrologyStore) -> None:
++    (reviews / "latin1.code.md").write_bytes(b"---\nreviewType: code\n---\n\xff\xfe")
++
++    result, _ = run(reviews, store)
++
++    assert "latin1.code.md" in {path.name for path, _ in result.failed}
++
++
++def test_re_ingesting_after_an_edit_replaces_the_record(reviews: Path, store: MetrologyStore) -> None:
++    run(reviews, store)
++    target = reviews / SLICE_947
++    target.write_text(
++        target.read_text(encoding="utf-8").replace("findings:", "findings:\n  []\nold:", 1),
++        encoding="utf-8",
++    )
++    synthetic = reviews / "synthetic-pr-review.code.md"
++    synthetic.write_text(
++        synthetic.read_text(encoding="utf-8").replace('summary: "finding 1"', 'summary: "edited"'),
++        encoding="utf-8",
++    )
++
++    result, records = run(reviews, store)
++
++    assert result.replaced == result.ingested == 5
++    assert records["synthetic-pr-review.code.md"].findings[0].summary == "edited"
++    assert records[SLICE_947].findings == []
++    assert len(list(store.store_dir.glob("*.json"))) == 5
++
++
++def test_a_nonexistent_path_raises_and_writes_nothing(tmp_path: Path, store: MetrologyStore) -> None:
++    with pytest.raises(ReviewIngestInputError, match="nope"):
++        resolve_review_files([tmp_path / "nope"], make_project_id(), tmp_path)
++
++    assert not store.store_dir.exists() or list(store.store_dir.glob("*.json")) == []
++
++
++def test_a_store_error_on_the_second_write_leaves_the_first_in_the_result(
++    reviews: Path, store: MetrologyStore, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    real_write = store.write_code_review
++    calls: list[str] = []
++
++    def failing_second(record: CodeReviewRecord) -> str:
++        calls.append(record.record_id)
++        if len(calls) == 2:
++            raise MetrologyStoreError("disk full")
++        return real_write(record)
++
++    monkeypatch.setattr(store, "write_code_review", failing_second)
++    project = make_project_id()
++    result = IngestResult()
++    files, _ = resolve_review_files([reviews], project, reviews)
++
++    with pytest.raises(MetrologyStoreError, match="disk full"):
++        ingest_reviews(project, reviews, files, store, result)
++
++    assert result.ingested == 1
++
++
++@pytest.mark.parametrize(
++    ("source", "expected"),
++    [
++        ("project-documents/user/slices/947-slice.unattended-pipelines.md", 947),
++        ("project-documents/user/tasks/402-tasks.code-review-normalization.md", 402),
++        ("https://github.com/ecorkran/squadron/pull/116", None),
++        ("", None),
++        (None, None),
++        ("project-documents/user/architecture/320-arch.judge.md", None),
++    ],
++)
++def test_slice_index_comes_from_the_source_document_basename_only(
++    source: str | None, expected: int | None
++) -> None:
++    assert _slice_index(source) == expected
++
++
++def test_default_reviews_dir_with_no_paths_must_exist(tmp_path: Path) -> None:
++    project = make_project_id()
++
++    with pytest.raises(ReviewIngestInputError, match="doesn't exist"):
++        resolve_review_files([], project, tmp_path)
+diff --git a/tests/metrology/test_review_ingest_cli.py b/tests/metrology/test_review_ingest_cli.py
+new file mode 100644
+index 00000000..57eb1d0b
+--- /dev/null
++++ b/tests/metrology/test_review_ingest_cli.py
+@@ -0,0 +1,158 @@
++"""``sq metrology ingest-reviews`` CLI tests (slice 402)."""
++
++from __future__ import annotations
++
++import logging
++import shutil
++from collections.abc import Callable, Iterator
++from pathlib import Path
++from unittest.mock import patch
++
++import pytest
++from typer.testing import CliRunner
++
++from squadron.cli.app import app
++from squadron.metrology.errors import MetrologyStoreError
++from squadron.metrology.store import MetrologyStore
++
++runner = CliRunner()
++
++ConfigWriter = Callable[[Path, dict[str, object]], Path]
++FIXTURES = Path(__file__).parent / "fixtures" / "review_ingest"
++PROJECT = "github.com/manta/example-repo"
++BAD_FILES = (
++    "synthetic-malformed-frontmatter.code.md",
++    "synthetic-missing-verdict.code.md",
++    "synthetic-new-format-bad-category.code.md",
++)
++
++
++@pytest.fixture
++def store_dir(tmp_path: Path) -> Iterator[Path]:
++    directory = tmp_path / "cli-store"
++    with patch(
++        "squadron.cli.commands.metrology_review_ingest.resolve_store_dir", return_value=directory
++    ):
++        yield directory
++
++
++@pytest.fixture
++def project(tmp_path: Path, write_project_config: ConfigWriter) -> Path:
++    """A project directory with a recorded identity and no git remote."""
++    root = tmp_path / "project"
++    root.mkdir()
++    write_project_config(root, {"metrology.project_id": PROJECT})
++    return root
++
++
++@pytest.fixture
++def reviews(tmp_path: Path) -> Path:
++    target = tmp_path / "reviews"
++    shutil.copytree(FIXTURES, target)
++    return target
++
++
++def invoke(project: Path, *paths: Path) -> tuple[int, str]:
++    result = runner.invoke(
++        app, ["metrology", "ingest-reviews", *map(str, paths), "--cwd", str(project)]
++    )
++    return result.exit_code, result.output
++
++
++def record_files(store_dir: Path) -> list[Path]:
++    return sorted(store_dir.glob("*.json")) if store_dir.exists() else []
++
++
++def test_fixture_directory_prints_counts_and_exits_one_for_the_failed_files(
++    project: Path, reviews: Path, store_dir: Path
++) -> None:
++    code, output = invoke(project, reviews)
++
++    assert code == 1, output
++    assert f"Ingested 5 code reviews into {store_dir} (0 replaced)" in output
++    assert "Skipped: 1 not code reviews, 2 unknown verdict" in output
++    assert "Dropped: 1 findings with a severity outside the review scale" in output
++    assert "Failed: 3" in output
++    for name in BAD_FILES:
++        assert name in output
++    assert len(record_files(store_dir)) == 5
++
++
++def test_only_good_files_exit_zero_and_a_second_run_replaces(
++    project: Path, reviews: Path, store_dir: Path
++) -> None:
++    for name in BAD_FILES:
++        (reviews / name).unlink()
++
++    first_code, _ = invoke(project, reviews)
++    second_code, second_output = invoke(project, reviews)
++
++    assert (first_code, second_code) == (0, 0)
++    assert "(5 replaced)" in second_output
++    assert len(record_files(store_dir)) == 5
++
++
++def test_nonexistent_path_exits_one_and_writes_nothing(
++    project: Path, tmp_path: Path, store_dir: Path
++) -> None:
++    code, output = invoke(project, tmp_path / "nope")
++
++    assert code == 1
++    assert "nope" in output
++    assert record_files(store_dir) == []
++
++
++def test_missing_default_reviews_directory_exits_one_naming_it(project: Path, store_dir: Path) -> None:
++    code, output = invoke(project)
++
++    assert code == 1
++    assert "reviews directory" in output
++    assert "doesn't exist" in output
++    assert record_files(store_dir) == []
++
++
++def test_empty_directory_ingests_zero_with_a_warning_and_exits_zero(
++    project: Path, tmp_path: Path, store_dir: Path, caplog: pytest.LogCaptureFixture
++) -> None:
++    empty = tmp_path / "empty"
++    empty.mkdir()
++
++    with caplog.at_level(logging.WARNING):
++        code, output = invoke(project, empty)
++
++    assert code == 0
++    assert "Ingested 0 code reviews" in output
++    assert str(empty) in caplog.text
++
++
++def test_store_write_error_prints_the_partial_count_and_exits_one(
++    project: Path, reviews: Path, store_dir: Path
++) -> None:
++    real_write = MetrologyStore.write_code_review
++    calls: list[str] = []
++
++    def failing_second(self: MetrologyStore, record: object) -> str:
++        calls.append("write")
++        if len(calls) == 2:
++            raise MetrologyStoreError("disk full")
++        return real_write(self, record)  # pyright: ignore[reportArgumentType]
++
++    with patch.object(MetrologyStore, "write_code_review", failing_second):
++        code, output = invoke(project, reviews)
++
++    assert code == 1
++    assert "Ingested 1 code reviews" in output
++    assert "disk full" in output
++
++
++def test_identity_failure_exits_one_and_writes_nothing(
++    tmp_path: Path, reviews: Path, store_dir: Path
++) -> None:
++    no_identity = tmp_path / "anonymous"
++    no_identity.mkdir()
++
++    code, output = invoke(no_identity, reviews)
++
++    assert code == 1
++    assert "project identity" in output
++    assert record_files(store_dir) == []
+diff --git a/tests/metrology/test_review_models.py b/tests/metrology/test_review_models.py
+new file mode 100644
+index 00000000..27300393
+--- /dev/null
++++ b/tests/metrology/test_review_models.py
+@@ -0,0 +1,67 @@
++"""The ``code_review`` record models (slice 402, D6)."""
++
++from __future__ import annotations
++
++import json
++from datetime import UTC, date, datetime
++
++import pytest
++from pydantic import ValidationError
++
++from squadron.core.finding_categories import ReviewCategory
++from squadron.metrology.review_models import CodeReviewFinding, CodeReviewRecord
++from squadron.review.models import Severity, Verdict
++from tests.metrology.snapshot.builders import make_project_id
++
++
++def make_finding(category: ReviewCategory | None = ReviewCategory.TEST_DEBT) -> CodeReviewFinding:
++    return CodeReviewFinding(
++        finding_id="F001",
++        severity=Severity.CONCERN,
++        category=category,
++        raw_category="Test Debt" if category is not None else None,
++        location="src/a.py:1",
++        summary="No test",
++    )
++
++
++def make_record(
++    verdict: Verdict = Verdict.CONCERNS, findings: list[CodeReviewFinding] | None = None
++) -> CodeReviewRecord:
++    return CodeReviewRecord(
++        record_id="codereview-x-y",
++        project_id=make_project_id(),
++        review_path="project-documents/user/reviews/947-review.code.x.md",
++        commit_sha="c" * 40,
++        slice_index=947,
++        verdict=verdict,
++        read_side_mapped=False,
++        reviewed_at=date(2026, 10, 18),
++        ingested_at=datetime(2026, 10, 25, tzinfo=UTC),
++        findings=findings if findings is not None else [make_finding()],
++    )
++
++
++def test_a_valid_record_round_trips_through_json() -> None:
++    record = make_record()
++
++    assert CodeReviewRecord.model_validate_json(record.model_dump_json()) == record
++
++
++@pytest.mark.parametrize("verdict", [Verdict.PASS, Verdict.CONCERNS, Verdict.FAIL])
++def test_known_verdicts_are_accepted(verdict: Verdict) -> None:
++    assert make_record(verdict).verdict is verdict
++
++
++def test_unknown_verdict_is_rejected() -> None:
++    with pytest.raises(ValidationError, match="UNKNOWN"):
++        make_record(Verdict.UNKNOWN)
++
++
++def test_a_missing_category_serializes_as_null_never_other() -> None:
++    record = make_record(findings=[make_finding(category=None)])
++
++    dumped = json.loads(record.model_dump_json())
++
++    assert dumped["findings"][0]["category"] is None
++    assert dumped["findings"][0]["raw_category"] is None
+diff --git a/tests/metrology/test_review_store.py b/tests/metrology/test_review_store.py
+new file mode 100644
+index 00000000..adb80891
+--- /dev/null
++++ b/tests/metrology/test_review_store.py
+@@ -0,0 +1,108 @@
++"""Store methods for ``code_review`` records (slice 402, D5)."""
++
++from __future__ import annotations
++
++import logging
++from datetime import date
++from pathlib import Path
++
++import pytest
++
++from squadron.metrology.errors import MetrologyStoreError
++from squadron.metrology.review_models import CodeReviewRecord
++from squadron.metrology.store import MetrologyStore, code_review_record_id
++from tests.metrology.conftest import make_sample_verdict
++from tests.metrology.snapshot.builders import make_project_id
++from tests.metrology.test_review_models import make_finding, make_record
++
++
++@pytest.fixture
++def store(tmp_path: Path) -> MetrologyStore:
++    return MetrologyStore(store_dir=tmp_path / "review-store")
++
++
++PATH_A = "project-documents/user/reviews/947-review.code.a.md"
++PATH_B = "project-documents/user/reviews/948-review.code.b.md"
++
++
++def record_for(
++    path: str, project: str = "github.com/manta/example-repo", **overrides: object
++) -> CodeReviewRecord:
++    base = make_record()
++    return base.model_copy(
++        update={
++            "project_id": make_project_id(project),
++            "review_path": path,
++            "record_id": code_review_record_id(make_project_id(project), path),
++            **overrides,
++        }
++    )
++
++
++def test_id_is_stable_and_differs_by_path_and_project() -> None:
++    project = make_project_id()
++
++    assert code_review_record_id(project, PATH_A) == code_review_record_id(project, PATH_A)
++    assert code_review_record_id(project, PATH_A) != code_review_record_id(project, PATH_B)
++    assert code_review_record_id(project, PATH_A) != code_review_record_id(
++        make_project_id("github.com/manta/other"), PATH_A
++    )
++    assert code_review_record_id(project, PATH_A).startswith("codereview-")
++
++
++def test_writing_twice_with_the_same_id_leaves_one_file_with_the_second_content(
++    store: MetrologyStore,
++) -> None:
++    first = record_for(PATH_A)
++    second = record_for(PATH_A, findings=[make_finding(), make_finding()])
++
++    store.write_code_review(first)
++    store.write_code_review(second)
++
++    assert len(list(store.store_dir.glob("*.json"))) == 1
++    assert store.list_code_reviews(make_project_id()) == [second]
++
++
++def test_a_mismatched_id_raises(store: MetrologyStore) -> None:
++    record = record_for(PATH_A).model_copy(update={"record_id": "codereview-wrong"})
++
++    with pytest.raises(MetrologyStoreError, match="does not match"):
++        store.write_code_review(record)
++
++    assert list(store.store_dir.glob("*.json")) == []
++
++
++def test_listing_filters_by_project_and_sorts_newest_first(store: MetrologyStore) -> None:
++    older = record_for(PATH_A, reviewed_at=date(2026, 1, 1))
++    newer = record_for(PATH_B, reviewed_at=date(2026, 2, 1))
++    other_project = record_for(PATH_A, "github.com/manta/other")
++    for record in (older, newer, other_project):
++        store.write_code_review(record)
++
++    listed = store.list_code_reviews(make_project_id())
++
++    assert [r.review_path for r in listed] == [PATH_B, PATH_A]
++
++
++def test_a_corrupt_sibling_is_skipped_with_a_warning(
++    store: MetrologyStore, caplog: pytest.LogCaptureFixture
++) -> None:
++    store.write_code_review(record_for(PATH_A))
++    (store.store_dir / "broken.json").write_text("{not json", encoding="utf-8")
++
++    with caplog.at_level(logging.WARNING):
++        listed = store.list_code_reviews(make_project_id())
++
++    assert len(listed) == 1
++    assert "broken.json" in caplog.text
++
++
++def test_an_existing_sample_record_still_loads_beside_a_code_review(
++    store: MetrologyStore,
++) -> None:
++    store.write_code_review(record_for(PATH_A))
++    sample = make_sample_verdict()
++    store.write_sample(sample)
++
++    assert len(store.list_code_reviews(make_project_id())) == 1
++    assert store.load_record(sample.sample_id).sample is not None
+diff --git a/tests/pipeline/actions/test_review_action_single_file.py b/tests/pipeline/actions/test_review_action_single_file.py
+index 7c598944..123178e5 100644
+--- a/tests/pipeline/actions/test_review_action_single_file.py
++++ b/tests/pipeline/actions/test_review_action_single_file.py
+@@ -125,6 +125,9 @@ async def test_single_task_file_review_is_unchanged(
+             "summary": "Task 3 lacks a test",
+             "location": _TASK_PATH,
+             "location_verified": None,
++            # Slice 402: the structured finding gained this key; null unless a template
++            # normalizes categories. The saved review file above is unchanged.
++            "raw_category": None,
+         }
+     ]
+     assert result.metadata == {
+diff --git a/tests/pipeline/test_findings_addressed.py b/tests/pipeline/test_findings_addressed.py
+index 47bc84ae..3952dfb1 100644
+--- a/tests/pipeline/test_findings_addressed.py
++++ b/tests/pipeline/test_findings_addressed.py
+@@ -324,6 +324,27 @@ def test_screen_2_leaves_an_unmatched_finding_as_residue(no_transport: None) ->
+     assert [record.finding_id for record in result.residue] == ["F001"]
+ 
+ 
++def test_mixed_pre_and_post_normalization_categories_are_not_settled_as_recurring(
++    no_transport: None,
++) -> None:
++    """Slice 402: round 1 predates normalization (`error-handling`), round 2 follows it
++    (`error-handling-observability`). The keys differ, so screen 2 leaves the finding for
++    the judge, which is how any category mismatch is already handled."""
++    with patch("squadron.review.addressed.screens.run_git", _changed_diff()):
++        diff = compute_round_diff(cwd=_CWD)
++
++    result = run_deterministic_screens(
++        prior_findings=[_finding("F001", location="src/x.py:12", category="error-handling")],
++        fresh_findings=[
++            _finding("F009", location="src/x.py:12", category="error-handling-observability")
++        ],
++        diff=diff,
++    )
++
++    assert result.outcomes == []
++    assert [record.finding_id for record in result.residue] == ["F001"]
++
++
+ def test_unverified_locations_never_settle_in_screen_2(no_transport: None) -> None:
+     """904 normalizes every unknown location to one token; matching on it would
+     collide two unrelated findings and trap the loop until exhaustion."""
+diff --git a/tests/review/test_categories.py b/tests/review/test_categories.py
+new file mode 100644
+index 00000000..9ccd6163
+--- /dev/null
++++ b/tests/review/test_categories.py
+@@ -0,0 +1,53 @@
++"""Write-time category normalization (slice 402, D4)."""
++
++from __future__ import annotations
++
++import pytest
++
++from squadron.core.finding_categories import ReviewCategory
++from squadron.review.categories import lenient_category_key, normalize_category
++
++
++@pytest.mark.parametrize("raw", [None, "", "   "])
++def test_missing_category_stays_missing_never_other(raw: str | None) -> None:
++    result = normalize_category(raw)
++
++    assert result.category is None
++    assert result.raw_category is None
++
++
++@pytest.mark.parametrize("member", list(ReviewCategory))
++def test_canonical_value_keeps_no_raw_string(member: ReviewCategory) -> None:
++    result = normalize_category(member.value)
++
++    assert result.category is member
++    assert result.raw_category is None
++
++
++@pytest.mark.parametrize(
++    ("raw", "expected"),
++    [
++        ("`Correctness`", ReviewCategory.CORRECTNESS),
++        ("Test Debt", ReviewCategory.TEST_DEBT),
++        ("test_debt", ReviewCategory.TEST_DEBT),
++        ('"security-hygiene"', ReviewCategory.SECURITY_HYGIENE),
++        ("  Error-Handling-Observability ", ReviewCategory.ERROR_HANDLING_OBSERVABILITY),
++    ],
++)
++def test_lenient_match_maps_and_keeps_the_string_as_emitted(raw: str, expected: ReviewCategory) -> None:
++    result = normalize_category(raw)
++
++    assert result.category is expected
++    assert result.raw_category == raw
++
++
++@pytest.mark.parametrize("raw", ["error-handling", "design/typing", "testing", "style"])
++def test_historical_aliases_are_out_of_vocabulary_at_write_time(raw: str) -> None:
++    result = normalize_category(raw)
++
++    assert result.category is ReviewCategory.OTHER
++    assert result.raw_category == raw
++
++
++def test_lenient_key_is_the_public_comparison_form() -> None:
++    assert lenient_category_key(" `Error_Handling` ") == "error-handling"
+diff --git a/tests/review/test_models.py b/tests/review/test_models.py
+index 9bfec646..a51a03d7 100644
+--- a/tests/review/test_models.py
++++ b/tests/review/test_models.py
+@@ -245,6 +245,40 @@ class TestReviewResult:
+         assert d["findings"][0]["category"] == "naming"
+         assert d["findings"][0]["location"] == "src/x.py:1"
+ 
++    def test_to_dict_carries_categories_normalized_and_raw_category(self) -> None:
++        r = ReviewResult(
++            verdict=Verdict.CONCERNS,
++            findings=[
++                ReviewFinding(
++                    severity=Severity.CONCERN,
++                    title="Normalized",
++                    description="Desc.",
++                    category="other",
++                    raw_category="error-handling",
++                ),
++                ReviewFinding(severity=Severity.CONCERN, title="Plain", description="Desc."),
++            ],
++            raw_output="",
++            template_name="code",
++            input_files={},
++            categories_normalized=True,
++        )
++
++        d = r.to_dict()
++
++        assert d["categories_normalized"] is True
++        assert d["findings"][0]["raw_category"] == "error-handling"
++        assert d["findings"][1]["raw_category"] is None
++        assert d["structured_findings"][0]["raw_category"] == "error-handling"
++        assert d["structured_findings"][1]["raw_category"] is None
++
++    def test_categories_normalized_defaults_to_false_in_the_json(self) -> None:
++        r = ReviewResult(
++            verdict=Verdict.PASS, findings=[], raw_output="", template_name="arch", input_files={}
++        )
++
++        assert r.to_dict()["categories_normalized"] is False
++
+     def test_to_dict_has_structured_findings(self) -> None:
+         r = ReviewResult(
+             verdict=Verdict.CONCERNS,
+diff --git a/tests/review/test_persistence.py b/tests/review/test_persistence.py
+index 7885462f..d3aec26c 100644
+--- a/tests/review/test_persistence.py
++++ b/tests/review/test_persistence.py
+@@ -132,6 +132,46 @@ class TestFormatReviewMarkdown:
+         assert f1["summary"] == "Missing error handling"
+         assert f1["location"] == "src/foo.py:10"
+ 
++    def test_normalized_result_writes_the_marker_and_raw_category_only_where_set(self) -> None:
++        result = ReviewResult(
++            verdict=Verdict.CONCERNS,
++            findings=[
++                ReviewFinding(
++                    severity=Severity.CONCERN,
++                    title="Out of vocabulary",
++                    description="d",
++                    category="other",
++                    raw_category='error "handling"',
++                    location="src/a.py:1",
++                ),
++                ReviewFinding(
++                    severity=Severity.CONCERN,
++                    title="Canonical",
++                    description="d",
++                    category="test-debt",
++                    location="src/b.py:2",
++                ),
++            ],
++            raw_output="",
++            template_name="code",
++            input_files={},
++            categories_normalized=True,
++        )
++
++        md = format_review_markdown(result, "code", _make_slice_info())
++        data = yaml.safe_load(md.split("---")[1])
++
++        assert data["categoriesNormalized"] is True
++        assert data["findings"][0]["rawCategory"] == 'error "handling"'
++        assert "rawCategory" not in data["findings"][1]
++
++    def test_non_normalized_result_writes_neither_key(self) -> None:
++        md = format_review_markdown(_make_result(), "code", _make_slice_info())
++        data = yaml.safe_load(md.split("---")[1])
++
++        assert "categoriesNormalized" not in data
++        assert all("rawCategory" not in finding for finding in data["findings"])
++
+     def test_location_with_colon_space_round_trips(self, tmp_path: Path) -> None:
+         """The corruption class this slice exists to close.
+ 
+diff --git a/tests/review/test_review_client.py b/tests/review/test_review_client.py
+index c3bacf52..753e4d21 100644
+--- a/tests/review/test_review_client.py
++++ b/tests/review/test_review_client.py
+@@ -1729,3 +1729,125 @@ async def test_pricing_warned_set_is_the_callers() -> None:
+         )
+ 
+     assert resolve.call_args.args[3] is run_warned
++
++
++_TAGGED_REVIEW = """\
++**Verdict:** CONCERNS
++
++## Findings
++
++### [CONCERN] Canonical
++category: security-hygiene
++location: src/a.py:1
++A secret is hardcoded.
++
++### [CONCERN] Non canonical
++category: Test Debt
++location: src/b.py:2
++No test covers the branch.
++
++### [CONCERN] Out of vocabulary
++category: error-handling
++location: src/c.py:3
++The exception is swallowed.
++
++### [CONCERN] Untagged
++location: src/d.py:4
++Something else is wrong.
++"""
++
++_UNTAGGED_REVIEW = """\
++**Verdict:** CONCERNS
++
++## Findings
++
++### [CONCERN] First
++location: src/a.py:1
++Problem one.
++
++### [CONCERN] Second
++location: src/b.py:2
++Problem two.
++"""
++
++_NO_FINDINGS_REVIEW = "**Verdict:** PASS\n\n## Findings\n"
++
++
++async def _review(response: str, *, name: str, normalize: bool) -> ReviewResult:
++    template = _make_template()
++    template.name = name
++    template.normalize_categories = normalize
++    mock_provider = _make_mock_provider(agent=_make_mock_agent(response))
++    with (
++        patch(f"{_P}.get_profile") as mock_get_profile,
++        patch(f"{_P}.get_provider", return_value=mock_provider),
++        patch(f"{_P}.ensure_provider_loaded"),
++    ):
++        from squadron.providers.profiles import ProviderProfile
++
++        mock_get_profile.return_value = ProviderProfile(
++            name="openai", provider="openai", api_key_env="OPENAI_API_KEY"
++        )
++        return await run_review_with_profile(
++            template, {"input": "file.md"}, profile="openai", model="gpt-4o"
++        )
++
++
++def _category_warnings(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
++    return [r for r in caplog.records if r.name == "squadron.review.categories"]
++
++
++class TestCategoryNormalization:
++    """The parse hook normalizes categories only for templates that opt in (slice 402)."""
++
++    @pytest.mark.asyncio
++    async def test_flagged_template_normalizes_every_finding(self) -> None:
++        result = await _review(_TAGGED_REVIEW, name="code", normalize=True)
++
++        assert [f.category for f in result.findings] == ["security-hygiene", "test-debt", "other", None]
++        assert [f.raw_category for f in result.findings] == [None, "Test Debt", "error-handling", None]
++        assert result.categories_normalized is True
++
++    @pytest.mark.asyncio
++    async def test_unflagged_template_keeps_the_raw_strings(self) -> None:
++        result = await _review(_TAGGED_REVIEW, name="arch", normalize=False)
++
++        assert [f.category for f in result.findings] == [
++            "security-hygiene",
++            "Test Debt",
++            "error-handling",
++            None,
++        ]
++        assert all(f.raw_category is None for f in result.findings)
++        assert result.categories_normalized is False
++
++    @pytest.mark.asyncio
++    async def test_no_tags_at_all_warns_and_never_becomes_other(
++        self, caplog: pytest.LogCaptureFixture
++    ) -> None:
++        with caplog.at_level(logging.WARNING, logger="squadron.review.categories"):
++            result = await _review(_UNTAGGED_REVIEW, name="code", normalize=True)
++
++        assert [f.category for f in result.findings] == [None, None]
++        assert "Template 'code'" in caplog.text
++        assert "none of its 2 findings" in caplog.text
++
++    @pytest.mark.asyncio
++    async def test_review_with_no_findings_logs_no_warning(
++        self, caplog: pytest.LogCaptureFixture
++    ) -> None:
++        with caplog.at_level(logging.WARNING, logger="squadron.review.categories"):
++            result = await _review(_NO_FINDINGS_REVIEW, name="code", normalize=True)
++
++        assert result.findings == []
++        assert result.categories_normalized is True
++        assert _category_warnings(caplog) == []
++
++    @pytest.mark.asyncio
++    async def test_a_review_with_one_tagged_finding_logs_no_warning(
++        self, caplog: pytest.LogCaptureFixture
++    ) -> None:
++        with caplog.at_level(logging.WARNING, logger="squadron.review.categories"):
++            await _review(_TAGGED_REVIEW, name="code", normalize=True)
++
++        assert _category_warnings(caplog) == []
+diff --git a/tests/review/test_templates.py b/tests/review/test_templates.py
+index bc60d434..0f9e800e 100644
+--- a/tests/review/test_templates.py
++++ b/tests/review/test_templates.py
+@@ -262,6 +262,21 @@ prompt_builder: nonexistent.module.func
+         assert t.is_judge is False
+         assert t.judge is None
+ 
++    def test_normalize_categories_defaults_to_false(self, tmp_path: Path) -> None:
++        assert load_template(_write_yaml(tmp_path, VALID_YAML)).normalize_categories is False
++
++    def test_normalize_categories_true_is_read(self, tmp_path: Path) -> None:
++        path = _write_yaml(tmp_path, VALID_YAML + "normalize_categories: true\n")
++
++        assert load_template(path).normalize_categories is True
++
++    @pytest.mark.parametrize("value", ['"yes"', "1", "[true]"])
++    def test_non_bool_normalize_categories_fails_to_load(self, tmp_path: Path, value: str) -> None:
++        path = _write_yaml(tmp_path, VALID_YAML + f"normalize_categories: {value}\n")
++
++        with pytest.raises(TemplateValidationError, match="normalize_categories"):
++            load_template(path)
++
+ 
+ class TestBuildPrompt:
+     """Test ReviewTemplate.build_prompt edge cases."""

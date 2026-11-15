@@ -20,8 +20,6 @@ from squadron.providers.base import ProfileName
 SAMPLES_FLAG = "--samples"
 AUTH_CHECK_COMMAND = "sq benchmark auth-check"
 AUTH_YES = frozenset({AuthAnswer.YES, AuthAnswer.YES_CARRYOVER_REPLACED})
-#: The case kind that gains its runner in a later slice, named in the refusal.
-KIND_RUNNER_LATER = {CaseKind.SLICE: "slice 426"}
 
 
 def _check_samples(samples: int | None) -> int:
@@ -53,10 +51,8 @@ def _check_profile(
 
 def _check_case(case: BenchmarkCase, runners: Callable[[CaseKind], CaseKindRunner | None]) -> None:
     if runners(case.kind) is None:
-        later = KIND_RUNNER_LATER.get(case.kind)
-        suffix = f" until {later} adds one" if later else ""
         raise BenchmarkRefusal(
-            f"case {case.case_id} is of kind '{case.kind.value}', which has no case runner{suffix}"
+            f"case {case.case_id} is of kind '{case.kind.value}', which has no case runner"
         )
     if case.kind is CaseKind.FIX and issue_number(case) is None:
         raise BenchmarkRefusal(

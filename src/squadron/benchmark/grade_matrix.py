@@ -143,7 +143,8 @@ def _sort_key(row: RowKey) -> tuple[str, str, str, str, str, str]:
     )
 
 
-def _identity(replay: ImplementationReplay) -> RowKey:
+def row_key_of(replay: ImplementationReplay) -> RowKey:
+    """The row a replay belongs to: its config's identity without the prompt (420 D6)."""
     config = replay.config
     return RowKey(
         config.model, config.profile, config.effort_sent, config.tool_use, config.max_output_tokens
@@ -210,7 +211,7 @@ def build_matrix(
 
     prompts: dict[RowKey, set[str | None]] = defaultdict(set)
     for _, replay in stamped:
-        prompts[_identity(replay)].add(None if replay.prompt is None else replay.prompt.sha256)
+        prompts[row_key_of(replay)].add(None if replay.prompt is None else replay.prompt.sha256)
     split = {identity for identity, shas in prompts.items() if len({s for s in shas if s}) > 1}
     warnings: list[str] = []
     split_rows: set[RowKey] = set()
@@ -219,7 +220,7 @@ def build_matrix(
     )
     case_replays: dict[str, list[ImplementationReplay]] = defaultdict(list)
     for record_id, replay in stamped:
-        identity = _identity(replay)
+        identity = row_key_of(replay)
         row = identity
         if identity in split:
             sha = None if replay.prompt is None else replay.prompt.sha256

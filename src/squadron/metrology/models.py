@@ -31,6 +31,7 @@ from squadron.metrology.project_id import ProjectId as ProjectId  # re-exported
 from squadron.metrology.project_id import ProjectIdSource as ProjectIdSource  # re-exported
 from squadron.metrology.replay_models import PairwiseJudgment, ProducerReplay
 from squadron.metrology.review_models import CodeReviewRecord
+from squadron.metrology.slice_case_models import DiffJudgment, OverSizeCase, SliceQualification
 from squadron.metrology.slice_range_models import SliceRanges
 from squadron.metrology.snapshot_models import CodeSnapshot
 from squadron.review.models import Verdict
@@ -66,6 +67,12 @@ RECORD_TYPE_IMPLEMENTATION_REPLAY = "implementation_replay"
 RECORD_TYPE_REFERENCE_GRADE = "reference_grade"
 RECORD_TYPE_IMPLEMENTATION_GRADE = "implementation_grade"
 RECORD_TYPE_SAMPLE_SIZE_ESTIMATE = "sample_size_estimate"
+#: Written by 426's slice cases: a qualification per (project, slice, landing, environment),
+#: a diff judgment per (benchmark, case, pair, judge), an over-size record per (benchmark,
+#: case, judge).
+RECORD_TYPE_SLICE_QUALIFICATION = "slice_qualification"
+RECORD_TYPE_DIFF_JUDGMENT = "diff_judgment"
+RECORD_TYPE_OVER_SIZE_CASE = "over_size_case"
 
 
 class JudgeResultRef(BaseModel):
@@ -254,7 +261,8 @@ class MetrologyRecord(BaseModel):
     ``"audit_noise_floor"``; 421 writes ``"benchmark_case"`` and ``"case_set"``;
     422 writes ``"fix_qualification"``; 424 writes ``"benchmark_run"`` and
     ``"implementation_replay"``; 425 writes ``"reference_grade"``,
-    ``"implementation_grade"`` and ``"sample_size_estimate"``. Each addition is an
+    ``"implementation_grade"`` and ``"sample_size_estimate"``; 426 writes
+    ``"slice_qualification"``, ``"diff_judgment"`` and ``"over_size_case"``. Each addition is an
     optional sibling field, so the envelope shape stays backward compatible and
     ``schema_version`` does not move — no store migration is needed.
     """
@@ -278,3 +286,6 @@ class MetrologyRecord(BaseModel):
     reference_grade: ReferenceGrade | None = None
     implementation_grade: ImplementationGrade | None = None
     sample_size_estimate: SampleSizeEstimate | None = None
+    slice_qualification: SliceQualification | None = None
+    diff_judgment: DiffJudgment | None = None
+    over_size_case: OverSizeCase | None = None

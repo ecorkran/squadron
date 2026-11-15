@@ -5,14 +5,18 @@ from __future__ import annotations
 import os
 import subprocess
 import tomllib
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
+from squadron.benchmark.adapter import SandboxContext
 from squadron.benchmark.python_adapter import PythonBenchmarkAdapter
 from squadron.benchmark.sandbox import BenchmarkSandbox
 from squadron.benchmark.scrubbed_env import (
     BENCHMARK_GIT_USER_EMAIL,
+    HARNESS_TOOL_ALLOWLIST,
+    SCRUB_SPEC_VERSION,
     SQUADRON_CONFIG_SEED,
     SYSTEM_PATH_DIRS,
     CredentialGrant,
@@ -231,3 +235,92 @@ def test_missing_home_raises_its_own_error(tmp_path: Path, harness_env: dict[str
     env = make_env(tmp_path, harness_env, CredentialGrant.none())
     with pytest.raises(MissingHarnessHomeError, match="HOME"):
         env.prepare()
+
+
+def _stub_cf(tools_dir: Path) -> Path:
+    cf = tools_dir / "cf"
+    cf.write_text("#!/bin/sh\n")
+    cf.chmod(0o755)
+    return cf
+
+
+def test_with_tools_links_the_named_tool_in_the_copy_only(
+    tmp_path: Path, harness_env: dict[str, str], tools_dir: Path
+) -> None:
+    cf = _stub_cf(tools_dir)
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    original = make_env(tmp_path / "a", harness_env, CredentialGrant.none())
+    copy = make_env(tmp_path / "b", harness_env, CredentialGrant.none()).with_tools(("cf",))
+
+    original.prepare()
+    copy.prepare()
+
+    assert not (original.home / "bin" / "cf").exists()
+    assert (copy.home / "bin" / "cf").is_symlink()
+    assert (copy.home / "bin" / "cf").resolve() == cf.resolve()
+    assert (copy.home / "bin" / "git").is_symlink()  # the default tools stay
+
+
+def test_with_tools_does_not_change_the_receiver(
+    tmp_path: Path, harness_env: dict[str, str], tools_dir: Path
+) -> None:
+    _stub_cf(tools_dir)
+    original = make_env(tmp_path, harness_env, CredentialGrant.none())
+
+    original.with_tools(("cf",))
+    original.prepare()
+
+    assert not (original.home / "bin" / "cf").exists()
+
+
+def test_a_tool_already_in_the_default_list_is_not_linked_twice(
+    tmp_path: Path, harness_env: dict[str, str]
+) -> None:
+    copy = make_env(tmp_path, harness_env, CredentialGrant.none()).with_tools(("git",))
+
+    copy.prepare()
+
+    assert (copy.home / "bin" / "git").is_symlink()
+
+
+def test_with_tools_names_a_tool_the_harness_cannot_resolve(
+    tmp_path: Path, harness_env: dict[str, str]
+) -> None:
+    env = make_env(tmp_path, harness_env, CredentialGrant.none())
+
+    with pytest.raises(MissingHarnessToolError, match="cf not found") as caught:
+        env.with_tools(("cf",))
+
+    assert caught.value.tool == "cf"
+
+
+def test_the_environment_identity_digest_is_the_same_with_extra_tools(
+    tmp_path: Path, harness_env: dict[str, str], tools_dir: Path
+) -> None:
+    _stub_cf(tools_dir)
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (tree / "uv.lock").write_text("lock\n")
+    (tmp_path / "a").mkdir()
+    original = make_env(tmp_path / "a", harness_env, CredentialGrant.none())
+    copy = original.with_tools(("cf",))
+
+    class _Versions:
+        def run(self, argv: Sequence[str], **kwargs: object) -> ProcessResult:
+            return ProcessResult(argv=tuple(argv), returncode=0, stdout="1.2.3\n", stderr="")
+
+    def identity_digest(env: ScrubbedEnvironment) -> str:
+        context = SandboxContext(
+            tree=tree,
+            output_dir=tmp_path / "out",
+            env=env,
+            runner=_Versions(),
+            install_timeout_s=1,
+            suite_timeout_s=1,
+        )
+        return PythonBenchmarkAdapter().resolve_environment(context).identity_digest
+
+    assert identity_digest(copy) == identity_digest(original)
+    assert SCRUB_SPEC_VERSION == 1
+    assert HARNESS_TOOL_ALLOWLIST == ("git", "uv")

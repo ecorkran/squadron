@@ -206,8 +206,12 @@ class _PlanEntry:
     effort: int | None
 
 
+#: A slice plan's file name; ``plan_file_for`` searches ``ARCHITECTURE_DIR`` for it.
+SLICE_PLAN_GLOB = "*-slices.*.md"
+
+
 def _plan_files(project_root: Path) -> list[Path]:
-    return sorted((project_root / ARCHITECTURE_DIR).glob("*-slices.*.md"))
+    return sorted((project_root / ARCHITECTURE_DIR).glob(SLICE_PLAN_GLOB))
 
 
 def _parse_plan(path: Path) -> list[_PlanEntry]:

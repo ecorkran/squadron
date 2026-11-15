@@ -1,4 +1,5 @@
-"""``commands/sq/benchmark.md`` lists ``grade`` and ``report`` with their real options (slice 425)."""
+"""``commands/sq/benchmark.md`` lists ``grade``, ``report``, ``judge`` and ``slice-cases build`` with
+their real options (slices 425, 426)."""
 
 from __future__ import annotations
 
@@ -14,15 +15,19 @@ COMMAND_FILE = Path(__file__).resolve().parents[2] / "commands" / "sq" / "benchm
 
 
 def _flags(name: str) -> set[str]:
+    """The ``--flags`` of a benchmark subcommand; ``slice-cases build`` is a nested one."""
     group = typer.main.get_command(benchmark_app)
     assert isinstance(group, click.Group)
-    command = group.commands[name]
+    command = group
+    for part in name.split():
+        assert isinstance(command, click.Group)
+        command = command.commands[part]
     return {
         opt for param in command.params for opt in getattr(param, "opts", []) if opt.startswith("--")
     }
 
 
-@pytest.mark.parametrize("name", ["grade", "report"])
+@pytest.mark.parametrize("name", ["grade", "report", "judge", "slice-cases build"])
 def test_every_option_of_the_typer_command_is_listed(name: str) -> None:
     text = COMMAND_FILE.read_text(encoding="utf-8")
     signature = next(part for part in text.split("`") if part.startswith(f"{name} "))

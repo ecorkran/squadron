@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import shutil
 from collections.abc import Iterable, Mapping, Sequence
@@ -114,6 +115,7 @@ class ScrubbedEnvironment:
         self._harness_env = harness_env
         self.home = root / f"{sandbox_id}.home"
         self._carried_digests: dict[Path, str] = {}
+        self._extra_tools: dict[str, str] = {}  # tool name -> resolved path, see with_tools
 
     @property
     def changed_carried_paths(self) -> list[Path]:
@@ -127,6 +129,28 @@ class ScrubbedEnvironment:
             for path, digest in self._carried_digests.items()
             if not path.is_file() or _file_digest(path) != digest
         ]
+
+    def with_tools(self, tools: Sequence[str]) -> ScrubbedEnvironment:
+        """A copy whose ``bin`` also links each named tool, resolved on the harness PATH.
+
+        The default tool list, ``SCRUB_SPEC_VERSION`` and the environment identity are
+        unchanged, so a sandbox built with the copy has the same digest as one without. The
+        links are made by the copy's ``prepare()``. A tool the harness cannot resolve raises
+        ``MissingHarnessToolError`` naming it, here, before anything is built.
+        """
+        harness_path = self._harness_env.get("PATH", "")
+        resolved = dict(self._extra_tools)
+        for tool in tools:
+            if tool in HARNESS_TOOL_ALLOWLIST:
+                continue  # already linked by prepare()
+            found = shutil.which(tool, path=harness_path)
+            if found is None:
+                raise MissingHarnessToolError(tool)
+            resolved[tool] = found
+        clone = copy.copy(self)
+        clone._carried_digests = dict(self._carried_digests)
+        clone._extra_tools = resolved
+        return clone
 
     def prepare(self) -> None:
         """Create the home: seed config, gitconfig, tool symlinks, carried files."""
@@ -145,6 +169,14 @@ class ScrubbedEnvironment:
         already there is left alone (a tool may have refreshed it since).
         """
         self._link_carryover(self._real_home(), skip_existing=True)
+
+    def link_extra_tools_into_home(self) -> None:
+        """Link this environment's extra tools into an already prepared home.
+
+        For a producer that needs a tool (``cf``) a suite-only sandbox did not link. A tool
+        already linked is left alone.
+        """
+        self._link_extra_tools(self.home / "bin")
 
     def cleanup(self) -> None:
         """Remove the home directory if it exists."""
@@ -209,6 +241,13 @@ class ScrubbedEnvironment:
             if found is None:
                 raise MissingHarnessToolError(tool)
             (bin_dir / tool).symlink_to(found)
+        self._link_extra_tools(bin_dir)
+
+    def _link_extra_tools(self, bin_dir: Path) -> None:
+        for tool, found in self._extra_tools.items():
+            link = bin_dir / tool
+            if not link.is_symlink():
+                link.symlink_to(found)
 
     def _link_carryover(self, real_home: Path, *, skip_existing: bool = False) -> None:
         for rel in self._grant.carryover_files:

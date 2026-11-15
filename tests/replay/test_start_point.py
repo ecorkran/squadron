@@ -10,7 +10,9 @@ from squadron.metrology.replay_models import ReplayPhase
 from squadron.replay.start_point import (
     ArtifactNotFoundError,
     RootCommitError,
+    artifact_pattern,
     resolve_start_point,
+    suffix_order,
 )
 from squadron.review.git_utils import run_git
 from squadron.stats.git_history import GitHistory
@@ -128,3 +130,28 @@ def test_real_history_resolves_slice_176_to_the_spike_start_sha() -> None:
     assert point.start_sha == "bca771926e89d9ac7c753d9c88a84aa4b1f83ac7"
     assert point.slice_name == "effort-calibration-and-producer-model-effectiveness"
     assert point.original_first_draft.startswith("---")
+
+
+@pytest.mark.parametrize(
+    ("phase", "expected"),
+    [
+        (ReplayPhase.DESIGN, "project-documents/user/slices/426-slice.*.md"),
+        (ReplayPhase.TASKS, "project-documents/user/tasks/426-tasks.*.md"),
+    ],
+)
+def test_artifact_pattern_is_directory_index_stem_glob(phase: ReplayPhase, expected: str) -> None:
+    assert artifact_pattern(phase, 426) == expected
+
+
+def test_suffix_order_puts_split_file_2_before_10() -> None:
+    paths = [
+        "d/5-tasks.name-10.md",
+        "d/5-tasks.name-2.md",
+        "d/5-tasks.name-1.md",
+    ]
+
+    assert sorted(paths, key=suffix_order) == [
+        "d/5-tasks.name-1.md",
+        "d/5-tasks.name-2.md",
+        "d/5-tasks.name-10.md",
+    ]

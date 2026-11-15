@@ -10,6 +10,7 @@ import itertools
 from collections import Counter
 
 from squadron.benchmark.grade_matrix import RowKey
+from squadron.benchmark.pair_row import PairRow, verdict_text
 from squadron.benchmark.paired_stats import (
     compare_pair,
     pair_seed,
@@ -19,7 +20,6 @@ from squadron.benchmark.report_models import (
     CheckRow,
     FixTableData,
     ObjectiveRow,
-    PairRow,
     ReferenceLine,
     TableSection,
 )
@@ -41,9 +41,10 @@ from squadron.benchmark.report_rows import (
 from squadron.benchmark.report_tables import ReportInputs, register_case_table
 from squadron.metrology.benchmark_models import CaseKind
 from squadron.metrology.grade_models import PairVerdict
+from squadron.metrology.grade_records import ReferenceGrade
 
 
-def _objective_row(inputs: ReportInputs, row: RowKey, cases: tuple[str, ...]) -> ObjectiveRow:
+def objective_row(inputs: ReportInputs, row: RowKey, cases: tuple[str, ...]) -> ObjectiveRow:
     matrix = inputs.matrix
     fractions = case_fractions(matrix, row, cases)
     results = [cell.grade.result for cell in graded_cells(matrix, row, cases) if cell.grade]
@@ -67,19 +68,24 @@ def _objective_row(inputs: ReportInputs, row: RowKey, cases: tuple[str, ...]) ->
     )
 
 
-def _reference_line(inputs: ReportInputs, cases: tuple[str, ...]) -> ReferenceLine | None:
+def case_reference(inputs: ReportInputs, case: str) -> ReferenceGrade | None:
+    """The case's reference grade, read for the environment of its first replay that has one."""
+    return next(
+        (
+            found
+            for row in sorted_rows(inputs.matrix)
+            for cell in inputs.matrix.cells.get(row, {}).get(case, ())
+            if (found := reference_of(inputs.reference_for, case, cell)) is not None
+        ),
+        None,
+    )
+
+
+def reference_line(inputs: ReportInputs, cases: tuple[str, ...]) -> ReferenceLine | None:
     """The reference's grade on each included case, read for its replays' environment."""
     passed = total = regressions = counted = 0
     for case in cases:
-        reference = next(
-            (
-                found
-                for row in sorted_rows(inputs.matrix)
-                for cell in inputs.matrix.cells.get(row, {}).get(case, ())
-                if (found := reference_of(inputs.reference_for, case, cell)) is not None
-            ),
-            None,
-        )
+        reference = case_reference(inputs, case)
         if reference is None or reference.result is None:
             continue
         counted += 1
@@ -95,7 +101,7 @@ def _reference_line(inputs: ReportInputs, cases: tuple[str, ...]) -> ReferenceLi
     )
 
 
-def _pairs(inputs: ReportInputs, cases: tuple[str, ...]) -> tuple[PairRow, ...]:
+def pair_rows(inputs: ReportInputs, cases: tuple[str, ...]) -> tuple[PairRow, ...]:
     matrix = inputs.matrix
     rows = sorted(matrix.comparable_rows, key=lambda r: r.identity_text)
     out: list[PairRow] = []
@@ -122,7 +128,7 @@ def _pairs(inputs: ReportInputs, cases: tuple[str, ...]) -> tuple[PairRow, ...]:
     return tuple(out)
 
 
-def _check_row(inputs: ReportInputs, row: RowKey, cases: tuple[str, ...]) -> CheckRow:
+def check_row(inputs: ReportInputs, row: RowKey, cases: tuple[str, ...]) -> CheckRow:
     matrix = inputs.matrix
     lint: list[float] = []
     types: list[float] = []
@@ -158,24 +164,19 @@ def fix_table_data(inputs: ReportInputs) -> FixTableData:
     cases = inputs.included_of(CaseKind.FIX)
     rows = sorted_rows(inputs.matrix)
     return FixTableData(
-        objective=tuple(_objective_row(inputs, row, cases) for row in rows),
-        reference=_reference_line(inputs, cases),
-        paired=_pairs(inputs, cases),
-        checks=tuple(_check_row(inputs, row, cases) for row in rows),
+        objective=tuple(objective_row(inputs, row, cases) for row in rows),
+        reference=reference_line(inputs, cases),
+        paired=pair_rows(inputs, cases),
+        checks=tuple(check_row(inputs, row, cases) for row in rows),
     )
 
 
-def _pair_text(pair: PairRow) -> str:
+def pair_text(pair: PairRow) -> str:
     head = f"  {pair.label_a} − {pair.label_b}"
     if pair.verdict is PairVerdict.TOO_FEW_CASES:
         return f"{head}  {pair.mean_difference:+.2f}  too few cases ({pair.n_cases})"
     interval = f"[{pair.low:+.2f}, {pair.high:+.2f}]"
-    verdict = {
-        PairVerdict.A_AHEAD: f"{pair.label_a} ahead",
-        PairVerdict.B_AHEAD: f"{pair.label_b} ahead",
-        PairVerdict.NOT_DISTINGUISHABLE: "not distinguishable",
-    }[pair.verdict]
-    return f"{head}  {pair.mean_difference:+.2f}  {interval}  {verdict}"
+    return f"{head}  {pair.mean_difference:+.2f}  {interval}  {verdict_text(pair)}"
 
 
 REFERENCE_LABEL = "reference (never ranked)"
@@ -202,7 +203,7 @@ def render_fix_table(data: FixTableData) -> list[str]:
             f"{'':>9}  {ref.hidden_passed}/{ref.hidden_total}  {ref.regressions:>5}"
         )
     lines += ["", "paired (95% bootstrap over cases)"]
-    lines += [_pair_text(pair) for pair in data.paired] or [f"  {NO_VALUE} (fewer than two configs)"]
+    lines += [pair_text(pair) for pair in data.paired] or [f"  {NO_VALUE} (fewer than two configs)"]
     check_width = name_width([check.config for check in data.checks])
     lines += [
         "",

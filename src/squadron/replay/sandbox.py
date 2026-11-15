@@ -17,6 +17,11 @@ from typing import Self, cast
 
 from squadron.core.process_lock import is_orphan, read_lock
 from squadron.core.process_runner import ProcessRunner
+from squadron.replay.cf_registration import (
+    CfRegistration,
+    CfRegistrationError,
+    SliceNotInPlanError,
+)
 from squadron.replay.history_free_sandbox import (
     LOCK_SUFFIX,
     PROCESS_FAILURES,
@@ -28,7 +33,6 @@ from squadron.replay.history_free_sandbox import (
     run_command,
     unlink_quietly,
 )
-from squadron.stats.planning_docs import UnknownSliceError, plan_file_for
 
 __all__ = [
     "LOCK_SUFFIX",
@@ -118,28 +122,22 @@ class ReplaySandbox:
         self._repository.__exit__(exc_type, exc, tb)
 
     def _register_with_cf(self) -> None:
-        """Register the sandbox as a cf project and point cf at the slice's initiative.
+        """Register the sandbox as a cf project (the harness's environment, the sandbox branch).
 
-        The branch guard compares the checkout to ``git.integration_branch``, so the sandbox
-        branch is set as its integration branch; and a fresh cf project has no slice plan, so
-        ``cf set arch`` names the initiative whose plan lists the slice (Task 1 spike).
+        ``_registered`` follows the registration even when it raised, so cleanup removes a
+        half-registered project.
         """
-        initiative = self._initiative()
-        checked = self._repository.checked
-        checked("cf", "init", "--lite", "--no-ide", "--name", self.cf_project, cwd=self.path)
-        self._registered = True
-        checked("cf", "config", "set", "git.integration_branch", self.branch, cwd=self.path)
-        checked("cf", "set", "arch", initiative, cwd=self.path)
-
-    def _initiative(self) -> str:
-        """The initiative index of the slice plan listing the slice, at the start point."""
+        registration = CfRegistration(self._runner, None)
         try:
-            plan = plan_file_for(self._slice_index, self.path)
-        except UnknownSliceError as exc:
+            registration.register(self.path, self.cf_project, self.branch, self._slice_index)
+        except SliceNotInPlanError as exc:
             raise SandboxError(
                 f"slice {self._slice_index} is in no slice plan at start commit {self._start_sha}"
             ) from exc
-        return plan.name.split("-", 1)[0]
+        except CfRegistrationError as exc:
+            raise SandboxError(str(exc)) from exc
+        finally:
+            self._registered = registration.registered
 
     def _cleanup(self) -> None:
         """Remove the cf project, the directory, then the lock. Never raises."""
