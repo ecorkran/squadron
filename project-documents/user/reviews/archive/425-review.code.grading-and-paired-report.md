@@ -14,19 +14,19 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261115
 dateUpdated: 20261115
-reviewedSha: 4a325e7da266e006b1c02cbf51d03cf1597396ce
+reviewedSha: 0dd899b940c0abca288d06ce775d05dc714f37a4
 revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 14
+toolCallsMade: 28
 diffTruncated: false
 effort: xhigh
-turns: 15
-promptTokens: 2029843
-cachedTokens: 1680641
-cacheWriteTokens: 349190
-completionTokens: 84174
-durationSeconds: 362.1
-costUsd: 0.775327
+turns: 29
+promptTokens: 2444454
+cachedTokens: 2076790
+cacheWriteTokens: 367650
+completionTokens: 79988
+durationSeconds: 367.1
+costUsd: 0.80468
 costBasis: provider
 runId: run-20261114-p6-27f2e9a4
 squadronVersion: 0.24.28
@@ -34,123 +34,134 @@ categoriesNormalized: true
 findings:
   - id: F001
     severity: fail
-    category: test-debt
-    summary: "Test module imports a function that no longer exists, so pytest collection fails"
-    location: "tests/config/test_keys.py:9"
-  - id: F002
-    severity: fail
     category: correctness
-    summary: "Absence detail is not bounded, so a long message crashes the run instead of recording an absence"
-    location: "src/squadron/benchmark/grade_one.py#_absent_record"
+    summary: "Snapshot config is read from the producer-editable sandbox tree"
+    location: "src/squadron/benchmark/grade_snapshot.py:25"
+  - id: F002
+    severity: concern
+    category: correctness
+    summary: "The grading review inherits the `code` template's diff exclusions"
+    location: "src/squadron/benchmark/grade_review.py#review_tree_diff"
   - id: F003
     severity: concern
     category: correctness
-    summary: "Precondition for replays is checked after a paid review has already run"
-    location: "src/squadron/benchmark/grade_one.py#_grade_steps"
+    summary: "The reference diff loses CR characters through text-mode git output"
+    location: "src/squadron/benchmark/grade_prepare.py:51-66"
   - id: F004
     severity: concern
-    category: type-contract-debt
-    summary: "Stringly-typed absence kinds are built and parsed by prefix matching"
-    location: "src/squadron/benchmark/grade_matrix.py#_exclusion"
+    category: correctness
+    summary: "Hidden-fixture injection copies only the imports a fixture uses"
+    location: "src/squadron/benchmark/python_injection.py:175-179"
   - id: F005
     severity: concern
-    category: correctness
-    summary: "Report shows whatever estimate the benchmark last stored, with no grader or freshness check"
-    location: "src/squadron/cli/commands/benchmark_grade.py#_report"
+    category: consistency-rot
+    summary: "The `target_pass_rate_difference` rule is written twice"
+    location: "src/squadron/benchmark/grading_config.py:36"
   - id: F006
-    severity: concern
-    category: test-debt
-    summary: "No load test for the grading path, which the rules require for environment-layer and concurrency code"
-    location: "tests/load"
+    severity: note
+    category: architectural-decay
+    summary: "Three files are over the ~300-line guideline"
+    location: "src/squadron/metrology/grade_models.py"
   - id: F007
     severity: note
-    category: documentation-drift
-    summary: "Config key comment describes a read path that production does not use"
-    location: "src/squadron/config/keys.py#BENCHMARK_REVIEW_FLOOR_RUNS_KEY"
+    category: performance-resource
+    summary: "Grade-store queries scan every record"
+    location: "src/squadron/metrology/grade_store.py#GradeRecordStore"
   - id: F008
     severity: note
-    category: correctness
-    summary: "Tool-config restoration does not cover setup.cfg or tox.ini, which pytest reads"
-    location: "src/squadron/benchmark/python_grading.py#TOOL_CONFIG_FILES"
+    category: type-contract-debt
+    summary: "The report's `TableSection.data` is untyped"
+    location: "src/squadron/benchmark/report_models.py#TableSection"
   - id: F009
     severity: note
-    category: correctness
-    summary: "The no-tools change in the shared review client also affects the CLI's `--no-tools` path"
-    location: "src/squadron/review/review_client.py#run_review_with_profile"
+    category: other
+    summary: "The review-pair statistic may not match the floor it is compared to"
+    location: "src/squadron/benchmark/bench_report.py#_review_pairs"
   - id: F010
     severity: note
     category: test-debt
-    summary: "Test helpers are shared across test modules, and one test locates records by slicing ids"
-    location: "tests/benchmark/test_bench_report_inclusion.py#test_a_missing_sample_excludes_the_case_as_incomplete"
+    summary: "The load test's latency bound is too loose to catch regressions"
+    location: "tests/load/test_benchmark_grading_volume.py"
   - id: F011
-    severity: pass
-    category: other
-    summary: "Production wiring and cross-module names resolve"
-    location: "src/squadron/benchmark/grade_services.py"
+    severity: note
+    category: error-handling-observability
+    summary: "Broad exception handlers turn any snapshot or review failure into an absence"
+    location: "src/squadron/benchmark/grade_checks.py#measure_and_store"
 ---
 
 # Review: code — slice 425
 
 **Verdict:** FAIL
 **Model:** claude-haiku-5-5
-**Evidence:** 14 successful tool call(s) of 14 made; 587520 of 587520 diff characters reached the model
+**Evidence:** 28 successful tool call(s) of 28 made; 594602 of 594602 diff characters reached the model
 
 ## Findings
 
-### [FAIL] Test module imports a function that no longer exists, so pytest collection fails
+### [FAIL] Snapshot config is read from the producer-editable sandbox tree
 
-Line 9 imports `read_review_floor_runs` from `squadron.benchmark.grading_config`. A repo-wide search finds no definition in `src/`, and the `grading_config.py` shown in this diff defines only `check_review_floor_runs`, `check_review_timeout`, and `check_target_difference`. Pytest aborts the session on a collection error by default, so the whole suite stops, not only the new `TestBenchmarkGradingKeys` class. An earlier review note (`project-documents/user/reviews/425-review.code.grading-and-paired-report.md`) flagged this function as dead and suggested removing it or wiring it into production. It was removed, but the tests that call it were not updated. Point the tests at `check_review_floor_runs` through the config read, or drop them.
+`make_snapshot_measurer` calls `read_snapshot_config(tree)`, with the sandbox tree as the root. `read_snapshot_config` reads each setting through `get_config(key, cwd=repo_root)`. `load_config` merges in the project file at `project_config_path(cwd)`, which is `<tree>/.squadron.toml` (src/squadron/config/manager.py:42, :96). The producer's diff can edit that file.
 
-### [FAIL] Absence detail is not bounded, so a long message crashes the run instead of recording an absence
+`restore_config` does not restore it. `TOOL_CONFIG_FILES` in src/squadron/benchmark/python_grading.py:51 lists only ruff, pyright, mypy, pytest, coverage, setup.cfg, and tox.ini. The `[tool.*]` restoration covers only `pyproject.toml`. So `.squadron.toml` is neither restored nor deleted when the producer adds it.
 
-`check_detail` in `grade_models.py` raises when `detail` exceeds `DETAIL_MAX_CHARS` (1000), and `_check_result_or_absence` runs it on both grade record types. `absent()` passes its detail through unchanged, and nothing caps it earlier. Several producers emit unbounded text:
-- `python_adapter.py` `_failure` (lines 106, 136, 158) puts the full `result.stderr.strip()` into `EnvironmentResolutionError.detail`. That reaches `grade_one`'s outer `except` through `str(exc)` on sandbox enter, and reaches `grade_prepare.reinstall_if_dependencies_changed` as `f"{exc.reason.value}: {exc.detail}"`.
-- `grade_review.review_tree_diff` wraps `f"the review call raised {type(exc).__name__}: {exc}"` into `ReviewFailed`.
-- `grade_checks.measure_and_store` wraps `f"{type(exc).__name__}: {exc}"`.
+The producer can therefore set the snapshot exclusion key (`_read_exclusions`, src/squadron/metrology/snapshot/preflight.py:117). Those patterns become `project_exclusions`, which `resolve_files` applies, so files drop out of the lint and type measurements. `_check_total` then reports smaller `lint_total` and `type_total` values, and the "checks vs baseline" deltas shift. The length limits and the tool timeout are producer-controlled in the same way.
 
-When the detail is over the cap, `_absent_record` raises a pydantic `ValidationError` inside the `except` block of `grade_one`. The error escapes `grade_one`, the run aborts, and no absence record is written. D16 says these failures must be recorded. The environment install failure is the most likely trigger, since uv's stderr can be long. No test uses a long detail; the sandbox tests use short strings. Bound the detail once, in `absent()` or `_absent_record`, and add a test with a stderr over 1000 characters.
+Fix: read the snapshot config from the start commit (through the `TreeReader`), or add `.squadron.toml` to the restored set with delete-if-added. Add a test in which the producer adds `.squadron.toml` with an exclusion and asserts that the lint total does not change.
 
-### [CONCERN] Precondition for replays is checked after a paid review has already run
+### [CONCERN] The grading review inherits the `code` template's diff exclusions
 
-`_grade_steps` calls `prepare_tree(run)` first. That step runs the reviewer through `review_once` and charges the budget. Only after that does it call `load_baseline(run)` for replays, which raises `MissingReferenceGrade` when the reference is missing. That exception is not an absence, so it aborts the run after the spend. The check only reads the store, so move `load_baseline` ahead of `prepare_tree`. The test `test_a_replay_with_no_reference_grade_raises_and_logs_error` does not assert that no review ran.
+`review_tree_diff` calls the review without overriding exclusions. `run_review_with_profile` takes `exclude_patterns = template.diff_exclude_patterns` (src/squadron/review/review_client.py:189) and applies them to both the injected diff (:645-648) and the file list (:190-193). `code.yaml:102-115` excludes `*.md`, `*.yaml`, `*.yml`, `*.toml`, `*.json`, `*.txt`, `*.lock`, `*.csv`, and images.
 
-### [CONCERN] Stringly-typed absence kinds are built and parsed by prefix matching
+The effect is that the reviewer never sees producer edits to `pyproject.toml` or `uv.lock`. Fixture `producer_c` is an example: its entire change is in those files, so the reviewer would see an empty diff, which D7 treats as a valid zero-findings outcome. Nothing in the review outcome records that files were excluded.
 
-`Cell.harness` is a plain `str`. `_cell` builds `f"replay:{...}"` and `f"grade:{...}"`, and `_exclusion` decides between `HARNESS_REPLAY` and `HARNESS_GRADE` by `harness[0].startswith("replay:")`. `bench_report.py` `_absence_counts` builds the same prefixes again, so the literals are duplicated across two modules. The repo rules say a value used in a comparison is defined once. Use an enum or a single constant, and have `Exclusion` and the absence-kind labels derive from it.
+Decide in the design whether grading reviews should see these files. Either pass an empty exclusion set for grading, or record the exclusion set and the excluded-file count on the outcome. Add a test with a producer diff that edits only `pyproject.toml`.
 
-### [CONCERN] Report shows whatever estimate the benchmark last stored, with no grader or freshness check
+### [CONCERN] The reference diff loses CR characters through text-mode git output
 
-`_report` passes `services.grade_store.estimate_for(benchmark_id)` straight into `build_report`. `estimate_for` returns the stored estimate without comparing `grader_digest` to the grader the report uses. `write_estimate` writes only when an estimate can be computed and never deletes an earlier one. So after a later run can no longer estimate (for example, a case drops out), the old estimate remains and is printed next to a report built under a different grader. The rendered line shows only k and n, so the mismatch is not visible. Return `None` when `estimate.grader_digest != grader.digest`, or clear the stored estimate on the no-estimate path. Also show `created_at`.
+`subject_diff` gets a REFERENCE's diff from `run_git`, which goes through `SubprocessRunner` (src/squadron/core/process_runner.py:133-139). That call uses `text=True` and `TEXT_DECODING` (src/squadron/core/subprocess_text.py:25: utf-8 with `errors="replace"`). CPython's text-mode `communicate()` normalizes `\r\n` and lone `\r` to `\n`.
 
-### [CONCERN] No load test for the grading path, which the rules require for environment-layer and concurrency code
+`apply_subject` then pipes that text to `git apply` (:70-79). For a CRLF source file, the context and `+` lines no longer match, so the apply fails with DIFF_APPLY_FAILED, which blames the reference. For a newly added CRLF file, the apply can succeed and write LF content silently, so the hidden tests run against a file that differs from the reference commit. `errors="replace"` also corrupts non-UTF-8 bytes in `--binary` output.
 
-The diff adds sandbox creation, environment install and reinstall, git subprocesses, and the grade lock, all of which are environment-layer and concurrency paths. The Python rules say these require at least one load test with latency, throughput, or resource bounds, and that CI gates it. This diff adds nothing under `tests/load/`.
+Replay diffs are not affected, because they come from stored bytes. Fix: write the reference diff to a file inside the sandbox (`git diff --binary --output=...`) and read bytes, or add a bytes-returning path to the runner. Add a test with a CRLF file in the reference commit. The grading fixtures in the diff are all LF, so no current test covers this. `GitTreeReader` has the same root cause, which tree_reader.py documents as #334. The diff path is not documented.
 
-### [NOTE] Config key comment describes a read path that production does not use
+### [CONCERN] Hidden-fixture injection copies only the imports a fixture uses
 
-The comment says the key is read through `get_positive_int_config`. The production path in `benchmark_grade.py` reads it with `services.read_config` (which uses `get_config`) and then applies `check_review_floor_runs`. `grading_config.py`'s docstring has the same stale description. Correct both comments.
+`build_module` takes the function body of each hidden fixture, plus only the imports whose bound names that body uses (lines 175-178), and appends the function source (line 179). A fixture that reads a module-level constant or helper defined in the reference conftest, rather than an import, will raise NameError when the injected module is collected. The fixture also silently uses the producer's conftest for any other fixture it requests by name.
 
-### [NOTE] Tool-config restoration does not cover setup.cfg or tox.ini, which pytest reads
+The failure is loud: hidden nodes error, and the reference then fails with REFERENCE_FAILED_GRADE and its case is dropped. The record does not show the missing name, so the cause is hard to find. Fix: copy the module-level names the fixture uses, or reject such fixtures with a named error at injection time. Add a test with a fixture that reads a module constant. Confidence is medium, since I read this code rather than executed it.
 
-`TOOL_CONFIG_FILES` lists `ruff.toml`, `.ruff.toml`, `pyrightconfig.json`, `mypy.ini`, `pytest.ini`, and `.coveragerc`. It omits `setup.cfg` and `tox.ini`. Pytest reads `[pytest]` from `tox.ini` and `[tool:pytest]` from `setup.cfg` when `pytest.ini` and `pyproject.toml` do not define config. A producer could change test configuration through either file and it would survive restoration. Confirm whether D4 intends to exclude them.
+### [CONCERN] The `target_pass_rate_difference` rule is written twice
 
-### [NOTE] The no-tools change in the shared review client also affects the CLI's `--no-tools` path
+`check_target_difference` reimplements the `0 < value < 1` rule with its own message. The existing reader, `get_open_unit_interval_config` (src/squadron/config/manager.py:153-158), enforces the same rule, and the keys.py comment names it as the reader for this key. The rule now lives in two places, so the two messages can drift. Fix: extract a `check_open_unit_interval(key, value)` helper that both the typed reader and the grade seam call.
 
-`NO_TOOLS_NOTICE` is now appended, and the preset is dropped, for every caller that passes `no_tools=True`. That includes `sq review --no-tools` (`cli/commands/review.py:791`) and `review_pr --no-tools` (`cli/commands/review_pr.py:428`), not only grading. The new tests cover only the SDK path. The comment attributes the change to the slice 425 walkthrough. Confirm that the change to the existing CLI behavior is intended.
+### [NOTE] Three files are over the ~300-line guideline
 
-### [NOTE] Test helpers are shared across test modules, and one test locates records by slicing ids
+From the diff headers, `grade_models.py` and `benchmark_grade.py` are 312 lines each, and `python_injection.py` is 302. Not blocking, but worth splitting when the next change lands in them.
 
-The test finds a replay with `cases[0].case_id[5:17]` string slicing. The `len(lost) == 1` assertion will catch a mismatch, but the test is tied to the id format. Several test support modules also import helpers from other test modules, and `report_support.py` imports private `_environment` from `tests.metrology`. Move shared builders into a support module.
+### [NOTE] Grade-store queries scan every record
 
-### [PASS] Production wiring and cross-module names resolve
+`grades_for`, `largest_review_cost`, and `latest_estimate` each iterate `iter_records()` over the whole store. The yield command calls `latest_estimate` once per case set. This is fine at current scale but will grow with the store.
 
-I checked the new code's external imports against their definitions: `OrphanSweep`, `CollectedTests`, `SnapshotConfig`, `AdapterRegistry`, `LEAK_RULES_VERSION`, `CASE_LANGUAGE`, `GIT_QUERY_TIMEOUT_SECONDS`, `BuildHalted`, `MissingCredentialError`, `BenchmarkLock`, `BenchmarkRefusal`, `model_effort`, `normalize_result_categories`, `summarize_counts`, `extract_diff_paths`, `load_review_rules`, `run_git` (which can return `None`, and `grade_review` handles that), `STDERR_TAIL_CHARS`, and `ProcessRunner.run` with `stdin` and `replace_env`. `BenchmarkSandbox` has the `__enter__`/`__exit__`, `keep`, `home`, and `output_dir` the grade seam uses. `collect().digests` is keyed by node id, so `_collect_node_ids` returns node ids. `_z_total` and `audit_variance._stat` have no remaining callers under the old names, and `REPLAY_ID_PREFIX` has one definition. `harness_env=dict(os.environ)` follows an existing pattern in `production_deps.py`, `benchmark_fix_cases.py`, and `benchmark_sandbox.py`, and the grade sandbox uses `CredentialGrant.none()`, so it adds no credential exposure.
+### [NOTE] The report's `TableSection.data` is untyped
+
+`data: dict[str, Any]` is the one loosely typed boundary in the report models. Tests re-validate it into `FixTableData`. A typed union or a generic over the table's data model would keep the contract checked.
+
+### [NOTE] The review-pair statistic may not match the floor it is compared to
+
+`_review_pairs` compares the difference between two configs' per-case means of findings, each averaged over k replays, against `is_within_floor`. That floor is the spread of three single reviews of one reference diff. A difference of k-sample means has a different variance, so "beyond floor" may not mean what the report says. Confirm the statistic with the design owner.
+
+### [NOTE] The load test's latency bound is too loose to catch regressions
+
+The bound is 10 seconds per subject, and the run uses doubled suites and a doubled reviewer, so it does not exercise a realistic sandbox or suite. It still asserts that no sandbox is left behind. Tighten the bound against a measured baseline, or add a variant with a real suite run.
+
+### [NOTE] Broad exception handlers turn any snapshot or review failure into an absence
+
+`measure_and_store` catches `Exception`, logs with `logger.exception`, and raises `GradeAbsent`. `review_tree_diff` does the same. Both are logged and recorded, so nothing is silent. But a programming error in the measurer becomes a per-subject absence, and the run continues. Narrow the catch to the tool and I/O errors the measurer is expected to raise, and let other errors stop the run.
 
 ### Run Digest
 
-- Response length: 10566 chars
+- Response length: 10559 chars
 - Response is newline-free: no
-- Tool calls made: 14
+- Tool calls made: 28
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -158,12 +169,12 @@ I checked the new code's external imports against their definitions: `OrphanSwee
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: xhigh
-- Turns: 15
-- Tokens — prompt / cached / cache write / completion / reasoning: 2029843 / 1680641 / 349190 / 84174 / not computed
-- Duration: 362.1 s
-- Cost: $0.78 (provider)
+- Turns: 29
+- Tokens — prompt / cached / cache write / completion / reasoning: 2444454 / 2076790 / 367650 / 79988 / not computed
+- Duration: 367.1 s
+- Cost: $0.80 (provider)
 - `## Summary` located: yes
-- `## Findings` located: yes
+- `## Findings` located: no
 - Finding-shaped matches — whole response: 11
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 11
