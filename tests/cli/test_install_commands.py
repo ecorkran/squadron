@@ -22,6 +22,7 @@ EXPECTED_FILES = {
     "auth.md",
     "benchmark.md",
     "list.md",
+    "monitor.md",
     "onboard.md",
     "pr.md",
     "replay.md",

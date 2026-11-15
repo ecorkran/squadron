@@ -252,6 +252,8 @@ To change a built-in, copy it into either directory under the same name. Your co
 
 **Inside an agent session,** `/sq:run P4 152` (Claude Code) or `$sq-run P4 152` (Codex) drives the pipeline step by step from the session itself.
 
+**Watching a run from a session.** `/sq:monitor` (Codex: `$sq-monitor`) waits for the pipeline running in this repository to stop, reads its reviews, fixes the findings that are valid and important, drops the rest with a reason each, and saves a `/sq:summary`. Give it a run id when more than one run is going.
+
 [docs/PIPELINES.md](docs/PIPELINES.md) is the full authoring guide: YAML grammar, every step type, model resolution, and judge-gated cycles.
 
 ## Summaries and handoffs
