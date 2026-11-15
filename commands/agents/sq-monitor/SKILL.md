@@ -27,7 +27,7 @@ Otherwise run:
 sq runs list --json
 ```
 
-Keep the entries whose `status` is `running` and whose `working_directory` is the current repository's root (`git rev-parse --show-toplevel`).
+Keep the entries whose `liveness` is `live` and whose `working_directory` is the current repository's root (`git rev-parse --show-toplevel`). A run that only says `running` (`stale`, `orphaned` or `unowned`) is not being driven by a live process, and a paused run is waiting on someone; neither is picked up here. Pass a run id to monitor one of those explicitly.
 
 - Exactly one: use its `run_id`.
 - None: say there is no running run in this repository, show the full listing's run ids with their `status`, and stop.

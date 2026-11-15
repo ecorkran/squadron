@@ -18,6 +18,7 @@ from typer.testing import CliRunner
 from squadron.cli.app import app
 from squadron.cli.commands import runs
 from squadron.pipeline.executor import ExecutionStatus
+from squadron.pipeline.run_liveness import RunLiveness
 from squadron.pipeline.run_prune import parse_duration
 from squadron.pipeline.run_wait import WAIT_EXIT_CODES, WaitOutcome, WaitResult, orphaned_message
 from squadron.pipeline.state import StateManager
@@ -131,6 +132,7 @@ class TestRunsListJson:
             "status",
             "started_at",
             "active_step",
+            "liveness",
             "working_directory",
             "checkpoint",
         }
@@ -139,11 +141,34 @@ class TestRunsListJson:
         assert entry["params"] == {"slice": "199"}
         assert isinstance(entry["started_at"], str) and entry["started_at"]
         assert entry["active_step"] is None  # set only while a run is running
+        assert entry["liveness"] is None  # judged only for a running run
         assert entry["status"] == ExecutionStatus.PAUSED.value
         assert entry["working_directory"] == str(Path.cwd())
         checkpoint = entry["checkpoint"]
         assert isinstance(checkpoint, dict)
         assert checkpoint["step"] == STEP_NAMES[1]  # type: ignore[index]
+
+    def test_running_run_without_an_owner_is_unowned(self, sm: StateManager) -> None:
+        """A prompt-only or pre-owner run says `running` but has no process to check."""
+        begin(sm, "steps")
+
+        [entry] = self._list_json()
+
+        assert entry["liveness"] == RunLiveness.UNOWNED.value
+
+    def test_running_run_owned_by_a_live_process_is_live(self, sm: StateManager) -> None:
+        begin_owned(sm, "steps", os.getpid())
+
+        [entry] = self._list_json()
+
+        assert entry["liveness"] == RunLiveness.LIVE.value
+
+    def test_running_run_whose_process_exited_is_orphaned(self, sm: StateManager) -> None:
+        begin_owned(sm, "steps", exited_pid())
+
+        [entry] = self._list_json()
+
+        assert entry["liveness"] == RunLiveness.ORPHANED.value
 
     def test_run_without_a_directory_lists_null(self, sm: StateManager) -> None:
         run_id = begin(sm, "steps")

@@ -729,6 +729,7 @@ sq runs list [OPTIONS]
 | `status` | The status the run recorded: `running`, `completed`, `paused`, `failed` |
 | `started_at` | When the run started, ISO 8601 |
 | `active_step` | The step a running run is in; `null` otherwise |
+| `liveness` | For a `running` run, whether its process is there: `live`, `stale` (heartbeat overdue), `orphaned` (process gone), or `unowned` (a prompt-only run or one recorded before ownership existed). `null` for any other status |
 | `working_directory` | Absolute directory the run started in, kept across resumes. Resume from there. `null` for runs started before it was recorded |
 | `checkpoint` | When paused, the same object `sq runs wait --json` prints under `checkpoint`; else `null` |
 

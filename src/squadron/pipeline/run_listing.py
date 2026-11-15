@@ -191,6 +191,7 @@ def listing_document(listing: RunListing) -> list[dict[str, object]]:
             "status": row.status,
             "started_at": row.started_at.isoformat(),
             "active_step": row.active_step,
+            "liveness": row.liveness.liveness.value if row.liveness is not None else None,
             "working_directory": row.working_directory,
             "checkpoint": row.checkpoint,
         }
