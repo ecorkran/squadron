@@ -48,6 +48,7 @@ from squadron.providers.errors import (
     ProviderError,
     ProviderRateLimitError,
 )
+from squadron.providers.sdk.api_error import api_error_from_reply
 from squadron.providers.sdk.rate_limit import (
     MAX_RATE_LIMIT_RETRIES,
     RATE_LIMIT_MAX_BACKOFF_S,
@@ -194,6 +195,13 @@ class ClaudeSDKAgent:
                     "Informational rate-limit event (%s); passing through.",
                     sdk_msg.rate_limit_info.status,
                 )
+            if isinstance(sdk_msg, AssistantMessage):
+                api_error = api_error_from_reply(sdk_msg)
+                if api_error is not None:
+                    # Raised before translation so the CLI's notice never reaches the
+                    # caller as the model's reply, and no retry or recovery turn follows.
+                    self._state = AgentState.failed
+                    raise api_error
             yield sdk_msg
 
     def _translate_and_track(self, sdk_msg: Any) -> list[Message]:

@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - A pipeline with no step that uses Context Forge no longer calls `cf` when it starts.
+- A review or other SDK call that hits a usage limit (or a login or server error) now fails with the CLI's notice, such as "You've hit your 5-hour limit · resets 11:20am", instead of returning that notice as the model's reply with verdict UNKNOWN (#325).
 
 ## [0.24.28] - 20261112
 
