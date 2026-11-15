@@ -58,10 +58,10 @@ usageByModel:
 ## Tasks
 
 ### Task 1: Create the slice branch and correct the design
-- [ ] Read the target: `cf config get git.integration_branch` (its value, or `main` when empty). Check out the target. If `git status --short` lists this task file as modified or untracked, commit it there by path as `docs: add slice 426 tasks`; planning work commits to the target. Stage every later commit by path
-  - [ ] Success: `git status --short` does not list the task file
-- [ ] Edit `user/slices/426-slice.slice-cases.md` so it states each design-gap bullet in the Context Summary (those bullets are the spec): D12 (`judge_pair` signature with `on_call`), D3 (plan files materialized from the fork; numeric task-file order), D9 (`CfRegistration.registered`, `CfRegistrationError`, the registration branch), D14 and D15 (the over-size count rule), the `--keep` and build-stop lines in API Contracts, the API Contracts block, the Scope line (the two edits to 424 named in the gap bullets) and Implementation Notes (order)
-  - [ ] Success: D3, D9, D12, D14, D15, API Contracts, Scope and Implementation Notes agree with the gap bullets
+- [x] Read the target: `cf config get git.integration_branch` (its value, or `main` when empty). Check out the target. If `git status --short` lists this task file as modified or untracked, commit it there by path as `docs: add slice 426 tasks`; planning work commits to the target. Stage every later commit by path
+  - [x] Success: `git status --short` does not list the task file
+- [x] Edit `user/slices/426-slice.slice-cases.md` so it states each design-gap bullet in the Context Summary (those bullets are the spec): D12 (`judge_pair` signature with `on_call`), D3 (plan files materialized from the fork; numeric task-file order), D9 (`CfRegistration.registered`, `CfRegistrationError`, the registration branch), D14 and D15 (the over-size count rule), the `--keep` and build-stop lines in API Contracts, the API Contracts block, the Scope line (the two edits to 424 named in the gap bullets) and Implementation Notes (order)
+  - [x] Success: D3, D9, D12, D14, D15, API Contracts, Scope and Implementation Notes agree with the gap bullets
 
 **Commit**: `docs: correct slice 426 design for judge_pair counting, fork plan files, registration branch, keep and over-size counts`
 

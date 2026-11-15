@@ -39,7 +39,7 @@ Slice cases are weaker evidence than fix cases, since there is no hidden test. K
 - Report: a table set per case kind, and the pairwise section for slice cases (D17).
 - Slice-case rows in 422's `sq benchmark yield`.
 - CLI `sq benchmark slice-cases build` and `sq benchmark judge`, with matching `/sq:benchmark` subcommands.
-- No edits to 424 or 425: 424 provides `CaseKindRunner.requalify` (D8), and 425 provides `bootstrap_mean_interval` (D17).
+- No edits to 425: it provides `bootstrap_mean_interval` (D17). Two edits to 424: `CaseDrop.reason` widens to accept `SliceCandidateRejection` (Patterns and Conventions), and the refusal of case sets with slice cases is removed (D8). 424 already provides `CaseKindRunner.requalify`.
 
 **Excluded**
 
@@ -183,8 +183,9 @@ Status: decided
 ### D3 — Task text is the design and task file at the fork
 Status: decided
 - The design and task files are found at `fork_sha` with `git ls-tree`, using `start_point.py`'s patterns (`{DOCS_ROOT}/user/slices/{index}-slice.*.md` and `{DOCS_ROOT}/user/tasks/{index}-tasks.*.md`). Those patterns become public and are defined once.
-- `task_text` is each file's content, in the order design then tasks (task files sorted by name), each preceded by a line `## File: <path>`. Content is verbatim, frontmatter included. This string is part of the case id (421 D1).
+- `task_text` is each file's content, in the order design then tasks, each preceded by a line `## File: <path>`. Task files are ordered numerically by `suffix_order` (the helper `start_point.py` already has, made public with the patterns), so `-2` comes before `-10`; sorting by name would not. Content is verbatim, frontmatter included. This string is part of the case id (421 D1).
 - Rejections: `no_design_at_fork`, `no_tasks_at_fork`, and `no_slice_plan_at_fork` when `plan_file_for` finds no plan listing the index at the fork. P6 needs all three, and cf registration needs the plan (D9).
+- `plan_file_for(index, root)` reads `*-slices.*.md` under a working tree, and discovery has no tree at the fork. The check writes the fork's slice-plan files (`git ls-tree` and `git show` on `ARCHITECTURE_DIR/*-slices.*.md`) into a temporary directory with the same layout, calls `plan_file_for` there, and removes the directory afterwards, also on error.
 - The tree at `fork_sha` is what the producer reads through cf. `task_text` records it in the case and feeds the judge's task section. It is not passed to the producer separately.
 
 ### D4 — No-code slices are rejected
@@ -228,7 +229,9 @@ Status: decided
 ### D9 — cf registration inside the scrubbed home
 Status: decided
 - P6's `implement` step runs cf-ops (`set_slice`, `set_phase`, `build_context`), so the tree must be a registered cf project. The producer runs with `HOME=<id>.home` (421 D7), so cf reads its registry from the scrubbed home. Registration therefore runs under the producer's environment, not the harness's.
-- `CfRegistration(runner, env)` is extracted from `ReplaySandbox._register_with_cf`: `cf init --lite --no-ide --name <name>`, `cf config set git.integration_branch <branch>`, then `cf set arch <initiative>` (the initiative from `plan_file_for` at the start commit). `ReplaySandbox` composes it with the harness environment and keeps its behavior and tests. `SliceCaseRunner` uses it with the scrubbed environment.
+- `CfRegistration(runner, env)` is extracted from `ReplaySandbox._register_with_cf`: `cf init --lite --no-ide --name <name>`, `cf config set git.integration_branch <branch>`, then `cf set arch <initiative>` (the initiative from `plan_file_for` at the start commit, resolved before `cf init`, so a slice in no plan leaves nothing registered; `UnknownSliceError` becomes `CfRegistrationError`). `ReplaySandbox` composes it with the harness environment and keeps its behavior and tests. `SliceCaseRunner` uses it with the scrubbed environment.
+- Cleanup state: `ReplaySandbox._registered` is set after `cf init` succeeds, so cleanup removes a half-registered project. `CfRegistration` exposes a `registered` property (true once `cf init` succeeded) and raises `CfRegistrationError` on a non-zero exit, a process failure or a timeout; its message is the command and its stderr, and it is logged at ERROR. `ReplaySandbox` sets `_registered` from `registration.registered` even when `register` raised, and re-raises the error as `SandboxError` with the message it gave before.
+- Registration branch: `register` takes a `branch`. cf's branch guard compares the checkout to `git.integration_branch`, so the branch is the one the sandbox tree is on (`git branch --show-current`). On a detached HEAD the runner first creates `SLICE_BRANCH_PREFIX + <sandbox id>`, as `ReplaySandbox` does for its own branch. 424 reads the diff as `start..HEAD`, so the branch does not change it.
 - A failed or timed-out cf step is a harness absence (424 D10), logged at ERROR with the step and its stderr. The producer never ran, so it is not charged to the config.
 - Removal: the registry is inside the scrubbed home, so removing the home removes the project. The slice-case runner calls no `cf project rm`, and the user's cf registry is never touched.
 - `cf` is not on the scrubbed `PATH` (421's `HARNESS_TOOL_ALLOWLIST` is `git` and `uv`). `ScrubbedEnvironment.with_tools(tools)` returns a copy whose `<id>.home/bin` also links each named tool as resolved on the harness's `PATH`. The slice runner asks for `("cf",)`, a constant in `slice_runner.py`. Suite runs and fix-case producers never get it. The tool links are not part of `EnvironmentIdentity`, which describes the installed project, so the grade sandbox's digest still matches the replay's (425 D1). cf's version is already part of prompt identity (177's `PromptIdentity.cf_version`).
@@ -256,7 +259,7 @@ Status: decided
 Status: decided
 - `data/benchmark/pairwise-diff-judge.md` frames the pair as two implementations of the same task, given as diffs against the same start commit, and asks which better implements the design and task file: correctness, completeness against the tasks, fit with the existing code, and tests. It ends with 177's `WINNER: A|B|TIE` line, so `parse_verdict` reads it unchanged. Its sha256 is the `JudgeRef.prompt_hash`, so these judgments never mix with 177's.
 - The prompt body is the packaged prompt, `## Task` with the case's `task_text`, then `## Implementation A` and `## Implementation B` with the normalized diffs.
-- 177's per-pair loop (`_call`, `_judge_pair`: two orders, bounded calls, a failed pair left unrecorded) is extracted from `judging.py` as `judge_pair(prompt_a_first, prompt_b_first, dispatcher, timeout_s, label) -> tuple[JudgeReply, JudgeReply] | None`. `judge_replay_set` and `diff_judge` both call it. 177's tests pass unchanged.
+- 177's per-pair loop (`_call`, `_judge_pair`: two orders, bounded calls, a failed pair left unrecorded) is extracted from `judging.py` as `judge_pair(prompt_a_first, prompt_b_first, dispatcher, timeout_s, label, on_call) -> tuple[JudgeReply, JudgeReply] | None`. `on_call: Callable[[], None]` runs once before each dispatched call, so `judge_replay_set` keeps 177's `JudgeSummary.calls` count (its `_call` incremented it, and `_judge_pair` stopped after a failed first call): it passes a callable that increments `summary.calls`. `judge_replay_set` and `diff_judge` both call `judge_pair`. 177's tests pass unchanged.
 - Dispatch is `one_shot_judge_dispatcher(alias)`, text only with no tools, so the judge cannot read the user's checkout. Outcomes come from `combine`.
 - The judge alias is `benchmark.judge_model`, declared in `config/keys.py` with no default, or `--judge-model`. With neither, `judge` refuses and names both. The timeout is 177's `metrology.judge_timeout_s`.
 
@@ -273,7 +276,7 @@ Status: decided
 Status: decided
 - Before any call, `diff_judge` builds every pair prompt for the case. If the longest exceeds `benchmark.judge_max_prompt_chars` (declared in `config/keys.py`, default 400 000 characters, about 100k tokens at four characters per token), the case is not judged. It is recorded as `over_size` with the longest prompt's length and the contestant that produced it.
 - The whole case is excluded, not only the oversized contestant. Dropping one diff would leave its config judged only on smaller cases, and the configs that write larger diffs would be ranked on a different case mix.
-- The report counts over-size cases and prints the limit in effect. Raising the key and rerunning `judge` judges them.
+- The report counts over-size cases and prints the limit in effect. Raising the key and rerunning `judge` judges them. A stale `OverSizeCase` stays in the store after the limit is raised and the case is judged, so the report counts a case as over size only when the judge has an `OverSizeCase` for it and no `DiffJudgment` for that case.
 - No truncation anywhere. Rejected: a bounded view (file list plus selected hunks). Which hunks to show is itself a judgment that could favor one config, and the slice plan allows either rule.
 
 ### D15 — Absences in judging
@@ -282,7 +285,7 @@ Status: decided
 - **Config absences forfeit.** In a pair where one side is a replay with a config absence (`no_commit`, `blocked`, `cost_cap`, `producer_failed`), the other side wins without a judge call. The judgment is recorded with `forfeit=True` and no calls. If both sides are absent, the pair is recorded as a forfeit `TIE`. This applies "absent is not zero" to the judge: committing nothing is a loss, not a missing data point.
 - **Failed calls** leave the pair unrecorded, logged at ERROR, so a rerun retries it (177 D5). They are counted in the summary.
 - Harness-absent cases are counted at report time from the replay records. No judge record is written for them.
-- An over-size case is written as an `OverSizeCase` record, so the report counts it. It is replaced when the limit changes.
+- An over-size case is written as an `OverSizeCase` record, so the report counts it. It is replaced when the limit changes. A case with an `OverSizeCase` and later `DiffJudgment`s is counted as judged, not over size (D14).
 
 ### D16 — Caps, bound and resume for judging
 Status: decided
@@ -328,14 +331,23 @@ Status: decided
 ```python
 def normalize(diff: bytes) -> NormalizedDiff: ...
 
+class CfRegistrationError(Exception): ...      # message: the command and its stderr
+
 class CfRegistration:
     def __init__(self, runner: ProcessRunner, env: Mapping[str, str] | None) -> None: ...
+    @property
+    def registered(self) -> bool: ...            # true once `cf init` succeeded
     def register(self, tree: Path, name: str, branch: str, slice_index: int) -> None: ...
+
+def judge_pair(
+    prompt_a_first: str, prompt_b_first: str, dispatcher: JudgeDispatcher,
+    timeout_s: float, label: str, on_call: Callable[[], None],
+) -> tuple[JudgeReply, JudgeReply] | None: ...
 ```
 
 **`sq benchmark slice-cases build --set NAME [--repo PATH] [--keep]`**
 
-One line per candidate (`slice 403 qualified case-… (412 regression nodes, 3 superseded, 1 excluded)` or the rejection reason), then the slice-case yield rows for this project. Exit 0 when the build finished, whatever the yield. Exit 1 when no `slice_ranges` record exists or a harness failure stops the build.
+One line per candidate (`slice 403 qualified case-… (412 regression nodes, 3 superseded, 1 excluded)` or the rejection reason), then the slice-case yield rows for this project. `--keep` leaves the fork and tip qualification sandboxes in place and prints their paths, as 425's `grade --keep` does; without it they are removed. Exit 0 when the build finished, whatever the yield. Exit 1 when no `slice_ranges` record exists or a harness failure stops the build. A harness error stops the build, but every index in the record still gets a line: the stopping candidate is recorded `harness_error`, and later ones print `slice <index> not attempted (build stopped at slice <n>)` with no record.
 
 **`sq benchmark judge BENCHMARK_ID --max-cost USD [--judge-model ALIAS] [--judge-cost USD] [--repo PATH …]`**
 
@@ -509,8 +521,8 @@ These are draft commands. `slice-cases build` and `judge` do not exist until thi
 
 ### Development Approach
 
-1. **cf spike.** In a 421 scrubbed sandbox at a squadron fork commit, register with cf under the scrubbed home and run `sq run P6 <index> --producer-only --dry-run`. Record the answer in the DEVLOG.
-2. Extract `CfRegistration` and `judge_pair`, and make `start_point.py`'s patterns public, with 177's tests passing.
+1. Extract `CfRegistration` and `judge_pair`, make `start_point.py`'s patterns public, add the config keys, the fixtures and `normalize`, with 177's tests passing. These need nothing from 421–425 and are committed before the precondition gate.
+2. **cf spike**, the first task after the gate, since it needs 421's sandbox. In a 421 scrubbed sandbox at a squadron fork commit, register with cf under the scrubbed home and run `sq run P6 <index> --producer-only --dry-run`. Record the answer in the DEVLOG.
 3. Records, enums and store methods.
 4. `slice_discovery`, `slice_task` and the no-code check against fixture repositories, then `slice_qualify` and `slice_case_build` with injected doubles. Then a live build on squadron.
 5. `SliceCaseRunner`, `with_tools` and re-qualification routing. Live replay of one case (walkthrough step 3).
