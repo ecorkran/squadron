@@ -1,0 +1,54 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Per-force timing deferred although the slice plan assigns it to 141",
+   "description": "The plan entry for 141 requires per-tick timings by phase, including \"force totals per force\". The slice design instead reports a single `force_total_ns`. It defers the per-force breakdown to slice 142 through an optional `force_breakdown` field to be added later.\n\nSlice 142 is the gate for the cohesion port, and the plan entry for 142 depends on 141 for this measurement. If 142 has to extend `PhaseTimings` and bump the JSON schema (`schema_version`), the \"zero changes elsewhere in the harness\" integration criterion no longer holds. Either bring per-force timing into this slice, or have the plan entry explicitly reassign it to 142.\n\nThe cost is small. Per-force `perf_counter_ns` brackets inside the instrumented tick are a few more lines.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:63-69, 292-296"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Numba backend registration is attributed to the wrong slice",
+   "description": "The slice says \"Slice 144 registers `numba`\" and lists Numba as \"slice 144 / 118 territory\". In the plan, Numba force JIT is slice 118, in plan 100. Slice 144 ports the forces to Quadrants.\n\nSlice 142 must benchmark Quadrants cohesion against Numba and NumPy, and its dependencies are 141 and 118. The Numba row therefore has to exist by 142, not 144. As written, no slice owns the Numba runner at the point it is first needed. The integration criterion \"Slice 144 can register a numba backend\" should name 118 or 142 as the registrant. The slice should also state whether 141 should be sequenced after 118 or whether 118 must add the registry entry.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:92, 341-342, 589-591"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "NumPy runner contract is contradictory, and the dependency on engine internals is unspecified",
+   "description": "\"Interfaces Required\" and \"Consumes\" say the NumPy runner \"calls `tick()` directly\". The Technical Decisions section instead has the runner call a parallel `tick_instrumented()` that re-implements the tick body. These two statements cannot both hold.\n\nThe design never names which engine internals the copy depends on. These would include the spatial build, CSR assembly, per-force dispatch, the profile fancy-indexing, and integrate. Because the harness cannot modify the engine, it must import those internals. That is a hidden dependency that couples `bench/` to private engine structure.\n\nThe drift mitigation catches output divergence but not phase-boundary divergence. The slice acknowledges that gap. Please make the interface list match the chosen option and enumerate the engine functions the instrumented tick calls.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:131-132, 244-272, 541"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failure modes for the new I/O paths and the backend call are incomplete",
+   "description": "The failure list covers YAML fields, an unregistered backend, `setup` raising, and TPS below 1. It does not cover several new paths:\n\n- `tick_once` raising mid-measure. Partial timings need an explicit policy: discard them, or write a partial report.\n- A hung tick. This matters most for the future GPU backends. The design has no timeout and no stated behavior.\n- A failed write of `bench/results/`: missing directory, permission error, or full disk.\n- `git rev-parse HEAD` failing because git is absent or the tree is not a repo. The project forbids silent fallbacks, so the header field must raise or carry an obviously placeholder value. The design should say which.\n- `platform.processor()` returning an empty string on some hosts.\n\nEach failure mode should be observable, either through a log at WARNING or higher or through a non-zero exit code. The CLI section currently says only \"non-zero on backend error\".",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Markdown aggregation and CLI surface are underspecified and partly speculative",
+   "description": "The Markdown report is described as \"one table per workload across all backends in `bench/results/`\". That directory accumulates timestamped runs from different shas and platforms. The design does not say which file wins per backend, or whether results from different hosts are mixed in one table. Mixing them would make the cross-platform comparison misleading.\n\nThe walkthrough uses `--list-backends` and `--list-workloads`, but the CLI section never defines them. The `--all-backends` flag is justified only by backends that do not exist yet, and the open question about subprocess isolation is likewise speculative. The design should cut `--all-backends`, since `--backend` is enough while only one backend is registered.\n\nIt should also state that pytest-benchmark is not required. The timer accounting is tested against a stub backend, and the pytest-benchmark dependency is listed only \"for consistency\".",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:440, 479-483, 603-613"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Parity hash point and final-result source are inconsistent",
+   "description": "The Scope section describes the hash as of the \"post-warmup\" `TickResult`. The Parity hash section computes it \"after the measure phase\". The data flow also shows `finalize()` feeding the final `TickResult`, but the Protocol declares `finalize() -> None`. Pick one hash point and say the result is the last `tick_once` return.\n\nSlice 145 will consume this hash as its reference, so the hash point matters.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:81-82, 205-211, 460"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Asynchronous GPU timing is not stated in the PhaseTimings contract",
+   "description": "The design says future backends \"expose their own timed kernel launches via the same `PhaseTimings` shape\". GPU kernel launches are asynchronous. Meaningful `perf_counter_ns` phase timings need a device synchronize at each boundary. One sentence in the `PhaseTimings` contract would prevent 142 from reporting launch-queue time as compute time.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:262-266, 274-296"
+  }
+ ]
+}

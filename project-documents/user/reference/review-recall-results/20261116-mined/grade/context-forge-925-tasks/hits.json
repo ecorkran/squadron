@@ -1,0 +1,36 @@
+{
+ "case": "context-forge-925-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The design's Success Criteria say \"A project whose shared config has `guide.git_strategy: manual` installs as tarball with the same warning\" (a `cf gu",
+   "hits": {
+    "r01": [
+     6
+    ],
+    "r02": [
+     4
+    ],
+    "r03": [
+     3
+    ],
+    "r05": [
+     7
+    ],
+    "r06": [
+     6
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Task 20 puts the CLI `ensureGuideReady` call for `prompt.ts` \"before the read\" at \"~lines 60 and 116\". In `prompt.ts` at `25ef4d74` the `get` action r",
+   "hits": {
+    "r01": [
+     1
+    ]
+   }
+  }
+ ],
+ "note": "F2: r01[1] names the line-116 vs line-114 read ordering; r01[2] and r02[8] only note phaseShorthand.ts is unlisted without the ordering defect, so not counted. F1: r01[6] and r02[4] cover other items too but name the config-path CLI warning gap."
+}

@@ -1,0 +1,40 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Collision path relies on `cf config unset`, which the routing rules make unable to clear the stale shared-file copy",
+   "description": "- **The contradiction:** Data Flow says Delete \"mirrors write\", so a personal key is deleted only from `.context-forge.local.toml`. Collision semantics and walkthrough step 9 say `cf config unset git.integration_branch --project` clears the stale copy in the shared file. As written, that command deletes the developer's personal value and leaves the stale shared copy in place.\n- **What fails:** Step 9 cannot pass. The Success Criterion that `cf check` returns to clean has no working mechanism in the collision case.\n- **Fix:** Define explicitly how a stale shared-file copy of a personal key is removed. Options are a delete that also clears the shared copy of personal keys, or a flag on `unset`. Alternatively, drop the collision branch together with the heavier migration command (see the next finding).",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#Data Flow, #Migration Plan (Collision semantics), #Verification Walkthrough step 9"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Migration mechanism is heavier than a one-key problem needs",
+   "description": "Exactly one key (`git.integration_branch`) is personal. The design still adds a new `cf config migrate-personal` subcommand, per-key write-then-delete ordering, and a three-way collision policy (absent, same value, different value). It also adds per-key `failed:` reporting, an idempotency argument, and an extra CLI surface. The plan entry only asks for \"a defined migration/compat story\".\n\nThe read-time fallback already prevents regression, and the `cf check` warning already surfaces the problem. The warning text could name the one-time fix instead: `cf config set <key> <value> --project`, then remove the shared copy. That would cut:\n- the `migrate-personal` command and its tests\n- the collision matrix\n- the failure-summary logic\n\nIf the command is kept, state why it must exist for a single key. The \"effort 3/5 \u2026 keep minimal\" note under Special Considerations does not reconcile with this amount of mechanism.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#Migration Plan"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Scope lookup for the `workflow.review_gates.*.threshold` pattern key is unspecified",
+   "description": "The classification table lists a wildcard entry, `workflow.review_gates.*.threshold`. Routing, the checker rule and `migrate-personal` all depend on `CONFIG_KEYS[key].scope`. For a concrete key such as `workflow.review_gates.code.threshold`, a plain map lookup would miss. The design does not say how `ConfigManager` resolves a concrete key to its pattern entry's scope, or what happens when a key has no registry entry. That case needs an explicit error rather than a silent default to shared, which the project's no-silent-fallback rule requires. State the resolution mechanism, or confirm that the existing registry lookup already handles wildcard keys.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#Key classification (initial pass)"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure handling for the new personal file's read path and `.gitignore` check is incomplete",
+   "description": "- **Malformed TOML:** Failure modes cover write failures and the `.gitignore` append. They do not say what happens when `.context-forge.local.toml` exists but contains malformed TOML. That file is hand-editable, and every `ConfigManager.get()` caller now reads it, so a parse error there becomes a new read failure for all callers. State that it throws with the file path named, rather than being treated as empty.\n- **Gitignore check:** The substring check in `cf init` can match a commented or negated line such as `# .context-forge.local.toml` or `!.context-forge.local.toml`. That would leave the file un-ignored with no signal. Specify an exact-line match.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#Failure modes, #`.gitignore` handling in `cf init`"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Source-union extension and MCP surfacing are appropriately light",
+   "description": "Adding `'project-personal'` to `ConfigResult.source` is justified. The design records that both current consumers interpolate the value without an exhaustive switch. The MCP change is limited to exposing the second path. No NFR in the 900 architecture is touched by this slice.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#API Contracts"
+  }
+ ]
+}

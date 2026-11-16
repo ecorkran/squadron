@@ -1,0 +1,46 @@
+{
+ "case": "migratory-141-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Workload schema: `world_size: [200.0, 200.0, 200.0]`, `cluster_centers: [[60,60,60],[140,140,140]]`, \"initializes one `AgentState` per workload\". `src",
+   "hits": {}
+  },
+  {
+   "id": "F2",
+   "text": "\"A single registered backend: `numpy` (today's `engine.tick.tick` ...)\" and \"the NumPy backend (the only backend that exists today)\", while Numba is a",
+   "hits": {
+    "r04": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Workload section: profile names resolve to \"the existing `BehavioralProfile` constructors used in `config/default.yaml`. The harness does not invent n",
+   "hits": {}
+  },
+  {
+   "id": "F4",
+   "text": "\"Force names resolve to module-level singleton instances in the relevant engine modules (e.g. `flocking.cohesion_force`)\". No such instances exist; fo",
+   "hits": {
+    "r04": [
+     7
+    ]
+   }
+  },
+  {
+   "id": "F5",
+   "text": "Consumes from Other Slices: \"`engine.spatial.KDTreeQuery`\", while Interfaces Required says `migratory.spatial`; the class is `migratory.spatial.kd_tre",
+   "hits": {
+    "r02": [
+     3
+    ],
+    "r03": [
+     6
+    ]
+   }
+  }
+ ],
+ "note": "F4 borderline: r04 #7 cites the singleton-instances claim and says forces should resolve through force_builder, without saying the instances do not exist. F3 not credited: r02 #3, r04 #7 and r05 #9 flag profile-registry duplication or drift, not that flocker and leader are absent from config/default.yaml."
+}

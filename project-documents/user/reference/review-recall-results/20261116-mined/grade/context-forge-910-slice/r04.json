@@ -1,0 +1,33 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "All three WorkflowNavigator sites are `SliceStatus.status` values, which TD-3 excludes",
+   "description": "The doc lists `WorkflowNavigator.ts` with 3 `=== 'complete'` checks to sweep (also lines 75, 90). In the source, all three belong to the workflow-position union, not `NormalizedStatus`:\n- `slice.status === 'complete'` at WorkflowNavigator.ts lines 312 and 345 is the same field that is compared to `'review-failed'` at line 302.\n- `return { ...base, status: 'complete', taskProgress }` at line 588 builds a `SliceStatus`.\n\nTD-3 (lines 104-106) says these must not be swept because doing so \"implies the two unions are related, which they aren't.\" The plan contradicts its own decision. The success criterion at line 135 makes it worse: it requires zero matches in \"the six swept files,\" so an implementer has to break TD-3 to meet it. The file already uses `STATUS.*` where the value really is `NormalizedStatus` (lines 319 and 577). **Fix:** move `WorkflowNavigator.ts` to Excluded under TD-3, and change the file count from 6 to 5.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "ConsistencyChecker's `detail.value` fix payloads are frontmatter write-back values, and the doc does not classify them",
+   "description": "About 14 of the ConsistencyChecker literals are fix payloads such as `detail: { key: 'status', value: 'in-progress' }` (ConsistencyChecker.ts lines 368, 384, 403, 480, 546, 728, 744, \u2026). These are values written back into a document's frontmatter `status` field. The doc describes all 36 sites as \"comparisons\" and does not say which vocabulary these values belong to. TD-2 says raw frontmatter tokens and `NormalizedStatus` are \"intentionally distinct vocabularies\" that must not be merged. Sweeping these payloads onto `STATUS.*` would officially make `NormalizedStatus` the frontmatter write vocabulary, and that is the very merge TD-2 rules out. **Fix:** state explicitly whether `detail.value` payloads are `NormalizedStatus`, and therefore swept, or frontmatter tokens, and therefore excluded or deferred. Give the reason either way.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Several site counts and descriptions don't match the source, and the grep-based success check would fail",
+   "description": "Problems found:\n- **`types.ts` count:** the doc says \"5 (of 8 total)\" for the `inferredStatus` union. Line 44 holds only 3 literals. The 8th literal is the `SliceStatus` `'complete'` at line 269, which is excluded.\n- **`statusNormalizer.ts` split:** the doc says 13 values plus 3 alias keys. The source has 14 value-side literals and 2 quoted keys (`'in-progress':` and `'not-started':`).\n- **`ProjectModelBuilder.ts`:** the doc calls `'unknown'` its \"one literal\" (lines 39, 50). The only match is `'not-started'` inside a comment at line 179, so the grep at lines 135 and 149 will count it.\n- **Comment matches:** ConsistencyChecker.ts line 514 has the literals in a comment (`// 'complete' | 'in-progress' | 'not-started'`). The zero-match criterion at line 135 will also catch this.\n- **Totals:** the before/after counts at lines 150-151 (~75 \u2192 4 + 3 + 4) mix line counts with occurrence counts. The `SliceStatus` contribution is 1, not 4.\n\nAs written, the Functional Requirements check (line 135) cannot pass even if the sweep is correct. **Fix:** redo the inventory per site. Exclude comment lines from the check, or require the comments to be updated too. Restate the expected after-count.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33-41"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Relying on the existing test suite is acceptable but unverified for the touched paths",
+   "description": "The architecture requires that \"refactoring slices must have test coverage verifying preserved behavior.\" The doc uses the existing suite as the regression guard, which is reasonable for an identity-preserving change, since `STATUS.X === 'x'`. It does not confirm that the swept ConsistencyChecker rule functions are actually exercised by tests. The compile-time typo check at line 153 covers most of the risk, so no action is needed beyond a quick coverage check during task breakdown.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:85"
+  }
+ ]
+}

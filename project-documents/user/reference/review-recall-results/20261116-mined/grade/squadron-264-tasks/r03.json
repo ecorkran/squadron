@@ -1,0 +1,61 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "SC6's live demo is deferred, but the slice is still marked complete",
+   "description": "SC6 (slice design line 229-231) has two parts. The first is a materialized `cf_workflow_status` executor returning real status, which Task 8.2 and Task 9.1 step 2 cover. The second is a tool-capable non-SDK model calling `cf_build_context` and receiving the assembled context. Task 9.3 says this second part \"remains open\", yet in the same step it sets both the task file and the slice design to `status: complete`. That leaves a success criterion unmet behind a \"complete\" status. Do one of these:\n- Leave the status at a non-complete value until walkthrough step 4 runs.\n- Add an explicit `BLOCKED:`/open line that the status reflects.\n- Have the slice design formally move that half of SC6 to another slice (263's demo or 265).",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:286-292"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The protocol/transport-error failure mode has no test",
+   "description": "The design's failure-mode table (slice line 146) lists \"Protocol/transport error mid-call (`McpError`, closed stream)\" with a WARNING signal, and line 149-150 requires that \"Each row above has a test asserting the observable signal.\" Task 4.3 implements the handler, but Task 5 never exercises it:\n- Task 5.4's caplog list covers only timeout, server isError and spawn failure.\n- `test_unknown_tool_name` doesn't reliably cover this path. The SDK may report an unknown tool as an `isError` result rather than an `McpError`.\n\nAdd a fake-server tool that closes the stream or exits mid-call (for example, a `crash` tool that calls `os._exit`). Then add a test asserting `is_error is True` plus a WARNING via caplog.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:173-176"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The non-text-block rule is never tested",
+   "description": "SC2 requires results to be mapped \"per the Result mapping rules\". Those rules include \"Non-text blocks are noted by type in the content, not dropped silently\" (slice line 137). The Context Summary's fact 3 repeats this rule. Task 4.2 implements it, but nothing checks it:\n- The Task 3 fixture has no tool that returns a non-text block.\n- Task 5 has no matching test.\n- The `empty` tool returns zero blocks, which doesn't cover the image-only case. An image-only result also has \"no text blocks\", so the expected outcome (an error result that also notes the image type) is left unspecified.\n\nAdd an `image` tool to the fixture (or a mixed text+image tool) and a test in Task 5.1 for each.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:102-111"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 3's fixture omits what Task 5 needs, so the junior implementer has to improvise",
+   "description": "Task 5.2 asks for the child PID \"via the fake server printing it to a temp file at startup, or scan for the fixture's command line\". Task 3 defines no such PID-reporting behavior, and the two options in 5.2 differ a lot in how reliable they are. That task also leaves out the crash and non-text tools named in the two findings above. Put all three into Task 3: write the PID to a path passed by argument or environment variable, add a crash tool, and add an image tool. Then make Task 5.2 state the single mechanism to use.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:167-169"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 2 is too small to stand alone and adds an extra commit of untested code",
+   "description": "Task 1 adds two config keys, and Task 2 adds two tests for their defaults. Each has its own commit, so Task 1 commits code before its tests exist. This is a 2/5-effort slice, so merge Task 2 into Task 1 as a subtask and commit once. The same pattern (implementation committed, tests in the next task) also applies to Tasks 4\u21925 and 6\u21927. That is acceptable there because the test tasks are substantial, but each implementation commit is untested at that point.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:70-96"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "SC3's \"an executor returns\" is only verified at the transport level",
+   "description": "SC3 says \"against the fake python MCP server, an executor returns the server's text\". Task 5 checks the fake-server round trip through `call_mcp_tool`. Task 7 tests the executors only with a mocked transport. Together these cover the chain, and Task 8.2 tests the executor end to end against the real server, so this is acceptable. Still, consider changing the slice wording to \"the transport helper\" so the criterion matches the test.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:156-163"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "It's unclear whether the bridge or the caller sets the spawned process's environment",
+   "description": "Task 4.1 says the bridge uses `get_default_environment()` as the spawned environment, while also saying callers build `StdioServerParameters`. Task 6.3 then has the caller pass `env=get_default_environment()` explicitly. Pick one owner, preferably the caller, since the bridge receives finished parameters. Otherwise the junior implementer may set the environment in both places.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129-131"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The merge step in Task 9.4 conflicts with the parent repo's rule",
+   "description": "The worktree's CLAUDE.md allows merging when implementation is done, so Task 9.4 is allowed under the conventions in scope here. The parent squadron CLAUDE.md, however, forbids merge tasks in task files and limits merging to Phase 7 after code review. If this task file gets used under the parent repo's rules, remove 9.4 and the \"merge commit\" wording from Task 9's success criteria.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:293-295"
+  }
+ ]
+}

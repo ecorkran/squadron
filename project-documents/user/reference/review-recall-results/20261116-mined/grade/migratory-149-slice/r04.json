@@ -1,0 +1,47 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Candidate-count analysis for S=3 is wrong, which weakens the rationale for Intervention 2",
+   "description": "The doc says S=3 drops agents per cell to ~555 and that \"candidates loaded drops to ~5000\". The scan is 7\u00d77 = 49 cells, not one. 49 \u00d7 ~555 is about 27,000 candidates, against 45,000 at S=1. That is roughly a 40% reduction, not 9\u00d7. The scanned area shrinks from (3r)\u00b2 to (7r/3)\u00b2, about 0.6\u00d7. The \"combined ~555 candidates, exit after ~32\" claim has the same problem. The actual candidate count depends on how quickly the cap is reached in scan order, and the doc doesn't analyze that. The \u22655\u00d7 target and the choice of S=3 as the gate configuration rest on this analysis. The design should restate the expected candidates-scanned numbers correctly. It should also say that early exit, not subdivision, is expected to carry most of the gain.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56-58"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`break` on the innermost loop leaves the outer cell loops running, and the cost is not accounted for",
+   "description": "The Quadrants constraint forces the `break` onto the `for kk` loop only. After the cap is hit, the `drow`/`dcol` loops still visit every remaining cell. Each one reads its start/end bounds and then breaks on the first iteration. At S=1 that is up to 8 extra cells. At S=3 it is up to 48 extra cells per agent. The doc says agents \"exit after ~32\" and avoid \"~44,968 iterations\". It doesn't acknowledge this residual per-cell overhead, which grows as (2S+1)\u00b2. That overhead is the cost of the S>1 intervention that the doc leaves out. The design should state the residual cost, or say how the outer loops are short-circuited, for example by clamping the cell bounds once the cap is reached.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:29-46"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The four-way ablation in the Verification Walkthrough cannot be run as written",
+   "description": "The \"baseline (counter-gating)\" and \"early exit only\" commands are identical (`--subdivision-factor 1`). The \"subdivision only (S=3, counter-gating)\" command is likewise indistinguishable from the \"both interventions\" command. The design adds the `break` unconditionally and defines no flag or kernel parameter to turn it off. The only toggle defined is `--subdivision-factor`, and that flag is not listed in the Component Interactions section. A2 and A3 measure against the slice 145 baseline, so the design needs one of two things. Either it specifies a switch for early exit, which has to be a compile-time constant or a kernel parameter, or it takes baselines from the pinned slice 145 commit and drops the intermediate ablations. Without that, the per-intervention attribution the doc promises (\"needs CUDA measurement to quantify\") cannot be produced.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-176"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Hidden dependency on slice 148, which also modifies the same kernel",
+   "description": "The frontmatter and the slice plan list only (145) as a dependency. Slice 148 (shared-memory cell tiling) is marked complete in the plan and restructures the inner cell-iteration loop of the same fused kernel. The design cites slice 145 line numbers (291, 155\u2013184, 411\u2013462) and treats the `for kk` loop as per-thread. If 148 has landed, its tiled loop is cooperative across a warp or threadblock. A per-thread `break` there is not valid, because it conflicts with the collective loads and barriers. The doc should state whether 148 is merged and which loop structure the `break` targets. It should add (148) to the dependencies, or explain why 148's tiling does not touch this loop. Also, the plan's 148 entry says density independence at N=50k \"ruled out inner-loop compute as the bottleneck\". This slice's premise, that 148's Phase 2 identified inner-loop waste, sits in tension with that. The doc should reconcile the two.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:6"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Seam handling and the S validation add mechanism the slice does not need",
+   "description": "- **Seam.** Option A keeps `get_neighbors_first_k` behind a new guard. The doc calls the seam \"unreachable when the break fires\", but it is still reached on every iteration before the cap. Its internal counter-gating is now redundant with the guard. The discussion of Options A and B, plus the claim that the seam is \"preserved\", spends space on a decision with little consequence. The design should state plainly that the seam keeps its signature and that its gating logic becomes redundant.\n- **S upper bound.** The `S > 8` hard cap is arbitrary. Its rationale (\"larger than the physical neighborhood\", \"GPU memory\") doesn't hold up. Memory scales with grid_w \u00d7 grid_h, which grows as S\u00b2, and the doc doesn't compute that figure. The check also lets `bool` pass `isinstance(S, int)`. The literal 8 should be a single named constant per project rules, or the cap should be dropped in favor of a computed grid-size check.\n- **Spill check.** A5 (register spill via `nvcc --ptxas-info`) is not in the plan's exit criteria. The mechanism for getting ptxas output from a Quadrants kernel is hedged (\"or equivalent\"). Either pin down how it is obtained or defer it.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-34,69-78"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Scan-order bias changes with S",
+   "description": "Neighbor selection is first-k in scan order. Changing the loop to `range(-S, S+1)` over smaller cells changes which agents win the 32 slots, with a different spatial bias from S=1. The 20% statistical-parity gate (A4) probably absorbs this. The doc should still acknowledge the shift, since it is a behavior difference between S=1 and S=3.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:60-67"
+  }
+ ]
+}

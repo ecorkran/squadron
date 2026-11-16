@@ -1,0 +1,33 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 13 asserts a premise that cannot hold for the Python inputs it names",
+   "description": "Task 13 uses a file with an unterminated triple-quoted string and one with bad indentation. It expects both to be unparsed for duplication \"while their function length is unaffected\". Both inputs raise `SyntaxError` or `IndentationError` in `ast.parse` as well as in `tokenize`. Function length and complexity would therefore also list them in `unparsed_files`, and the second half of the assertion would fail. The slice's failure-mode table repeats the same claim (design lines 108 and 110). Reword the test to assert only that duplication marks the file unparsed with a WARNING and still compares the other files. If the independence claim matters, use an input that `tokenize` rejects and `ast` accepts, or drop the claim from the test and the design table.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:154"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 14 treats `MemoryError` as a per-file token error, contradicting Task 10 and the failure-mode table",
+   "description": "Task 14 says TypeScript's token errors are `TypeScriptParseError` and `MemoryError`. Task 10 sends anything in `token_errors` to the file's `unparsed_files` entry with a WARNING. Task 10 and the design (line 109) require a `MemoryError` to make `duplicated_lines` `tool_failed`, never a partial figure. With Task 14 as written, a `MemoryError` during tree-sitter tokenization would silently drop one file and continue. The result would be a partial duplication figure, and no test covers it, because Task 11 tests `MemoryError` only with a test tokenizer. Remove `MemoryError` from Task 14's list, and add a TypeScript-side assertion in Task 15 that a `MemoryError` gives `tool_failed`.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 2 changes only `PythonAdapter.metrics`, and that is correct",
+   "description": "`PythonAdapter.metrics` is `frozenset(SnapshotMetric)` and would claim the new metrics once the enums land. `TypeScriptAdapter.metrics` is already an explicit set (`typescript_adapter.py:22`), so it needs no change in Task 2. Tasks 8, 12, 14 and 25 add the new members to each set as the metric is measured.",
+   "location": "src/squadron/metrology/snapshot/python_adapter.py:105"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Minor task-shape items",
+   "description": "- Task 28 has no Success line.\n- Task 30 ends with \"Commit any remaining changes\". This risks a commit that only checks boxes or adds notes. Say it applies only if validation produced real changes.\n- Tasks 8, 12, 14 and 25 have no commit marker. That is acceptable, because their tests and commits sit in the next task.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:273-290"
+  }
+ ]
+}

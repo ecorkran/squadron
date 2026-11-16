@@ -1,0 +1,44 @@
+{
+ "case": "migratory-109-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Architecture, Vectorized Force Patterns, Cohesion sketch: `center_of_mass = np.sum(neighbor_pos, axis=1) / np.maximum(counts, 1)` then `cohesion = (ce",
+   "hits": {}
+  },
+  {
+   "id": "F2",
+   "text": "Verification Walkthrough step 4 runs `grep -n \"for.*agent_idx\\|for.*eval_indices\\|for.*list_idx\"` on the force modules and expects no matches, while t",
+   "hits": {
+    "r02": [
+     0
+    ],
+    "r03": [
+     0
+    ],
+    "r06": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Technical Scope and Success Criteria call all five forces \"neighbor-dependent\" and include `MomentumForce`, which the document later says \"does not us",
+   "hits": {
+    "r01": [
+     5
+    ],
+    "r02": [
+     8
+    ],
+    "r03": [
+     5
+    ],
+    "r06": [
+     5
+    ]
+   }
+  }
+ ],
+ "note": "F2: r01#0, r04#1, r05#4 name the comprehension loop but claim the verification grep would NOT match it (opposite of the flaw), so excluded. F3 r06#5 counted since it names the MomentumForce neighbor-dependent inconsistency among other trims."
+}

@@ -1,0 +1,27 @@
+{
+ "case": "squadron-264-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Slice design Result mapping: \"Non-text blocks are noted by type in the content, not dropped silently\" (design line 138), part of SC2 \"maps results per",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r03": [
+     2
+    ],
+    "r04": [
+     2
+    ],
+    "r05": [
+     1
+    ],
+    "r06": [
+     1
+    ]
+   }
+  }
+ ],
+ "note": "r02 #3 covers only the multi-block join rule, not the non-text note rule, so not a hit; r03 #3 mentions an image tool only in passing within a PID finding, not a hit."
+}

@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Frontmatter already says `status: complete` with every box unchecked",
+   "description": "The task file and the slice design (`313-slice.world-bounds-policy.md:10`) both carry `status: complete`. Every checkbox is unchecked, and task 5.3 is the step that sets this status. A reader or tool that trusts the frontmatter would treat the slice as finished and skip it. Reset both to the pre-implementation status and let 5.3 flip them.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 5.2 steps 5\u20137 need a human watching a viewer, so a junior AI can't complete them",
+   "description": "Steps 5\u20137 say to connect the Three.js viewer and watch for agents wrapping, bouncing or drifting. An AI implementer cannot observe that. It also edits `config/test.yaml` three times (`reflect`, `open`, then restore), which risks committing a stray policy. Replace steps 5\u20137 with an objective, scriptable check, such as a short WebSocket client or a `SimulationManager` run that asserts position bounds per policy. Keep the visual viewer check as an optional extra. Task 3.4's integration tests already cover most of this behavior.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:295-308"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Redundant full-suite runs, and the Section 4 commit has no test run before it",
+   "description": "The full suite runs in 3.5, again in 5.1, and again as walkthrough step 2 in 5.2. Section 4 is two one-line YAML edits split into tasks 4.1 and 4.2 with its own commit at 4.3. That commit is checked only by a `python -c` load, not by `pytest`. Switching both shipped configs to `wrap` could change any test that loads them. The first suite run after that change is 5.1, which comes after the commit.\n- Merge 4.1 and 4.2 into one task.\n- Run `pytest` before that commit, or fold the YAML edits into the Section 3 commit.\n- Drop the duplicate run in 5.1 or in walkthrough step 2.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:238-293"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`WRAP` can return exactly `width` for a tiny negative overshoot, and no test covers it",
+   "description": "Criterion 7 requires every position to land in the half-open `[0, width)`. Task 2.2 says `np.mod` produces values in `[0, width)`. In floating point, `np.mod(-1e-17, 100.0)` rounds to `100.0`, which is outside the interval. The wrap tests in 2.3 (lines 155\u2013161) use only integer-valued positions, so this case is untested. Add a small-negative-overshoot test and say how it is handled (for example, re-wrap values that equal `width` to `0`). Otherwise criterion 7 can silently fail.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:130-134"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Test list and steps are heavier than the criteria need",
+   "description": "Task 2.3 lists about 18 tests. The parametrized \"all three policies dispatch and don't raise\" test (line 171) adds nothing beyond the per-policy tests and traces to no criterion. `test_reflect_clamps_top_edge` and `test_reflect_clamps_bottom_edge` are described only as \"analogous\". Fold them into one parametrized axis test. Tasks 2.2 and 3.2 also dictate implementation detail the slice does not require, including the `out=` arguments, the mask construction, and the exact `data.get(\"policy\", None)` call in 1.3. State the required behavior and let the implementer choose the code.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:145-174"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The round-trip test checks less than criterion 5 states",
+   "description": "Criterion 5 says reloading the emitted YAML produces an equal `ServerConfig`. Task 1.4's test asserts only that the policy matches. Asserting full equality is cheap and matches the criterion.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+  }
+ ]
+}

@@ -1,0 +1,61 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Exit criteria and scope diverge from the slice plan entry",
+   "description": "The plan 140 entry for slice 152 sets three exit criteria:\n- k-nearest TPS at N=200k within 20% of k-first.\n- Parity within 5% of the numpy reference.\n- No regression on the k-first path.\n\nThe design drops the first and third. It removes `k_first` entirely and re-baselines the gate against a new `radius_only` mode that the plan never mentions. The plan entry also names FRNN collect-then-sort as what makes k-nearest viable, and the design defers that to a follow-up. Changing the gate, removing a mode and deferring assigned scope are each defensible, but none is reconciled with the plan. The plan entry should be updated alongside this design, or the design should justify the deviations explicitly against the plan text.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67, 357-358"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Proportionality: `radius_only` mode and speculative measurement work can be cut",
+   "description": "The slice needed to deliver coherent reads for `k_nearest`. The design adds the following:\n- A new public mode (`radius_only`) with its own accumulation branch and a second pruning and heap gating path.\n- Config-parse removal of `k_first`.\n- Four new bench workloads (`mid-flock-200k`, `-500k`, `-1M`, plus the baseline runs).\n- A long comparison against the 16M Babylon.js reference.\n- A Future Work section.\n\nThe `radius_only` mode exists mainly as a gate denominator and a \"match the reference\" narrative. A lighter option is to gate on k_nearest vs. the slice 150 baseline at 200k, as the plan entry does, and defer `radius_only` and the 500k/1M probes. At minimum, the reference-comparison prose, the Future Work section and the headroom probe can be cut or moved to notes.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Technical Scope"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Coalescing premise is undermined by the outer-loop ordering",
+   "description": "The justification is coalescing across warp threads. The kernel keeps the outer loop over original-order `i`, so adjacent lanes are arbitrary agents. They scan different cells and read unrelated `kk` ranges, so lane-wise coalescing does not occur. The real gain is per-thread contiguity and cache-line reuse within a cell range.\n\nThe alternative the design rejects (outer loop over coherent slots) is the one that gives warp-level coherence. It was rejected only for the write-side scatter. That cost is not quantified, and the same inverse permutation already exists. The exit gate may therefore be missed, or met for reasons the design does not understand. The design should either state the actual expected mechanism (cache locality) and its expected size, or evaluate the coherent-outer-loop variant with a measured writeback cost.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Technical Decisions (Inverse permutation field)"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tier 3 NFR not restated; the gate is only relative",
+   "description": "The slice calls N=200k \"the Tier 3 target\". The plan defines Tier 3 as 250k on production-class hardware. The path touched is the force-tick hot path, which has TPS NFRs in the plan (the 60 TPS tier targets). The design states no absolute TPS target for 200k. It also does not specify the `mid-flock-200k` parameters (`query_radius`, `max_neighbors`, density, `subdivision_factor`). The relative gate (k_nearest \u2265 0.8 \u00d7 radius_only) is therefore not reproducible. It also does not constrain absolute performance. Restate the tier target and pin the workload definition.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17, 358"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Component Structure claims no files outside the GPU path change, contradicting scope",
+   "description": "\"Component Structure\" says no file outside the GPU compute path is touched. Scope item 7 and the \"Default `neighbor_mode` flip\" section change `migratory_server.config.ComputeConfig`, `migratory.bench.workload.Workload`, the `_NEIGHBOR_MODE_MAP`, the bench CLI `--neighbor-mode` and existing user configs. The architecture doc says the world server consumes only the tick contract. The config break (`k_first` now raises `ConfigurationError`) is an externally visible change in the server layer. The design also calls it \"no change to any external interface other than collapsing three modes to two\". Correct the Component Structure section and list these touchpoints.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:91, 67, 347-349"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Internal contradiction on `k_first` handling and sync semantics",
+   "description": "Scope item 7 and Technical Decisions remove `k_first` and raise an error. Mitigation Strategies says to keep `k_first` \"still parsed, with a deprecation warning\" until the final commit. The Development Approach does not say which applies per commit. Separately, State Management says `qd.sync()` is implicit at kernel boundaries in `graph=True` mode. `build_spatial_hash` then adds an explicit `qd.sync()` after the reindex. Decide on one, and justify any explicit per-tick host sync against the throughput gate.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433, 344, 146"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Failure modes for the new kernel and the config-break path are not enumerated",
+   "description": "The new kernel launch and the removal of `k_first` have no failure analysis. These cases are unaddressed:\n- A stale or invalid `_sorted_agent_ids` entry gives an out-of-bounds read in the reindex.\n- A kernel launch or JIT failure.\n- A user config still containing `k_first` is handled, but no log or test asserting the observable error is specified.\n- The heap now stores coherent slots, which has no runtime guard. The design itself admits that only the parity test would catch a slot/ID mix-up.\n\nPer project rules, each failure mode needs an observable signal and at least one test. The permutation check in the Verification Walkthrough (step 1) covers part of this. The rest should be stated.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Risk Assessment"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Dependency status mismatch with the plan",
+   "description": "The design says slice 150 is shipped on `main`. The plan still shows 150 as `[ ]`. The dependency direction (152 \u2192 150) is correct. Sync the plan status so sequencing is not misread.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:81"
+  }
+ ]
+}

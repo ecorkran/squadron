@@ -1,0 +1,24 @@
+{
+ "case": "squadron-401-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design Success Criterion 10 says that when `DUPLICATION_MAX_TOKENS` is passed, `duplicated_lines` is `tool_failed` \"and its other metrics are unchange",
+   "hits": {
+    "r01": [
+     5
+    ],
+    "r02": [
+     3
+    ],
+    "r04": [
+     3
+    ],
+    "r06": [
+     2
+    ]
+   }
+  }
+ ],
+ "note": "r01 #5 bundles two clauses but explicitly names the other-metrics assertion; r06 #2 bundles it with a RecursionError gap but names the clause separately. r03 and r05 did not raise it."
+}

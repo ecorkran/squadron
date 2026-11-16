@@ -1,0 +1,40 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "D3 refines the architecture, and the design says so",
+   "description": "The architecture's boundary is \"fork commit against merge commit\". D3 uses `M^1` against `M`, which excludes work merged to the target in the meantime. `fork_sha` and `tip_sha` are still stored, so a consumer that wants the slice's own commits can use them. The deviation is justified and visible.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#D3"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Some failure signals fall below the project's observability bar",
+   "description": "Two rows in the failure-mode table do not meet the rule that each failure be observable at WARNING or above.\n- **Line 164:** a `run_git` `None` (a timeout or a non-zero exit) during a reflog read or merge search is logged at INFO (\"INFO line per unresolved slice\"). The row covers two cases:\n  - A genuine \"no reflog\" answer is normal.\n  - A git failure or hang is an error.\n\n  Both end up as INFO, so a git failure is indistinguishable from an expired reflog in logs.\n- **Line 166:** concurrent `slice_ranges` writes are marked \"Signal: None\". A lost landing is silent. The row accepts this, citing the same limitation in 400. But in 403 a lost fast-forward landing may be unrecoverable once the reflog expires, so the cost of the silence is higher than in 400.\n\nFix: separate \"git call failed or timed out\" (WARNING) from \"reflog legitimately absent\" (INFO). For concurrent writes, either log a WARNING when the stored record changed between read and write, or state explicitly why the loss is acceptable for fast-forward landings.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164-166"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "401 coupling leaves the slice's scope open-ended",
+   "description": "The Prerequisites section says that if 401 lands before 403, \"403 updates whatever of 401's code reads `ctx.repo_root` for tools or environments\". The plan lists 401 before 403 in implementation order, so this is the likely case. The affected code is not named. `environment_root` is also a required field with no default, so any 401 code that builds an `AdapterContext` breaks on this change.\n\nThe design states that 401's complexity, duplication and coverage code resolves no tools, which suggests the touch-up is empty or near-empty. Pick one:\n- Name the files and the change if 401 lands first.\n- State that 401 resolves no tools or environments, and drop the open clause.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:74"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The design is heavier than the slice must deliver",
+   "description": "The slice adds about 14 modules, five commands or flags, a contract change to 400, a change to `git_utils`, and a comparability engine. The plan requires the three reports, so the reports are not the problem. These items can be cut or deferred:\n- **`report history` row content (line 298):** audit totals per commit with floor state, and review findings attached to the landing's `after_sha` row. The plan asks for \"over-time breakdowns\", which per-commit headline figures with break markers already give. Reviews and audits are already broken down in `report slice` and `report project`.\n- **The slice-attributed vs project-only review split in `report project`:** this restates D9 attribution logic that `report slice` already carries.\n- **Snapshot-level `exclusions_changed` and `limits_changed` (D7):** the plan names only tool, rule-set and environment changes. The Risks section admits both breaks cannot fire between two exports under the live config, so they fire only against older snapshots taken under other settings. Defer them unless a walkthrough step needs them. Walkthrough step 6 does use `limits_changed`, so keep that one and defer `exclusions_changed`.\n- **Prose that restates other documents or covers cases the slice does not have:** the `export-ignore` paragraph (squadron and context-forge set no such attribute) and the rejected-alternative text in D5.\n\nCutting the first two items removes about two modules' worth of assembly and tests without losing a plan criterion.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#Technical Scope"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The design depends on 402 landing first",
+   "description": "The design says 403 cannot be implemented before 402, which matches the plan's dependency `[400, 402]`. 402's `list_code_reviews` and `ReviewCategory` contracts are consumed under the terms 402 states. The dependency direction is correct.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#Prerequisites"
+  }
+ ]
+}

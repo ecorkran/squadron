@@ -1,0 +1,33 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkbox tasks, and 5C/6C can make notes-only commits",
+   "description": "(same pattern at lines 94, 117, 126 and 134)\n\nThe commit points are written as `- [ ] **Task 2C: Commit** \u2014 ...` checkboxes. The convention is a plain `**Commit**:` line that is never a checkbox. As written, the task-checker can tick them, and an implementer can read them as work items.\n\nTasks 5C and 6C are also conditional (\"only if Task N changed files\"). Project rules say never to make a commit that only adds notes. Task 5 is mostly a verification run. When it changes only the slice design's \"Parity differences\" note, 5C is a notes-only commit. 6C is the same for a README line.\n\nSuggested change:\n- Convert 2C, 3C and 4C to plain `**Commit**: feat(core): ...` lines.\n- Drop 5C and 6C.\n- Put one `**Commit**:` line after Task 6. It captures any parity-fix code and tests, the notes, and the docs together.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Lint is not part of the per-task success criteria before the commits",
+   "description": "(also lines 82 and 104; the first `pnpm lint` is at line 130, after the commits at 71, 94 and 117)\n\nTasks 2, 3 and 4 gate only on `pnpm -r build` and tests. `pnpm lint` first runs in Task 6, after three commits have already been made. The project's exception-handling lint rules matter most in Task 3, which wraps `fs` errors. A lint failure found at Task 6 forces a fix after the commit, and project policy is to avoid follow-up fixup commits. Add `pnpm lint` (and typecheck, if it is separate from build) to the Success lines of Tasks 2T, 3T and 4T, before their commits.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:57"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "\"Several\" real slice designs in Task 4T is undefined",
+   "description": "A junior implementer has to pick \"several files that pass the bash script today\". That requires running the script first, and the task doesn't say to. Name how many files to use, or say to choose them by running `./project-documents/ai-project-guide/scripts/validate-slice-design` and keeping those that print `PASS`. The 214 design is already named and should be one of them.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Tasks 0, 1 and 6 are small enough to fold into neighbours",
+   "description": "Task 1 is a one-line constant that only Task 4 uses. It could be folded into Task 4, or kept where it is. Task 6's README check and full-suite run could sit inside Task 5's closing steps, along with the single final commit suggested above. This is optional. The task count (7 numbered tasks plus 5 commit lines) is acceptable for a slice of this size.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41"
+  }
+ ]
+}

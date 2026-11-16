@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "Commit markers appear as `- [ ] Commit: ...` sub-items at lines 105, 135, 179, 197, 212 and 224. The required form is a plain `**Commit**:` line, never a checkbox. A checkbox can be checked off by the task-checker, which makes the commit look like a work item. There are also six commits for a small slice. The one after Task 7 sits on a signal nothing consumes yet. The ones after Tasks 11 and 12 are test-only. Convert them to plain `**Commit**:` lines and keep them at working, tested points. Reasonable points are after Task 5 (parser), after Task 10 (wiring and CLI), and after Task 12 (regression tests). Drop the rest.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Editing the shared fixture contradicts the slice's regression criterion and widens the blast radius",
+   "description": "Slice success criterion (slice design lines 280-282) says `[ ]`/`[x]`/`[X]` behavior is proven byte-identical \"by the existing `sample-slice-plan.md` fixture tests continuing to pass unchanged.\"\n- Task 1 appends two entries to that fixture.\n- Task 5 (lines 95-98) then rewrites the existing `totalSlices`/`completedSlices` assertions from 5/3 to 7/5.\n- Those edits mean the existing tests do not pass unchanged.\n- Any other test that consumes this fixture and counts entries is exposed. Only Task 13's full run would catch that, after the Task 5 commit.\n\nThe slice design explicitly allows \"or add a sibling fixture\" (slice design line 222). A sibling fixture such as `sample-slice-plan-deprecated.md` keeps the existing assertions and the \"byte-identical\" proof intact. It also removes the need for the separate regression test added in Task 5 (lines 99-102), which duplicates the existing tests.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:36-50"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`arch-status-vs-plans` has no test, though the success criterion names it",
+   "description": "The slice criterion (slice design lines 277-279) says both `plan-status-vs-entries` and `arch-status-vs-plans` must not false-positive. The slice design places both rules at `ConsistencyChecker.ts:726,749,828,849`. Task 12 covers only `plan-status-vs-entries`, and the Task 13 walkthrough also checks only `cf check` on a plan. Either add one `arch-status-vs-plans` case to Task 12, or state in the task that it is covered transitively and why. As written, that half of the criterion is unmet.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:199-212"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 9's `derivedStatus` initializer change is not in the slice design and has no test",
+   "description": "Decision 4 calls for \"the same one-line addition\" to the inline `deriveEntryStatus()` call. The extra edit to the line-91 initializer, which adds a nested ternary, traces to no success criterion. Task 10 has no case that makes `detectDocuments` throw, so the new branch is untested. The task's own text admits the try block already resolves the normal case. The initializer is also a fallback path, and the project rules ask that failure paths be observable and tested. Either drop this sub-item, or keep it and add a test that forces the filesystem-error path and asserts `deprecated`.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:155-163"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task list is heavier than the change: over-granular and restates the design's code",
+   "description": "Tasks 2, 3 and 4 are three small edits to one file (`slicePlanParser.ts`) and one logical change, with no tests between them. Merge them into one task. Tasks 2-4, 6, 8 and 9 also repeat the expression-level code that Decisions 1-4 of the slice design already give, plus \"~line N\" references that will go stale. Replace those with a pointer to the decision. Smaller trims:\n- The third bullet in Task 7 (lines 131-132) only re-runs existing tests and is not a new test.\n- The complementary `in-progress` case in Task 12 (lines 205-209) guards a behavior no success criterion names.\n- Task 1's note (lines 46-50) is rationale rather than a step.\n\nWith these changes the list drops from 13 tasks to roughly 8-9 without losing any criterion coverage.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:52-83"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 8 is separated from its test",
+   "description": "The order is Task 8 (navigator wiring), Task 9 (CLI wiring), Task 10 (tests for Task 9), then Task 11 (test for Task 8). That breaks the test-with pattern for Task 8. Reordering to 8, 11, 9, 10 fixes it. There are no dependency problems or cycles. Task 11's stop-and-report instruction on failure is reasonable.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:137-197"
+  }
+ ]
+}

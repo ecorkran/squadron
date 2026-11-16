@@ -1,0 +1,40 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Login and logout paths have no bound or failure handling before or outside `handle.wait()`",
+   "description": "What is missing:\n- **Login before `wait()`:** The login data flow (line 84) and D7 (lines 103\u2013111) bound only `handle.wait()` with `codex.login_timeout_s`. Nothing bounds or handles three steps that come before it: `AsyncCodex(config)` startup, `initialize`, and the `login_chatgpt()` / `login_chatgpt_device_code()` call. A runtime that hangs while starting during `sq auth login` therefore hangs with no limit.\n- **Logout:** `sq auth logout` (lines 150, 155) also starts the runtime and calls `AsyncCodex.logout()`. Logout has no timeout key, no row in any failure table, and no stated behavior if the runtime fails to start or exits mid-call.\n- **Login without the extra:** The table at lines 116\u2013135 places the \"openai_codex not installed\" error only at `create_agent`. The design never says where `login.py` turns an `ImportError` into the install hint during `sq auth login` / `logout`. Success Criteria (line 190, \"any `openai-oauth` use exits with an error containing the exact install command\") assumes this happens.\n\nWhy it matters: the project's Failure-Mode Enumeration rule requires an explicit answer for hang, timeout and peer-disconnect on every new I/O path. That rule and the Success Criteria line above are left unmet for these paths.\n\nFix: add a \"Failure Modes \u2014 Auth Commands\" table covering:\n- runtime start for login and logout\n- the extra-missing case\n- logout hang or failure, with a bound. `codex.account_timeout_s` can be reused rather than adding a fourth key.\n\nAdd one test per row.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Agent state after a turn timeout is not spelled out",
+   "description": "The transport-closed row (line 129) explicitly clears `_codex` / `_thread` so the dead client is not reused. The timeout and cancellation rows (lines 125, 128) say `shutdown()` runs in `finally`, but they do not say the agent's state is reset. Line 82 says the client is reused across messages, so after a timeout a later `handle_message` could try to use a client that has been shut down. Say that the timeout path resets agent state the same way the transport-closed path does.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-129"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Doctor reads `auth.json` presence itself instead of asking the strategy",
+   "description": "D9 (line 112) carefully routes the doctor row's extra hint through `ExtraRequirement` and its runtime source through `resolve_codex_runtime()`, so each has one source. The login-state column (line 172), however, checks for `auth.json` itself. That repeats `OAuthFileStrategy.is_valid` / `active_source`. It will also drift if the step-0 outcome on the `OPENAI_API_KEY` fallback (line 232) changes what \"authenticated\" means. Have the doctor row ask the resolved strategy, which still starts no subprocess.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:172"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Upper version bound is both written and called undecided",
+   "description": "D1 writes `openai-codex>=0.159.3,<1`. Special Considerations (line 231) says the cap is not decided. Pick one and state it. For a 0.x SDK, `<1` does not guard against breaking minor releases. The one test against the real types (line 200) is the actual protection here, and that is enough.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Prerequisite added beyond the slice-plan entry",
+   "description": "The plan entry lists `Dependencies: [128]`. The design also depends on slice 931 (`AgentConfig.effort`, `applies_effort`, `core/usage.py`). This is correct and needed for the effort and usage scope the plan gives this slice. The slice plan should add 931 to the entry so the two documents match.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6"
+  }
+ ]
+}

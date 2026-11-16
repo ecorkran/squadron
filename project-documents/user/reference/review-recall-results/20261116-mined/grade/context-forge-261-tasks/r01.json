@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox items instead of plain `**Commit**:` lines",
+   "description": "Every commit point is written as a checklist item: `- [ ] **Task 2C: Commit** \u2014 ...`. The same form appears at lines 105, 131, 148, 178, 202, 225, 251, 257 and 269. Commit markers should be plain lines (`**Commit**: feat(core): ...`). As checkboxes, they look like work items: the task-checker will try to tick them, and ticking them adds churn to the commit itself. The commits are in good places (each comes after a tested implementation group), so only the format needs to change.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 15C would be a commit that only adds notes",
+   "description": "Task 15 runs checks and writes down walkthrough results. It also says \"Any defect is fixed in its own commit.\" That leaves Task 15C (`docs: record slice 261 verification walkthrough`) holding nothing except the recorded results and check-offs. The project rules forbid this: \"Never make a commit that only checks boxes or only adds notes.\" Fix: drop 15C, and put the recorded walkthrough results into the commit for the last defect fix. If there are no fixes, put them into the slice's final real commit. Separately, Task 14 (one README row) does not need its own commit at 14C; it can be folded into 13C.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:259-269"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Renderer tests skip most outcome kinds that the success criteria list",
+   "description": "The Technical Requirements ask for tests of `renderAdoptionFacts` across \"every outcome\". Task 8T tests brownfield, adoption-in-progress and `NOT_EVALUATED` only. It does not test `greenfield`, `already-planned` or `adoption-closed`. Task 8 still requires an exhaustive `never` switch, so those branches exist in the code with no test behind them. Fix: add one `it.each` case for each remaining kind, asserting a non-empty outcome bullet. Alternatively, if the renderer should only ever see selected outcomes, narrow its input type so those branches don't exist.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "No automated check that `context_build` returns `AdoptionError` as an error result",
+   "description": "The success criterion says `context_build` returns the missing-profile error as an error. Task 12 (case 12) tests the rejection only at the core level, and walkthrough step 4 covers only `cf build`. The existing `catch` \u2192 `errorResult` in `context_build` will most likely handle this already. Still, one assertion in Task 11's `contextTools.test.ts` would cover the MCP side: mock the pipeline to reject with `AdoptionError` and expect `isError: true` plus the message.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:210"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`readAdoptionState` throws a fourth kind of `AdoptionError` that the design doesn't mention",
+   "description": "D9 lists three `AdoptionError` cases. Task 2 adds a fourth: a hand-edited state value that isn't in `ADOPTION_STATES`. This is consistent with \"fail explicitly\" and costs little, but it goes beyond the design. Keep it, and record it as a deliberate addition in the task notes.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:67"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The performance target is covered by cap tests; no load test is needed",
+   "description": "D2's sub-second detection target is a bound on a single build, not a load NFR. D2 also says explicitly that the tests assert the caps, not timings. Task 3T covers both caps: early exit at 2000 lines and `AdoptionError` at `MAX_WALK_ENTRIES`. So no `tests/load/` task is needed, and no CI gating task either.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  }
+ ]
+}

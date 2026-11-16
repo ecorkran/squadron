@@ -1,0 +1,96 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Output path for the concept contradicts the layout the document claims to follow",
+   "description": "The Outputs section writes `project-documents/user/project-guides/000-concept.{project}.md`. The Overview and Design Goals say everything lands in `project-documents/user/` with \"correct\" conventions. Other documents in the repo place concepts in different directories. For example, `user/archive/000-concept.squadron.md` is in `archive/`, and the migratory worktrees use `user/project-guides/`. The document never says which of these is the canonical location or whether `cf` introspection resolves it. It also never says what the skill does if a concept already exists at that path. Capability 2's \"Optional\" concept input has the same unstated path. The \"User-Provided Concept\" section is sacred, so overwrite behavior needs a rule.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Outputs"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"No 000-concept document\" premise and overlap with existing concept-generation work are unverified",
+   "description": "Current State says squadron has no `000-concept` document. My glob of the main repo found `user/archive/000-concept.squadron.md`. It also found slice `363-slice.concept-generation.md`, with matching tasks and review files. The slice appears to cover concept generation, which is Capability 1's main output. The document never mentions slice 363 or says how the two relate. Either the premise is stale or the scope overlaps, and both need resolving before slice design. I could not confirm whether 363 existed at this document's authoring date.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Current-State"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The 940\u2013949 index allocation is racy and overflows into other bands",
+   "description": "Generated documents \"draw from\" 940\u2013949, \"incrementing per run.\" Three slots are already used, and the document sanctions overflow into \"remaining slots in the 900 band.\" The 900 band is also used for slices, fixes and tech-debt work. Nothing says how the next free index is chosen. It does not say who owns that logic, since the skill is markdown instructions and no CLI is involved. It does not say what happens when two runs or worktrees pick the same index. It does not say how an overflowing index avoids colliding with 9xx slice indices.\n- A convention the document admits will need re-cutting is being baked into every generated artifact filename.\n- The \"no change to file-naming-conventions.md\" claim is hollow if the reserved range cannot hold the output.\n- Fix: either pick a defined index mechanism (for example, the existing `cf` index tooling) or state the collision rule.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output-Conventions"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Capability 2 output filename contradicts the one-document-per-run index convention",
+   "description": "Capability 2 names its output `{index}-analysis.overview.md` and says multiple documents get `{index}-analysis.overview.{topic}.md`. Output Conventions says each run increments the index, like independent samples. These conflict on re-runs. When the plan changes, the overview is a revision of the same document, not an independent sample, so each regeneration consumes a scarce 940-band index. Regeneration is the normal lifecycle for a status-bearing document, and the Status and Roadmap fields guarantee staleness. The document does not say whether re-running overwrites, versions or creates a new index.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The client document's \"derive, never invent\" guarantee has no mechanism, and the Benefits and Roadmap fields contradict it",
+   "description": "The Design Goals, Translation rules and Document field schema sections make two incompatible promises. The first is \"Every claim traces to an input artifact\" and \"not a place where new claims appear.\" The second is a schema where Benefits is \"Derived from initiative descriptions,\" Roadmap is \"dependency-driven ordering,\" and features are rewritten as outcomes. The example \"automated review that converges without human babysitting\" is an invented outcome claim in client-facing text. The document gives no traceability mechanism, such as provenance annotations, a source-map appendix or a PM review gate before the file is written. Capability 1 gets a review gate for initiative-plan candidates, and Capability 2 has no equivalent despite external audiences. \"Status is honest\" is also asserted with no check. The Status field depends on frontmatter statuses that the document itself says are unreliable for retroactively generated plans. There is also no handling for an initiative plan whose statuses are stale.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Translation-rules"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Capability 1 \"read discipline\" and the interview design are under-specified for the actual hard part",
+   "description": "The skill must \"grep for the needed section\" of a large JSON file and never load it whole. The document does not say how. `knowledge-graph.json` is typically a single-line or minified JSON blob, and line-oriented grep cannot extract `layers[]` or file-level nodes from it. There is no `jq`-style tool in the squadron stack. Nothing says whether a helper script is shipped, which contradicts \"no installer, manifest, or CLI change\" if one is needed. If the file is minified, the stated mechanism does not work. The document also leaves the following unspecified:\n- Large-graph behavior. A graph with thousands of file nodes cannot be summarized in-context without a defined sampling or aggregation rule for \"complexity hotspots\" and \"initiative candidates.\"\n- The algorithm for \"layer boundaries and complexity clustering\" initiative candidates. This is the step 3 magic-happens case.\n- The data is a third-party schema that is only described as \"from the plugin's own reference,\" with no schema version pinning.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The-understand-anything-Output-Contract"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Upstream contract is unversioned and the failure mode on schema drift is unaddressed",
+   "description": "Squadron reads a third-party JSON schema (field names, `tour[]` presence, `meta.json` fields, `.trash-<epoch>` naming) from a plugin the document describes as \"actively developed (v2.8.1).\" The document does not say which versions are supported or how the skill detects a version. It also does not say what happens when `tour[]` is absent, `gitCommitHash` is missing, or the tour was produced by an older release. \"Graph is an input, not a dependency\" is aspirational given this coupling. Fail-explicit behavior on a missing or renamed field is not specified, and project conventions forbid silent fallbacks. The `.trash-*` gitignore entry depends on an upstream implementation detail, issue #301, that can change. The document also never says how the skill locates the \"installed plugin\" for the precondition check (user scope versus project scope).",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The-understand-anything-Output-Contract"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Staleness check cannot be done reliably and provenance mechanism is vague",
+   "description": "Staleness is defined as `gitCommitHash` differing from `HEAD`, reported with \"commit distance.\" Several cases are unhandled:\n- Hash not reachable after a rebase or squash.\n- Shallow clones.\n- Analyses run on a dirty tree.\n- Whether `.understand-anything/` being tracked means `meta.json` itself changes `HEAD` after the analysis commit.\n\nThe last case is circular. The recommended practice of tracking `meta.json` means committing the analysis creates a new HEAD, so the graph is always at least one commit behind. A \"typo commit\" versus a structural change is also not distinguished, even though the document cites that distinction as the reason not to block. The stale-graph provenance is meant to be \"in the generated document's provenance,\" but the document defines no provenance section or frontmatter field in either output. A frontmatter field would also need to pass the enum-validating gate the document is careful about.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Flow"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Gitignore management is scope creep with an unsafe default",
+   "description": "Mutating the user's `.gitignore` from an analysis skill is a side effect unrelated to producing documents. It is also undertested territory (existing file without trailing newline, CRLF, an existing broader `.understand-anything/` rule, ignore rules in nested directories). The architecture takes a position that tracking `knowledge-graph.json` is desirable, but the graph is \"large.\" Committing a multi-megabyte, frequently regenerated JSON file to every client repo is a significant repo-bloat decision made for the user. Both choices are justified only by one sentence (\"project knowledge\"). Cut or defer this: report the entry that is missing and let the PM add it. If kept, state the tracked-graph size tradeoff.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Working-tree-hygiene"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Capability 2 is not coupled to Capability 1; the bundling and the shared architecture are not justified",
+   "description": "The Overview admits \"Two capabilities share that shape and nothing else.\" They have different inputs, dependencies, delivery surfaces (`/sq:analysis understand` versus `/sq:overview`), and risk profiles. They also differ in how well specified they are, with Capability 2 close to a prompt template. Combining them under one initiative and one architecture means slices cannot be sequenced or cancelled independently, and the combined document inflates the shared \"Output Conventions\" section. Splitting into two architecture documents, or at minimum stating that the slice plan treats them independently, would be more honest. The Dependencies section also lists `[100]` \"for any command surface\" while Delivery says \"no installer, manifest, or CLI change,\" which is inconsistent.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Overview"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Dispatcher routing and Delivery claim \"three edits\" without handling skill discovery",
+   "description": "Delivery says adding `understand` needs only a pack file plus three prose edits in `commands/sq/analysis.md`. Routing by editing a markdown dispatcher with a hard-coded \"valid-skills line\" means the skill list lives in three places in one file. This scatters the same value, which project conventions prohibit. Per the 340 mechanism, an installed `analysis` pack that predates the new file will not get it unless the pack is reinstalled. Upgrade behavior and the pack versioning story are not covered. The name `understand` also invites confusion with upstream `/understand` in autocompletion, despite the \"no collision\" claim. Users will type `/sq:analysis understand` expecting it to run the graph build. The precondition error text is the only mitigation, and it is unspecified.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Delivery"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Skills are non-deterministic LLM prompts and the architecture has no verification story",
+   "description": "Both capabilities are prompt-defined transforms, but the document specifies no testing or acceptance approach beyond \"the tested path\" for a missing concept. Several key properties are asserted but unverifiable as written:\n- Never ask structural questions.\n- Never invent intent.\n- Strip internal vocabulary, so no slice indices appear in the overview.\n- Use only enum status values.\n\nSome of these are mechanically checkable, such as a lint that rejects the overview if it matches slice-index or phase patterns, or a frontmatter gate run on generated output. The document names none. It also does not say where the \"User-Provided Concept: verbatim\" guarantee is enforced when a model drafts the file.",
+   "location": "unverified"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Prior art retained but left dangling",
+   "description": "`analyze-codebase-prompt.md` is retained as a \"low-cost alternative path,\" but the document defines no way to choose between it and the graph path. It is deferred to an Open Question. The Open Questions also carry the interview wording, which is fine for slice design. Reuse of `[INFERRED]` is the more load-bearing item, because it is the only proposed mechanism for the \"never fabricate intent\" and \"attribute structural claims to the graph\" goals in step 5. Deciding whether to adopt it can be done in the architecture.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output-Conventions"
+  }
+ ]
+}

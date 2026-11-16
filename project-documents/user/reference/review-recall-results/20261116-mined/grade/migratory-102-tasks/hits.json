@@ -1,0 +1,39 @@
+{
+ "case": "migratory-102-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 2.1 adds two required fields to `BehavioralProfile`, and Task 2.2 updates test call sites only (\"search for `BehavioralProfile(` across `tests/`\"",
+   "hits": {
+    "r04": [
+     0
+    ],
+    "r06": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Slice design Technical Requirement 1: \"both forces are vectorized within each agent's neighborhood\". No task checks or enforces it (the tasks' sketche",
+   "hits": {
+    "r02": [
+     5
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     5
+    ],
+    "r05": [
+     2
+    ],
+    "r06": [
+     4
+    ]
+   }
+  }
+ ],
+ "note": "No borderline calls; r01 has no finding on either flaw. F1 hits both name build_profiles/ProfileConfig in migratory_server as uncovered by tasks."
+}

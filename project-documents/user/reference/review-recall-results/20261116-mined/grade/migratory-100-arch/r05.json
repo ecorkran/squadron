@@ -1,0 +1,145 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Stated scale target is unreachable with the planned neighbor strategy",
+   "description": "Line 33 requires \"tens of thousands of agents at full behavioral fidelity on a single CPU process.\" The only neighbor strategy that exists in the plan is brute force. The slice 100 design computes all pairwise distances in `build()` (`100-slice.agent-state-and-tick-function.md:173`). At N = 10,000 that is a 10\u2078-entry matrix, about 800 MB in float64, rebuilt every tick. At 20 Hz that is roughly 16 GB/s of writes for that one matrix.\n\nThe mechanism that would make the target reachable, a spatial hash, is slice 105, sequenced last (`100-slices.behavior-engine.md:34`). The world-server initiative depends only on (100) (`001-initiative-plan.migratory.md`, entry 300). So the server can ship on O(N\u00b2) queries at the 10,000-entity capacity in the example config of `303-slice.behavior-engine-integration.md:141`. The 300-arch says the 10K\u201350K range is \"comfortable \u2026 with NumPy-vectorized spatial hashing\" (`300-arch.worldserver-foundation.md:96`), but that work is not on the critical path.\n\nThe \"Current State\" evidence (line 56, 2000+ agents at 120fps) is a rendering benchmark with no neighbor queries, and it is one-fifth of the 10K floor. Either lower the goal to what brute force supports and say so, or move a grid or a benchmarked SciPy `cKDTree` into the first behavioral slice, and gate the scale claim on a 10K neighbor-query benchmark.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#design-goals"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Spatial query contract cannot be vectorized or replaced without changing the engine",
+   "description": "The \"pluggable spatial queries\" principle (line 45) says a grid or GPU index can replace brute force \"without changing the engine.\" The protocol in the slice design does not support that:\n\n- `query_radius(position, radius)` takes one position. The data flow calls it \"for each active agent\" (`100-slice\u2026md:88`). That is N Python-level calls per tick, which the same slice forbids (`:247`) and line 99 forbids for GPU compatibility. At 20 Hz the budget is 50 ms.\n- `build(positions)` takes no maximum query radius and no world bounds. Radius is per profile (`:237`), so a grid cannot size its cells, and a hashed grid needs bounds. Slice 105 will change the protocol, not only swap an implementation.\n- `BulkForce` receives `neighbor_lists: list[NDArray]` (`:145`). A ragged list of arrays is neither array-in/array-out nor a GPU-dispatchable shape.\n- The arch never names a neighbor-result representation, such as CSR offsets plus flat indices produced in one batched call for the active set. That is the hard part of vectorized boids, and the document leaves it out.\n- Boundary behavior at world bounds (walls, wrap, clamp) appears nowhere. The slice's drift tests run unbounded.\n\nDefine the neighbor contract as one batched call before 102\u2013105 build on the current shape. It should take bounds and maximum radius, and return a batched neighbor structure.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "State schema and force inputs cannot express the anticipated archetypes",
+   "description": "Line 79 says \"the same force-accumulation loop handles all archetypes. The profiles just change which forces dominate.\" The anticipated slices need state and inputs the design does not provide:\n\n- Herding leadership (\"experienced individuals,\" slice 102) needs per-agent leader or experience state.\n- Predator target selection (103) needs a persistent per-agent current target. That is a decision with state, which contradicts \"Forces, not decisions\" (line 41).\n- Territorial home range (104) needs a home center per agent or per profile.\n- Migration waypoints and energy (107) need waypoint progress and fatigue.\n- Environment context (304) and stigmergic deposits (106) need an input and an output channel.\n\n`BulkForce` inputs are fixed to state, neighbor lists, profiles, and active indices (`:141\u2013148`). `AgentState` is fixed to positions, velocities, accelerations, and profile indices (`:96`). Each new force kind therefore changes the protocol and the state container, which EntityManager, the serializer (`300-arch\u2026md:80`), and logging all depend on. Decide now how per-agent state columns are declared and how force inputs are extended. Otherwise slices 102\u2013107 each reopen the engine's core interface.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+  },
+  {
+   "i": 3,
+   "severity": "FAIL",
+   "title": "Tick contract contradicts itself and the world-server architecture",
+   "description": "- This document says the engine is \"stateless between ticks \u2026 feed in state, get back state\" and \"returns the updated state array\" (lines 68\u201370). Slice 100 specifies `-> None` with in-place mutation (`:91`, `:180\u2013187`).\n- The 300-arch depends on the transactional version: \"Tick as transaction \u2026 read current state, compute next state, commit\" (`300-arch\u2026md:39`), \"pure tick functions\" as a distribution requirement (`:35`), and a separate commit step (`:64`). With in-place mutation, step 3 has already committed. The commit is a no-op, and a failure partway through leaves partly integrated state (`:90\u201391` integrates velocity and then position as separate steps).\n- The arch calls the engine stateless, but `SpatialQuery` holds an index between `build()` and `query_radius()` (`:158\u2013170`), and `SimulationManager` holds dt and forces (`303-slice\u2026md:118\u2013122`).\n- Line 81 lists \"register/remove agents\" as an engine operation. `300-arch\u2026md:70` says the engine \"does not manage the entity lifecycle,\" and `:88` puts spawn and remove on EntityManager.\n\nPick one contract: pure with new arrays, or in-place with an explicit commit and a failure rule. Name the array owner and remove register/remove from the engine. A pure contract conflicts with the no-dynamic-allocation rule (line 99) unless scratch buffers are preallocated, so state which trade is being made.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Variable-rate ticking is claimed to need no engine changes, but the signature cannot express it",
+   "description": "Slice 100 says subset evaluation supports variable-rate ticking \"all without any engine changes later\" (`100-slice\u2026md:27`). The tick signature takes one scalar `dt` for the whole call (`:184`). An agent evaluated every fourth tick needs 4\u00b7dt, or its elapsed time, and the signature cannot carry that for a mixed-rate population in one call.\n\nNon-evaluated agents also keep stale positions and velocities. Line 65 says only that they are \"still visible to its neighbors,\" with no statement of how stale. The 300-arch says reduced-rate agents use \"interpolated positions between evaluations\" (`300-arch\u2026md:105`) and assigns that to no one. Put per-agent elapsed time or dt in the signature now, where it costs nothing for the all-agents default, and define staleness semantics. Otherwise remove the \"no engine changes\" claim.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Multi-resolution simulation has no owner in the scheduled work",
+   "description": "Line 97 says \"the world server will implement multi-resolution strategies.\" The 300-arch describes three tiers (`300-arch\u2026md:102\u2013106`) but has no slice for them among its seven anticipated slices (`:118\u2013130`). The initiative plan puts multi-resolution under 620 Distribution & Scaling, which is \"deliberately deferred\" and \"need not be designed proactively\" (`001-initiative-plan.migratory.md:65\u201366, 97\u201399`). Aggregation support (`100-slices\u2026md:49`, slice 108) waits on a \"World Server multi-resolution implementation\" that nobody has scheduled. Assign one owner, and make the engine's dependency on it explicit.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Environment interface is undefined and conflicts with the hot-loop rules",
+   "description": "Line 47 says the engine queries environment through a \"read-only interface,\" and line 64 says the tick receives \"environmental context.\" No such interface is defined. The slice 100 signature has no environment argument (`100-slice\u2026md:180\u2013187`), and 303 defers it to 304 (`303-slice\u2026md:313`).\n\nIf the environment is queried per agent inside the force loop, that is a callback per agent, which line 99 prohibits. The engine needs sampled environment fields passed as arrays aligned to agent positions (for example, distance to threat or corridor direction), and the arch should say so.\n\nThe dependency direction is also unstated. The 300-arch says the server \"provides\" environment queries to the engine (`300-arch\u2026md:72`). Under the dependency-inversion rule in `review-code.md`, the consumer should define the Protocol it depends on. The arch should name the owning package.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Swarm intelligence cannot be produced under the read-only environment contract",
+   "description": "Line 47 makes the environment read-only. Stigmergy (line 77) requires agents to write trail markers, and the tick has no output channel for deposits. Either reserve a deposit output in the contract now, or decide explicitly that swarm behavior waits for the Environment Layer. The slice plan defers swarm for exactly this reason (`100-slices\u2026md:41`), and this document does not acknowledge it.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Determinism is a design goal with no equality contract, and the planned acceptance test cannot pass as written",
+   "description": "Line 31 says the same state and inputs produce the same outputs, and that this lets regions agree on shared boundary state. Slice 105 requires output to be \"identical before and after the swap\" (`100-slices\u2026md:34`). Swapping brute force for a grid changes neighbor enumeration order. Force sums are floating-point and order-dependent, so bitwise equality fails unless neighbors have a canonical order and accumulation order is fixed. The arch does not mention ordering.\n\nNumPy does not document bit-identical reductions across versions or CPU dispatch paths, so cross-region agreement needs a stated tier: bitwise on one host, tolerance across hosts, or fixed-order accumulation. The arch also does not say who owns RNG state. Any randomness (spawn placement, wander or jitter in 102+) breaks replay unless it is seeded and logged, and `300-arch\u2026md:92` relies on that. Define the equality tiers, the canonical neighbor order, and RNG ownership.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#design-goals"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Failure modes are unaddressed, and several are silent",
+   "description": "The arch has no failure-mode discussion. Concrete cases in the planned design:\n\n- **Coincident agents:** separation and attraction forces divide by distance. Two agents at identical positions produce inf or NaN, which propagates silently into positions. Pack convergence (103) and home-range attraction (104) make coincidence likely, and nothing checks for it.\n- **Duplicate indices:** `state.velocities[active_indices] += \u2026` (`100-slice\u2026md:215`) applies each duplicated index once, not once per occurrence. The result is silently wrong. Negative indices wrap silently.\n- **Mask ambiguity:** line 49 allows \"index array or mask,\" but one parameter receives both. An integer 0/1 mask is read as indices. The mask `[1, 0, 1, 0]`, meaning agents 0 and 2 are active, selects agents 1, 0, 1, 0 instead.\n- **Out-of-range profile index or memory exhaustion in `build()`:** the tick fails partway with no defined state.\n\nThe project rules require explicit failure over silent fallback. Validate index arrays and profile indices and check finiteness at tick entry. Define the NaN policy (raise and leave state unchanged, or quarantine the agent), and state the failure behavior in the tick contract.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Synchronous CPU-bound tick is not specified against the asyncio server",
+   "description": "Line 21 assigns timing and yielding to the world server, but the arch never states that `tick()` is synchronous, CPU-bound, and has a budget. The 300-arch runs it synchronously on the event loop and yields between ticks (`300-arch\u2026md:78`). One engine call is therefore an uninterrupted stall for WebSocket I/O for the whole tick.\n\nThe stated escape hatch is to offload to a thread, because NumPy releases the GIL (`300-arch\u2026md:78`; concept line 84). That depends on the hot path releasing the GIL. The planned path does not: the per-agent `query_radius` loop and per-force Python iteration hold it. Until the neighbor interface is batched (see the spatial finding above), the thread escape hatch is not available. State the blocking contract and per-tick budget, and measure the GIL behavior of the vectorized path before naming it as the upgrade.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "\"No dynamic allocation\" and vectorization are not achieved by the planned NumPy design, and the SciPy option is not evaluated",
+   "description": "Line 99 requires no dynamic allocation in the hot loop. The slice design's `BulkForce` returns a new zero-filled N\u00d72 array per force per call (`100-slice\u2026md:148\u2013152`), and each NumPy expression allocates temporaries. The arch does not say whether preallocated `out=` buffers will be used, which is the only way to meet the rule in NumPy.\n\nFull-population output also means a subset tick still pays O(N) per force, which undercuts the rationale for subset evaluation (`:27`). On indexing, the concept names SciPy KD-trees as \"a natural fit\" (concept line 83), and this document ignores them. Slice 105 plans a hand-built NumPy grid without evaluating `scipy.spatial.cKDTree`, which is C-backed and supports batched radius queries. A hand-rolled grid may still be right, but that decision needs to be recorded. State the scratch-buffer policy, return active-sized outputs, and record the SciPy evaluation as a decision.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Internal layout leaks across the boundary, and profile-index ownership is split",
+   "description": "Line 35 says internal representation is \"hidden behind these interfaces and replaceable without affecting consumers.\" In practice the SoA layout crosses the boundary. The 300-arch serializes raw float buffers with an array layout descriptor (`300-arch\u2026md:80`). Slice 303 passes `entity_manager.state` straight into the engine and reads the private `_profile_list` (`303-slice\u2026md:294, 307`).\n\nThe profile index mapping is held by both EntityManager and SimulationManager and kept aligned by convention (`303-slice\u2026md:388`). Precision is also split: line 95 says the engine should \"provide an efficient conversion path at the serialization boundary,\" while slice 100 places conversion in the world server (`100-slice\u2026md:100`). Give the profile table one owner, expose state through a read-only view with a documented layout, and assign conversion to one side.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Profile representation cannot express pairwise interactions and breaks on schema evolution",
+   "description": "Line 43 defines a profile as \"a set of named weights, ranges, and thresholds.\" Slice 100 implements a typed dataclass with no defaults (`100-slice\u2026md:118`), and 303 says each later slice adds fields (`303-slice\u2026md:315`). Under the fail-explicit rule, every existing profile config must be updated whenever a field is added, or the server refuses to start. That conflicts with \"adding a new species means defining a new profile\" (line 29).\n\nFlight response and predator-prey (lines 91, 103) also need relations between profiles, such as \"prey flees predator.\" A per-profile record cannot hold that. The arch calls parameter-space design \"a design challenge\" (line 89) and leaves it open, but slice 103 is blocked on it. Decide the representation now: a versioned parameter table resolved to column indices at load, plus a profile-pair interaction table. The named-to-index mapping should happen once at load so the hot loop has no string lookups.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Aggregate entities cannot pass through an interface that returns agent indices",
+   "description": "Line 97 says the world server presents aggregates \"through the same neighbor query interface,\" and slice 108 repeats it (`100-slices\u2026md:49`). The current protocol returns `NDArray[np.intp]`, indices into the agent arrays (`100-slice\u2026md:165\u2013167`). An aggregate has no agent index. It has a center, heading, dispersion, and count, and its forces are count-weighted and dispersion-based. `BulkForce` cannot express that, because neighbor entries carry no weight or source type. Specify a neighbor result that tags source and carries weight, or pass aggregates as a separate input. Decide before 108, and remove the implication in line 97 until then.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "Herding depends on corridor data owned by a later initiative, but slice 102 declares only (101)",
+   "description": "Lines 74 and 109 require herding movement \"along travel corridors.\" Corridors are an environment feature. The concept calls them \"corridor effects\" (concept line 71), and the initiative plan assigns them to the Environment Layer (`001-initiative-plan.migratory.md`, entry 500). `100-slices\u2026md:25` lists 102 as depending only on (101). Either 102 has a hidden dependency on 500, or corridors must be defined as an engine-level input. Territorial \"boundary effects\" (line 113) have the same issue. Declare the dependency or define the input, and state the consequence.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#anticipated-slices"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Swarm intelligence is dropped from the anticipated slices, and migration is inconsistently scoped",
+   "description": "The initiative plan assigns \"all behavioral archetypes (flocking, herding, predator-prey, territorial, swarm intelligence)\" to (100) (`001-initiative-plan.migratory.md`, entry 100). The anticipated slices (lines 103\u2013115) contain no swarm slice and no migration slice. The slice plan defers swarm to (106) with a stated reason (`100-slices\u2026md:41`) and schedules migration as (107) (`:47\u201348`). This document mentions neither as deferred.\n\nMigration appears in the Overview (line 19), swarm in the design goal (line 27) and the envisioned archetypes (line 77), and neither in the anticipated slices. Scope the list once, and show deferred items as deferred rather than absent.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#anticipated-slices"
+  },
+  {
+   "i": 17,
+   "severity": "CONCERN",
+   "title": "Status and content are out of date relative to the slice plan",
+   "description": "- \"No engine exists\" (line 53) is out of date. Slices 100 and 101 are complete (`100-slices\u2026md:17, 22`), and 303 is complete (`303-slice\u2026md:10`).\n- The open questions in Technical Considerations are resolved in slice 100: SoA layout (line 85), semi-implicit Euler over Verlet (line 93), and float64 internal precision (line 95). Slice 100 also adds an `accelerations` array that this document never lists.\n- The anticipated slices don't match the plan. \"Spatial query abstraction\" is slice 3 here, but the plan folds it into 100 and puts optimization last at 105. Aggregation (line 115) is future work (108) in the plan.\n- The initiative plan checks off (100) (`001-initiative-plan.migratory.md` line 33) while this arch is still `in_progress` and 102\u2013105 are open. That contradicts the plan's own rule (line 94).\n\nRefresh the arch to the built state, and turn each open question into a decision that points to slice 100.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#current-state"
+  },
+  {
+   "i": 18,
+   "severity": "CONCERN",
+   "title": "Related Work links to a file that does not exist",
+   "description": "Line 122 links `200-arch.world-server-foundation.md`. The file is `300-arch.worldserver-foundation.md`, which the Overview itself cites as \"(300-arch)\" (line 21). The reader who needs the aggregation requirements from that document hits a dead link. Correct it. The 300-arch has a similar broken link to `001-concept.migratory.md`, which is outside this review but worth fixing.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#related-work"
+  },
+  {
+   "i": 19,
+   "severity": "CONCERN",
+   "title": "Overweight for a 100-band initiative whose first slice is effort 3/5",
+   "description": "Most of the eight Technical Considerations are \"should not preclude\" statements rather than decisions. Initiative 620 says this scaling \"need not be designed proactively\" (`001-initiative-plan.migratory.md:97\u201399`). Cut or defer:\n\n1. **Per-agent `Force` protocol** (`100-slice\u2026md:124\u2013136`). Keep only `BulkForce`, and let tests use an adapter. Two forms of every force double the surface for slices 101\u2013104, and the slice requires testing both paths (`:248`).\n2. **GPU path** (line 99). Keep the no-callbacks rule, and drop the GPU design until 620.\n3. **Aggregation** (line 97). Defer to 108.\n4. **Float32 conversion and zero-copy serialization** (line 95). Slice 100 already assigns these to the world server (`:100`).\n5. **Register/remove and \"query agent state\"** in the engine interface (line 81). These belong to EntityManager.\n6. **Multi-resolution as a design goal** (line 33). Line 33 itself says the engine does not implement scaling strategies.\n\nSpend the saved space on the decisions the findings above call for: state schema, neighbor contract, tick contract, determinism tiers, environment input, and failure behavior.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  }
+ ]
+}

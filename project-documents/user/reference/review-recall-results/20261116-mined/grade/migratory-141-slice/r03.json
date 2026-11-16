@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Per-force timing breakdown deferred, though the slice plan assigns it to 141",
+   "description": "The slice plan entry for 141 (`140-slices.simulation-scaling.md:26`) requires per-phase timings that include \"force totals per force\". The slice reports only one `force_total_ns` and hands per-force resolution to slice 142. Slice 142's plan entry does not take on that work.\n\nThe deferral also breaks the slice's own promises:\n- Adding `force_breakdown` later changes `PhaseTimings` and bumps the JSON `schema_version` (line 531).\n- That contradicts the Integration Requirement that 142 lands with \"zero changes elsewhere in the harness\" (lines 586-588).\n\nThe cost of doing it now is small: the NumPy backend already calls each `BulkForce` separately, so each call can be timed in `tick_instrumented`. Add `force_breakdown_ns: dict[str, int]` to `PhaseTimings` and to schema v1 in this slice.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Numba backend registration assigned to slice 144, which is the Quadrants force-kernel slice",
+   "description": "The slice says \"Slice 144 registers `numba`\" (lines 341-345) and \"Slice 144 can register a `numba` backend\" (lines 589-591), and line 92 calls Numba \"slice 144 / 118 territory\". In the slice plan:\n- 144 is **Quadrants** Force Kernels.\n- Numba comes from (118) Numba Force JIT.\n- Slice 142 needs the Numba comparison: its plan entry says \"benchmarked against the existing NumPy and Numba implementations\".\n\nSo 142 is the first consumer of a Numba row, and the design names no slice that registers it before 142. The design also assumes \"the engine's existing JIT-config flag\" and `engine.forces_jit`, but nothing in the slice plan defines those yet, so this is an unstated dependency.\n\nFix: assign Numba backend registration to 118, or make it a 142 prerequisite, and describe the 118 interface as expected rather than existing.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:341-345"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Parity hash cannot be the reference for slice 145's tolerance-based parity test",
+   "description": "The slice plan (entry 145 and Open Questions) says tick-level GPU parity is checked \"within a documented tolerance for non-deterministic GPU reductions\". A SHA-256 digest is all-or-nothing: if any bit differs, the hash differs completely, so no \"tolerance band\" can be applied to it.\n\nDespite that:\n- Lines 469-473 say a downstream consumer will interpret the hash \"within the documented tolerance band\".\n- Line 533 says \"Slice 145's tick-level parity test consumes the harness's NumPy parity hash as the reference.\"\n\nNeither claim can work. Either drop the 145 integration claim and scope the hash to \"bit-exact regression detection on deterministic backends\", or have the harness write the final positions and velocities as an `.npy` artifact that a tolerance check can compare against.\n\nThe doc also disagrees with itself about when the hash is taken: line 81 says \"post-warmup\", line 460 says \"after the measure phase\". Pick one.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:469-473"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Fixed `PhaseTimings` shape does not fit fused or asynchronous GPU backends",
+   "description": "`PhaseTimings` has five required `int` phase fields. Line 264 says future backends will supply \"the same `PhaseTimings` shape\" from \"timed kernel launches\". Two problems for the GPU backends:\n- Slice 145 is defined as a single GPU tick with no NumPy round-trips mid-tick. The slice plan also anticipates fused kernels, and the doc's own risk note (lines 682-686) mentions merging spatial build and query.\n- Quadrants and Taichi launches are asynchronous. Calling `perf_counter_ns` around a launch measures dispatch time, not execution, unless the backend synchronizes.\n\nA fused backend would have to make up per-phase values. That breaks the project rule against silent placeholder values and makes the report misleading.\n\nFix in the Protocol, now:\n- Allow a phase to be absent (`int | None`, rendered as \"n/a\").\n- State that each backend must synchronize the device before reading each phase boundary.\n\nChanging this after 142 lands would be a schema-breaking change.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:260-285"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure-mode list misses mid-run and metadata I/O paths",
+   "description": "The list covers workload loading, registry lookup and `setup`, but leaves several paths out:\n- **`tick_once` raises during warmup or measure.** Is a partial report written or thrown away? Is `finalize` called? The try/finally is only described for `setup`.\n- **`git rev-parse HEAD` fails** (not a repo, git missing, detached worktree). The design does not say whether the run aborts or writes a placeholder. This is a likely place for a silent fallback.\n- **Result file write fails** (`bench/results/` missing or unwritable). Is the directory created, or is this an error?\n- **Hung backend.** A GPU stall never reaches the \"TPS < 1\" warning, because that check only runs after the measure loop finishes. For an interactive CLI, Ctrl-C is acceptable, but the doc should say so explicitly.\n\nEach of these needs a stated outcome and a visible signal on stderr.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Markdown aggregation and CLI surface are under-specified and partly inconsistent",
+   "description": "Markdown aggregation:\n- Line 440 says the Markdown report is \"one table per workload across all backends in `bench/results/`\". That means reading back earlier result files from a gitignored folder.\n- The design does not say which file wins when one backend has several runs, or whether runs from different git SHAs or platforms get mixed together.\n- With only one backend in this slice, the only thing this aggregation adds is that ambiguity.\n- Fix: render the table only from the records produced in the current invocation (one row per backend run under `--all-backends`), and leave cross-run aggregation to the downstream comparison tool the doc already defers.\n\nCLI inconsistencies:\n- The CLI section (lines 477-487) lists `--workload`, `--backend`, `--all-backends` and `--workload-dir`.\n- The Verification Walkthrough uses `--list-backends` and `--list-workloads` (lines 603-613), which the CLI section never mentions.\n- Make the two lists match. Drop `--workload-dir` unless something uses it.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:440-487"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Phase-name mapping and minor internal inconsistencies",
+   "description": "- Line 247 says the phase names \"correspond exactly\" to the architecture's budget table. The architecture labels CSR assembly as `self_excl_cap` (`140-arch.simulation-scaling.md:54`). Note the rename so people comparing against performance journal Entry 8 are not confused.\n- Lines 288-289 list profile-attribute fancy indexing as **overhead** (outside the five phases). The risk section (lines 697-701) says the same work is counted inside `force_total`. Decide where that time is counted.\n- The Scope section (line 71) lists a `density` workload field, but the schema (lines 349-390) has none; density only follows from the formation parameters.\n- `migratory.spatial` (line 136) and `engine.spatial.KDTreeQuery` (line 542) name different module paths.\n- Reusing `pytest-benchmark` for stub-backend timer tests (lines 122-124) adds a dependency that tests built on synthetic, deterministic timings do not need.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:244-249"
+  }
+ ]
+}

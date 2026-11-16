@@ -1,0 +1,18 @@
+{
+ "case": "squadron-385-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 1's header says `parse_slice_branch` is \"needed by Task 9\". The only task that calls it is Task 7.1 (\"`parse_slice_branch(head)` from Task 1\"); T",
+   "hits": {
+    "r01": [
+     7
+    ],
+    "r04": [
+     7
+    ]
+   }
+  }
+ ],
+ "note": "r02 #4 and r06 #0 mention Task 9 but not the wrong parse_slice_branch cross-reference, so not counted."
+}

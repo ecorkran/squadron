@@ -1,0 +1,68 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "SC6 is only half met, yet the slice is marked complete",
+   "description": "SC6 has two parts: (a) a materialized `cf_workflow_status` executor returns real status, and (b) \"a dispatch with a tool-capable non-SDK model can call `cf_build_context` and receive assembled context (walkthrough \u00a74).\"\n\n- Part (a) is covered by Task 8.2 and Task 9.1 step 2.\n- Part (b) is only mentioned in a note under 9.3 as \"remains open\". In the same item, the task file and slice design are set to `status: complete`.\n\nSo the slice gets marked complete with one of its success criteria unmet. The `sq run` CLAUDECODE guard is a real reason to defer, but the deferral should be visible. Fix:\n\n- Add an unchecked task, e.g. \"9.5 Walkthrough step 4 (standard terminal)\", with a `BLOCKED:` line giving the CLAUDECODE-guard reason.\n- Do not set `status: complete` until 9.5 is done, or set a status that shows step 4 is still open.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:286-292"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Two design rules have no test: transport errors and non-text blocks",
+   "description": "The design says each failure-mode row \"has a test asserting the observable signal\" (slice design line 149\u2013150). SC2 also requires results to map \"per the Result mapping rules\". Two rules are implemented but never tested:\n\n1. **Protocol/transport error (`McpError`, closed stream) \u2192 `is_error=True` plus WARNING.** Task 4.3 implements it. Task 5 has no test for it, and 5.4 lists only timeout, isError and spawn failure for the WARNING checks.\n2. **\"Non-text blocks are noted by type in the content.\"** Task 4.2 implements it. The fake server has no tool that returns a non-text block, so no test can reach this path.\n\nFix: add two tools to the Task 3 fixture.\n- A `crash` tool that calls `os._exit(1)` partway through the call, for the closed-stream case.\n- A `mixed` tool that returns a `TextContent` block plus an `ImageContent` block.\n\nThen add the matching cases to Task 5.1 and 5.4. In the transport case, assert the WARNING via `caplog`. In the mixed case, assert that the content names the non-text block's type.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:102-111"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Timeout test needs a PID mechanism the fixture task never builds",
+   "description": "Task 5.2 needs the server child's PID. It offers two options: \"the fake server printing it to a temp file at startup\" or \"scan for the fixture's command line\". Task 3 builds the fixture and includes neither. Its tool list is echo, fail, sleep and empty, with an ~80-line cap.\n\nA junior implementer reaching 5.2 would have to go back and change a fixture that Task 3 already committed. They would also have to choose between two strategies with very different reliability. Scanning command lines is flaky when tests run in parallel.\n\nFix: move the PID mechanism into Task 3. For example, the fake server writes `os.getpid()` to a path given by an env var or argv, and the 3.2 helper passes that path. Then make 5.2 specify one method: read the PID file, then assert the process is gone (`os.kill(pid, 0)` raises `ProcessLookupError`).",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:167-169"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Live-test availability gate is ambiguous and can hang offline",
+   "description": "Task 8.1 says the gate should \"attempt to launch the configured `cf.mcp_command` server (or detect a launchable command)\". Those are two different strategies, and the cheaper one breaks the requirement.\n\nIf the gate only checks for the binary (e.g. `shutil.which(\"npx\")`), then a machine with node but no network passes the gate. The test then runs `npx -y @context-forge/mcp`, which tries to fetch the package. It fails or stalls until timeout instead of skipping, and the full suite goes red. That breaks SC7 and the design's \"skip when the server cannot be launched\" rule.\n\nThe gate also runs at module scope, so every full-suite run (including 9.2) does a real spawn and possibly a package fetch while tests are being collected.\n\nFix: pick one strategy, a real launch with `initialize()` bounded by `cf.mcp_timeout_s`, and skip on any failure. Put it in a module-scoped fixture rather than at import time, so the cost is paid only when the module's tests are selected.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:256-259"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Merge step is written into the task file",
+   "description": "Task 9.4 merges the slice branch into the target, and the Task 9 success criteria include \"plus the merge commit\".\n\nThe current squadron project rules (`squadron/CLAUDE.md` \u2192 Git Rules \u2192 Merging) say merging happens only in Phase 7, after the code review passes. They also say to \"never write a merge or push as a task, sub-item, or Success Criteria in a task file.\" This worktree's managed CLAUDE.md is an older copy that still says \"a slice branch merges into the target when its implementation is done\", so the two rule sets disagree.\n\nNone of the slice's success criteria needs a merge, so 9.4 doesn't trace to anything. Fix: remove 9.4 and the merge-commit wording from Task 9's success criteria. Phase 6 should end with the work committed on the slice branch.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:293-300"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Tasks 1 and 2 are split too finely",
+   "description": "Adding two config keys (effort 1/5) and testing their two defaults (effort 1/5) are separate tasks with separate commits. Merge them into one task: the keys and their default tests, one commit.\n\nRelatedly, Task 4 commits the bridge after only a manual smoke check, before Task 5 tests it. With per-task commits that's allowed, but it isn't a tested point.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:70-96"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 3 cites the wrong tasks as fixture users",
+   "description": "\"Tasks 5, 6 both need a real stdio peer.\" Task 6 (`cf_tools.py`) never uses the fake server, and Task 7 mocks the transport. The fixture's users are Task 4 (manual smoke) and Task 5. Fix the reference so the dependency picture is right.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Unclear who sets the spawned process's env",
+   "description": "Two tasks claim the same job:\n- Task 4.1 says the bridge uses `get_default_environment()` as the spawned process's env, and also that \"callers construct `StdioServerParameters`.\"\n- Task 6.3 (line 207) has the caller pass `env=get_default_environment()`.\n\nThe SDK already uses that default when `env` is None. Say that the caller owns `env` and the bridge passes `StdioServerParameters` through untouched. Otherwise an implementer may write merge or override logic in the bridge.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129-131"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Executor-level round-trip is only tested live",
+   "description": "SC3 says \"an executor returns the server's text\" against the fake server. Task 5 calls `call_mcp_tool` directly, and Task 7 mocks the transport. The full executor path (config \u2192 `shlex.split` \u2192 `StdioServerParameters(cwd=\u2026)` \u2192 real spawn) is exercised only by the availability-gated Task 8.2.\n\nTask 7.3's assertions on the mock arguments cover most of the risk, so this is acceptable. If wanted, one cheap fix: point `cf.mcp_command` at `sys.executable fake_mcp_server.py`, have the fixture also answer as `workflow_status`, and run the materialized executor against it.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:228-243"
+  }
+ ]
+}

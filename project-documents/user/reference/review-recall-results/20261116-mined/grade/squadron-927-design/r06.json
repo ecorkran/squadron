@@ -1,0 +1,26 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The synthetic finding blames the wrong limit when the total injection budget drops the diff",
+   "description": "D3 (lines 123-125) treats a diff skipped by `review.max_total_injection_bytes` as truncation to zero: `DiffInjection(total_chars=len(diff), injected_chars=0)`. But the D4 finding template always cites `review.max_file_size_bytes` and tells the user to raise it. `DiffInjection` (D1, line 111) only stores `total_chars` and `injected_chars`, so the finding can't tell which limit caused the cut.\n\nIn the D3 case the artifact would say \"the first 0 reached the model (review.max_file_size_bytes)\u2026 Raise review.max_file_size_bytes\". That advice is wrong. Raising that limit changes nothing, because the total budget is what dropped the diff.\n\nThe slice plan requires the outcome to be \"observable in the artifact, not in a log\". A finding that names the wrong cause is observable but misleading. D3 is also the path the design itself calls \"worse\" (line 19).\n\nFix: add a field to `DiffInjection` that records the limiting key (or a small enum: file-size vs total-budget), and pick the finding wording from it. Add one test case to the \"over total limit\" test in the Technical Requirements (line 302) that checks the finding text.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:139-150"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`aiModel` changing meaning is a cross-tool contract change, and only `verdictSource` readers were checked",
+   "description": "The plan rates the risk Low-Medium because context-forge gates read these fields, and entry 911 says frontmatter is the documented boundary with Context Forge. D5 reports a grep of context-forge for `verdictSource` readers. Integration Points says the new `aiModel` meaning is \"the meaning its consumers assumed all along\", but no similar check is recorded for `aiModel`, `diffTruncated` or `requestedModel`.\n\nInside squadron, the one consumer of `metadata[\"model\"]` is the INFO log line in the pipeline executor, so the change to pipeline metadata is safe. A one-line grep of context-forge for `aiModel` would back up the claim. This doesn't block anything.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:271-274"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The D6 render change goes beyond the plan, but the design's own fix needs it",
+   "description": "D6 changes how the \"Findings Not Parsed\" notice is shown in persistence and in the terminal. The plan doesn't ask for this. But without it, the synthetic finding from D4 would hide a partly failed parse, which would break the slice's own principle. The change is small and has its own success criterion (SC7), so the size is reasonable.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d6--a-synthetic-finding-must-not-hide-a-degraded-parse"
+  }
+ ]
+}

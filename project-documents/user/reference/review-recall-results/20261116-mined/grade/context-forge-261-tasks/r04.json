@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox tasks, and 15C is a notes-only commit",
+   "description": "The task file records commits as checkbox items (`- [ ] **Task 2C: Commit** \u2014 ...`, and likewise 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C). Implementation commits happen only at the task file's `**Commit**:` markers, and those must be plain lines, never checkboxes. As written, a tool or agent looking for `**Commit**:` markers would find none. The marker placement itself is sound. Most sit at working, tested points, and 11C covers the whole 10/10T/11 group, which only passes `pnpm -r test` once Task 11 is done.\n\n- **Notes-only commit:** Task 15C (line 269, `docs: record slice 261 verification walkthrough`) would commit only recorded walkthrough notes. The project rule forbids a commit that only adds notes. Fold the walkthrough record into the commit of any defect fix it produces. Otherwise drop 15C and let the notes ride on the final real commit.\n- **Optional merge:** 14C (README, a single table row) could join 13C instead of being its own commit.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No test or walkthrough covers `context_build` returning `AdoptionError` as an error result",
+   "description": "The slice's success criterion says that with a guide missing the profile or prompt, \"`cf build` exits non-zero with the `AdoptionError` message; `context_build` returns it as an error.\" The task file covers this only in part:\n\n- Task 10T checks that the integrator rejects.\n- Task 12 case 12 checks that the pipeline rejects.\n- The Task 15 walkthrough (step 4) exercises `cf build` only.\n- Task 11's `contextTools.test.ts` assertions cover only the `persist` and `read-only` arguments.\n\nNo task checks the MCP tool's error result or the CLI's non-zero exit for `AdoptionError`. Add one case to Task 11's `contextTools.test.ts` work: a mocked pipeline that rejects with `AdoptionError` produces an error result carrying the message. Optionally add a matching `build.test.ts` case.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-223"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "`measureSourceVolume` is exported from `detection/index.ts` in Task 5, not Task 3",
+   "description": "Task 5 (the history fact) adds the `detection/index.ts` exports for `measureSourceVolume` and `SourceVolume`, which Task 3 created. Nothing breaks, because the tests import the files directly and the resolver comes much later. The export would sit more naturally in Task 3, so 3C leaves a barrel that omits a finished module.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:119"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 15 bundles automated verification with live walkthrough steps",
+   "description": "Task 15 combines:\n\n- the full format, lint, typecheck, build and test run;\n- file-size checks;\n- the before/after diff against `main` in a temporary worktree;\n- a clone of a real repository;\n- a live `claude -p` run;\n- an MCP-client run, which may end up `BLOCKED:`.\n\nIt is cohesive as a final gate. Splitting the automated checks from the walkthrough would let the automated half finish and be committed even if the MCP-client step blocks. This is optional.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:259-267"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The sub-second detection target has no timing or load test, and the task file says why",
+   "description": "The slice restates a performance target (detection adds under one second), but its own D2 says \"tests assert the caps, not timings.\" The task file records that decision. It verifies the bound through Task 3T's early-exit and `MAX_WALK_ENTRIES` cap tests, and it states that the `tests/load/` tier is a Python rule that doesn't apply here. I could not verify that last claim, because I did not open `rules/python.md`. Given the slice's explicit decision, adding a load test and a CI-gating task would go beyond the slice, so I raised no finding. The Task 15 live run against a real repository would be a natural place to note the observed duration, if wanted.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  }
+ ]
+}

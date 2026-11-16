@@ -1,0 +1,26 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D9 defers the routed-variant decision the slice plan assigned to design",
+   "description": "The slice plan (Part C) says \"Design must decide what counts as 'differs' for providers that return a dated or routed variant of the requested id (OpenRouter), so an alias resolving to its own snapshot is not reported as a substitution.\" D9 decides only the dated-snapshot suffix. It says it will add OpenRouter and local forms after Phase 6 captures real ids. The Risk Assessment names the unhandled forms: a dropped `vendor/` prefix and a `:free` suffix. The consequence is that a profile can ship with every run reporting a false substitution. That means a WARNING and a `requestedModel` key on each run, which weakens the signal the slice exists to provide. \"When unsure, report substitution\" is a safe failure direction, but it does not meet the plan's requirement.\n\nFix: decide the routed forms now, or cut the scope explicitly:\n- Name the OpenRouter forms the rule accepts (prefix-stripped ids, `:variant` suffixes), each with a test.\n- Or state that routed ids are out of scope for this slice and record that in the slice plan entry.\n\nThe capture walkthrough in step 6 is still useful as verification.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D9 \u2014 What counts as \"the model that was requested\""
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Metrology judge identity changes for OpenAI-direct judges",
+   "description": "D10 acknowledges that `aiModel` for OpenAI-direct judges moves from `gpt-5` to a dated snapshot. This changes `metrology/identity.py` keys once. The doc argues this is the correct calibration identity, and I agree. Confirm that no metrology consumer pins or aggregates by the undated id. If one does, the first post-slice runs will split into a new bucket. The Integration Points section lists metrology as a consumer but does not say whether it was checked.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D10 \u2014 `aiModel` is the answering model; `requestedModel` appears only on substitution"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Proportionality is acceptable, with a few trim candidates",
+   "description": "The component list touches about nine modules plus two new ones. That is consistent with the plan's Effort 3/5 and Risk Low-Medium. The scope is bounded, and the design defers diff ordering, `--stat` and file-body truncation to #137 and #138. If effort has to be cut, these are the candidates:\n- D12's multi-model digest line and WARNING, which handles a case that is rare in practice.\n- `models/snapshot.py` as a separate module for one function, if D9 stays small.\n\nNeither is required for the plan's acceptance criteria. Neither blocks progress.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Component Structure"
+  }
+ ]
+}

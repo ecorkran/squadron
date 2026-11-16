@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Edge-endpoint resolution contradicts the read discipline and is underspecified",
+   "description": "Section 6 says function- and class-level edge endpoints are \"resolved to their owning file's layer rather than dropped\". Three things in the document conflict with that:\n- Success criterion 9 and Verification step 7 require that \"no function- or class-level node is read\" and that no such data appears in any section.\n- The Read discipline section keeps the 687 function and class nodes out of context.\n- The design never says how an endpoint resolves to its owning file. It could use a `filePath` on function nodes, `contains` edges, or an ID-prefix convention.\n\nThe Verified graph facts table only confirms `filePath` on `file`, `config` and `pipeline` nodes. Whether function nodes carry `filePath` is not measured.\n\nThis is the one place where a hidden dependency could force a whole-graph read or break criterion 9. Pick one of two fixes:\n- State the mechanism, with its `jq` form and a probe, so resolution is a scoped selection that never emits node bodies. For example, build an id\u2192filePath map inside `jq` and emit only counts.\n- Drop function-to-function edges from inter-layer counts and say so.\n\nAlso add a fallback for an endpoint that cannot be resolved. Today it would be dropped silently, which breaks the \"no silent shortening\" rule the design sets for itself.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#Section detail (6. Dependency observations)"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Closing observation\" per section adds an unmapped, subjectively gated prose path",
+   "description": "The mapping table says each section is sourced from its fields and \"emits that fallback and nothing else\". The `[INFERRED]` section then adds a closing observation to every section. Its only gate is \"derivable from the table directly above it\", and the example given (\"complexity concentrates in the seams where squadron meets an external SDK\") names a semantic claim a table cannot mechanically back.\n\nThis conflicts with Success Criterion 3, \"every claim traces to node, edge, layer, tour, or metadata\", and with the zero-`[INFERRED]` rule. It also opens the interpretive path that the governance decision is meant to close.\n\nTwo options:\n- Cut the closing observation, which is the lighter fix.\n- Restrict it to templated statements of counts and proportions that the table already shows, and add that to the mapping table as a row-level rule.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#`[INFERRED]` governance"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Failure handling for the new file reads is incomplete",
+   "description": "This slice adds three direct reads: `meta.json`, `config.json` and `.understandignore`. Row 7 gives one fallback for all three, a gap marker \"naming the unreadable file\". It does not say what happens in these cases:\n- Malformed JSON in `meta.json` or `config.json`, as opposed to a missing file.\n- `analyzedFiles` present but not an integer.\n- `.understandignore` absent. This is probably a normal state, since it is an upstream-optional file, but it would be reported as a gap. Section detail 7 only covers the all-comments case (\"defaults only\").\n\nThe walkthrough tests only a missing `meta.json` and a wrong count. Give each read an explicit outcome. Treat parse failure as a gap, treat an absent `.understandignore` as \"none (defaults)\", and add a walkthrough case for malformed JSON.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#Extraction mapping (row 7) and Section detail (7)"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Correction 2 wording says \"allow-list\" but specifies an exclusion",
+   "description": "The text reads \"the file-level selector becomes an explicit type allow-list\", then gives `select(.type != \"function\" and .type != \"class\")` and defends it as \"an exclusion rather than an allow-list\". Fix the sentence so the skill text does not carry the contradiction.\n\nThe exclusion filter also treats any filePath-less survivor as drift. If upstream adds non-file node types without `filePath`, every run would raise false drift. The 361 preflight remains the guard against that, but the design should say so.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#Correction 2"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Ordering rules left ambiguous in two rows",
+   "description": "- Row 6, \"descending count, ties by `weight`\", does not say what is counted. It could be edges per layer pair or per edge type, and the two subsections of section 6 use different units.\n- Row 3 orders by \"layer\" without saying whether that means the section-2 order (file count) or alphabetical.\n\nBoth are cheap to fix and matter because 363 and 364 reuse the mapping verbatim.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#Extraction mapping"
+  }
+ ]
+}

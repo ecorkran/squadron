@@ -1,0 +1,33 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit points are checkbox tasks, and two are conditional with a fixed message",
+   "description": "Tasks 2C, 3C, 4C, 5C and 6C (lines 71, 94, 117, 126, 134) are written as `- [ ] **Task NC: Commit**` checklist items. Commit markers must be plain `**Commit**: <message>` lines, never checkboxes. Their placement is right: each sits after an implementation task and its test task.\n\nTwo related problems in the same lines:\n- **5C message:** Task 5 tells the implementer to fix any parity bug and add a test, but 5C's only message is `docs: record slice 214 parity sweep results`. A code fix would be committed as `docs:`.\n- **Task 6 success line:** \"working tree clean after commit\" (line 132) depends on 6C, which is conditional.\n\nFix: convert the five items to plain marker lines. Give Task 5 a `fix:` message for the code-change case, and reword Task 6's success to \"working tree clean\".",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Exit-2 criterion is only partly asserted at the command level",
+   "description": "The slice design (line 171) requires exit 2, a stderr message and empty stdout, including under `--json`, for each of these: no arguments; a missing, non-regular or unreadable file; a missing or unreadable template; a template with no required headings.\n\nTask 4T's exit-2 bullet covers only no arguments, a nonexistent path, a valid file before a missing one, and a missing template. The gaps:\n- **Directory as a file, and a template with no markers:** asserted only in Task 3T as an error type (line 91). Nothing checks the exit code or empty stdout through the CLI.\n- **Unreadable file and unreadable template:** tested nowhere.\n- **Wrapping of unexpected `fs` errors:** required by Task 3 (line 79) and the design (line 78), with no test.\n\nFix: add \"a directory argument\" and \"a template with no required markers\" to the 4T exit-2 list. Add one unreadable-file case to 3T (for example `chmod 000`, skipped where permissions are not enforced), which also exercises the wrap path.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 0 hard-codes `main` and stops on a non-empty integration branch",
+   "description": "The branch rule is to read the target and fork from it. Task 0 instead expects the value to be empty, stops for the Project Manager otherwise, and forks from a literal `main`. Replace both sub-items with: read the target, then `git checkout -b 214-slice.native-slice-design-validation {target}`. The stop is not required by any rule.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 4T does not say how to pick the real designs for the test",
+   "description": "\"Several files \u2026 that pass the bash script today\" leaves the implementer to guess, and the parity sweep that would tell them runs later in Task 5. Add a sub-step: run `./project-documents/ai-project-guide/scripts/validate-slice-design` over `project-documents/user/slices/` first, and hard-code a few of the files it passes, plus the 214 design.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108"
+  }
+ ]
+}

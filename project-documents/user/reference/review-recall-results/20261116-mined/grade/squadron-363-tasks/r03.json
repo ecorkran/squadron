@@ -1,0 +1,47 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, and most sit at non-working states",
+   "description": "- **Format.** Every commit is written as a checkbox sub-item (`- [ ] Commit: ...`) at lines 99, 125, 164, 185, 221, 254, 296 and 351. Markers must be plain `**Commit**:` lines, never checkboxes. Convert them.\n- **Placement.** Seven of the nine task groups end in a commit, which approaches \"after every task\". Several of those commits are not working points:\n  - After 1.2, `concept` is a recognized argument that routes to an empty section shell.\n  - After Tasks 2\u20135, the flow still has no write contract, output conventions or provenance.\n- **Fix.** Keep markers only where the flow is coherent and exercised. Candidates are after Task 5 (extraction, interview and confirmation complete) and after Task 7 (flow fully authored). A third marker after Task 8.6 is fine. Fold Tasks 1\u20134 into those commits.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 9 produces a bookkeeping-only commit, and 8.6's scope check precedes the DEVLOG",
+   "description": "- **Bookkeeping commit.** Tasks 9.1 and 9.2 (status updates, check-offs, DEVLOG) land in the 9.3 \"final commit\". That commit contains only check-offs, status and notes, which project rules forbid.\n- **Fix for the commit.** Do the status and DEVLOG work before the Task 8.6 commit marker, or make it the last marker with real content.\n- **Scope check ordering.** The 8.6 `git diff --name-only main` check expects the DEVLOG in the changed set. The DEVLOG isn't written until 9.2, and the slice-plan edit in 9.1 isn't in the allowed set at all. Either move 9.1/9.2 ahead of 8.6 or update the expected file list.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:346-375"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Walkthrough leaves several success-criteria paths unexercised",
+   "description": "- **Absence and README fallback (SC3).** All walkthrough runs use squadron, where every signal is present and a README exists. Nothing exercises these two paths:\n  - \"absence of a signal is an observation, not a gap\"\n  - the no-README fallback to graph fields or gap markers\n  \n  Add a scratch-copy variant to 8.2 that removes `tests/` and the README, and check the output.\n- **Dropped topics (SC4).** No step checks that why-now, audience-evolution and methodology-preference appear nowhere in the written document. Add this check to 8.1.\n- **Confirmation outcomes (5.2).** Only the \"corrected\" outcome is run. Confirm and refuse/unavailable are authored but untested, so `extracted-and-confirmed` and `extracted-unconfirmed` are never produced. Decline the confirmation in the 8.2 scratch run to cover refuse/unavailable.\n- **Usefulness (SC12).** No step records the PM's judgment of whether they would edit the concept or discard it. Add it to 8.1's success line.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-352"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Project-name resolution mechanism appears only in verification, and the guide-presence check is duplicated",
+   "description": "- **Name resolution.** Task 2.1 (precondition 3) and 7.2 say the name comes from \"the cf project registration\", but never say how the skill reads it. The `cf get` Name field appears only in verification Task 2.2 (line 121). A junior implementer writing 2.1 has no instruction to follow. Move the retrieval mechanism into 2.1.\n- **Duplicated check.** Precondition 2 (guide tree and file present, line 105) and write-time check 1 (line 226) both stop on an absent guide with the same setup-step message. Have 6.1 reference the precondition, or define the message once, in line with the DRY rule.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:110-113"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Some verification tasks only re-read just-authored text",
+   "description": "- Tasks 1.2 and 4.2 are self-diff passes with no executed command, and 5.3 is mostly a diff. They add task count without adding evidence.\n- Fold their checks into the success lines of 1.1, 4.1 and 5.1. Keep 2.2, 3.4 and 6.3, which run real commands against the repo.\n- Selector routing is already exercised live in 8.5.\n- Task 0.2 duplicates design walkthrough step 1. That is acceptable because it is a STOP gate, but it could be one line.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-99"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Design line-number references are fragile",
+   "description": "Tasks cite design line ranges throughout (for example 137\u2013148, 158\u2013164, 175\u2013183). Because the design will not change during implementation, the citations mostly work. One is off by one: the `[INFERRED]` blockquote sits at design lines 277\u2013279, not 278\u2013280. Prefer section names so the references survive edits. Task 8.2 also says \"scratch copy of the tree\" without saying how to make one, such as a git worktree or a temporary directory.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:259"
+  }
+ ]
+}

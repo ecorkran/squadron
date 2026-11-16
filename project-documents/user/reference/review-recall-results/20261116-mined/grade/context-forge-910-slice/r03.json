@@ -1,0 +1,33 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Verification counts and grep criteria are internally inconsistent",
+   "description": "The success criteria and walkthrough contradict the scope table, so a mechanical check could give false failures or false passes.\n\n- **`types.ts` arithmetic:** The table says \"5 (of 8 total; 4 are the STATUS definition)\", but 5 + 4 = 9. The union `'complete' | 'in-progress' | 'not-started'` has 3 literals, not 5. The 8 literals appear to be 4 for the definition, 3 for `inferredStatus` and 1 for `SliceStatus`'s `'complete'`. The \"~65\" total is therefore probably overstated.\n- **`SliceStatus.status`:** The walkthrough expects 4 remaining `SliceStatus.status` sites. Only `'complete'` matches the grep pattern, so there is 1.\n- **Contradictory pass condition:** The functional criterion requires \"zero matches in the six swept files\". `types.ts` is one of those files, and the `SliceStatus` `'complete'` literal intentionally stays in it. The criterion also excludes the definition by hard-coded line numbers (`types.ts:[3-6]:`). Those lines shift as soon as the retype lands, and the references to `types.ts:44` and `ProjectModelBuilder.ts` line 179 are fragile in the same way.\n\nFix this by restating expected counts per file after the sweep. Exclude the `STATUS` definition and the `SliceStatus` line by pattern or context rather than by line number. Or add a lint or grep check that ignores those two known sites.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:29-41, 135, 147-152"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Behavior preservation relies on existing coverage that the design doesn't establish",
+   "description": "900-arch requires that refactoring slices \"have test coverage verifying preserved behavior before and after.\" The slice argues that the sweep cannot change behavior because `STATUS.X === 'x'` by construction. That is plausible for the type-level changes. It doesn't show that the 30\u201336 comparison sites in `ConsistencyChecker.ts` (about 15 rule functions) are exercised by tests. The only evidence offered is that no test asserts on the literals, which says nothing about whether the rules are covered. A transposed property, such as `STATUS.InProgress` swapped for `STATUS.Complete`, would compile cleanly and could pass if the rule has no test. The doc says a transcription error would show up as test changes, which holds only for covered rules.\n\nAdd a step before the sweep to confirm that each rule function in `ConsistencyChecker.ts` has at least one test hitting each status branch. Add tests for any that don't. Alternatively, state that the sweep is reviewed as a diff for transposition errors. Cite the `ConsistencyChecker` test file's coverage of these branches as the evidence.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51, 85"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Verification walkthrough step 4 is lightweight and partly redundant",
+   "description": "The live `cf status` and `cf list slices` spot-check duplicates the full `pnpm -r test` pass for a change with no runtime delta. It is cheap, so no action is required. The typo-injection check in step 2 is the more useful verification of the slice's value claim.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:160-165"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "No new I/O paths, NFR paths or failure modes",
+   "description": "The slice adds no I/O, message types or latency-sensitive paths, and 900-arch states no NFRs that it touches. Failure-mode enumeration and NFR restatement are not applicable.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md"
+  }
+ ]
+}

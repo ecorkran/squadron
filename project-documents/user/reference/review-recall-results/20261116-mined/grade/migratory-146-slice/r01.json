@@ -1,0 +1,82 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Bounds sync-back uploads positions only, so REFLECT and SOFT velocity changes never reach the GPU",
+   "description": "`apply_bounds_policy()` receives both `positions` and `velocities` (lines 186-191). REFLECT works by flipping velocity, and SOFT applies a corrective velocity. The sync-back path only has `notify_positions_modified(positions)` and `GpuAgentState.upload_positions()`. The velocities changed on the host are thrown away, and the next GPU tick keeps integrating the old outward velocity. With REFLECT, an agent gets its position clamped every tick but keeps pushing outward. A4 (line 330) cannot pass as designed. Line 209 (\"same sync-back pattern\") hides the gap. The fix is to sync back both positions and velocities, e.g. `notify_state_modified(positions, velocities)` plus `upload_velocities()`. Test 7 should cover REFLECT, not only WRAP.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:203-227"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "GPU path never writes results back to `EntityManager.state`, so spawn/despawn re-sync teleports agents",
+   "description": "On the CPU path, `EntityManager.state` holds the authoritative state: `tick(state=state, ...)` runs on it, and the empty branch builds its result from it (line 193). On the GPU path the result comes from `export_*()` and nothing writes it back into `entity_manager.state`. So when `sync_from_entity_manager()` runs after a spawn or despawn (line 179), it re-uploads host arrays that are still at setup-time values (or at the last spawn). Every existing agent jumps back to an old position. Any other reader of `entity_manager.state`, such as environment hooks or spawn logic that picks positions near current agents, also sees stale data. The design needs to say who owns the authoritative state on the GPU path. One option is to copy `result` back into `entity_manager.state` each tick. Another is to upload only the changed agents.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:175-201"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Spawn/despawn handling ignores field capacity, same-count churn, and its ordering against the dirty-positions upload",
+   "description": "Three gaps in this path:\n1. **Capacity.** Slice 145 allocates the GPU fields once in `setup()` at size N and never reallocates them. The design does not say what `sync_from_entity_manager()` does when the count grows past the allocated size: reallocate, pre-allocate a maximum, or reject.\n2. **Same-count churn.** `count_changed_since_last_tick()` (line 201) misses a spawn and despawn in the same tick, which leaves the count unchanged. It also misses swap-remove reordering. In both cases the GPU state silently goes out of sync.\n3. **Ordering.** `SimulationManager.step()` calls `sync_from_entity_manager()` first. `gpu_driver.step()` then checks `_positions_dirty` and uploads `_pending_positions` (line 213). That array is the previous tick's, at the old count, so it overwrites the fresh upload with stale data of the wrong length. The fix is for `sync_from_entity_manager()` to clear the dirty flag.\n\nA mutation counter or generation counter on `EntityManager` would work better than comparing counts.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:178-180"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`_select_arch()` cannot detect a missing GPU, which contradicts the scope and A7",
+   "description": "Scope line 33 and A7 (line 336) promise that a host \"with no Metal and no CUDA starts successfully\". But `_select_arch()` only looks at `platform.system()`. A Linux host without an NVIDIA driver gets `qd.cuda`. According to Open Notes line 382, `qd.init` then raises and the server exits. Linux without CUDA is the common no-GPU case: it is the \"CPU fallback (Linux)\" host used in slice 147. Either probe CUDA availability (try `qd.init(qd.cuda)`, and on that specific failure log a WARNING and use `qd.cpu`) or narrow A7 to non-Linux/non-Darwin hosts. Separately, the warning tells users to set `backend: cpu` to suppress it. That setting selects the NumPy/Numba path, not `qd.cpu`, so the advice changes the engine, not just the log output. The message should say so.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:100-117"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Default backend and arch values contradict each other within the document",
+   "description": "- The \"CPU default (no GPU)\" walkthrough says removing the `compute:` block gives the CPU path with no GPU init. But line 61, line 309 (test 1) and A1 all make `quadrants` the default.\n- Line 252 says `arch` returns `\"cuda\"` or `\"metal\"`, while line 224 lists `\"metal\" | \"cuda\" | \"cpu\"`.\n\nFix the walkthrough to use an explicit `backend: cpu`, and make `arch` consistently include `\"cpu\"`.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:358-362"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Bench-harness scope statements contradict the Files Changed table",
+   "description": "Line 40 puts \"Any changes to the bench harness\" out of scope, and line 301 says \"bench backends are not changed\". But lines 294-296 move `GpuAgentState` out of `bench/backends/` and edit the imports in `quadrants_fused_backend.py`. The move itself is correct: it keeps production code from depending on bench code (line 383). The scope text and line 301 should describe it as a pure relocation, and A5 is the guard against regressions. Separately, `tests/load/test_gpu_server_tps.py` (the A6 gate) is missing from Files Changed.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:294-301"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "World-server code now knows about the compute substrate; backend selection is a bare string checked in several places",
+   "description": "The architecture's design goal says \"the world server should not need to know whether forces are computed by NumPy or Quadrants\". The plan entry says \"the world server call site is unchanged\". Yet `server.py` branches on `backend == \"quadrants\"`, builds a Quadrants driver, and logs the Quadrants arch. `gpu_driver.py` also sits in `migratory_server` rather than next to `migratory.gpu`. On top of that, the `\"quadrants\"`/`\"cpu\"` literals appear in `ComputeConfig`, in validation and in `server.py`, against the rule that comparison values are defined once. A lighter design:\n- a `ComputeBackend` enum;\n- a single factory in the engine package that turns `ComputeConfig` into the tick implementation;\n- `SimulationManager` depending on a small protocol, not on the concrete `GpuSimulationDriver | None`.\n\nThat also removes the `if self._gpu_driver is not None` branch from `step()`.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:229-250"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The GPU path silently drops production forces and environment effects that are not in the fused kernel",
+   "description": "On the CPU path, `tick()` receives `forces=self._forces` (built by `_build_forces()`) and `spatial=self._spatial`. The GPU path ignores both and runs the slice 145 kernel with its fixed 7 forces. `environment.pre_tick()` still runs, but anything it changes in host state or force parameters (seasonal, terrain-aware) never reaches the GPU. The architecture's first design goal is \"preserve behavioral fidelity\", and A2 / walkthrough step 5 claim the result is \"visually identical\". The design should list the forces production configures and map each one to the fused kernel. Any force or environment effect the kernel does not support should cause an explicit error at startup, not be dropped silently.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:171-183"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The f32\u2194f64 boundary relies on an unverified implicit upcast",
+   "description": "The design says `export_positions()` returns f64 because \"Quadrants upcasts on download\", and that `from_numpy()` converts f64 to f32 on upload. In Taichi-family APIs, `to_numpy()` on an f32 field returns float32, and `from_numpy()` expects a matching dtype. A3 (the dtype contract) depends on this behaviour. The design should name the explicit `astype` points and say who owns them. Slice 147 flagged `.astype()` copies as per-tick overhead, so their cost belongs in the TPS budget at N=50k.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Test plan does not exercise the failure modes and sync paths it introduces",
+   "description": "- Line 307 is self-contradictory: \"All tests are CPU-only (skip \u2026 if GPU not available)\".\n- Test 7 asserts positions stay in bounds. `apply_bounds_policy` guarantees that on every result anyway, so the test cannot detect a broken sync-back. It should compare the GPU-resident state after upload, or the trajectory on the next tick.\n- There is no test that A7's fallback logs its WARNING, as the project's failure-mode rule requires.\n- There is no test for REFLECT/SOFT, for growth beyond the allocated size, or for spawning while positions are dirty.\n- Open Notes line 382 says repeated `qd.init()` in one process is undefined. Tests 5-8 all call `setup()`, but the Testing section does not say how they are isolated (subprocess or per-module fixture).",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:305-316"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Frontmatter dependency list understates what the TPS gate needs",
+   "description": "Only `145` is listed, which matches the plan entry. But `subdivision_factor` comes from slice 149. Slice 145 alone measured 38 TPS at 50k, so A6 (\u226560 TPS) relies on the 148 and 149 kernel improvements. Listing 148 and 149 would make the gate's prerequisites explicit.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:12-13"
+  }
+ ]
+}

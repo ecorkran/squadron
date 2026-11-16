@@ -1,0 +1,89 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Break placement ignores completed slice 148, which restructures the same loop",
+   "description": "The frontmatter lists `dependencies: [145]` (line 6), but the plan marks 148 complete (plan line 48). 148 rewrites the inner cell loop as a block-collective tile load: each cell is loaded once per block and processed collectively, with `qd.sync()` between load and use (148 lines 103\u2013108, 286\u2013294). Intervention 1 places a per-thread `break` in the 145-era `for kk` loop (lines 38\u201344). On the post-148 kernel, a per-thread break cannot skip the block-wide cell loads or the barrier, and the doc does not say what the break saves there. 148 attributes the kernel's cost to DRAM traffic (148 lines 56\u201359, 72\u201387), so the doc has to show the early exit reduces that traffic. The doc also names `fused_force_integrate_kernel` (line 95) and `quadrants-fused`, which 148 renames to the tiled kernel on ship (148 lines 556\u2013565). Finally, 145 R1 (lines 363\u2013368) requires a prototype showing that an inner-loop `break` compiles on Quadrants. The doc does not cite that result.\n\nBefore implementation: add 148 to dependencies, state where termination lands in the tiled kernel (every thread must still reach each `qd.sync()`), and name the 145 baseline kernel after 148's rename.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:23-46"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The premise cites 148 for a bottleneck that 148 rules out",
+   "description": "Line 17 says 148's Phase 2 measurements identified \"O(N \u00d7 candidates_scanned) inner-loop waste\" as the Tier 2 bottleneck. 148 says the reverse: \"candidate count isn't the lever\" (148 lines 145\u2013150). 148 instead attributes the traffic to accepted-neighbor reads (148 lines 80\u201383, ~38 MB/tick), so the two docs disagree about which reads dominate. Line 27 also asserts that divergence cost is \"orders of magnitude\" smaller than the saving, without measurement, and the \u22655\u00d7 gate depends on that assertion. Cite the 148 envelope note for the occupancy figure, correct the attribution, and name the measurement that separates candidate-scan cost from accepted-neighbor cost.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:15-19"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The seam-preservation claim is contradicted by the design",
+   "description": "Option A keeps `get_neighbors_first_k` but puts the stop condition (`k_found >= max_neighbors`) in the caller's loop. 145 defines the seam as the accept predicate and says it allows distance-ranked selection \"without changing the tick kernel structure\" (145 lines 207\u2013216). A distance-ranked selector must see all candidates, so a break after the 32nd accept makes it return first-k results. The claims that the seam remains \"the documented swap point for distance-ranked selection\" (line 33) and that \"A7 seam preserved\" (line 112) are therefore wrong for this design. The cap comparison also appears twice, in the seam and in the break guard. The snippet treats `max_neighbors` as one scalar, but 145 stores `k` per profile (145 lines 123\u2013126). The `max_neighbors > 0` uncapped sentinel is defined nowhere.\n\nFix: put a termination predicate in the seam (first-k returns `k_found >= k_max`; distance-ranked returns false) and have the loop call it, so changing the selection policy does not edit the loop body.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Subdivision candidate arithmetic does not follow from the doc's own numbers",
+   "description": "Line 56 gives ~555 agents per cell at S=3, and the doc itself says the scan becomes 7\u00d77. That is 49 \u00d7 ~555 \u2248 27,000 candidates, not the \"~5000\" stated on line 58. In area terms the scanned region shrinks from (3r)\u00b2 = 9r\u00b2 to (7r/3)\u00b2 \u2248 5.4r\u00b2, a ~40% cut in candidates, not ~9\u00d7. The \"~555 candidates with both\" figure does not follow either, and the claim that the two interventions \"compose multiplicatively\" is not shown. These numbers justify the S=3 gate configuration, so they need recomputing, ideally from measured candidate counts.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56-58"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`cell_size` is derived twice and not checked against the scan reach",
+   "description": "The design passes `cell_size` and `S` as separate config inputs (lines 80, 84\u201392), although `cell_size = query_radius / S` (line 53). Only `S` is validated (lines 69\u201376). If `cell_size` is set below `query_radius / S`, the \u00b1S scan reaches less than the query radius and silently drops neighbors. The formula also uses a single `query_radius`, while 145 sets cell size from `max_query_radius` across profiles (145 line 168). Compute `cell_size` once from max query radius and S, and fail at setup if it is below max_query_radius / S.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:80"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The verification plan cannot isolate the two interventions",
+   "description": "The four Step 3 commands reduce to two pairs of identical arguments. \"Baseline (counter-gating)\" matches \"Early exit only\" (`--subdivision-factor 1`), and \"Cell subdivision only\" matches \"Both\" (`--subdivision-factor 3`). No flag enables or disables the break, and Option A makes the break unconditional, so no counter-gating path exists to run. The baseline command also uses `--backend quadrants-fused` (line 162), which 148 renames to the tiled kernel on ship. Add an explicit break switch or a separately named backend, and have the baseline command name the 145 kernel directly.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:160-176"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Test coverage misses the new behavior",
+   "description": "Step 1 relies on the 145 parity suite and a statistical check (mean speed and NN distance within 20%). A missing-neighbor bug in the expanded scan could pass that tolerance. No deterministic test covers:\n- the S validation errors (0, 9, non-integer);\n- a neighbor at the far edge of the \u00b1S scan being found;\n- the cap boundary (exactly k neighbors, fewer than k, uncapped).\n\nThe doc also changes behavior for S>1 without saying so. The first-k set follows scan order, so S=3 can accept a different 32 neighbors than S=1, yet lines 56 and 67 describe this as \"correct neighborhood preserved.\" The register-spill check is also specified two ways: `nvcc --ptxas-info` (line 124) and `TI_PRINT_KERNEL_STATS=1 or equivalent` (line 182).\n\nAdd unit tests for each case, document the S>1 selection change, and pick one spill-measurement method.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:141-148"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The S \u2264 8 upper bound is unsupported and contradicts the architecture",
+   "description": "The plan sets S=1 as the default and S=3 for bench runs, with no upper bound. The memory rationale on line 78 conflicts with 140-arch: \"Memory is not a constraint that gates the roadmap\" (140-arch line 94). Grid cell count grows with S\u00b2, but at S=8 a 1200\u00d71200 world is ~37k cells, which is trivial. The `(2S+1)\u00b2` in the error message is scan cost, not memory. The bare `8` also breaks the define-once rule.\n\nRemove the cap, or replace it with a measured limit defined once as a named constant. Keep the integer and `S >= 1` check.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:69-78"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The 146 integration is unstated, and the dependency direction is wrong",
+   "description": "Line 111 says \"Slice 146 is unblocked.\" The plan lists 146 as depending only on 145 (plan line 44), so 149 is not a dependency of 146. Line 116 frames the A3 gate as a check \"before slice 146 wires\" the tick, which implies a gate the plan does not state. Either the plan adds 149 as a dependency of 146, or the doc drops that rationale.\n\nSeparately, the default S=1 gives 38 TPS (line 19), below the 60 TPS NFR at 50k. `S` and `cell_size` are defined only on BenchConfig (lines 84\u201387). The doc does not say where production config sets S, so the live server would not get the gain by default. State the production config key and its default, and note that the change applies to whichever kernel 146 selects, which 148 R4 (lines 310\u2013317) leaves to 146.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:111"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "A 7-neighbor benchmark target from the plan is dropped",
+   "description": "Plan entry 149 (plan line 50) says \"the 7-neighbor operating point is a benchmark target.\" The gate configuration (line 128) uses only `max_neighbors=32`. The early exit's benefit is largest at small k, because the cap fires after fewer candidates, so the 7-neighbor run is where the claim is most testable. Add a 7-neighbor run to the gate or walkthrough, or record a deferral with a reason.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:128"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Parts of the design are heavier than a 2/5-effort slice needs",
+   "description": "Cut or shrink these:\n- the Component Interactions diagram (lines 82\u2013100), which restates 145's kernel signature and the S wiring already in Intervention 2;\n- the restated 148 measurements in the Problem Statement (lines 17\u201319), which can be a one-line citation;\n- the divergence essay (line 27), which is a hypothesis for the CUDA run, not a design decision;\n- Option B (line 34), once the seam predicate is chosen.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:82-100"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "The Tier 2 NFR is cited to the wrong source",
+   "description": "The doc attributes \"60 TPS at N=50k on CUDA\" to 140-arch. 140-arch states 60 TPS only for the 2M end state (140-arch line 18). The 50k figure comes from plan entry 148 (plan line 48) and slice 145 (145 line 66). The target itself is restated correctly; only the citation needs fixing.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:116"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "TypeScript `token_errors` includes `MemoryError`, which contradicts the slice's failure-mode table",
+   "description": "- **The conflict:** Task 14 makes the TypeScript tokenizer's `token_errors` `TypeScriptParseError` and `MemoryError`. This copies the length pipeline's error tuple (`src/squadron/metrology/snapshot/typescript_length.py:151`). But Task 10 and the slice's failure-mode table (row 2) say a `MemoryError` during the duplication pass makes `duplicated_lines` `tool_failed`. Task 11 tests exactly that.\n- **What happens as written:** in the TypeScript adapter, a `MemoryError` would be caught as a per-file error. The file goes into `unparsed_files` and the pass carries on, producing the kind of partial figure D3 forbids.\n- **The languages also disagree:** Python's tokenizer leaves `MemoryError` out of its token errors (Task 12), even though `_PARSE_ERRORS` at `python_adapter.py:81` includes it.\n- **Fix:** remove `MemoryError` from Task 14's `token_errors`. Add a Task 15 test showing that a `MemoryError` from the TypeScript tokenizer gives `tool_failed`.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`read_coverage`'s result type is described inconsistently across Tasks 19, 21 and 23",
+   "description": "- Task 19 returns \"a failure (not an exception)\", and Task 21 also produces failures (stat `OSError`).\n- But Task 21 then says \"The result is either a reading or an absence (reason, detail)\".\n- Task 23 handles three cases: an absence, a failure (sent to `tool_failed`) and a reading.\n- A junior implementer could fold failures into absences with a made-up reason, or drop the failure case.\n- **Fix:** state the result as reading | absence | failure in Task 21, and name the failure type once in Task 19.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:218"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+   "description": "- Every commit line (Tasks 2, 4, 6, 7, 9, 11, 13, 15, 17, 18, 20, 22, 24, 26, 27, 28, 29, 30) is written as `- [ ] Commit: ...`.\n- Commit markers must be plain `**Commit**: ...` lines. As checkboxes they get checked off like work items, and they invite a commit that only checks a box.\n- Where they sit is fine: each one comes at a tested, working point.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The token-ceiling test doesn't check that the language's other metrics are unchanged",
+   "description": "- Success Criterion 10 and the Technical Requirement (\"assert both the signal and the outcome for each row\") include \"its other metrics are unchanged\".\n- Task 11 tests the ceiling only at the `duplication.py` level.\n- One adapter-level assertion would close this: lower the ceiling with `monkeypatch`, then check that function length and complexity are still present. It fits in Task 13 or Task 26.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Duplication's `unparsed_files` won't appear in the summary",
+   "description": "- Task 27 renders `duplicated_lines` with the generic \"N in M file(s)\" branch, and that branch never shows `unparsed_files`.\n- The API Contracts example doesn't show it either, so this isn't a gap against the slice. A tokenizer failure will only be visible in the JSON and the WARNING log.",
+   "location": "src/squadron/metrology/snapshot/render.py:54-63"
+  }
+ ]
+}

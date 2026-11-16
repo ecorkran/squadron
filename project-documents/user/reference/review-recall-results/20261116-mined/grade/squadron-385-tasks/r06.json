@@ -1,0 +1,54 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "PrInputs/PrFacts contract cannot feed the title and \"why\" prose",
+   "description": "Task 9's `PrFacts` carries the slice design *path*, the task items, and the review path, verdict and sha. Three consumers need more than that:\n- **Task 10a** needs the design's H1 to build the title.\n- **Task 11** needs design content to write \"Why\" prose. A path alone gives the model nothing to summarize, and D3 says it is \"given PrFacts only\".\n- **Task 8** reads only `reviewedSha`, but `PrFacts` also carries the review's verdict. No task says where the verdict is read.\n\nAlso, `PrInputs` is never defined. Task 7 builds the commit and slice halves of `gather_inputs` and Task 8 adds the review scan, but no task composes them into `gather_inputs -> PrInputs`.\n\nAdd the design text (or H1) and the review verdict to `PrInputs`/`PrFacts`. Assign the `gather_inputs` composition and the `PrInputs` dataclass to Task 7 or 8.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:197-202"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No task provides the local head sha that Task 6 requires",
+   "description": "`check_head_pushed` takes `local_sha`, and Task 13 must supply it. Task 3 adds only `current_branch` and `commits_in_range`. `git_utils.py` has a private `_resolve_rev(ref, cwd)` (line 339), which returns `None` on failure. The task should either name a public local-sha helper or say to reuse `_resolve_rev`. If it does, a `None` result must raise rather than silently pass the \"behind\" check.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "body.py accumulates four tasks and will exceed the ~300-line guideline",
+   "description": "Tasks 10, 10a, 11 and 12 all write to `src/squadron/pr/body.py`. Together they add the model composer, title resolution (including H1 parsing and fallbacks), the section-definition table and `compose_body`, and the presence check. With their tests, that is likely over the file-size guideline and mixes several responsibilities. Split into separate modules, for example `composer.py`, `title.py` and `body.py` (sections plus check). Task 10 already names the composer as injectable, so the split costs little.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:216"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 16.4 lists a merge as a task item, against the project's git rules",
+   "description": "CLAUDE.md says to never write a merge or push as a task, sub-item or success criterion in a task file. Merging happens in Phase 7, after code review passes. Remove the \"Merge `385-slice...` into `squadron-pr`\" item.\n\nThe \"Ask the Project Manager how they want it run\" line is a PM-confirmation step with no named rule behind it. The project rules call such steps invalid, so reduce that item to \"code review is required\".",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:372-373"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 5 contradicts itself on an unreachable `cf`",
+   "description": "The bullet opens with \"Do not degrade an unreachable `cf` to a default base\" and then says that when `cf` is unavailable the chain proceeds to the host default. Task 5.2 and the design both intend the second behavior. A junior implementer could read the opening sentence as requiring a refusal. Reword it to \"an unreachable `cf` means the integration-branch term is absent; it does not substitute a guessed branch\".",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "\"First commit's subject\" is ambiguous given newest-first ordering",
+   "description": "Task 3 returns commits newest first. Task 10a's fallback uses \"the first commit's subject\", which a junior would read as `commits[0]`, the tip commit. Say which commit is meant: the tip or the oldest.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:80"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Identity precondition has no implementing sub-item",
+   "description": "Task 13.1 orders \"identity, then pushed\" and Task 13.2 tests the refusal. No task states how the hostname for `identify_operator(hostname)` is obtained, or that the call is wired into `create`. A line in 13.1 would cover it, since the locator presumably carries the host.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:298"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Concurrent `slice_ranges` writes silently lose landings that cannot be recovered",
+   "description": "The table accepts last-write-wins with signal \"None\".\n\n- **Why the loss can be permanent:** a merge-commit landing is found again on the next run. A fast-forward landing lost after its reflog expires is gone for good. The slice plan says of this slice that \"the persistence has to be right the first time\" (slice plan line 82).\n- **Why it is likely:** there is one record per project, keyed on `ProjectId`, in a user-level store. Separate worktrees of the same remote, which squadron uses (`squadron-brownfield`), share that record and run `slice-ranges` or `report slice` independently. That makes an overlap far more likely than the single-checkout case 400 accepted.\n- **Rule broken:** a silent failure path breaks the project rule that every failure mode must be observable.\n\n**Fix:** re-read the record just before `write_slice_ranges` and merge the newly found landings into it. That is append-only and keyed on `after_sha`, so the cost is negligible. If a separate fix is still needed, at least log a WARNING when the record on disk changed between the read and the write.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "On squadron, the lockfile gate (D6) may hide type counts across most slices",
+   "description": "D5 (line 218) rejects symlinking `.venv` because squadron's editable self-install makes `uv sync --check` fail on any commit whose version differs. That points to the project's own version being part of the locked environment. If so, the export's `uv.lock` hash also changes on every version bump. D6's identical-hash rule would then mark type errors `environment_unresolved` for any slice whose before and after straddle a release bump, and in a release-per-slice workflow that is most of them.\n\nThis fails safe: the counts are absent, not wrong. But it guts the type-count row for squadron itself, which is the first project in the walkthrough. I could not check squadron's `uv.lock` in this worktree.\n\n**Fix:** confirm whether squadron's `uv.lock` records the editable root package's version. If it does, either:\n- compare the lock with the root package's own entry removed, or\n- say outright in D6 and the walkthrough that type counts will usually be absent across releases.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:220-224"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Settings are read from the live checkout, so the per-commit exclusion identity is weaker for exports",
+   "description": "The architecture records \"the effective exclusion set\" per snapshot because \"changing it changes every metric\" (arch line 94). D5 reads limits and exclusions from the live checkout for both boundaries, so a slice that edits them shows no break. The design states this, and it is forced: `.squadron.toml` is gitignored. Each record still states the settings it used, so the comparison is honest, just less informative. No change needed. It might deserve a line in `docs/COMMANDS.md`.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:377"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Validator wording names a field the schema does not have",
+   "description": "Line 315 says the validator \"rejects an empty `landings`\", but the schema at line 305 has `slices: dict[int, list[SliceLanding]]` and no `landings` field. The intent is clear: each per-slice list must be non-empty. Align the wording so the task breakdown doesn't invent a field.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:305-315"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "A fast-forward follow-up to a merge-landed slice is never found",
+   "description": "The fast-forward path runs only when \"none found\" on the merge path. A slice whose first landing was a merge commit and whose follow-up was a fast-forward records only the merge. D1 handles repeat landings only when both are merges. This is rare and the gap is not silent: a missing landing just doesn't show. Record it as a known limitation next to D2's `LANDED_ELSEWHERE` case.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:111-121"
+  }
+ ]
+}

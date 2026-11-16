@@ -1,0 +1,64 @@
+{
+ "case": "migratory-152-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Overview: \"at the architecture's Tier 3 target (N=200k)\" and \"our current Tier 3 milestone of 200k\". `140-arch` (Tier 3 \"250k\") and `140-slices` (\"Tie",
+   "hits": {
+    "r01": [
+     5
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     1
+    ],
+    "r04": [
+     4
+    ],
+    "r05": [
+     3
+    ],
+    "r06": [
+     5
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Technical Scope item 7 and Technical Decisions: `k_first` \"is removed entirely from the kernel\", configs using it \"raise a `ConfigurationError`\", \"no ",
+   "hits": {
+    "r01": [
+     3
+    ],
+    "r02": [
+     3
+    ],
+    "r03": [
+     2
+    ],
+    "r04": [
+     2
+    ],
+    "r05": [
+     5
+    ],
+    "r06": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Walkthrough steps 2-5 use `python -m migratory.bench parity ...` and `python -m migratory.bench run ... --neighbor-mode ... --ticks`. `bench/cli.py` a",
+   "hits": {}
+  },
+  {
+   "id": "F4",
+   "text": "Success path raises `ConfigurationError`; the config module defines `ConfigError`. **VALID** (minor): contradicts code. Needs: code.",
+   "hits": {}
+  }
+ ],
+ "note": "F2: r02-3, r03-2, r04-2 name the step 2 vs default interim problem explicitly; r01-3, r05-5, r06-3 only name the scope vs mitigation vs development-approach contradiction (borderline, counted). r03-1 mentions Tier 3 250k vs 200k as a bullet within a broader finding (counted). F3 and F4 not raised by any review."
+}

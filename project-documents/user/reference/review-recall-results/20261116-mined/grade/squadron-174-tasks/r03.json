@@ -1,0 +1,40 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes, not `**Commit**:` plain lines",
+   "description": "The file has 17 markers written as `- [ ] Commit: ...` (lines 112, 157, 187, 217, 264, 286, 306, 320, 344, 368, 386, 414, 456, 472, 493, 508 and 527). The convention is a plain `**Commit**:` line, never a checkbox.\n\nBecause these are checkboxes and not markers, an implementer could read the file as having no markers. The fallback rule then commits at the end of every top-level task. That would commit the half-finished refactor after Task 4, with `execute_pipeline` still on `on_step_complete`, and again after Task 5, before the tests move in Task 6.\n\nConvert each one to a plain `**Commit**: \\`type: summary\\`` line.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task file is overweight for a 3/5 slice",
+   "description": "The file has 43 top-level tasks. Many restate design sections nearly word for word, and several split work that belongs together:\n- Tasks 4, 5 and 6 are one refactor, with the tests moved a separate task later. Tasks 4 and 5 should merge, and Task 6 should follow directly.\n- Tasks 33 and 34 are two halves of `plan_prune`. Tasks 36 and 37 are a three-line function and its test.\n- Tasks 29 and 30 each need `resolve_pipeline`, yet its unit tests appear only in Task 31.\n- Task 5 (`:390`, `:427`, `:576`, `:1553-1597`) and Task 4 (`state.py:267`) hard-code source line numbers that will drift. Name the symbols instead.\n- The 1.0 s limit and the 20-run counts are restated from the design.\n\nMerge the paired tasks above and drop the line-number citations. The success criteria need nothing more than that.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 22a asserts wall-clock time, which the design says tests do not do",
+   "description": "Task 22a asserts `MAX_LISTING_S = 1.0`. Special Considerations in the slice design (line 648) says \"There is still no assertion on time in tests.\" Two things need resolving:\n- Update the design sentence to point at the load tier, or the two documents contradict each other.\n- The 1.0 s limit is the advisory figure measured for 199 on real disk. Say whether it holds against a seeded `tmp_path` run on a CI runner, or add a note on how to tune `MAX_LISTING_S` if it flakes.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:316"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 42 runs walkthrough step 8 in a scratch HOME",
+   "description": "Design step 8 measures `sq runs list --all` read-only against the real runs directory (188 runs). Task 42 runs it \"in a scratch HOME\", which holds only the seeded handful of runs. That measurement says nothing about the 1 s target. The load test in Task 22a already covers scale, so either point step 8 at the real directory read-only or drop it from Task 42.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:521"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Test-with pattern is mostly followed",
+   "description": "Tests follow their implementation in Tasks 9\u219210, 11\u219212, 13\u219214, 15\u201316\u219217, 19\u219220, 21\u219222, 23\u219224, 25\u219226 and 27\u219228. The exceptions are Tasks 29\u201330\u219231, where `resolve_pipeline` waits for tests until Task 31, and Task 6, which moves tests to the observer one task after the refactor. Neither blocks work.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:229"
+  }
+ ]
+}

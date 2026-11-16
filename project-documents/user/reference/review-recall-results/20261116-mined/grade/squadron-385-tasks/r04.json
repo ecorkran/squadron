@@ -1,0 +1,75 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Dry-run/real equality can't hold across two runs with a live model; Task 16.2 step 5 will fail",
+   "description": "Task 13.1 binds the body once \"so their equality is structural.\" That only holds inside one run. `sq pr create --dry-run` followed by `sq pr create` is two runs, and each one makes a fresh model call for the body prose. On a non-slice branch the title also comes from the model (Task 10a). Task 13.2's \"dry-run output equals the body the next real run sends\" passes only because the fake composer is deterministic. Task 16.2 (line 355) then repeats the LLD's step 5, expecting the created PR to match `/tmp/dry.txt`, and a live model will generally produce different prose. The slice's Testing note also says this test should be structural \"rather than comparing two separately composed strings,\" yet 13.2 compares outputs. This leaves the \"`--dry-run` title and body equal what the next real run creates\" criterion untestable in practice. Fix: make the 13.2 test assert that one bound value reaches both the print and `open_pull_request` within one run. Also either change the slice criterion to \"within one invocation\" or add a way to replay a dry run (for example passing the body through), and update the expectation in 16.2.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:304-309"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Empty commit range is assumed impossible but never refused, so the title fallback can crash",
+   "description": "Task 7.1 says an empty range \"is impossible here, since a PR with no commits cannot be opened.\" Nothing enforces that before the model call. A branch that is pushed and level with its base passes every check in Tasks 5 and 6. Task 3.2 makes `commits_in_range` return `[]` for that case. Task 10a.1 (line 242) then falls back to \"the first commit's subject \u2014 always present,\" which would raise an IndexError. Separately, `open_pull_request` would get a 422 only after tokens were spent, which contradicts D8's rule that every refusal that can be decided without a model call happens before it. Add an explicit refusal for an empty range in 7.1, ahead of composition, with a test in 7.2 or 13.2.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:158"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Composer's broad catch is placed in `pr/body.py`, which is not a process boundary, and its test can't observe an exit code",
+   "description": "Task 10.1 catches every provider exception \"at the composer's boundary\" in `src/squadron/pr/body.py` and turns it into \"a non-zero exit.\" It justifies the broad catch as a process-boundary handler. `pr/body.py` is a library module, though. The process boundary is the `create` command in `cli/commands/pr.py`, which D6 says owns \"orchestration, printing, and exit codes.\" Under the project's exception rule (c), a catch-all is allowed only at a process boundary. Task 10.2's assertion that a provider error \"exits non-zero\" also can't be checked in `tests/pr/test_body.py`, where there is no CLI. Fix: have the composer log with `logger.exception` and re-raise a typed `CompositionError`, which matches rule (a). Have Task 13 map it to `typer.Exit(1)`. Move the exit-code assertion into 13.2.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221-227"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Detached-HEAD error can't use the codehost exception type, and no task catches it in the command",
+   "description": "Task 3.1 puts `current_branch` in `src/squadron/review/git_utils.py` and tells it to \"match `github_cli._branch_for`'s existing behavior,\" which raises `TargetUnresolvableError`. That is a codehost exception, and the import-boundary test forbids `review/` from importing `codehost/`. So the helper must raise some other exception type. Task 14 only wraps `CodeHostError`, and Task 13.2 has no detached-HEAD case. As written, a detached HEAD would surface as an uncaught traceback, not a named refusal. Fix: name the exception type `current_branch` raises (one that lives in `review/` or is a built-in). Have Task 13.1 catch it and render it, and add a detached-HEAD case to 13.2 that asserts exit 1 and no host call.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:79"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Unreachable `cf` silently switches to the host default; the bullet's title also contradicts its own text",
+   "description": "The bullet is headed \"Do not degrade an unreachable `cf` to a default base,\" but its text then says an unavailable `cf` is treated as unset and the chain goes to the host default. That is a degrade to a default. A junior implementer can't tell which instruction applies. This is also the silent retarget D1 warns about. In a repository that has an integration branch configured, a temporarily broken `cf` opens the PR against `main`, and nothing tells the operator. Task 5.2 then asserts \"no raise\" and nothing more. The failure-mode enumeration rule requires the case to be observable. At minimum, emit a WARNING saying the integration branch could not be read and assert it in 5.2. Rewrite the bullet title so it matches the behavior.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Slice success criterion conflicts with D2 and with Task 6.2's success line",
+   "description": "The slice's functional criterion says a branch whose host sha differs from local \"fails the same way with the same command.\" D2 and Task 6.1 specify different commands, `git push -u` versus `git push`. Task 6.2's success line is \"the two refusals name different commands.\" The tasks follow D2, which is the better-reasoned rule, but as written the criterion can't be met. Note in the task file that D2 governs, or amend the slice criterion, so the Task 16.3 rewrite and later review don't report it as unmet.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:149"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Close-out says to check off skipped items, which misreports progress",
+   "description": "Task 16.4 says \"Mark any dropped or skipped item above `[x]` before closing.\" A checked box claims the work was done and verified. Checking skipped items makes the visualizer report work that never happened. Skipped items should stay unchecked, with a note saying they were skipped and why, or be removed from the file with a recorded reason. The next line adds a step that waits on the Project Manager (\"Ask the Project Manager how they want it run\"). No named rule requires that gate. The project rules call such steps invalid, so the task should state the review method itself.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:371-372"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Wrong cross-references for the parsers",
+   "description": "Task 1 says it is \"needed by Task 9,\" and Task 2 (line 55) says \"Needed by Tasks 9 and 10.\" The actual consumer of both parsers is Task 7 (`inputs.py`). Task 10a's H1 parsing doesn't use either one. The order is still correct, but these cross-references would mislead an implementer.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "One body model call or five is not specified",
+   "description": "Task 11.1 follows D4's \"requests prose per section\" but doesn't say whether that means one call with per-section instructions or one call per section. The choice affects token cost, how the failure handler in 10.1 applies, and what the fake composer in 11.2 must model. State the intended shape.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:260-262"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Minor test overlap",
+   "description": "Task 4.2 repeats 4.1's success criterion (existing `show` tests pass unchanged). The `--title overrides` case in 13.2 repeats a case in 10a.2. Both are small, so this is not worth restructuring. 4.2 could be folded into 4.1.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:102-105"
+  }
+ ]
+}

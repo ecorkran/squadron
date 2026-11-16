@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "`adoptionBuild.integration.test.ts` outlives the pipeline seam, so the 3.7 gate cannot pass",
+   "description": "Task 3.3 changes `createContextPipeline` to take one argument and removes the resolver from the integrator. But `core/tests/adoption/adoptionBuild.integration.test.ts` is only deleted in task 4.1. This test drives the real pipeline: line 68 calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe: fakeProbe })`, and it asserts on `FACTS_HEADING = '### Adoption Facts'` (line 24) and on state writes.\n\nThe compiler will not catch this. Core's `typecheck` is `tsc --noEmit` against `tsconfig.json`, which includes only `src/**/*`. The extra argument is ignored at runtime, so the test runs and its adoption assertions fail. The targeted test run in 3.3 doesn't include it, but `pnpm --filter @context-forge/core test` in 3.4's flow and `pnpm -r test` in 3.7 both will. A junior implementer would hit a red gate and might \"fix\" the test rather than delete it.\n\n**Fix:** move the deletion of `adoptionBuild.integration.test.ts` from 4.1 into 3.3, next to the `pipeline-integration` brownfield deletions.",
+   "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commits are written as checkbox items, not plain `**Commit**:` markers",
+   "description": "Every commit point is a checkbox: `- [ ] **2.3 Commit**`, `- [ ] **3.2a Commit the render removal**`, and `- [ ] Commit: ...` in 3.7, 4.1\u20134.4, 5.1 and 6.3. Project rules say implementers commit only at `**Commit**:` markers, and that a file with no markers is committed at the end of each top-level task. Read literally, this file has no markers. That would merge 3.2a into 3.7 and turn 4.1\u20134.4 into one commit, which loses the per-task compile-safe commits section 4's header promises.\n\nCheckbox commits also cause a loop. The rule is implement, then run task-checker, then commit. Ticking \"Commit\" after committing leaves a change that only ticks a box, which is forbidden. Task 1.1 already has to work around task-file changes carrying across commits.\n\nThe commit points themselves are placed well, at working, tested states. **Fix:** turn each one into a plain `**Commit**: \\`<message>\\`` line. Merge task 3.2a's check into a marker after 3.2.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "6.2 export audit checks the wrong list and would flag symbols the slice keeps",
+   "description": "The audit tells the implementer to remove any export that doesn't have a consumer \"listed under the design's Interfaces Required\" and isn't in `history`, `comprehensionAnalysis` or `adoptionOutcome`. Interfaces Required lists only detection modules plus those three. Several kept symbols are not on it:\n- `AdoptionError` (`contracts.ts`, still thrown by kept detection modules)\n- `readAdoptionState` and the `ADOPTION_STATES` re-export (`adoptionState.ts`, used by navigation)\n\nThe Context Summary (line 39) says to keep all of these, so the task file contradicts itself, and a literal reading would remove exports that are still needed. The slice's actual requirement is \"No exported symbol remains that only the deleted code used.\" **Fix:** reword the audit so each export must have at least one remaining production consumer, or appear in the Context Summary's Kept list.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:200"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Success check for 3.4 doesn't cover the test-file edits it asks for",
+   "description": "Task 3.4 says to \"remove any remaining references in core tests and helpers\". Its success check, `pnpm --filter @context-forge/core typecheck`, only compiles `src/`. Leftover `adoptionFacts`/`fileComprehension` uses in tests would only show up as runtime failures. Adding the core test run to 3.4's success check would close this gap. The same blind spot is behind the FAIL above.",
+   "location": "packages/core/tsconfig.json:20"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Purity test runs after the deletions instead of right after the seam removal",
+   "description": "Test 5.1 checks the behaviour changed in section 3 and doesn't depend on section 4. Running it after 3.7 would confirm no writes and no `sq` spawn before deleting code. The current order follows the design's Development Approach, so this is optional.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:175"
+  }
+ ]
+}

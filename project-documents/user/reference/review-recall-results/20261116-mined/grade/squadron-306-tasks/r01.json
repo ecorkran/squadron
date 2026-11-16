@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Part 0 is overweight for a purely mechanical move",
+   "description": "Part 0 has eight tasks (T1\u2013T8) and four commits for moving code verbatim and updating import paths. T2, T4 and T6 are verification-only tasks, and each repeats a long NOTE saying \"this is the focused subset, not the full-suite gate.\" The slice only requires that 305's suite passes unchanged (SC12). T1+T2, T3+T4 and T5+T6 could each be one task. T7 could be folded into T1/T3. The repeated caveats could be a single sentence. As written, the file spends more steps on the move than the slice's risk justifies.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:78-198"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Intermediate commits sit at points verified only by a subset of tests",
+   "description": "T2, T4 and T6 each commit after running only a focused subset of tests (lines 99-104, 127-129, 161-165). The file says the full-suite check is deferred to T8, and T2 states \"Commit here regardless.\" Commit markers should sit at working, tested points. Commits at T2, T4 and T6 can leave an importer regression outside the subset in history until T8. Running `uv run pytest -q` once at each of those points, or committing once at T8, would fix this. The commits are also written as `- Commit:` list items, not plain `**Commit**:` lines.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:105"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "T14 has no test for the CLI path that the scope decision added",
+   "description": "The T13 scope note (line 316) says the guard moved into a shared `archive_existing_review` helper. It is called from `save_review_file`, which returns `None` on failure. It is also called from `save_review_result`, which raises `OSError`. The CLI got a `_save_and_report` wrapper. SC7 and SC11 are about re-running `sq review code <N>`, and that goes through `save_review_result`. T14's tests cover only `save_review_file`. Nothing tests the `save_review_result` raise or the CLI error-reporting path, which is the one users hit. T14 needs a sub-item for those, or it needs to say that the helper's tests cover both callers.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:316-338"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T11 may leave one of the two `reviewedSha` paths untested",
+   "description": "SC1 requires the stamp from both the CLI and the pipeline persistence paths. T10 specifies two separate resolutions, one per caller. T11 tests one path, \"whichever is more directly testable.\" T10 should extract one shared resolver, which the slice's SC1 note says was done as `resolve_reviewed_sha`. Alternatively, T11 should require a test through each caller. Otherwise parity between the two paths, which T10 calls a standing project rule, is untested.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233-236"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Stale cross-reference in T14",
+   "description": "T14 says \"the second failure mode T12 enumerates,\" but T12 is the cf-scanning checkpoint. The two failure modes are enumerated in T13 (copy cannot be created, and verification fails). An implementer following the reference lands on the wrong task.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:330"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "T3 contradicts the relocation the slice records as completed",
+   "description": "T3 says \"do not move `screens.py`\" and keeps `RoundDiff` as a cross-package import. The slice's SC12 note says `RoundDiff` and the two context-free screens did move to `review/addressed/screens.py`, because T21 needed to construct a `RoundDiff`. The task file was not updated to reflect this. The file is marked `status: complete`, so this affects only readers using it as a record. The context summary at lines 48-54 has the same drift, since it lists `screens.py` as staying in the pipeline package.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:115-119"
+  }
+ ]
+}

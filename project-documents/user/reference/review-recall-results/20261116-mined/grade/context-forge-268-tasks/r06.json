@@ -1,0 +1,33 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit 3.2a gate cannot pass: tests that assert the removed output still exist",
+   "description": "Tasks 3.1 and 3.2 stop rendering `Comprehension:` and `### Adoption Facts` while the resolver is still wired into `ContextIntegrator`. Task 3.2a then requires `pnpm --filter @context-forge/core test` to pass. A grep of the repo shows other core tests that still assert that output at that point:\n- `packages/core/tests/pipeline-integration.test.ts`: 3.3 deletes its brownfield cases.\n- `packages/core/tests/services/ContextIntegrator.test.ts`: 3.3 deletes its resolver cases.\n- `packages/core/tests/adoption/adoptionBuild.integration.test.ts`: 4.1 deletes it.\n- `adoptionResolver.test.ts` and `adoptionFacts.test.ts`: 4.1 deletes them, and they may also fail.\n\n3.1 and 3.2 only delete the `SectionBuilder` and `ContextTemplateEngine` tests, so the full core suite will fail at 3.2a. Fix this in one of two ways. Fold 3.1 and 3.2 into the 3.3\u20133.7 group and commit once at 3.7. Or add the failing test deletions to 3.1/3.2 and narrow the 3.2a check to the suites that still apply.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:89-101"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit points are written as checkbox tasks and \"Commit:\" sub-items, not `**Commit**:` markers",
+   "description": "Task 2.3 and task 3.2a are checkbox tasks that exist only to commit. Tasks 4.1\u20134.4 and 5.1 carry `- [ ] Commit: \u2026` sub-items, and 3.7 does the same. The rules say commit markers are plain `**Commit**:` lines, never checkboxes. The project rule for a file without markers is to commit at the end of each top-level task. That would make an implementer commit at the end of the whole of section 3, which contradicts the intended two commits inside it. Convert these to plain `**Commit**:` lines and drop 2.3 and 3.2a as separate tasks.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Test coverage is missing for the \"later-phase\" part of the byte-identity criterion",
+   "description": "The success criterion says \"Greenfield, already-planned and later-phase builds are byte-identical\". D6 limits the capture to a greenfield Phase 0 build and a planned Phase 4 build, and task 2.2 follows that. Phase 4 is the only non-zero phase tested, so the task file covers the criterion only by that interpretation. The golden test depends on how `ContextIntegrator` handles each phase. The design-level fix is to state in task 2.2 that the Phase 4 case represents \"later-phase\", or to add one more phase. I am not adding a requirement here, only flagging the thin mapping.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:70-77"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Small tasks that could be merged",
+   "description": "Tasks 3.1 and 3.2 are each a one-file delete with its tests, and 3.4 is a type-field deletion. Merging 3.1, 3.2 and 3.4 into the 3.3 group would shorten the section. It would also remove the ordering problem in the first finding. Nothing else is overweight. The single-file layout and the effort estimates fit the slice.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:89-116"
+  }
+ ]
+}

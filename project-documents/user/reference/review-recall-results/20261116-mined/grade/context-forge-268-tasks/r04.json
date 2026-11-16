@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Commit gates 3.2a and 3.7 require passing suites while tests of the removed behavior still exist",
+   "description": "Tasks 3.1\u20133.2 stop rendering `Comprehension:` and `### Adoption Facts`, and 3.2a then requires `pnpm --filter @context-forge/core test` to pass before committing. Two files still assert that output at that point:\n\n- **`adoptionBuild.integration.test.ts`**: `expectBrownfield` asserts `toContain(FACTS_HEADING)` through the real pipeline (cases 3, 4, 5b, 6, 8, 9, 11, 13). The task file does not delete it until 4.1.\n- **`pipeline-integration.test.ts:184`**: asserts `Comprehension: ${COMPREHENSION}`, and lines 154\u2013173 assert probe facts text. The task file does not delete this block until 3.3.\n\nThe same problem recurs at 3.7, which requires `pnpm -r test` to pass. After 3.3 removes the resolver wiring, `adoptionBuild.integration.test.ts` still exists and still expects the brownfield swap, the `in_progress` state write and the `AdoptionError`. Vitest does not typecheck, so its two-argument `createContextPipeline` call runs and the assertions fail.\n\nAs written, a junior implementer either stalls at the gate or improvises deletions out of order.\n\nFix:\n- Move the deletion of `adoptionBuild.integration.test.ts` from 4.1 into 3.3.\n- Move the deletion of the `pipeline-integration.test.ts` brownfield block from 3.3 to before the first gate.\n- Simpler alternative: drop the 3.2a commit and fold 3.1\u20133.2 into the 3.7 commit, with both deletions done in 3.3. The gate at 3.2a is then no longer needed.",
+   "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:99-103"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "Every commit point is a checkbox item: `- [ ] **2.3 Commit**`, `- [ ] **3.2a Commit the render removal**`, and `- [ ] Commit: \u2026` sub-items in 3.7, 4.1\u20134.4, 5.1 and 6.3. The convention is plain `**Commit**:` lines, never checkboxes. Checkbox commits also produce the \"commit that only checks boxes\" pattern the project rules forbid.\n\nConvert each to a plain `**Commit**: {message}` line after the task it closes. Placement is otherwise sound once the FAIL above is fixed.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Test references are checked by typecheck gates that do not see tests",
+   "description": "Each package's `typecheck` script is `tsc --noEmit` against `tsconfig.json`, which includes only `src/**/*`. Tests are covered only by `tsconfig.test.json`, which no script or CI step references. This weakens three checks:\n\n- **Task 3.4**: \"Remove any remaining references in core tests and helpers\u2026 Success: core typecheck passes\" cannot detect a leftover test reference.\n- **Task 6.2**: the grep covers `packages/*/src` only, so a stale `adoptionStateWrites` or `fileComprehension` in a test file passes every gate. An example is the four two-argument calls in `cli/tests/integration/build.integration.test.ts:42-65`, if 3.5 misses one.\n- **Task 4.3**: the \"leftover `switch` fails to compile\" claim holds for `src` only.\n\nFix: extend the 6.2 grep to `packages/*/src packages/*/tests`, as 4.2\u20134.4 already do. Give 3.4 a grep-based success check for the test side.",
+   "location": "packages/core/tsconfig.json:20"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task count is on the heavy side for an effort-2 slice",
+   "description": "There are 19 tasks and 8 commit points for a deletion slice. Section 4's four separate commits (4.1\u20134.4) could be one or two without losing a working checkpoint. Folding 3.2a into 3.7 removes another. This is not blocking; each task is clear and independently verifiable.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:138-169"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Stale header comment survives the cut",
+   "description": "The file header describes the module as \"Presence-only facts for the Adoption Facts section\", which no longer exists after 3.2. The module is kept and the Migration Plan does not list it, so no criterion is unmet. A one-line comment fix could ride along with 4.2's header rewrite.",
+   "location": "packages/core/src/detection/presentPaths.ts:1"
+  }
+ ]
+}

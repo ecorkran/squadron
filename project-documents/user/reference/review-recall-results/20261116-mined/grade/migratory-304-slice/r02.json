@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Second `step()` listing returns before `post_tick()`, contradicting the stated requirement",
+   "description": "The \"Technical Decisions\" snippet (lines 176-191) wraps only `engine.tick()` in the entity-count guard. The \"Implementation Details\" snippet (lines 272-289) uses `if count == 0: return`, which runs after `pre_tick` and before `post_tick`. With zero entities, `post_tick()` is skipped. The note at line 291 and the special consideration at line 408 both say `post_tick()` must still run so trail decay advances. A reader implementing from the Implementation Details listing would build the defect the doc says to avoid. Keep one `step()` listing, the guard-wraps-tick form, and cut the duplicate. Add a test for the zero-entity case that asserts `post_tick` is called.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:272-291"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Environment is always present\" contradicts the optional `Environment | None` design",
+   "description": "The doc says the environment is not optional and that this avoids `if environment is not None` checks. The design then makes `SimulationManager` accept `Environment | None`, and `step()` has two such checks. The stated reason is \"backward compatibility\" with existing tests. That is a test-fixture convenience shaping a production API. It leaves a `None` path that production never uses, and the `environment` property returns `None` to force-construction code. Make `environment` required and update the existing test fixtures, since every `step()` call site is being edited anyway for `tick_number`. That removes the checks and the contradiction.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:218-220"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Plan-assigned scope is dropped or deferred without a destination",
+   "description": "The slice plan entry for 304 assigns these items, and the design drops or changes them:\n- **Config scope:** the plan lists \"seed, grid resolution, layer selection\" in YAML. The design delivers only `seed` and excludes grid resolution and layer selection.\n- **Engine context:** the plan says to \"pass environment context to `SimulationManager` and `engine.tick()`\". The design passes it only to `SimulationManager` and leaves `engine.tick()` unchanged.\n- **Snapshot data:** the plan's 305 entry says \"Terrain summary in snapshots deferred to (304)\". 304 excludes environment data from snapshots as \"deferred to future work\", and no slice picks it up.\n\nDeferring these can be reasonable, since there are no layers yet. But the design should say explicitly that the plan entry is being narrowed. It should also name where the snapshot hand-off from 305 lands, or the plan should be updated.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:42-48"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No mechanism for agent-originated post-tick writes",
+   "description": "The plan requires handling \"post-tick environment writes (e.g., stigmergic trail deposits)\". The design says `post_tick()` applies \"agent-originated writes (trails, threats)\". The `post_tick()` call takes no arguments, and `step()` does not pass entity state or positions to the environment. It does not say how a trail layer learns where agents were. Either that data reaches the layer through the environment reference in `post_tick()`, or it comes from somewhere else. This is the contract that slices 506 and 505 consume. State it, even if the answer is \"`post_tick` receives nothing yet; 506 will extend the signature\". Otherwise 506 will force a signature change to the `step()` and `Environment` interface this slice just established.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:193-196"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure modes of the new `pre_tick`/`post_tick` call path are not enumerated",
+   "description": "This slice adds two synchronous calls into third-party layer code inside every tick. The doc covers only the empty-layer case. It does not say:\n- What happens if `pre_tick` or `post_tick` raises. The exception could propagate through `tick_body`, and the doc does not say whether it crashes the server or is logged and skipped.\n- What happens if a layer is slow. Its time counts against the tick budget, which the 301 loop already warns on. The doc does not say how environment time is made visible, for example a per-phase duration log.\n- What happens if `pre_tick` succeeds and `engine.tick()` raises. The environment has advanced but `post_tick` never ran, which leaves it inconsistent.\n\nPick explicit behavior for each. Fail fast with `logger.exception` and re-raise is consistent with project rules. Add at least one test that asserts the observable signal.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:175-198"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Unused config and state add weight the slice does not need",
+   "description": "- `EnvironmentConfig.seed` is explicitly \"not used by the empty environment\". It is a config field and a validation path with nothing consuming it. It also carries a magic default of 42 (lines 149-151, 228-231), which the project rules discourage when the default is not centralized.\n- `_seasonal_parameter: float` is listed under SimulationManager state, but the design passes `seasonal_parameter` as a `step()` argument with a `0.0` default. The field does not exist in any code listing. Remove it from the state list.\n- The \"Environment Access for Forces\" section includes an illustrative `TerrainResistance` class \"not built here\". Cut it down to one sentence. The same goes for the repeated data-flow and config-field prose.\n- Seed validation should reject `bool`, which is an `int` subclass in Python. Otherwise `seed: true` passes validation.\n\nConsider deferring `seed` to slice 501, the first consumer. If it stays, define the default once in config rather than in the dataclass and again in prose.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:117-119"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Dependency and API naming alignment with the slice plan",
+   "description": "- The plan says `environment.update()`, while the design uses `pre_tick()`/`post_tick()`. The two-phase split matches the \"post-tick writes\" requirement, so this looks like a deliberate refinement from the 500 interface. Note it in the doc.\n- \"Consumes from\" lists (300) Server Bootstrap, but the frontmatter `dependencies` omits it. This is minor, since 303 depends on 300 transitively.\n- The dependency direction is correct: the server depends on `migratory.environment` and not the reverse. 308 consumes `seasonal_parameter` and `tick_number` as the plan describes.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:6"
+  }
+ ]
+}

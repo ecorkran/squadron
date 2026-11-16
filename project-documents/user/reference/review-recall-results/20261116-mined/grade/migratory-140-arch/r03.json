@@ -1,0 +1,89 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The tick return type contract, this document's stated purpose, is never decided",
+   "description": "The Overview says this document \"defines the shared boundary \u2014 the tick return type contract.\" The Technical Considerations section only lists options (a) `to_numpy()`, (b) return Quadrants fields, (c) DLPack. It then says to \"support all three behind an abstraction, with the choice made per-platform.\"\n- **No decision or interface.** No signature, no ownership of device memory lifetime, and no rule for when a returned array is valid. The next tick may overwrite it, and the doc doesn't say whether the engine double-buffers. Nothing says who triggers the sync.\n- **Option (b) contradicts a design goal.** The doc admits (b) \"leaks the compute substrate into the server.\" The \"Clean ownership boundaries\" goal says the server must not know the backend.\n- **Building all three is overweight.** Three implementations of an abstraction before any measurement is premature. The Metal claim (\"nearly free, no actual copy\") and the DLPack-on-Metal support are both unverified.\n- **The contract slice comes last.** \"Tick return type contract implementation\" is the last of the five 140 slices, after the spatial and force kernels are built.\n\nPick one contract now. Option (a) is the obvious first choice. State the buffer-validity semantics, and let the benchmark slice decide whether (c) is ever needed.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Slicing at the `SpatialQuery`/`BulkForce` boundary forces a host\u2194device round trip per tick in the intermediate slices",
+   "description": "The doc says Quadrants operates \"behind the existing `SpatialQuery` and `BulkForce` interfaces.\" Those interfaces take and return NumPy arrays and CSR. The slice order is: GPU spatial kernel, then force kernels, then \"integration and tick pipeline \u2014 full tick on GPU.\"\n- **Transfers in the middle slices.** Between the spatial-kernel and pipeline slices, positions go host to device for the query. CSR comes back to the host, goes up again for each force, and results come back down. On discrete CUDA that is PCIe traffic several times per tick. On Metal it is still sync and cache overhead.\n- **The intermediate slices may measure slower than Numba.** That could trigger an unwarranted abandon decision.\n- **Residency belongs in the abstraction.** The seam needs a device-resident state object (positions, velocities, CSR) shared by spatial, force and integrate stages. Per-interface substitution cannot give that.\n- **\"Same code, different backend\" understates the change.** The principle claims the CSR-walk structure carries over unchanged, but the data-ownership model is different.\n\nEither re-slice so the spatial, force and integrate kernels land together on a resident-state abstraction, or define that abstraction up front.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#anticipated-slices"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "GPU spatial hash does not provide k-NN semantics, which conflicts with the fidelity goal and the CSR contract",
+   "description": "The current path is `cKDTree.query k=13`, an exact k-nearest-neighbour query with density-adaptive reach. The proposed GPU path is \"gather neighbors from adjacent cells,\" which yields a radius or cell neighbourhood with variable count.\n- **Different neighbour sets.** It needs a per-agent top-k selection to reproduce k=13, or it changes neighbour semantics. In dense collision regions (the 2M demo) a cell holds far more than 13 agents. In sparse regions the fixed cell size finds too few.\n- **Fidelity and CSR bounds.** The \"regression testing mandatory\" goal and the \"bounded by k \u00d7 n_active edges\" CSR property both depend on this. Neither is addressed.\n- **The sort primitive isn't a given.** The doc assumes \"parallel radix sort\" and \"prefix sum\" are available \"single-kernel operations.\" As I recall, Taichi-lineage stacks ship a prefix-sum helper and a slow odd-even merge sort, not a radix sort. Genesis-style projects hand-write theirs. Verify this in the evaluation slice. Today the sort is an unscoped hidden cost, not a primitive.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Wire optimizations at tier 3+ must run GPU-side, which contradicts \"the wire is a separate problem\"",
+   "description": "The Principles say delta compression, culling and decimation are \"independent of the compute backend.\" Tier 4 says the contract \"determines whether position data exits the GPU at all.\"\n- **Cost at scale.** At 1M\u20132M agents the full float32 position set is 12\u201324 MB per tick. At 60 Hz that is 0.7\u20131.4 GB/s across PCIe or unified memory, before any Python-side culling or delta encoding. Frustum culling and int16 delta encoding in NumPy over 2M agents per client per tick is not viable.\n- **They must run as kernels next to the sim.** That makes culling and delta encoding substrate-aware and moves them into the engine boundary. That conflicts with \"Clean ownership boundaries\" and with `tick() \u2192 state arrays` being preserved at every tier.\n- **Reconcile the two statements.** Either the engine exposes a \"visible-set + delta-encoded\" output stage, or the server owns GPU code. The doc has to pick one.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#envisioned-state"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Wire arithmetic is wrong or unsupported in several places",
+   "description": "- **Delta compression ratio.** \"int16 \u2026 gives ~32\u00d7 compression over float32 positions\" is incorrect. int16 vs float32 is 2\u00d7. Larger gains would need entropy coding or sparse updates, neither of which is described.\n- **Bytes per agent.** The wire is described as \"uncompressed JSON,\" then sized at \"24 bytes \u00d7 3,500 agents.\" 24 bytes is a binary payload (for example 3\u00d7float32 position plus 3\u00d7float32 velocity). Real JSON for six floats is several times larger. The \"manageable at 60 Hz\" and \"still viable at 10k\" claims rest on the wrong number. JSON-encoding 10k agents per tick in Python may itself be a Tier 1 bottleneck, yet Tier 1 keeps \"Current wire protocol.\"\n- **Bandwidth at the target.** 2M \u00d7 12 B \u00d7 60 Hz is about 11.5 Gb/s for positions alone. The Tier 4 \"10G or 25G LAN\" option only works with culling or decimation, which the doc doesn't quantify.\n- **Culling assumption.** \"~50k visible at ground level\" is unsourced. Frustum culling has no occlusion culling. For the Tier 5 demo, a camera inside a 2M-agent collision with a wide FOV may see hundreds of thousands of agents.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#current-state"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Delta stream protocol lacks keyframes, resync and per-client state",
+   "description": "The doc covers large-delta fallback per agent. It omits:\n- **Keyframes and late join.** Nothing covers initial keyframes, late-joining clients, or reconnect.\n- **Drift.** The client \"accumulates deltas,\" so quantization error compounds. The server must compute deltas against the client's reconstructed (quantized) state, not true state. That is not stated.\n- **Interaction with decimation and culling.** With stream-rate decoupling (sim 60, stream 30), the baseline is the last frame sent, not the last tick. With culling, agents entering or leaving the visible set need full-position events. Culling is also per-client, so delta baselines and visible sets are per-client state, and multi-viewer cost is unaddressed.\n- **Failure handling.** The camera control channel is described as needing to be \"reliable and low-latency,\" with no failure mode specified. The cases are a stale camera, a disconnect (does the sim keep running), and what the client sees when the camera update lags.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Fidelity verification strategy is undefined for non-deterministic and chaotic systems",
+   "description": "\"Outputs verifiable against the current NumPy implementation\u2026 mandatory at each tier transition\" has no acceptance criteria.\n- **Float differences compound.** Different reduction order (Numba `fastmath`, GPU atomics, float32 vs float64) makes trajectories diverge in a flocking system. Bit-for-bit comparison is impossible.\n- **The tolerance regime is unspecified.** The doc needs per-force numerical tolerance on identical input state, plus statistical metrics for emergent behaviour (for example polarization or nearest-neighbour distance distributions).\n- **The baseline moves.** Staggered updates (119) are explicitly \"a behavioral change,\" so the baseline for verifying Numba (118) and Quadrants is not the NumPy implementation once 119 lands. Declare whether verification is against NumPy with stagger=1.\n- **Determinism claim.** \"Determinism within a given stagger configuration should still hold\" will not hold on GPU with atomics or unordered reductions. Say so.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#design-goals"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Tier 1 feasibility not demonstrated from the profile in the doc, and the baseline numbers are inconsistent",
+   "description": "- **Mixed baselines.** The doc quotes \"3,500 at 57 TPS\" (about 17.5 ms/tick) next to a per-tick budget from N=2,492 that sums to about 9.4 ms (about 100 TPS). The 79\u219243 TPS drop is cited for a different N range.\n- **Tier 1 gains are bounded.** Numba targets `force_total` (3.14 ms). `spatial_query` is 5.67 ms, about 60% of the measured budget. If stagger refresh k is small, you get at most a few-fold speedup on spatial work. `spatial_build` (O(n log n)) is not staggered, and cKDTree's `query` is single-threaded unless `workers=` is set. Linear extrapolation to 10k puts the tick near 35\u201340 ms. The doc never shows that 118 + 119 reach 16.7 ms.\n- **Tier 1 is gated on numbers the doc doesn't produce.** Add a projected budget at 10k, or make \"measure 10k baseline\" an explicit first step.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#current-state"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "No fallback for Tiers 2\u20135 if Quadrants fails, and no go/no-go criteria for the evaluation slice",
+   "description": "The risk mitigation is \"the Numba tier provides a working fallback at 10k.\" Everything above 10k, which is the actual goal, depends on a young fork (0.7.2, dated the same day as this document).\n- **No alternatives considered.** Nothing is compared for the Metal+CUDA constraint, such as Warp, wgpu/WebGPU compute, or Taichi upstream. Nothing records why the choice was made.\n- **No exit criteria.** The evaluation slice (\"benchmark Quadrants against Numba on a single force\") has no threshold such as a minimum speedup, Metal feature coverage, or sort availability. It should also test the spatial hash and sort primitives, not just a force kernel. A force kernel alone is the easy part.\n- **Compatibility unchecked.** Python 3.10\u20133.13 support is stated without checking the project's pinned Python version.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Design goals on platform support are ambiguous or inconsistent with the tiers",
+   "description": "- **Gap between 50k and 250k.** \"Apple Silicon primary through at least 50k\" and \"NVIDIA not required \u2026 below 250k\" leave 50k\u2013250k undefined.\n- **Tier 3 contradicts the goal.** Tier 3 is 250k on \"NVIDIA CUDA,\" so it requires CUDA at exactly the boundary the goal says it need not be required below.\n- **Metal feasibility is unvalidated.** No Metal feasibility check for 50k+ agents, the Metal feature limits Taichi-lineage backends have (such as 64-bit and atomics), or the Metal-vs-CUDA parity expected.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#design-goals"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Slices and ownership are inconsistently specified",
+   "description": "- **Numbering and ownership.** Only 118 and 119 have indices, and they are filed under initiative 100. The world-server wire slices and the 140 slices have none. `relatedSlices: [118, 119]` gives no mapping to the other eight. The Overview says \"each track is owned by its respective initiative's worktree,\" but this document also lists those other initiatives' slices.\n- **Dependencies not stated.** Server frustum culling depends on a client camera channel (a viewer-side change), but the viewer is declared out of scope. Delta compression and binary WebSocket require client-side decoding, also viewer work. Slice dependencies (which wire slices gate each demo tier) are not stated.\n- **Scope contradiction.** \"Biome terrain shading\" is described under Technical Considerations as \"viewer-only \u2026 independent of all scaling work,\" yet Scope excludes viewer rendering. It also has no slice, but is stated to \"ship before or alongside the 50k milestone.\" Move it out or give it a slice.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#anticipated-slices"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Tiers 4\u20135 and the multi-option contract are speculative; defer them",
+   "description": "The architecture is overweight for what the anticipated slices actually deliver.\n- **Cut or defer: Tier 4 and Tier 5.** \"Vulkan framebuffer \u2192 H.264 stream,\" \"dedicated 10G/25G link,\" and the 2M demo have no slice, no design and no measurement behind them. The Tier 4/5 text amounts to a vision statement. Replace it with \"revisit after Tier 3 measurements.\"\n- **Cut: the three-option contract abstraction.** Build option (a) and add others only if measurement demands it.\n- **Defer: the cross-platform benchmark harness.** It is listed last but needs to exist at the start, to support the \"profile before you optimize\" principle. Make it an early slice limited to what 118/119 and the evaluation slice need, rather than a late \"automated comparison across \u2026 NVIDIA.\"\n- **Bundling.** Tier 2 combines the compute migration, the wire format change, stream-rate decoupling and binary WebSocket. That contradicts \"no big-bang transitions.\" Pull the wire items into tiers independent of the compute work, as the Principles say.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#envisioned-state"
+  }
+ ]
+}

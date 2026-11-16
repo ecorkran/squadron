@@ -1,0 +1,68 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Neighbor gathering is a per-agent Python loop and the BulkForce inputs cannot be vectorized",
+   "description": "Step 3 of the data flow calls `SpatialQuery.query_radius(position, radius)` once per active agent (line 88). That is a Python loop over agents, which contradicts the slice's own technical requirement \"No Python-level per-agent loops in the hot path\" (line 247).\n\nThe `BulkForce` inputs have the same problem (lines 145\u2013147):\n- `neighbor_lists: list[NDArray]` is a ragged Python list.\n- `profiles: list[BehavioralProfile]` makes every force resolve parameters per agent through `profile_indices`.\n\nThe arch's GPU compute path section requires \"bulk array-in/array-out operations with no Python-level per-agent branching, no dynamic allocation\". Slices 101\u2013104 will all write against these inputs, so they are the integration surface.\n\n**Fix:**\n- Add a batch query, e.g. `query_radius_batch(indices, radii)`, that returns a flat CSR-style pair (`neighbor_indices`, `offsets`).\n- Pass profile parameters to forces as per-agent arrays gathered once per tick, e.g. `max_speed[profile_indices]`.\n\nThe brute-force implementation can still use a simple loop internally. What has to be fixed now is the protocol shape.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:86-89"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Two force protocols, but tick only accepts one",
+   "description": "The doc defines both a per-agent `Force` and a `BulkForce`, and says \"The tick loop prefers the bulk variant when available\" (line 152). But the `tick()` signature accepts only `forces: list[BulkForce]` (line 185). So:\n- There is no path through which a `Force` reaches tick, and nothing to \"prefer\".\n- The success criterion \"Placeholder forces exercise both the `Force` and `BulkForce` protocol paths\" (line 248) cannot be met as designed.\n\nA per-agent callable protocol is also exactly the \"callbacks into Python during the hot loop\" pattern the arch's GPU compute path section rules out.\n\n**Fix:** cut `Force` and its placeholder tests. If a per-agent reference form is really wanted for testing, specify one adapter (`Force` \u2192 `BulkForce`) and say where it lives.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-154"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Spatial query contract leaves open details that slices 101 and 105 depend on",
+   "description": "The slice plan requires (105) to \"Validate that behavioral output is identical before and after the swap (determinism preserved)\". Neighbor forces are floating-point sums, so the result depends on summation order and on exactly which agents are included. The `query_radius` contract does not fix:\n- **Result order:** e.g. ascending indices. A hash grid will return a different order than brute force, so results will not be bit-identical.\n- **Boundary:** whether the radius test is `<` or `<=`.\n- **Self-inclusion:** whether the queried agent appears in its own results. Cohesion and separation in (101) must know this.\n\n**Fix:** state all three in the protocol docstring, and add a test in (100) that later implementations must also pass.\n\nThere is also an internal contradiction at line 173. It says brute force \"computes all pairwise distances on `build()`\". But `query_radius` takes an arbitrary `position`, not an agent index, so a precomputed pairwise matrix cannot answer it. The N\u00b2 matrix would also take about 800 MB at 10K agents. Specify the brute force as an O(n) distance scan per query, with `build()` storing positions.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:156-175"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Agent removal semantics are unspecified",
+   "description": "\"Add/remove operations that resize arrays\" does not say how removal maps indices. Two common strategies behave differently:\n- **Swap-with-last:** O(1), but moves one agent to a new index.\n- **Compaction:** keeps order, but shifts every index after the removed one.\n\nEither way, any index the caller holds becomes stale, including `active_indices`, which the world server builds. The arch names \"register/remove agents\" as part of the engine's narrow system interface, so this is a contract the world server consumes.\n\n**Fix:** specify the strategy, and have `remove` return the index remapping (or an old\u2192new mapping) so callers can update their indices. Add a test for it.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:98"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Invalid inputs fail silently instead of failing fast",
+   "description": "`tick()` has no I/O, but the doc does not specify how it handles invalid inputs that would otherwise fail silently:\n- **Duplicate entries in `active_indices`:** NumPy's buffered fancy-index `+=` (line 215) applies the update only once, with no error.\n- **Out-of-range indices:** `active_indices` beyond `count`, or `profile_indices` beyond `len(profiles)`.\n- **Bad `dt`:** zero, negative or non-finite.\n- **Wrong force output:** a `BulkForce` returning an array that is not N\u00d7DIMS.\n\nThe project rules forbid silent fallbacks and require failing fast at the boundary.\n\n**Fix:** list these checks at the tick entry point, each raising an error, and add a test per check. If the cost on the full-population path is a worry, the checks can be skipped when `active_indices is None`.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:177-215"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The `accelerations` array has no stated purpose, and the return contract contradicts itself",
+   "description": "**Accelerations:** `AgentState` includes an `accelerations` array (line 96), but integration applies `velocity += force * dt` directly (lines 90, 208). Nothing reads or writes `accelerations`. Either define it as the per-tick force accumulation buffer, which would also avoid allocating a new array every tick, or cut it.\n\n**Return contract:**\n- The Included list says tick will \"return updated state\" (line 39).\n- The signature returns `None` and mutates in place (lines 187, 191).\n- The arch's Envisioned State says \"Returns the updated state array\" and \"feed in state, get back state\".\n\nPick one and make line 39 match. Mutating in place is reasonable for performance, but say so as a deliberate deviation from the arch wording.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The arch's scale goal is not restated, and no target is set for this slice",
+   "description": "The arch's NFR for the tick path is \"tens of thousands of agents at full behavioral fidelity on a single CPU process\". The slice touches that hot path but only says it targets \"the hundreds-of-agents scale\" (line 173). It never restates the arch target or sets a tick-time budget at a reference agent count.\n\nThe brute-force query can legitimately fall short of the arch target until (105). But the slice should:\n- restate the arch NFR;\n- state that (100) is not expected to meet it;\n- name what it does guarantee. One option is a measured tick time at N=1,000 as a baseline for (105) to compare against.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Environment input is deferred without saying so",
+   "description": "The arch's Envisioned State has the tick receive \"environmental context\", and \"Environment as input surface\" is one of its principles. The slice plan does not assign this to (100), and the swarm/migration slices that need it are deferred until the Environment Layer exists, so leaving it out is correct. Adding one line to Excluded, e.g. \"Environmental query interface \u2014 deferred until the Environment Layer initiative\", would make the omission visible.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:43-49"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Indentation breaks the integration section's rendering",
+   "description": "The \"Integration: Semi-Implicit Euler\" heading and its body are indented four spaces, so Markdown renders them as a code block. The heading will not appear and the nested fence will show as literal text. Remove the indentation.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215"
+  }
+ ]
+}

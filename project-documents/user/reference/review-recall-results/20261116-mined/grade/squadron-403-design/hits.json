@@ -1,0 +1,15 @@
+{
+ "case": "squadron-403-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "D1 requires every landing of a slice (a slice can land twice; slices 172, 305 and 940 each have two merges on first-parent history), but D2 resolves t",
+   "hits": {
+    "r03": [
+     4
+    ]
+   }
+  }
+ ],
+ "note": "r03#4 names the helper returning only one newest commit; r01#1, r03#3 and r02#7 are about the fast-forward gating (related, but not the helper defect) so not counted."
+}

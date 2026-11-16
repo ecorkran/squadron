@@ -1,0 +1,33 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes, not plain `**Commit**:` lines",
+   "description": "Tasks 2C, 3C, 4C, 5C and 6C (lines 71, 94, 117, 126, 134) are written as `- [ ] **Task NC: Commit** \u2014 ...`. Commit markers must be plain `**Commit**:` lines, never checkboxes. Written as checkbox tasks, they cause two problems:\n- Task-checker will check them off as if they were work items.\n- A commit could end up containing only a checked box, which the project rules forbid.\n\nThe markers are in the right places: after each implementation task and its tests, plus conditional commits after the parity sweep and the docs step. Only the format needs changing. Replace each one with a plain line such as `**Commit**: feat(core): add slice design heading validator`, and drop the \"Task NC\" numbering.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "No test for an unreadable file or an unreadable template",
+   "description": "The design's exit-2 criterion (slice line 171) lists \"unreadable\" for both file arguments and the template. Tasks 3T and 4T test a missing file, a directory passed as a file, a missing template and a template with no required markers, but neither unreadable case. Every one of these failures goes through the same `SliceDesignValidationError` \u2192 `handleError(err, 2)` path, so the risk is low. If you want it covered, add one Task 3T case for a `chmod 000` file, skipped when running as root.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 1's success check conflicts with Task 3T's hard-coded template path",
+   "description": "Task 1's success check says \"No other file hard-codes the template path.\" Task 3T (line 86) then hard-codes `project-documents/ai-project-guide/project-guides/templates/slice-design.md` in a test. To remove the conflict, either build the test path from `GUIDE_RELATIVE_PATH` and `SLICE_DESIGN_TEMPLATE_RELATIVE_PATH`, or limit Task 1's check to source files.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:44"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 0 assumes the target is `main`",
+   "description": "Task 0 stops whenever `git.integration_branch` is set, and always branches from `main`. The project rule is to branch from whatever the target is. This is safe as written, but it fits the rule better to say \"create the branch from the target\" and drop the stop condition.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38"
+  }
+ ]
+}

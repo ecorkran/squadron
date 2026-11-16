@@ -1,0 +1,40 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit steps are checkbox tasks, not plain `**Commit**:` markers",
+   "description": "Tasks 2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C and 15C are written as `- [ ] **Task NC: Commit** \u2014 ...`. Commit markers must be plain lines, never checkboxes. A checkbox commit cannot be checked off inside the commit it describes, so each one either stays unchecked or forces a follow-up commit that only checks a box.\n\nFix: replace each with a plain line, e.g. `**Commit**: feat(core): add adoption.state config key and state helpers`. Placement is good and needs no change; every marker sits after an implementation and test pair.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Parity test builds from two directories, but the facts carry absolute paths",
+   "description": "Task 13 builds \"twice from identical copies\" and asserts identical prompt strings. D5 says CI matches are absolute paths, and `recognizeCi` returns `join(dir, name)` values (`packages/core/src/detection/ciDetection.ts:57`). If the fixture contains a CI file, the two prompts differ by temp-directory path and the test fails for a reason unrelated to parity. Any other absolute path the template emits would have the same effect.\n\nFix, either of:\n- Build both paths from one directory, resetting `adoption.state` to `''` between the two builds.\n- State that the fixture has no CI file and that the temp root is normalized before comparing.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:247-249"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Two success criteria have no automated check at the CLI/MCP boundary",
+   "description": "- **`context_build` returns the `AdoptionError` as an error result.** No task tests this. Tasks 10T and 12.12 stop at the integrator and pipeline rejecting. The existing `catch` in `packages/mcp-server/src/tools/contextTools.ts:210-213` makes it work by construction, but nothing asserts it. Add one case to Task 11's `contextTools.test.ts` work: the mocked pipeline rejects with `AdoptionError`, and the result has `isError: true` with the message.\n- **`cf build` exits non-zero.** This is covered only by the manual walkthrough step 4 in Task 15. A matching `build.test.ts` case in Task 11 would close it cheaply.\n- **`renderAdoptionFacts` for \"every outcome\".** Task 8T covers `brownfield`, `adoption-in-progress` and `NOT_EVALUATED`. Task 8 requires an exhaustive switch, so `greenfield`, `already-planned` and `adoption-closed` have render branches with no test. Add one assertion per remaining kind to 8T.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-223"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Walkthrough step 1 does not say where the `main` build runs",
+   "description": "\"A temporary `git worktree add` of `main`, built there\" can be read as running `cfl build` inside the temporary worktree. That is a different, unregistered checkout path, so the diff could show differences that have nothing to do with the slice. Say explicitly: compile `main`'s CLI in the temporary worktree, then run that binary with the slice checkout as the working directory.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Shallow-clone fixture depends on commit order",
+   "description": "Fixture 4 clones fixture 3. If fixture 3 is committed after its build, the clone carries `state = \"in_progress\"`. The test would then pass through the resume path, not through detection. State that the commit is made before any build, or assert the state-set notice in the clone's facts.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:235"
+  }
+ ]
+}

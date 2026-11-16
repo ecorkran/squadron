@@ -1,0 +1,61 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Slice redefines the exit criteria and drops scope the plan assigns to it",
+   "description": "The plan entry for (152) in `140-slices.simulation-scaling.md` assigns three things that the slice changes or drops:\n- **Gate baseline.** The plan says \"k-nearest TPS at N=200k within 20% of **k-first** TPS\". The slice compares against a new `radius_only` mode (criterion 4).\n- **No k-first regression.** The plan says \"no regression on k-first path\". The slice removes `k_first` entirely (Technical Scope 7).\n- **FRNN selection.** The plan says k-nearest via FRNN (collect-then-sort) \"becomes viable at scale\". The slice keeps the slice 150 heap and defers collect-then-sort to a follow-up (lines 75, 187-193).\n\nThese may be good decisions, since `k_first` early exit masks the cost. But the plan entry is the contract, and it was not updated. Either amend the plan entry (exit criteria, `radius_only`, `k_first` removal, FRNN deferral) before approval, or restore the plan's criteria. Without that, the slice can pass its own gate and still fail the plan's.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Overview"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Performance gate is relative-only and does not restate the architecture NFR",
+   "description": "The architecture sets the end-state NFR of 60 TPS at tier targets. The slice plan sets Tier 3 at 250k on production-class hardware. The slice makes two related errors:\n- **Tier mislabel.** It calls N=200k \"the architecture's Tier 3 target\" (line 17). That figure is not in either document.\n- **Relative gate.** Criterion 4 is `k_nearest >= 0.8 \u00d7 radius_only` at 200k, with no absolute TPS floor. Both modes could run at a few TPS and the slice would still unblock the `k_nearest` default.\n\nThe 500k and 1M probes are explicitly \"not a hard gate\". State the absolute target this slice is working toward. Either add a TPS floor at 200k on the dev-class box, or say explicitly that no absolute floor applies and why. Fix the Tier 3 label.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Gate workload parameters are unspecified, and the candidate-count figures conflict",
+   "description": "The `k_nearest` / `radius_only` ratio depends heavily on `query_radius`, `max_neighbors`, subdivision S and density. The slice cites x-fractal (`query_radius=128`, `max_neighbors=7`, ~160 candidates per agent). It also cites ~1400 candidates per agent at \"operational density\" (lines 19, 154). The `mid-flock-200k` workload, and the 500k and 1M entries, are never defined: no radius, cap, S or world size. Because the gate is a ratio between two modes on the same workload, an unspecified workload makes it unreproducible. Pin the workload parameters in the slice and reconcile the 160 and 1400 figures.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:27"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Landing sequence removes `k_first` before the gate, and the slice contradicts itself on deprecation",
+   "description": "Three passages disagree:\n- **Mitigation Strategies (line 433).** `k_first` stays \"still parsed, with a deprecation warning\" until the final commit.\n- **Technical Scope 7 and Technical Decisions (lines 67, 199).** `k_first` is \"removed entirely from the kernel\", raises `ConfigurationError`, and there is no silent migration.\n- **Development Approach steps 2 and 4 (lines 442-444).** Step 2 rewrites the inner loop with no `k_first` branch. The default stays `k_first` until step 4, after the gate.\n\nIf step 2 removes the kernel path, the default (`k_first`) points at a mode that no longer exists until step 4. If the gate fails, the fallbacks are the 88%-regression `k_nearest` or a revert. Pick one. Either keep the `k_first` specialization through the gate and remove it in the final commit, or move the removal and default flip into the same last commit and drop the deprecation language.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Boundary claim contradicts the scope: config and bench layers are touched, and the mode set is duplicated",
+   "description": "Component Structure says \"No file outside the GPU compute path is touched\" and the frontmatter says `interfaces: []`. Technical Scope 7 and \"Default `neighbor_mode` flip\" change `migratory_server.config.ComputeConfig`, `migratory.bench.workload.Workload`, `_NEIGHBOR_MODE_MAP`, the bench CLI (`--neighbor-mode radius_only`) and a `ConfigurationError` parse path. The accepted-values set and default live in both `config.py` and `workload.py` (line 349). That duplicates a comparison value across layers, which the project conventions prohibit. Correct the boundary statement. Define the mode enum, default and validation once in a shared location, and have both `ComputeConfig` and `Workload` reference it.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:93"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Per-iteration inverse-permutation read is avoidable and adds to the bandwidth this slice exists to cut",
+   "description": "The slice calls `_coherent_to_original[kk] != i` \"the cheapest way\" to preserve self-exclusion. It adds one global read to every inner-loop iteration, roughly 160 to 1400 per agent. A lighter option meets the requirement: store `original_to_coherent[i]` (written in the reindex as `[orig] = kk`), read it once per agent, and compare `kk != i_c`. That removes the extra read from the hot loop. It also removes the need for the contingency in Risk 2 (shared-memory tiling of the permutation). The slice rejects only the \"walk coherent slots in the outer loop\" alternative. Evaluate this one before committing to the heavier design.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:159-165"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Overweight: reference narrative, extra workloads, and repeated FRNN follow-up text",
+   "description": "Items that can be cut or deferred:\n- **16M reference discussion (lines 36-44).** The \"Reference points\" section and the repeated 16M/80\u00d7 framing restate external material and a goal this slice does not deliver. One sentence is enough.\n- **FRNN follow-up text.** It appears in Technical Decisions (187-193), criterion 4, verification step 5 and Future Work. Keep it once.\n- **500k and 1M workloads.** Verification step 5 needs `mid-flock-500k` and `mid-flock-1M` workloads. \"Special Considerations\" budgets only `mid-flock-200k`. Either drop the probes, or run them ad hoc with parameter overrides rather than registering new workloads.\n- **`radius_only` exposure.** It is a new public config value that the plan does not assign. The gate needs it as a measurement yardstick, but nothing needs it in the server `ComputeConfig` yet. Consider exposing it only through the bench `Workload` until a consumer asks for it.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:36-44"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Stale and inconsistent statements to tidy",
+   "description": "- **Slice 150 status.** The slice says slice 150 is \"shipped on `main`\", but the slice plan still shows (150) as `[ ]`. Reconcile when the plan entry is amended.\n- **Sync handling.** State Management says `qd.sync()` is implicit at kernel boundaries in `graph=True` mode (line 146). The `build_spatial_hash` snippet adds an explicit `qd.sync()` (line 344). State which one holds.\n- **Metal status.** The architecture calls Metal a \"fully supported\" operating mode. The slice and plan treat it as best-effort. The slice's check that Metal runs `mid-flock` and `mid-flock-10k` without error satisfies both readings.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:81"
+  }
+ ]
+}

@@ -1,0 +1,103 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Walkthrough does not check SC4 (dropped topics absent)",
+   "description": "SC4 requires why-now, audience-evolution and methodology-preference to appear nowhere in the document, as content or gap markers. Task 8.1 checks only that the questions were asked once, and 8.2 checks gap markers only where Q1 and Q2 land. No step searches the generated concept for these topics. Add a search to 8.1 and 8.2 that fails on any hit.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-324"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "SC10's inferred-claim rule and outcome set are not verified",
+   "description": "SC10 requires every `[INFERRED]` sentence to meet the 7.1 rule and provenance to use only the 7.3 outcome set. Task 8.1 checks only that the inferred-claims line exists. Add per-sentence checks to 8.1: each `[INFERRED]` sentence names a graph field and asserts something that field does not literally state, and every section outcome comes from the 7.3 list.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:315-316"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "SC12 has no verification step",
+   "description": "SC12 (\"a concept a PM would edit rather than discard\") is the only criterion with no check. Task 8.1 already has the PM live, so record the PM's edit-or-discard verdict from that session as the evidence for SC12.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-318"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Degradation branches the design specifies are never run",
+   "description": "Two branches have no walkthrough run. First, a refused or unavailable confirmation: the flow must never stall and must record extracted-unconfirmed. Task 8.1 exercises only the corrected outcome, and 8.2 declines only the questions. Second, a missing root README: 3.2 and the design's risk table say sections fall back explicitly. Add both to the 8.2 scratch copy: decline the confirmation, and delete `README.md` in the copy.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-324"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes and mark too many untested points",
+   "description": "Eight commit markers are written as checkboxes (`- [ ] Commit: ...`) at lines 99, 125, 164, 185, 221, 254, 296 and 351. The convention is plain `**Commit**:` lines, never checkboxes. The positions are also weak: until 7.4 the flow is untested text, and 1.2 commits a `concept` route into an empty section shell. Keep two markers in plain form, after 7.4 (first complete flow) and after 8.6 (walkthrough fixes).",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Git target is hard-coded to `main` instead of read from config",
+   "description": "Task 0.1 asserts that the integration branch is unset and hard-codes `main` in the checkout command. The git rules require reading `cf config get git.integration_branch` in the checkout where the work runs, then forking from that target. Each worktree resolves its own value. The working directory is under `wt/squadron-363-tasks`, which may be a git worktree; if it is unregistered, the rules say to stop and ask the PM. Rewrite 0.1 to read the value, derive the target, and fork from it.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:60-62"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task file is oversized for a single-section markdown edit",
+   "description": "The file has 10 tasks (0\u20139), 31 numbered items and 104 sub-items (135 checkboxes) across 376 lines, for one skill section plus a one-sentence edit. Cuts:\n- Premise checks repeat. The `grep -c '^## User-Provided Concept'` check appears in 0.2, in 6.3 and in the design's walkthrough step 1. Graph-field checks appear in 0.2, 2.2 and 3.4. Keep 0.2 and the 8.x walkthrough, and drop the rest.\n- Six standalone verify tasks (1.2, 2.2, 3.4, 4.2, 5.3, 6.3) each take a heading and an Effort score. Fold each into its authoring task as one final sub-item.\n- Tasks 3.3 and 4.1 restate design tables and checklists. Cite design line ranges instead, so the restatement cannot drift from the design.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Walkthrough runs pytest and ruff, which trace to no success criterion",
+   "description": "SC11 requires only that the one changed non-document file is `understand.md`, which the `git diff --name-only` check in 8.6 already covers. `uv run ruff format --check .` and `uv run pytest tests/skills/` check nothing this slice changes, since it touches no Python. `tests/skills/` does exist (seven test files), so the command is valid but not required. Cut both. Task 9.3 also runs `uv run ruff format .` before committing. That is a no-op for a markdown-only change, and it would reformat unrelated Python if the repo is not already clean. Drop it, or name the rule that requires it.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:348-349"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Group 7 has no verify step before its commit",
+   "description": "Groups 1\u20136 each end with a verify step before the commit. Group 7 (7.1\u20137.3: governance, output conventions, provenance) commits in 7.4 with no check, so its text is first tested in 8.1. Add a 7.5 verify item that confirms each provenance line from 7.3 is present.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:258-296"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The guide-absent stop is authored in two tasks",
+   "description": "Task 2.1 (precondition 2) and task 6.1 (check 1) both specify the stop for an absent guide, including the setup-step wording. Two authors for one stop invite two messages. Keep it in 6.1, the write-time contract, and have 2.1 reference it.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:106-109"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "A design line citation is off by one",
+   "description": "Task 7.1 cites design lines 278\u2013280 for the `[INFERRED]` rule. The blockquote is at lines 277\u2013279, and line 277 holds its opening clause (\"A sentence carries `[INFERRED]` when...\"). A reader who follows the cite misses that clause. Change it to 277\u2013279.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:259"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "\"The DEVLOG\" is ambiguous, and several sections are cited without a heading",
+   "description": "Tasks 8.6 and 9.2 say \"the DEVLOG,\" but two exist: `DEVLOG.md` and `project-documents/DEVLOG.md`. Name one. Tasks 2.1, 3.1, 7.2 and 7.3 cite \"361's rule,\" \"361's shape,\" and \"the shared contract\" without a heading. The headings are `## Preflight: Graph Contract` (understand.md:22), `### Gap markers` (understand.md:262) and `### Provenance block` (understand.md:311). Name them in the tasks.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:364-368"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Repo anchors resolve only in the primary checkout",
+   "description": "The concept guide and its single `## User-Provided Concept` heading exist in the primary checkout, but not under this worktree's path. Task 0.2 would hit its STOP here, and 2.2, 6.3 and 8.3 depend on the guide. Task 0.1 should name the checkout the run uses. Task 8 says \"repo root,\" which is the primary.",
+   "location": "project-documents/ai-project-guide/project-guides/guide.ai-project.000-concept.md"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "SC8's refill rule and stop-writes-nothing are not checked",
+   "description": "Task 8.4 checks that populated sections stay byte-identical and that the default stop was observed. It does not check that empty or `[GAP: ...]`-only Refined Concept sections were filled on augment, or that the default stop wrote nothing. Add both.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+  }
+ ]
+}

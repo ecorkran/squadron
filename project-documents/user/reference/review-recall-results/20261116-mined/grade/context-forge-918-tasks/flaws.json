@@ -1,0 +1,22 @@
+{
+ "case": "context-forge-918-tasks",
+ "kind": "tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Success Criterion 6 names both `plan-status-vs-entries` and `arch-status-vs-plans`; Task 12 adds regression cases only for `plan-status-vs-entries`, and no other task asserts the arch rule (`ConsistencyChecker.ts:828-850` is a separate rule body). **VALID** (minor, `coverage`): the tests leave out a rule the parent criterion names. Needs: doc (design plus tasks). **Raised by the original review (F001)**; the response added the test."
+  },
+  {
+   "id": "F2",
+   "text": "Task 8 widens `resolveEntryStatus`'s `entry` parameter to `Pick<SlicePlanEntry, 'index' | 'isChecked' | 'status'>` and says \"its only caller passes a full `SlicePlanEntry`, so widening the `Pick` is a compatible narrowing-relaxation\" with success \"builds clean\". The only caller of `resolveEntryStatus` is `resolveEntryStatusSafe` (`WorkflowNavigator.ts:740`), whose own `entry` parameter is typed `Pick<SlicePlanEntry, 'index' | 'isChecked'>` (line 736). Passing that to the widened parameter is a type error (`status` missing), so Task 8 cannot build as written; `resolveEntryStatusSafe` must be widened too. **VALID**: task not completable as written. Needs: code."
+  },
+  {
+   "id": "F3",
+   "text": "Task 1's unindexed fixture example is `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` (no bold). `PLAN_UNINDEXED_RE` (`slicePlanParser.ts:9`) requires `\\*\\*([^(].*?)\\*\\*`, so that line is never parsed, while Task 5 asserts the unindexed `[~]` entry parses (`indexSource: 'fallback'`) and `totalSlices` becomes 7. The design's success criteria give the unindexed form as `N. [~] **Name** \u2014 rationale`. The example line is the non-bold style the fixture uses only under the skipped \"Future Work\" section. **VALID** (minor): the fixture step and the test cannot both be satisfied as written. Needs: doc plus the regex in code."
+  },
+  {
+   "id": "F4",
+   "text": "Design Decision 3 and Scope say `completedSlices` is \"computed once, in the parser\" and the consumers take it unchanged, so the change is \"narrow, local\". `mcp-server/src/tools/introspectionTools.ts:117-119` recomputes `completedSlices` as `entries.filter((e) => e.isChecked).length` whenever a worktree index range filters the entries, so after the slice a `[~]` entry counts as resolved in the unfiltered `introspection_slice_plan` result but not in the filtered one. No task touches it. **VALID**: contradicts code. Needs: code."
+  }
+ ]
+}

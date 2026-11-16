@@ -1,0 +1,82 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "MemoryError is both a per-file token error and a whole-measurement failure",
+   "description": "Task 10 (line 123) and Task 11 (line 139) say a `MemoryError` during the pass returns `tool_failed` for the whole measurement, which matches the design's failure table. Task 14 (line 160) lists `MemoryError` among the TypeScript token errors. Task 10 (line 121) sends anything in `token_errors` to `unparsed_files`. Following Task 14 produces a per-file unparsed result and fails Task 11's `tool_failed` test. Remove `MemoryError` from Task 14's list and say that the pass handles it.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Python tokenizer-failure test expects function length to be unaffected, but both fixtures already fail ast.parse",
+   "description": "An unterminated triple-quoted string and bad indentation both fail `ast.parse`. Under 400, function length already lists those files as unparsed, so \"their function length is unaffected\" can't hold as written. The design's claim that a tokenizer failure touches only duplication (D1) isn't shown by these fixtures. Assert the real function-length outcome, or drop the isolation claim for Python.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:154"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Multi-line tokens have no line-mapping rule",
+   "description": "Task 10 stores one line number per token. A token that spans lines (a Python triple-quoted string, a TypeScript template string, JSX text) yields only its start line. A duplicated docstring would then report one line for a block that spans many. D3 says every line under both occurrences is marked, and Success Criterion 4 says the block's lines are reported. Add a rule (mark every line a token spans) and a test with a multi-line string inside a duplicated block.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:122"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No test shows the other metrics are unchanged when duplication hits the ceiling",
+   "description": "Success Criterion 10 requires `duplicated_lines` to be `tool_failed` and \"its other metrics are unchanged\". Task 11 tests only the duplication result, and Task 26 has no ceiling case. Add a snapshot-level case to Task 26: lower `DUPLICATION_MAX_TOKENS`, then assert that file length, function length, complexity, lint and types match their unlowered values. Also assert that the window index is never built after the ceiling trips (the failure table's row 2).",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 21 omits the cwd argument for the coverage key lookup",
+   "description": "The slice design (line 64) and D6 require `get_config(key, cwd=<measured repo root>)`. Task 16 states this for preflight. Task 21 says only \"key unset \u2192 coverage_not_configured\", so a junior could call `get_config(key)` and read config from the process directory, which breaks `--cwd`. Add `cwd=str(repo_root)` to Task 21, and add a test where the key is set only in the measured repo's `.squadron.toml`.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:212"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 8 wires complexity into the TypeScript path but not the Python path",
+   "description": "Task 8 explains how the TypeScript call passes the complexity identity through to `TypeScriptAdapter.measure`. It has no matching step for `PythonAdapter.measure`, which must pass the complexity identity to `measure_parse_metrics` and include the third measurement in its output. Task 26's \"every language section holds all eight metrics\" would catch a miss, but the step should be explicit.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:102-104"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 10 is the largest unit and mixes two halves",
+   "description": "Task 10 is Effort 4 with nine bullets. It covers the read and tokenize path, id mapping, the ceiling and `MemoryError` handling, the rolling hash, window confirmation, the overlap rule, per-file output and the counting text. Split it into (a) ingest, from read through the ceiling, unparsed files and id arrays, and (b) the window pass, from hash through counting. Test each half before moving on.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:117-129"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "coverage.py collects five responsibilities and no size split is named",
+   "description": "Per the module table, `coverage.py` holds the key constant and parser (Task 16), the Cobertura reader (Task 19), the git-based freshness check (Task 21), and the measurement builder (Task 23). Tasks 12 and 14 name a split for size, but this one doesn't, and Task 30 would only catch an overrun at the end. Name the split now: keep the key and parser in `coverage.py`, and move the Cobertura reader to its own module, such as `coverage_report.py`. Update the module table as Tasks 12 and 14 require.",
+   "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:81"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox items, not `**Commit**:` lines",
+   "description": "All 17 markers are written as `- [ ] Commit: ...`. The marker form is a plain `**Commit**:` line, never a checkbox. As checkboxes, task-checker may tick them as work items. Placement is right: each marker sits at a tested point, and Task 8 folds into Task 9's commit. Change the 17 lines to `**Commit**: \\`...\\``.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Task 1 is one command and could be a preamble step",
+   "description": "Task 1 is one branch command with a one-line check. Fold it into a \"before you start\" step or into Task 2. The Context Summary names `cf config get git.integration_branch` as the target lookup, but Task 1 itself says only \"from the target\", so the step should name the lookup.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:38-40"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Two failure-table rows have no test",
+   "description": "The failure table requires a signal and an outcome for each row. Row 5's stat failure is tested only for a tracked file (Task 22), not for the report, which Task 21 also stats. Row 2's \"window index isn't built\" is untested. Add a patched stat failure on the report to Task 22, and the never-built index check suggested under the ceiling finding.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:221-229"
+  }
+ ]
+}

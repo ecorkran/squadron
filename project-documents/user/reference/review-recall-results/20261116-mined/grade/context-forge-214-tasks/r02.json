@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox tasks, not plain `**Commit**:` lines",
+   "description": "Tasks 2C, 3C, 4C, 5C and 6C (lines 71, 94, 117, 126, 134) are written as `- [ ] **Task NC: Commit** \u2014 ...`. Commit markers should be plain lines (`**Commit**: feat(core): ...`), never checkboxes. A checkbox commit task also causes a real problem. The workflow is implement, then task-checker, then commit. A commit can't contain the check-off of its own commit task, so the box either stays unchecked or needs a separate commit that only checks boxes, which the rules forbid. The placement is right: each marker sits at a tested point. Only the format needs to change. Turn each one into a plain `**Commit**: <message>` line under the task group it closes. Keep the \"only if files changed\" wording on 5C and 6C as plain text.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Some exit-2 cases are not tested at command level",
+   "description": "The functional criterion lists six exit-2 cases: no args, a missing file, a non-regular file, an unreadable file, a missing or unreadable template, and a template with no required headings. Each must exit 2 with empty stdout, including under `--json`. Task 4T covers no args, a missing path, a valid file before a missing one, and a missing template. Task 3T covers a directory argument and a template with no markers, but only as a check on the core error type. Nothing tests an unreadable file or an unreadable template. Task 4 sends every `SliceDesignValidationError` through one `handleError(err, 2)` path, so the core-level type checks plus one CLI exit-2 test reasonably cover the rest. No new task is needed. Optionally, add the directory case to Task 4T's exit-2 list to cover \"non-regular\" end to end.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 5C commit message assumes a docs-only change",
+   "description": "Task 5 tells the implementer to fix any unexplained `DIFF` as a bug and add a test for it. Task 5C's message is still fixed as `docs: record slice 214 parity sweep results`. If the sweep turns up a code fix, that commit would mix code and docs under a `docs:` prefix. Say that a code fix from the sweep gets its own commit with a `feat`/`fix` message before the docs commit.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122-126"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 0 stops when the integration branch is set",
+   "description": "Task 0 says to stop and ask the Project Manager if `git.integration_branch` is not empty, and it hard-codes `main` as the fork point. The branch rules already cover that case: fork from the configured target and merge back into it. The step should read the target and create the branch from it (`git checkout -b 214-slice.native-slice-design-validation {target}`), not stop. This only matters if the config changes before implementation.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 3 does not say whether template loading or preflight runs first",
+   "description": "The design's Data Flow loads the template first (step 2) and runs the file preflight second (step 3). Task 3 describes both but doesn't fix the order. The order decides which error appears when the template and a file argument are both bad. One clause like \"load the template, then preflight\" removes the ambiguity for a junior implementer.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:76-77"
+  }
+ ]
+}

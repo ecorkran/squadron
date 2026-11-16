@@ -1,0 +1,27 @@
+{
+ "case": "squadron-174-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 22a asserts wall-clock `MAX_LISTING_S = 1.0` for `list_run_summaries`, while the parent design says \"The I/O-bounds test enforces the counts, and",
+   "hits": {
+    "r02": [
+     2
+    ],
+    "r03": [
+     2
+    ],
+    "r04": [
+     5
+    ],
+    "r05": [
+     3
+    ],
+    "r06": [
+     5
+    ]
+   }
+  }
+ ],
+ "note": "Hits name the contradiction between Task 22a time assertion and the design sentence; they propose updating the design rather than deleting 22a, but identify the same defect. r01 finding 2 only discusses threshold headroom, not the contradiction, so not a hit."
+}

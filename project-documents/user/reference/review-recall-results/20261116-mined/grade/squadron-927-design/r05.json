@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Truncated-and-unread cap can misfire on providers whose tool use isn't telemetered (Codex)",
+   "description": "D4 treats `tool_calls_made is None` as zero and caps PASS to CONCERNS. In `review/models.py`, `None` means \"ran without tools\". D8 and D11 say Codex returns only `final_response` and reports nothing, and Codex has its own file-reading tools. A Codex review that read the omitted files could carry `tool_calls_made = None` and still get a false CONCERNS with `verdictSource: imposed`. The same document tells readers elsewhere that \"None means not reported and is never replaced by a plausible value\". Settle whether Codex yields `None` (\"no tools\") or \"not reported\", and say which. If Codex can't distinguish them, exempt it from the cap or state that Part B applies only to providers that report telemetry. Add a Codex case to SC4/SC5.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "D9 substitution rule has no escape for deployment-specific id forms (local, OpenRouter)",
+   "description": "The rule is exact, and the only remedy for a false positive is to add an observed form to the code after Phase 6 captures ids. This works for the sdk and openai profiles. It fails for `local` and router profiles, where the returned id depends on the user's server. llama.cpp-style servers can report a file path or a different alias, for example. Every run on such a setup would write `requestedModel`, add the header suffix, and log a WARNING. The slice defines `requestedModel`'s presence as the gate signal for \"not the model you asked for\", so persistent false positives dilute that signal. The slice's own risk section names this risk. Its only mitigation is a one-time capture on the maintainer's profiles. State the intended behavior for a profile whose reported id can't match the request by rule. Either accept it and document it, or add a small, config-level, per-profile way to declare the expected id.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D9"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Multi-model handling (D12) and Run Digest lines are more than the slice plan asks for",
+   "description": "The plan asks for `ReviewResult.model` and frontmatter to carry the answering model, with a WARNING on difference. The design adds a distinct, ordered `answering_models` list, folding across the #92 recovery turn, \"last model wins\" semantics, a separate multi-model WARNING, and a digest line listing all models. The multi-model case is hypothetical. The SDK path already skips subagent messages (D8), and the OpenAI path asks for one model per request. Cut or defer:\n- the `answering_models` accumulation and dedup across turns\n- the multi-model WARNING\n- the \"Answering models: a, b\" digest line\n\nKeep a single `answering_model` (last non-empty value) plus the D11 \"not reported\" digest line. If a multi-model run does occur, the existing substitution WARNING already fires when the last model differs. `TurnCapture` folding and its tests then shrink too.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D12"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Cross-tool contract and metrology identity changes are asserted as safe without a coordination step",
+   "description": "The 900 plan lists this slice's risk as \"adds frontmatter fields that context-forge gates read\". The design adds `diffTruncated` and `requestedModel`, introduces a new `verdictSource` value (`imposed`), and changes what `aiModel` means. Its safety evidence is one grep of context-forge on 20260926 that found no `verdictSource` reader. That doesn't cover a gate that validates `verdictSource` against a closed set, or one that reads `aiModel`. The design also accepts that OpenAI-direct judges move metrology identity from `gpt-5` to `gpt-5-2025-08-07`, splitting calibration history, with no migration or pooling note. Add a short, concrete check of how context-forge and Amoeba read frontmatter (unknown keys, unknown `verdictSource`, `aiModel` use). State the metrology consequence as a decision, covering existing pooled scores and whether they stay under the old id, not just as a \"consequence\".",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Integration Points"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`--stat` deferral cuts against the plan's \"in scope if small\" wording",
+   "description": "The plan makes ordering and `--stat` in scope \"only if design shows it is small; otherwise it becomes an issue\". D7 concedes `--stat` is small but defers it because it only helps tool-enabled models and Part B doesn't depend on it. The reasoning is fair and #137 exists, so the plan's condition is met. Say outright that it was judged out of proportion to the correctness gap, since the plan's wording implied small items would be done.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D7"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Failure modes for the new stamping paths are covered",
+   "description": "There are no new I/O paths, only reads of fields already on the streams. Missing or empty values are handled explicitly: `<synthetic>` and subagent messages are skipped, the last non-empty `chunk.model` is used, an empty list gives the D11 \"not reported\" digest line, and the D3 total-limit skip is recorded as a truncation to zero. D6 closes the case where a synthetic finding would hide a degraded parse. The plan has no NFR for this path, so none needs restating.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D8"
+  }
+ ]
+}

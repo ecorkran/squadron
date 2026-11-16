@@ -1,0 +1,40 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Edge-endpoint resolution contradicts the read discipline and has no stated mechanism",
+   "description": "Section 6 says function- and class-level edge endpoints \"are resolved to their owning file's layer rather than dropped\". This conflicts with three things the design states or inherits:\n- The architecture's read discipline says function- and class-level nodes are not read (360-arch, \"Read discipline\").\n- 361 states \"Function- and class-level nodes are never read.\"\n- This slice's own success criterion 9 and walkthrough step 7 require that no function- or class-level node is read.\n\nThe mechanism is also missing. The Verified graph facts show that only `file`, `config` and `pipeline` nodes carry `filePath`, so function and class nodes have no owning-file field to look up. The remaining options are parsing the type-prefixed `id` (`function:path:name`) or following `contains` edges. The design names neither, and ID parsing adds a hidden dependency on upstream ID syntax, which the preflight does not validate. Paths containing `:` would break it.\n\nTwo further inconsistencies in the same paragraph:\n- Section 6 counts \"inter-layer `imports` and `depends_on`\", then says a `calls` edge also counts as an inter-layer signal.\n- `edges[].direction` is listed under Interfaces Required as used \"for dependency ordering\", but no ordering rule uses it. \"Ties by `weight`\" does not say whether `weight` is summed, averaged or maximized across edges.\n\nFix: choose one mechanism and state it. Either resolve endpoints through ID prefix or `contains` edges, with an explicit carve-out from the \"never read a function/class node\" rule that is limited to ID and edge data. Or restrict section 6 to file-level endpoints and drop the `calls` claim. Then fix the edge-type list, the tie-break aggregation, and the unused `direction` entry.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The file-level selector is defined three different ways, and the departure from the architecture's nine-type list is unrecorded",
+   "description": "Correction 2 gives three definitions of \"file-level\":\n- The heading defines it as \"carries a `filePath`\".\n- The Fix text calls the selector \"an explicit type allow-list\".\n- The jq filter given is an exclusion, `type != \"function\" and type != \"class\"`, and the next paragraph says it is \"stated as an exclusion rather than an allow-list deliberately\".\n\nThe architecture enumerates nine file-level types. The exclusion filter replaces that list, and the slice says the change \"is not an escalation\" without saying so against the architecture. The exclusion filter admits any other node type in an upstream release, such as a non-file concept or domain node. It then relies on the \"survives the filter but has no `filePath` \u2192 drift\" rule to catch it. That rule is only stated in one sentence, and the section 7 reconciliation with `analyzedFiles` would report a mismatch rather than a clean drift message.\n\nFix: pick one definition and use it in the heading, the selector, and success criterion 5. Record explicitly that this refines the architecture's enumerated list and why, so slices 363 and 364 inherit one rule. Say what the skill does when a drift node is found: report it and exclude it, or stop.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-165"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Failure modes for the three new file reads, and for the layer-membership assumption, are not enumerated",
+   "description": "Section 7 introduces reads of `meta.json` `analyzedFiles`, `config.json` and `.understandignore`. Its single fallback, `[GAP: ...]` naming the unreadable file, covers only absent or unreadable files. These cases are not handled:\n- `config.json` or `meta.json` exists but is not valid JSON. `jq` will error.\n- `meta.json` exists but `analyzedFiles` is missing or non-numeric.\n- `.understandignore` is absent. Is that a gap or \"no ignore file\"? The design reasons carefully about absent optional `config.json` keys but does not apply that reasoning to the file itself.\n\nSection 6 also depends on \"every file-level node belongs to exactly one layer\", described as \"(verified)\". It was verified on one graph (the design's own Risk section says so). The sum of 238 does not prove uniqueness, and no runtime check or handling is given for a file-level node in zero layers or in more than one. The Correction 1 cross-check covers only `nodeIds` entries that do not resolve to a file. Without handling, edges are mis-attributed silently.\n\nFix: add a short failure-mode row for each new read: malformed, missing key, and absent-versus-unreadable. Add a runtime layer-membership check (zero or multiple layers \u2192 reported discrepancy). Add matching scratch-copy cases to the walkthrough, since step 5 currently tests only the removal of `meta.json`.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:180,222-235"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The mapping 363 reuses omits `tour[].nodeIds`",
+   "description": "The architecture's interview table sources Solution Approach from \"`layers[]`, `tour[]` node ordering\", and the architecture says the tour is read \"as structured data with node IDs\". This slice's mapping row 5 lists only `order`, `title` and `description` for the tour, and the Interfaces Required table likewise omits `nodeIds`. The Provides section nevertheless tells 363 that \"layers and tour feed Solution Approach\". Without `nodeIds`, 363 cannot relate tour steps to files or layers and would have to extend the mapping, which defeats \"reused verbatim\". The plan also names tour ordering as the signal for which components matter most.\n\nFix: add `tour[].nodeIds` to row 5, resolved to layer or file path. Alternatively, state explicitly that it is deferred to 363 and why.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:178,299-301"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Some scope could be trimmed",
+   "description": "- **Project identity section.** The plan's 362 entry does not list it. The design justifies it as supplying slice 363's Initial Technical Direction, so it could be deferred to 363. It is cheap, so it can stay if 363 is likely to land soon.\n- **`config.json` reporting.** It adds little value, since the only observed content is `outputLanguage`. It could be dropped from section 7, with the file still read-only per the architecture.\n- **Verified graph facts and walkthrough numbers.** These restate measurements already in Correction 1 and in the walkthrough. Keep one copy.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:195-198,228-235"
+  }
+ ]
+}

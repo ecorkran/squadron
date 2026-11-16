@@ -1,0 +1,69 @@
+{
+ "case": "context-forge-918-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Success Criterion 6 names both `plan-status-vs-entries` and `arch-status-vs-plans`; Task 12 adds regression cases only for `plan-status-vs-entries`, a",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     3
+    ],
+    "r03": [
+     3
+    ],
+    "r04": [
+     3
+    ],
+    "r05": [
+     1
+    ],
+    "r06": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Task 8 widens `resolveEntryStatus`'s `entry` parameter to `Pick<SlicePlanEntry, 'index' | 'isChecked' | 'status'>` and says \"its only caller passes a ",
+   "hits": {
+    "r02": [
+     1
+    ],
+    "r03": [
+     1
+    ],
+    "r04": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Task 1's unindexed fixture example is `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` (no bold). `PLAN_UNINDEXED_RE` (`slicePlanParse",
+   "hits": {
+    "r02": [
+     0
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F4",
+   "text": "Design Decision 3 and Scope say `completedSlices` is \"computed once, in the parser\" and the consumers take it unchanged, so the change is \"narrow, loc",
+   "hits": {
+    "r04": [
+     6
+    ]
+   }
+  }
+ ],
+ "note": "r04 finding 6 names the introspectionTools.ts:117-120 recompute directly (F4). r04 finding 3 also counted for F1 since it explicitly says Task 12 omits arch-status-vs-plans. F3 hits are the first bullet of combined findings."
+}

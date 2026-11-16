@@ -1,0 +1,82 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Interrupted adoption is indistinguishable from \"already planned\"",
+   "description": "Detection rule 2 says any initiative plan, architecture doc or slice plan makes the project \"already planned\", and \"an adopted project lands here, so no completion state is needed\". That holds only when adoption finishes.\n\n- **Failure mode:** flow step 5 writes concept, then architecture, then the existing-state slice plan. If the session ends after the architecture is written, the next detection returns \"already planned\" and `sq onboard` step 2 concludes \"adoption doesn't apply\".\n- **Consequence:** `cf next` then routes to an ordinary slice-plan phase with no retroactive entries. That is the \"empty slice plan that pretends nothing has been built\" the Motivation says this initiative exists to prevent.\n- **Same hole, other entry:** a brownfield repo where someone hand-wrote one architecture doc before running `sq onboard` can never be adopted.\n- **Lost behaviour:** the original design had \"a re-run resumes from whatever artifacts exist\" (line 136, now marked historical). The amended design has no equivalent.\n\nThe document needs a file-derived way to tell a complete baseline from a partial one, for example \"planned\" requiring a slice plan, or the derived-architecture marker without retroactive entries meaning adoption is incomplete. Otherwise it should state that partial adoption is unrecoverable and say how the user gets out.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:73-79"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Opt-out is checked before \"already planned\", so an opted-out project reports greenfield forever",
+   "description": "The outcome order is opted out \u2192 already planned \u2192 code signals, and rule 1 says \"It is greenfield\". A project that opts out and then proceeds normally will have an architecture and slice plan, yet the report still returns greenfield because the stored opt-out wins.\n\nEvery consumer of \"one detection, many consumers\" (`sq onboard`, `cf init`, `cf next`) then gets a wrong answer for a planned project. The opt-out only means something when no planning artifacts exist, so \"already planned\" must be checked first, or the opt-out must be scoped to the brownfield/greenfield decision.\n\nThe document also never says where the opt-out is stored, which command sets or clears it, or what happens to the shipped four-value `adoption.state` key. That key is still in `packages/core/src/config/ConfigKeys.ts`, and the slice plan (269) acknowledges 0.19.x users hold `in_progress`/`complete` values. This is a persisted-format change the architecture is silent on.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:75-77"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No way to correct a false greenfield; \"the override is the safety valve\" is now one-directional",
+   "description": "Brownfield thresholds lists shallow clones, squashed or imported history and scaffolding as known misfire cases, then relies on \"the override\". After the amendment the only override is the opt-out, which forces greenfield. The original two-way override (slice 261: \"user override in both directions\") is gone.\n\nA real codebase misjudged as greenfield reaches `sq onboard` step 2 (\"if the project is greenfield\u2026 adoption doesn't apply\") with no documented way to say \"this is brownfield\". Either restore a force-brownfield input, or state that `sq onboard` may proceed against a greenfield report at the PM's instruction. The cost-asymmetry argument on the same line (false greenfield \"wastes a conversation\") is also stale: on the squadron-only path it blocks adoption outright.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:133"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Superseded design is still presented as live in several sections",
+   "description": "The amendment says \"the sections below are rewritten to match\". They are not, in these places:\n\n- **Anticipated Slices (147-153):** still lists \"the persisted adoption state\", \"`cf build` selecting the `brownfield-adoption` profile\", \"reading the probe\" and \"adoption steps while in progress\". It claims \"all shipped (260\u2013267)\" but has seven bullets and omits slice 265, which exists in the slice plan.\n- **Guide release coupling (137):** still ends \"If cf selects the brownfield profile\u2026 `cf build` fails with a named error\", contradicting \"`cf build` is pure again\".\n- **Dependencies (159):** still phrased as \"cf releases that select the brownfield profile require at least v0.22.2\", and cites the probe's `surfaces.<s>.concept`.\n- **Table row (c) (120):** \"CF writes the architecture doc on both paths. With squadron present\u2026\". There is one path now.\n- **Lines 135-136:** carry roughly 400 words of dead probe and Adoption Facts contract inline \"for history\". A slice designer cannot tell binding text from historical text without rereading the amendment each time.\n- **Current State (63) and frontmatter:** line 63 says \"the capability probe does not exist yet\" as if still relevant, and `relatedSlices: []` is empty with 15 slices planned.\n\nMove the historical contract to an appendix or delete it (git has it), and rewrite the slice list to 260\u2013274.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:131-160"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Guide dependency for the reworked flow is missing, and the pinned guide prompt assumes removed behaviour",
+   "description": "Dependencies pins guide \u2265 v0.22.2 and lists only two pending guide items: the retroactive-marker rule and the docs-map naming.\n\n- **What v0.22.2 assumes:** the slice plan's notes for 268 and 272 say that prompt tells agents to run `cf build`, branches on raw probe JSON, and stops when the Adoption Facts section is missing.\n- **What the amendment removes:** all three.\n- **Consequence:** the prompt-delivery primitive, run against the minimum guide version the architecture names, hands out a prompt that halts or instructs the removed flow.\n\nThe new guide release is a hard dependency of the primitive and belongs in Dependencies with the fail-fast rule attached to it. Line 137 says the rule \"moves to the prompt-delivery primitive\" but does not say what is checked: profile presence alone would pass on v0.22.2.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:159"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Missing comprehension doc silently recreates the dropped CF-only path",
+   "description": "Step 4 has cf locate squadron's comprehension doc itself \"by filename and `docType`\" and fill the path into the prompt. Three problems:\n\n- **Wrong side resolves the path:** squadron wrote that file in step 3 and is the caller. cf rediscovering it by squadron's naming convention (`{n}-analysis.codebase-comprehension.md`, plus \"squadron 361's provenance block\" in row (b)) couples cf to squadron's output format. That contradicts \"cf never parses squadron output\" at line 50. Passing the path as an argument to the primitive removes the lookup, the convention coupling and the multiple-match ambiguity (which `{n}` wins is unspecified).\n- **No-match behaviour undefined:** the only statement is the historical \"cf passes nothing\u2026 the prompt works from the repo alone\", which is the CF-only path the amendment dropped. On a squadron-only path, a missing comprehension doc should be a named error from the primitive.\n- **Staleness unaddressed on the cf side:** a comprehension doc from an old graph run is found and used with no check.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:90"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Concept ownership under `sq onboard` is unresolved",
+   "description": "The Concept row says the writer is \"squadron 363, or the guide's adoption prompt\", \"exactly one writer per run\". Flow step 5 says the agent drafts the concept from cf's adoption prompt.\n\nSquadron 363 is complete and is a concept generator. Nothing says which one `sq onboard` uses or who enforces the one-writer rule. The mechanism that previously reconciled them (the prompt detecting 363's provenance block) is in the text marked historical. The Initiative candidates row says 364's adopt step is \"frozen until the handoff contract settles\", so the document itself records this as open while listing all findings as addressed (line 169).",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:125"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Retroactive marker \"can't be used to bypass the gate\" is overstated",
+   "description": "The marker is \"set only by the adoption flow\", but that flow is an agent writing markdown from a prompt, so cf cannot know who set it. The only guard is the checker error for a retroactive entry that has a slice design or task file.\n\nCurrent State (line 60) notes `missing-artifact` already tolerates entries without a design. So an entry marked retroactive and implemented without design or task files is counted complete and skipped by the review gate with no finding. The index-order rule (\"retroactive entries come before new work\") is stated as a convention, not as a checker rule, and nothing stops a retroactive entry being added to an already-planned project later.\n\nIf the guarantee matters, it needs a file-derivable anchor, such as retroactive entries being valid only at or below a boundary recorded at adoption, or only alongside a derived-marked architecture. Otherwise downgrade the claim.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:100"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "cf primitives are specified ahead of their only consumer, with no contract discipline",
+   "description": "`sq onboard` does not exist and adoption is \"parked\", yet the architecture commits cf to a CLI command plus an MCP tool exposing six fact families as JSON \"so squadron and the guide can design against it\".\n\n- **Contract gaps:** the old probe contract had a version field, null semantics and exit-code semantics. The replacement has none of them: no schema version, no meaning for unknown facts (not a git repo, shallow history, counting stopped at the floor), no error semantics.\n- **What can be cut:** squadron's flow as outlined needs the three-way outcome and the prompt. The full fact payload and the MCP surface can wait until `sq onboard`'s design asks for them.\n- **Goals not delivered:** \"brownfield is first-class\" and \"the workflow starts where the project is\" are not delivered by anything in this architecture as amended. An unadopted brownfield user gets one line naming a command that does not exist, followed by normal greenfield navigation. The document should say these goals are deferred to squadron 440.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:81-94"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Reconciliation and docs mapping have no place in the amended flow",
+   "description": "Rows (e) and (f) stay in scope and CF-owned, but the six-step `sq onboard` outline does not include them, and `cf next` \"carries no adoption guidance\". The document should say whether they are standalone commands the PM runs or steps `sq onboard` calls.\n\n\"Keyed by rule file identity\" is also undefined. For composite files (CLAUDE.md, AGENTS.md) a file-level key covers many unrelated rules, and a renamed or split guide rule file orphans its resolution. The issue #123 sequencing is still open.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:106-109"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "`cf init` gains a detection side-channel",
+   "description": "\"cf commands keep one meaning each\" is applied to `cf build` and `cf next`, yet `cf init` now runs detection and prints a brownfield line, and `cf next` prints a similar one. That is two surfaces emitting adoption messaging for a flow neither owns. It is harmless, but the wording should come from one definition, and detection in `cf next` should short-circuit on the cheap checks (opt-out, planning artifacts) before walking source or running git.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:81"
+  }
+ ]
+}

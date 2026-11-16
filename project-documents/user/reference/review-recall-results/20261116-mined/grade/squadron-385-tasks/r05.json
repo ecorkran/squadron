@@ -1,0 +1,54 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Release step in Task 16.4 breaks two project rules",
+   "description": "Task 16.4 has two problems:\n- **Merge as a task item.** It lists \"Merge `385-slice\u2026` into `squadron-pr`\". CLAUDE.md says never to write a merge or push as a task, sub-item or success criterion in a task file, and to merge only in Phase 7 after review passes. Remove the line.\n- **Wait on the Project Manager.** It tells the implementer to \"Ask the Project Manager how they want [code review] run\". CLAUDE.md treats a step that waits on PM confirmation as invalid unless a named rule requires it. Replace it with a plain \"code review required\" line, or a `BLOCKED:` line if it truly cannot proceed.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:372-373"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Identity check and local sha have no implementing task",
+   "description": "Two inputs to the precondition stage are not built anywhere:\n- **Operator identity.** The success criterion \"adapter unable to identify the operator \u2192 exit non-zero, no write\" is only wired by the ordering line in 13.1 (\"identity, then pushed\"). Task 6's `check_head_pushed` does not call `identify_operator`, and no task writes that call. Put it in `preconditions.py` with its own test case in 6.2, or name it explicitly in 13.1.\n- **Local head sha.** `check_head_pushed` takes `local_sha`, but Task 3 adds only `current_branch` and `commits_in_range`, and nothing says where the sha comes from.\n  - A near match exists: `resolve_reviewed_sha` (`src/squadron/review/persistence.py:143`) runs `git rev-parse HEAD`. It returns `None` and logs a warning on failure, which is the wrong contract for a precondition.\n  - Add a helper that raises, or name the one to reuse and how its `None` is handled.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:133-150"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The \"model gets facts only\" constraint has no test",
+   "description": "The design's central rule is that the model receives `PrFacts` only, and is not asked for prose on no-input sections. Task 11.1 states the second half, but 11.2 only checks output text. It never asserts that:\n- the fake composer was not invoked for a no-input section; or\n- the prompt contains nothing beyond the facts.\n\nNo task states what the prompt contains either, although the design lists \"the prompt\" under body composition. Add one prompt-construction bullet to 11.1 and one assertion on the fake composer's received calls to 11.2.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:266-270"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Provider failure in the title path is ambiguous",
+   "description": "Two points are unclear:\n- **Title composer failure.** Task 10 makes a provider exception a non-zero exit. Task 10a degrades empty, multi-line or over-length responses to the first commit subject. It does not say what happens when the title composer raises. Under D8 it should refuse, and a 10a.2 case would pin that down.\n- **Where the exit lives.** 10.2 says the composer \"exits non-zero\", which implies `pr/body.py` raises `typer.Exit`. That couples the `pr/` package to Typer. Consider having the composer raise a typed error that the command in Task 13 maps to exit 1, and test it end to end in 13.2.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 8 does not say how \"newest in range\" is decided",
+   "description": "Task 8.1 says to take the survivor whose sha is newest, but not how that is determined. `commits_in_range` from Task 3 already returns newest-first shas. Reusing that order avoids a second `git rev-list` call. Reviewed shas are full shas (`persistence.py:143` uses `git rev-parse HEAD`), so exact membership is safe.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:179-180"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 4.2 adds little beyond 4.1",
+   "description": "The real criterion for 4.2 is that the existing `show` tests pass unchanged, which 4.1 already states. The only new test is `resolve_locator` returning the locator for each target form. Consider merging 4.2 into 4.1. Otherwise the task count is proportionate to a seven-module package plus a CLI command.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:102-105"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "No commit markers and no load tests",
+   "description": "The file has no `**Commit**:` markers, which is acceptable, so CLAUDE.md's per-top-level-task commit cadence applies. The slice states no NFR, so no `tests/load/` task or CI gating task is required.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+  }
+ ]
+}

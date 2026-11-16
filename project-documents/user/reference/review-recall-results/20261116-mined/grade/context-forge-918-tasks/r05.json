@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`arch-status-vs-plans` has no coverage",
+   "description": "The slice's ConsistencyChecker criterion (slice design line 277) names two rules: `plan-status-vs-entries` and `arch-status-vs-plans`. Task 12 only tests the first. The design says both consume `completedSlices === totalSlices` (`ConsistencyChecker.ts:726,749,828,849`), so the second rule's no-false-positive claim is unverified.\n\nAdd one case to Task 12 for `arch-status-vs-plans` with a plan containing a `[~]` entry. Alternatively, state explicitly that the two rules share the code path and only one needs testing.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:199-212"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "Every commit is written as a `- [ ] Commit: ...` sub-item. Commit markers must be plain `**Commit**:` lines, never checkboxes.\n\nPlacement also needs trimming. The Task 11 and Task 12 commits are each a single test-only commit, and Task 13's commit is conditional. Keep markers at Task 5 (parser works and tests pass), Task 7 (derivation) and Task 10 (the wired end-to-end path). Fold Tasks 11 and 12 into one marker.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105,135,179,197,212,224"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Fixture edit is not checked against other consumers",
+   "description": "Task 1 adds two entries to the shared `sample-slice-plan.md`. Task 5 updates only the `slicePlanParser` `totalSlices`/`completedSlices` assertions (5\u21927, 3\u21925). Two problems follow:\n- Nothing tells the implementer to search for other tests that load this fixture, such as discovery, WorkflowNavigator or CLI tests. Any of them could break on the new entries, and the breakage would only show up in Task 13.\n- The slice design says existing fixture tests keep passing \"unchanged\". The task edits an existing assertion, so the two documents disagree.\n\nAdd a step to Task 1 or Task 5 to grep for all consumers of the fixture. Alternatively, use a sibling fixture, which the design explicitly allows (design lines 220-222) and which avoids both problems.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:36-50"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Tasks 2, 3 and 4 are too granular, and some tests go beyond the criteria",
+   "description": "Tasks 2, 3 and 4 are each a few-line edit to the same file. All three are tested together by Task 5, so they belong in one task, \"Parse `[~]` as Deprecated and count it as resolved\". Their steps also dictate near-literal code and line numbers, which is more detail than the slice requires.\n\nThree test items go beyond the success criteria:\n- Task 5's \"explicit regression test\" for `[ ]`/`[x]`/`[X]` duplicates what the design says the existing fixture tests already prove (design lines 280-282).\n- Task 7's third bullet (\"omitting `planLineStatus`\u2026\") is not a new test.\n- Task 12's complementary `status: in-progress` case is not required by the criterion.\n\nCut or merge these. Thirteen tasks is heavy for a change of about 20 lines of production code across four files.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:52-102"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 9's `derivedStatus` initializer change goes beyond the design and has no test",
+   "description": "Decision 4 specifies \"the same one-line addition\" to the inline `deriveEntryStatus` call in `cf list slices`. Task 9 also changes the `derivedStatus` fallback initializer to handle the case where `detectDocuments` throws. That is a third piece of status logic duplicated into `slice.ts`, and the design explicitly declines to touch that duplication. Task 10 never exercises the error path, so the added behavior is untested.\n\nEither drop the initializer change, or add a test that forces `detectDocuments` to fail and asserts `deprecated`. If the change stays, record it in the slice design so the two documents agree.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:155-163"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 11 sits three tasks after the wiring it verifies",
+   "description": "Task 8 (the `WorkflowNavigator` wiring) has no test until Task 11, with the CLI Tasks 9 and 10 in between. Moving Task 11 directly after Task 8 would follow the test-with pattern. The \"stop and report if the test fails\" instruction in Task 11 is acceptable as written.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:137-197"
+  }
+ ]
+}

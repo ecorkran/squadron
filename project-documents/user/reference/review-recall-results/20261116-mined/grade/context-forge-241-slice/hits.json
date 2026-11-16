@@ -1,0 +1,27 @@
+{
+ "case": "context-forge-241-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Technical Scope says to \"Fill the reserved `LIFECYCLE: review-gate` branch in `getNext()`; route each boundary's gated status to `review` / `blocked`\"",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     4
+    ],
+    "r06": [
+     0
+    ]
+   }
+  }
+ ],
+ "note": "r03:0 is borderline (asks how status reaches the review-gate branch with no slice, without naming guard ordering explicitly); r05:4 excluded since it covers only the missing index, not the unreachable branch."
+}

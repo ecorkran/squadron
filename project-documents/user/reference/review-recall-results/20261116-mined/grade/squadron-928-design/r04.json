@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Install into the shared flat agents root has no rule for a destination that already exists",
+   "description": "Claude packs are written into their own `~/.claude/commands/<prefix>/` folder. Agents skills go straight into `~/.agents/skills/`, a single flat folder shared with every other skill source, as D3 itself notes at line 123.\n\nThe install flow (lines 93-97) checks names and frontmatter, then calls `write_skill_dirs`. It never says what happens when `~/.agents/skills/<prefix>-x/` already exists and squadron didn't put it there, for example the user's own skill or another tool's. If it gets overwritten and recorded in the receipt, a later `skills uninstall` deletes files squadron never owned. That breaks the rule at line 176 (\"Receipts remain the only authority for what squadron owns in a shared directory\", #65) and makes Success Criterion 2 meaningless.\n\nThe exclusion at line 52 covers collisions with squadron's *own* receipt and skill names, described as already present on the Claude path. This collision is different: the flat shared root is new in this slice.\n\n**Fix:** Add a rule to D3, such as treating an existing destination folder that no receipt records as a validation error, reported before anything is written. Add one test for it.\n\nThe same issue affects status. `installed_path` for prefix packs proves an install with \"first `root/p-*/SKILL.md`\" (line 108). In a shared root, any skill from another source that happens to match `p-*` shows the pack as installed. For the agents target the per-target receipt is a more reliable signal, and the design already treats receipts as the authority.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:93-97"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Doctor's \"pack ships no Codex content\" check needs the pack source, and the design doesn't say how doctor gets it",
+   "description": "D8 has doctor report `WARN \u2014 pack ships no Codex content` for packs without an `agents/` directory, and walkthrough step 7 depends on it. To know that, doctor has to look at the pack's source.\n\nThat's simple for `bundled` and local-path sources. For a `github` source, the source exists only after `clone_github` (line 92). Doctor is read-only and offline by design (905 scope), so it can't clone just to report status. The design doesn't cover:\n- github sources\n- a local source path that has been deleted\n- a source that can't be read\n\nWithout that, doctor either quietly reports the wrong state or picks up an unlisted network dependency.\n\n**Fix:** In D8, state which source types doctor inspects and what it reports for sources it can't check, such as \"unknown \u2014 remote source\". Otherwise, cut the third state and report only installed or not installed for the agents rows. Cutting it also makes D8 smaller, which helps with the effort increase.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "A failed write partway through an agents install leaves files no receipt records",
+   "description": "D3 makes sure invalid input never reaches the disk. The receipt, though, is written only after `write_skill_dirs` returns (line 97).\n\nIf the write fails partway through a multi-skill pack (a permission error, a full disk, or an existing file that blocks a folder), the skill folders already copied stay in the shared root with no receipt. Per D7 and #65, `skills uninstall` can then never remove them. Nested folders in a shared root make this worse than the flat Claude case.\n\nThe failure-mode rule requires each new I/O path to say what happens on failure and how that is made visible. The design states nothing here.\n\n**Fix:** Say which of two strategies applies:\n- Undo the files already written in this install when the write fails, then raise `SkillSourceError` naming the failure.\n- Write the receipt step by step, so a partial install can still be uninstalled.\n\nAdd one test that simulates a failure partway through.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:93-97"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The rule's exact command list is left to an implementation-time probe",
+   "description": "Several D10 rows still read \"confirm by probe\" or \"unprobed\". This includes the daemon-client commands, which may need a correction to the README. The procedure is concrete: a named tool, run from a terminal, with results recorded in the DEVLOG. Success Criterion 8 checks the result with `codex execpolicy check`. That's an acceptable handoff for a maintenance slice, provided the task breakdown makes the probe a task that must finish before the docs are written.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The `agents/` pack format is a small new capability",
+   "description": "The 900 architecture excludes new capabilities, and 912 was moved to initiative 300 for that reason. A pack-format declaration is close to that line. The 928 plan entry names \"a pack-format declaration of per-target content\" as an accepted option, though, and the format only mirrors the layout squadron's bundle already uses. No action needed. Future extensions to the pack format, such as conversion or more targets, belong in a feature initiative.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:121"
+  }
+ ]
+}

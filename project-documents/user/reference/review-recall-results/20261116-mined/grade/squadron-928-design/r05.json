@@ -1,0 +1,40 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Design is heavier than the plan entry's Part A/B and should defer doctor rows and trim the layout refactor",
+   "description": "The plan entry assigns `skills install/uninstall --ide` and the approval-rule docs. The design adds work the entry does not name:\n- `skills list --ide`.\n- Per-target doctor rows (D8), including a new `WARN \u2014 pack ships no Codex content` state.\n- A new `PACK_LAYOUTS` table that lifts the working Claude writers out of `installer.py`.\n- A file move of the bundled `analysis` skills (D4), which touches `install-commands` fixtures and tests.\n- A `remove_receipt_files` extraction from `uninstall_commands`.\n\nThe design says this is why effort went from 2/5 to 3/5, but nothing in the entry requires the doctor rows.\n\nCuts and deferrals:\n- Defer D8 doctor rows to a follow-up. Doctor's Claude-only skill-pack report is not wrong, only incomplete, and this slice adds no Codex rule check that needs it. Criterion 5 and walkthrough step 7 go with it.\n- Add only an agents branch to `installed_path`, used by `skills list`. Don't move the Claude writers. If `PACK_LAYOUTS` stays, keep the Claude layout as a thin wrapper around the existing functions, not a relocation.\n- Keep the D4 move only if criterion 1 (`sq skills install analysis --ide codex`) stays in scope. Otherwise the bundled pack is reachable through `install-commands` already.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:33-44"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Shared agents root: write failures and overwrite of unowned skills are not enumerated",
+   "description": "The design handles validation failures (\"nothing written\") but not failures during the new write path into `~/.agents/skills`:\n- `write_skill_dirs` raises `OSError` midway, for example on permissions or a full disk. Files are on disk with no receipt, so `skills uninstall` can never remove them and nothing logs the orphans.\n- The receipt write fails after a successful file write. The outcome is the same.\n- A destination skill directory already exists from another source, such as the user's own skill or another pack's. The agents root is flat and shared, unlike Claude's prefix directory. D3 says directory names \"tie it to its pack\", but nothing says what install does on an existing path. The \"Excluded\" list calls collisions pre-existing, but overwriting a non-receipt skill directory in a shared root is new exposure for packs.\n- A `--commands-dir` that doesn't exist or isn't writable.\n\nState the handling for each. Examples are: write the receipt first, or clean up and re-raise on failure; refuse when a target path exists and is not in an existing receipt for this pack; log at ERROR. Add one test per failure that asserts the observable signal, as the project's failure-mode rule requires.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:87-98"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Suffix-based receipt names can collide between packs",
+   "description": "D5 builds receipt names as `pack + \"-agents\" + (\"-local\" if local)`. Claude receipts use the bare pack name, so these cases collide:\n- A Claude machine install of a pack named `foo-agents` and a Codex machine install of `foo` both write `foo-agents.toml`.\n- A pack named `foo-local` collides the same way with the local-scope receipt of `foo`.\n\nThe second install silently overwrites the first receipt, and uninstall then removes the wrong file set. The design excludes \"collisions with squadron's own receipt names\", but this is pack-vs-pack and is created by the new scheme. Either reject pack names ending in the reserved suffixes at install time, or have receipt lookup verify the target recorded in the receipt (925 added the target to receipts). Name the chosen guard and add a test for it.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Uninstall contract contradicts itself on removing the Claude prefix directory",
+   "description": "Line 75 says `remove_receipt_files` is extracted from `uninstall_commands` and \"never removes the destination itself\". The Data Flow section (line 102) says that for a Claude prefix pack \"the now-empty prefix directory is still removed, as today\". Line 100 gives that destination as `~/.claude/commands/<prefix>`, so the prefix directory is the destination. Both statements can't hold for the one shared routine. The D7 claim of \"no behavior change\" for `skills uninstall` on Claude, and criterion 6, depend on which one is true. Specify how the routine treats the prefix directory, for example by making the destination root the parent of the prefix directory. Add a test for the no-flag Claude uninstall of a prefix pack.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:75"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The approval rule's contents are deferred to an implementation-time probe, and granularity is unspecified",
+   "description": "Plan Part B requires enumerating every `sq` command that reaches a provider or the network. D9 leaves the pattern as `<subcommands from D10>`. In the D10 table, `review`, `run`, `metrology`, `skills install` and `auth login` are marked \"confirm by probe\" or unprobed. The daemon-client commands are marked \"probe with `sq serve` running\". The deliverable, and the testable form of criterion 8, are therefore undetermined at design time. A probe done under the plan's authorization is fine. What is missing is the decision rule for classifying a command, and the rule's granularity.\n\nThe granularity matters because a matching `allow` runs the command outside the sandbox with no prompt. A top-level alternative such as `\"skills\"` would also allow `sq skills uninstall` and `sq skills list`, which need no network. A top-level `\"run\"` allows arbitrary pipelines. State that the pattern uses the narrowest prefix that fails under the sandbox, for example `[\"sq\", \"skills\", \"install\"]`. Alternatively, say explicitly that top-level granularity is accepted and why. The docs must state which was chosen, since D9 already commits to saying what the rule authorizes.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166"
+  }
+ ]
+}

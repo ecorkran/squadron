@@ -1,0 +1,18 @@
+{
+ "case": "squadron-322-tasks",
+ "kind": "tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "T7 lists `classify_direction` precedence as 1 `n < floor` -> `INSUFFICIENT_EVIDENCE`, 2 unversioned -> same, 3 graduate, 4 `match_rate <= tighten_rate` -> `TIGHTEN`, 5 `HOLD`, and says case 4 is \"reachable even if `n < floor`\". Taken as a precedence list, case 1 returns first for every below-floor cell, so `TIGHTEN` is unreachable there. That contradicts the same task, T8's test (\"a below-floor cell with a low match rate returns `TIGHTEN`\") and the design (`322-slice` line 37 \"tightening is not floor-gated\"; Direction Bands table line 183). **VALID**: self-contradiction. Needs: doc alone. Raised by the original review (F001)."
+  },
+  {
+   "id": "F2",
+   "text": "The Coverage Check says the malformed `judge:` block row is \"exercised in T8\", but T8's tests list only registered and unregistered templates. **VALID** (minor): self-contradiction between the Coverage Check and T8. Needs: doc alone. Raised by the original review (F002)."
+  },
+  {
+   "id": "F3",
+   "text": "T13 says to \"reuse 320's existing result-discovery surface\" to find unsampled judge results, falling back to \"store-recorded samples only\". At `9360d61c`, `metrology/capture.py` has only `resolve_target` (a glob scoped to one `{index}`), and no module enumerates judge results across the project. Unsampled results are by definition absent from the store, so the fallback cannot meet T13's own success criterion (3 unsampled results at `rate=1.0` yield 3 `OfferTarget`s). **VALID**: the task cannot be completed as written, and it names code that does not exist. Needs: code. Raised by the original review (F003, as a note)."
+  }
+ ]
+}

@@ -1,0 +1,61 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`post_tick()` is called with no arguments, so the slice-plan item \"handle post-tick environment writes\" is not delivered",
+   "description": "The slice plan gives 304 the job to \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\". The 500 contract is `post_tick(trail_deposits, threat_mutations)` (500-slice lines 284-288; 500-arch line 56). The design always calls `post_tick()` with nothing. It never says where `trail_deposits` or `threat_mutations` would come from (engine return value, a collector on `SimulationManager`, etc.) or which slice will connect them. As written, slices 505 and 506 will have to change `SimulationManager.step()` and possibly the `tick()` return contract, which goes against the design's own goal that \"when layers arrive they plug in without server changes\" (line 19). Fix: either define the channel now (for example, `step()` collects optional deposits/mutations and forwards them, passing `None` today) or list this as an explicit deferral with a named owner slice.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:287-288"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The environment is not passed to `engine.tick()`, unlike the slice plan and 500-arch, and the change is not acknowledged",
+   "description": "The slice plan says \"Pass environment context to `SimulationManager` and `engine.tick()`\". 500-arch says the same in two places: line 52 (\"The world server passes the environment (or its query method) to `engine.tick()`\") and line 81. The design instead injects the environment into each force through its constructor and leaves `tick()` unchanged. That may well be the lighter and better choice, since no `BulkForce` protocol change is needed. But it changes a cross-initiative interface contract without saying so. Behavior-engine (100) and 500 slice authors reading their own architecture docs will expect an environment parameter on `tick()`. Add a sentence that records this as a deliberate change from 500-arch/slice plan and says which document should be updated.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Other slice-plan scope is dropped without being recorded as a deferral",
+   "description": "Two assigned items are dropped:\n- The slice plan's config scope is \"seed, grid resolution, layer selection\". This design delivers only `seed` (line 153 gives the reason).\n- The 305 plan entry says \"Terrain summary in snapshots deferred to (304)\". This design defers it again to unnamed \"future work\" (line 47).\n\nBoth deferrals are reasonable, because there are no grids or terrain yet. But the work now has no owner: 305 handed it to 304, and 304 hands it to nobody. Name the receiving slice for each item (for example, 501 for grid resolution and terrain summary, 507 for layer selection), or update the slice plan so the hand-off is recorded.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:42-48"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Hard-coded `seed=42` and `seasonal_parameter=0.0` defaults break \"configuration over convention\"",
+   "description": "The 300-arch principle names the environment seed directly: World parameters (tick rate, world bounds, entity limits, enabled behavioral profiles, environment seed) are explicit configuration, not hard-coded defaults scattered through the codebase. The design does three things against this:\n- It puts `seed: int = 42` on the dataclass (line 231).\n- It falls back to it silently when the YAML section is missing (line 250).\n- It sets `seasonal_parameter: float = 0.0` as a default on `step()` (lines 176, 272).\n\nThe `step()` default means that if slice 308 misses a call site, the system silently freezes the season instead of failing. Fix:\n- Make `seed` required whenever the `environment` section is present. `default.yaml` already sets it.\n- Since nothing reads `seed` in this slice, either drop the \"section optional\" fallback or log the default that was applied.\n- Remove the default on `step()`'s `seasonal_parameter`, so the tick body passes `0.0` explicitly in one place that 308 then replaces.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:149-151"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\"Environment is always present\" contradicts `Environment | None` and the None checks in `step()`",
+   "description": "The section says the always-present environment \"avoids `if environment is not None:` checks scattered through the codebase\". Yet `SimulationManager` accepts `Environment | None`, `step()` contains two such checks (lines 273, 287), and the `environment` property returns `Environment | None` (line 269). Every future force-construction site would then have to handle `None`. The only reason given is backward compatibility for existing tests. But the design already says every test call site must be updated for the new `step(tick_number)` signature (line 407), and an empty `Environment(bounds, {})` is cheap to build. Make `environment` a required, non-Optional parameter and remove both branches.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:218-220"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Unhandled environment exceptions and the entity-bounds contract are not addressed",
+   "description": "The new calls can raise:\n- `pre_tick` raises `ValueError` when the seasonal parameter is outside [0, 1].\n- `query` raises `ValueError` for the whole batch if any position is out of bounds (500-slice lines 280, 324-333).\n\nThe design does not say what the tick body does when either call raises: crash the server, log and stop, or skip the tick. The 300-arch \"Explicit lifecycle\" principle requires defined error behavior.\n\nThere is also a hidden dependency in the bounds handling. Line 113 says `WorldBounds` is \"shared with entity manager\", but `EntityManager` keeps `WorldBoundsConfig`. Neither 303 nor this slice keeps entities inside the bounds. Slice 303 only clamps speed. So the first environment-aware force built on this slice's constructor-injection pattern could fail every tick once an entity drifts out of bounds. Fix:\n- State how exceptions from the environment propagate in the tick body.\n- State who guarantees that positions passed to `query()` are in bounds (a boundary step in the engine or server, or a filter in the forces), or name that as a known requirement for the first consuming slice.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:155-169"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The tick-budget NFR is not restated",
+   "description": "This slice adds calls to the tick hot path. 300-arch sets the tick budget at 20\u201360 Hz target rates with 10K\u201350K entities, and requires an overrun warning when the budget is exceeded. The success criteria never mention it. Add one line restating the target (the tick must finish within `1/tick_rate` at the configured rate) and noting that the empty environment's `pre_tick`/`post_tick` must add negligible cost. The existing overrun metric from 301 is enough to verify this, so no new mechanism is needed.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#success-criteria"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "`_seasonal_parameter` state field is redundant",
+   "description": "The State Management section adds `_seasonal_parameter: float` to `SimulationManager`, but `step()` takes the value as a parameter and never reads the field. Remove the field. Slice 308 will decide where temporal state lives.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:119"
+  }
+ ]
+}

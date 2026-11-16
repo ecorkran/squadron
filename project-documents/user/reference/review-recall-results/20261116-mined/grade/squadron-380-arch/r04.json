@@ -1,0 +1,75 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "One `cwd` plays six roles today; the scratch worktree splits them and the document does not say how",
+   "description": "The Envisioned State hands \"range, working directory, and PR metadata to the existing code review\", and Related Work says the engine is \"reused; none changed in shape\". In the current code a single `inputs[\"cwd\"]` is all of the following:\n- the tool jail root (`_resolve_review_cwd`)\n- the git cwd for the diff\n- the rules root (`resolve_rules_dir(review_cwd, ...)`, which probes `{cwd}/rules/` then `{cwd}/.claude/rules/`)\n- the config root (`get_config(..., cwd=cwd_for_config)`)\n- the CLAUDE.md source (`cwd_for_claude` in `review_client.py`)\n- the root for the parser's path-existence check\n\nIf the scratch worktree becomes `cwd`, rules, CLAUDE.md and squadron config are read from the PR head. A PR author, including a fork author, then controls the conventions the reviewer treats as trusted. The \"Prompt inputs from the PR\" bullet only treats title, body and threads as untrusted, not the tree.\n\nIf the operator's checkout stays `cwd`, tools and path checks read the wrong tree. The design needs an explicit split: a trusted project root for rules, config and CLAUDE.md, and a reviewed tree for tools, diff and path checks. That is a change to the engine's input shape and should be named as one.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"A review without tools needs only the fetched ref\" is false against the current review path",
+   "description": "The principle \"Isolated checkout for tool-enabled reviews\" and the \"Fetching without checkout\" consideration create two modes. The no-tools mode breaks in three places:\n- **Path-existence check:** `review_client.py` runs it against `cwd` for all template types (`_check_path_existence` in `parsers.py`). Files added by the PR do not exist in the operator's tree, so valid findings are flagged as non-existent paths.\n- **Range helper:** `normalize_diff_spec` (slice 916, A3) produces `<ref>...HEAD`. Without a worktree, HEAD is the operator's branch, so \"the same merge-base semantics `--diff` uses\" cannot reuse it and needs a new `base...<namespaced-head-ref>` path.\n- **CLAUDE.md injection:** it reads from `cwd`, which is the operator's unrelated checkout.\n\nAlways materializing the worktree removes the second mode and all three problems. The fetch-only mode is an optimization with no stated requirement behind it.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Only the head is fetched; a stale local base gives a range that does not match the host",
+   "description": "\"Base semantics\" requires the reviewed range to match \"what the host displays\", but the adapter only \"fetches the head ref into the local repository\". The merge-base is computed against whatever the local base ref happens to be. If the PR head has merged a newer base than the operator has fetched, the local merge-base is older and the diff pulls in unrelated base commits. This is the \"review the wrong thing\" failure the Motivation cites.\n\nRelated gaps in the same area:\n- The typed record carries \"base ref\" but no base sha, and nothing says the base is fetched into a namespaced ref.\n- The failure mode \"base moved since resolution\" is named without defining what is compared.\n- Shallow or partial clones, where merge-base is not computable, are not enumerated.\n- A target of `owner/repo#n` or a URL can name a repository other than the local one. The design assumes a local repository and does not say whether that is refused.\n- \"Fail loudly when the repository \u2026 has more than one [host remote]\" rejects the ordinary fork layout (`origin` plus `upstream`), which is the enterprise case the Motivation targets. It needs a selection rule, not a refusal.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Rules degradation in an unplanned repository has no rule source, and the fallback probe can pick up unrelated directories",
+   "description": "\"Rules outside a planned project\" says the review runs \"with the template's rules and language auto-detection only\". In `rules.py`, both template rules (`get_template_rules(template_name, rules_dir)`) and language auto-detection (`match_rules_files(extensions, rules_dir, frontmatter)`, guarded by `rules_dir is not None`) load files from a rules directory. With no rules directory there is nothing to load, so the stated degradation is a review with no conventions unless squadron ships built-in rules. No such thing is described.\n\nSeparately, `resolve_rules_dir` falls back to `{cwd}/rules/` and `{cwd}/.claude/rules/`. A foreign repository can easily have a `rules/` directory of unrelated markdown that is silently treated as review rules. The document needs to state where rules come from in an unplanned repository and whether the cwd probe applies there.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Idempotent posting relies on operations the protocol does not have, and on a marker in user-editable text",
+   "description": "\"Host behind a protocol\" lists the operations: resolve a PR, fetch its head, read its threads, post a comment, create a PR, identify the operator. \"Posting idempotency and attribution\" needs two more, list comments (paginated) and update a comment, and neither is in the protocol.\n\nThe lookup mechanism is \"the comment is marked so squadron can find \u2026 its own prior comment\". A marker in a comment body is editable and copyable by anyone with write access (quote-replies duplicate it). That conflicts with the project rule \"NEVER use user-accessible labels as logical structure\". Keying on the host comment ID stored in the saved artifact, plus the author login, is the robust form.\n\nFurther undecided points:\n- \"Updates or supersedes\" is left open in the Envisioned State. Update-in-place discards the earlier review of a different head sha.\n- Posting takes \"the saved review\" as its source, so `--post` with a no-save run, or in a repository where the save location is unconfigured, has no defined behavior.\n- Nothing says whether a 917 failure artifact (unparseable or invalid verdict) is postable. It should be refused.\n- Enterprise failures are missing from the enumerated list: SSO-unauthorized token (403 on write while `gh auth status` passes), rate limiting, and a hung `gh` subprocess (no timeout stated).",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Slice order ships `sq review pr` before it can persist, while claiming full flag parity",
+   "description": "The Overview promises \"every existing review flag behaving as it does today\", and the `sq review pr` slice claims \"full parity with the existing review flags\". PR-keyed persistence is the following slice. Today `save_review_result` and `format_review_markdown` require a `SliceInfo`, and the principles forbid fabricating one for PRs, so the `sq review pr` slice lands with save unavailable and parity unmet. Either persistence precedes the command or the command slice states the reduced contract.\n\nTwo related inconsistencies:\n- \"A slice-keyed target and a PR-keyed target satisfy the same contract\" is not free. `SliceInfo` is a `TypedDict` whose keys `format_review_markdown` reads directly, and the pipeline `review` action also passes `SliceInfo`. Generalizing touches the pipeline call site, which \"Nothing else moves\" excludes.\n- The adapter slice is labelled \"Read-only\" but is said to deliver \"the protocol\", which includes post and create. Splitting read and write protocols would make the slice boundary true, and would stop a read-only consumer depending on write methods.\n\nThe PR-keyed filename and its key are also undefined. In the data-directory case the key must include host, owner and repository to avoid collisions. No behavior is stated for when that directory is not configured.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`sq pr create` omits the push precondition and cannot fill its fixed sections from named inputs",
+   "description": "Creating a PR requires the head branch to exist on the remote at the local sha. The document never says whether `sq pr create` pushes, refuses when the branch is unpushed or behind, or what it does when a PR for the branch already exists. `gh pr create` prompts interactively and fails non-interactively in this case. This is load-bearing because the project's git rules treat push as a separately authorized action.\n\nThe body has fixed sections \"what changed, why, how it was verified, known gaps, review provenance\", while the design goal says \"Nothing is asserted that no input supports\". For a commits-only description (a non-slice branch) no named input supplies \"how it was verified\" or \"known gaps\", and a one-shot model call will invent them. The design must state that sections with no input are rendered as explicitly empty or omitted.\n\nOther undefined points:\n- Whether the \"latest saved review\" must match the current branch head sha, and what the provenance says if it does not.\n- What the base is when `cf` is absent. A non-squadron repository has no integration-branch config to read.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The machine-parseable body contract has no consumer and contradicts the untrusted-input rule",
+   "description": "\"The body's section structure is a contract other tooling can rely on\", and the Envisioned State says `sq review pr` \"can parse [it] for intent and claimed verification\". No anticipated slice builds that parser. The same document says the PR body is third-party text injected \"as clearly delimited data \u2026 never as instructions\". Section headings in a human-editable PR body are also a user-accessible label used as structure, which the project rules forbid.\n\nCut the contract and the self-parsing claim. Keep the fixed sections as a rendering template only.\n\nTwo smaller scope items to trim:\n- The five-form target grammar. `gh` already resolves number, URL and branch, and \"number vs branch named `123`\" is declared \"unambiguous\" with no rule given.\n- The host-neutrality claim. The record's `owner, repository, number` is GitHub-shaped and will not fit nested GitLab groups without change, so \"a second host is a new implementation, not an edit\" is unsupported.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Scratch worktree does mutate the operator's repository",
+   "description": "\"Never surprise the operator\" is worded as never mutating the working tree, which holds. However the fetch and `git worktree add` write refs, objects and `.git/worktrees` metadata into the operator's repository. Cleanup on failure or interrupt is deferred as a \"slice-level question\", yet a leaked registration blocks later runs and survives until `git worktree prune`. The ownership and cleanup rule (a deterministic location outside the repository tree, prune on start) belongs at the architecture level because both the adapter slice and the review slice depend on it.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Posted comment is an output channel for injected content under the operator's identity",
+   "description": "Delimiting the PR title, body and threads does not stop a model from following them, and the diff and files of a fork PR are equally attacker-authored. With `--post`, the model's output is published under the operator's login. The dry-run form exists, but the document should state what is rendered into the comment: parsed findings and verdict only, never free-form model text.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  }
+ ]
+}

@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "No task covers the vectorization requirement",
+   "description": "The slice's Technical Requirements say: \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops.\" No task or step mentions this. Task 4.1 states the weighted average as `sum(velocity[i] * leadership[i]) / sum(leadership)`, which a junior implementer will likely write as an inner loop over `i`. Add a step to 4.1 requiring numpy operations on the neighbor slice, for example `(state.velocities[nbrs] * lw[:, None]).sum(axis=0) / lw.sum()`. Also add a matching acceptance check: no inner loop over neighbors in either force.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:113-119"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox tasks, not plain `**Commit**:` lines",
+   "description": "Tasks 1.3, 2.3, 3.3, 4.3, 5.4 and 6.3 are all checkbox items (lines 48, 73, 103, 134, 164, 180). Commit markers should be plain `**Commit**:` lines, never checkboxes. Where they are placed is fine: after the state change, after the profile change, after each force and its tests, and after the integration tests. Convert each one to a plain `**Commit**: feat: ...` line.\n\nTask 6.3 (lines 180-182) also plans a final `docs:` commit for \"any remaining changes\". After 5.4, the only thing left would be checked boxes. The project rules forbid commits that only check boxes or only add notes. Remove 6.3, or fold any check-offs into the 5.4 commit.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The convergence test assertion is too weak to show convergence",
+   "description": "The slice criterion says \"the herd's mean heading converges toward the leaders' initial heading.\" Task 5.2 only asserts that the final mean heading has a positive x-component. Random velocities with seed 42 could already average slightly east at tick 0, so the test could pass with no leadership effect at all. Change the assertion to one of these:\n- The angle between the final mean heading and `[1, 0]` is below a stated threshold.\n- The eastward component at the end is greater than at tick 0.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:152-153"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The LeadershipForce test lacks an exact expected value",
+   "description": "The slice requires \"Each force produces the correct output for hand-constructed inputs.\" The MomentumForce test (task 3.2, line 96) gives an exact expected vector. The LeadershipForce test (task 4.2, line 126) only checks that the force \"biases toward agent 1.\" The expected value is easy to compute: weighted heading = (0.1\u00b7[0,1] + 0.9\u00b7[1,0]) / 1.0 = [0.9, 0.1]. With leadership_weight=1.0 and zero velocity for agent 2, the force is \u2248 `[0.9, 0.1]`. State that value.\n\nLine 127 has the same problem. \"Similar to plain velocity averaging\" should become an exact check: with uniform leadership, force = (mean neighbor velocity \u2212 own velocity) \u00d7 leadership_weight.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:126-127"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Some steps repeat other steps",
+   "description": "- Task 6.2 repeats the protocol-conformance checks already done in 3.1/3.2 (lines 91, 95) and 4.1/4.2 (lines 122, 125). It can be removed.\n- Task 5.1's step \"confirm forces interact correctly\" (line 144) has no assertion and overlaps with 5.2. Reduce 5.1 to the run-without-error smoke check.\n\nThese are minor and do not block the plan.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:176-178"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The epsilon value is an inline magic number",
+   "description": "Tasks 3.1 (line 86) and 4.1 (line 117) each write \"epsilon (e.g. 1e-10)\" inline. Project rules say not to hard-code constants. Tell the implementer to define one module-level constant in `herding.py` and have both forces use it.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Corridor movement is in scope but has no test",
+   "description": "The slice's Included list mentions an integration test for \"corridor movement.\" The formal Success Criteria list path straightness only as one possible metric, so heading variance or mean heading is enough. This is not a gap against the success criteria. It is worth knowing that corridor behavior is not directly checked.",
+   "location": "project-documents/user/slices/102-slice.herding-and-leadership.md:54"
+  }
+ ]
+}

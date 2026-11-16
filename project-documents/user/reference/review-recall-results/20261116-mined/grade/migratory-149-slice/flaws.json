@@ -1,0 +1,10 @@
+{
+ "case": "migratory-149-slice",
+ "kind": "slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Intervention 2: \"With S=3 alone: candidates loaded drops to ~5000\", beside the same section's \"(2S+1) x (2S+1) = 7 x 7 scan\" and \"agents/cell about 555\". Seven by seven cells of about 555 agents is about 27,000 candidates, not about 5,000; 5,000 is the S=1 occupancy of one cell. The \"both interventions: ~555 candidates loaded\" figure inherits the same error. **VALID** (minor): self-contradiction in the numbers that motivate the gate. Needs: doc alone."
+  }
+ ]
+}

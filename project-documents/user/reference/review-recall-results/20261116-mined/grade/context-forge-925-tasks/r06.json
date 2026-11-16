@@ -1,0 +1,61 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are embedded in checkbox success-criteria, not plain `**Commit**:` lines",
+   "description": "Every commit is written inside a checkbox item, for example `- [ ] Success criteria: \u2026 Commit: \\`refactor(core): \u2026\\``. This is the case at lines 100, 127, 153, 205, 225, 247, 277, 313, 334, 343, 374, 390, 413 and 426. Markers must be plain `**Commit**:` lines and never checkboxes. As written, a commit can only be \"done\" by ticking a success criterion, so the commit step gets tangled with the test result. Move each one to a plain `**Commit**: \u2026` line under its task.\n\nTask 20 says to \"list the covered call sites in the commit body\", but its commit is not made until Task 21. State that on the Task 21 marker.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Early commit markers (Tasks 4 and 6) land where CLI and MCP likely don't compile",
+   "description": "Task 1 narrows `GuideMethod` and Task 3 sweeps only core. The CLI and MCP still use `'manual'` at `guides.ts:119` and `guideTools.ts:47,93,101`. The MCP zod enum still includes `manual`, and its value is passed to `manager.install()`. That likely fails to typecheck until Task 7. Tasks 4 and 6 verify only `pnpm --filter @context-forge/core test`, yet they carry commits. The project rule is to build after all changes, and the design says to run the full suite after step 1.\n\nEither move the first commit to after Task 8, or fold the minimal CLI and MCP type fixes into Task 3 and require `pnpm -r build` at the Task 4 marker.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:96-128"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "D10 timeout wiring is contradictory and no task verifies it is applied on the auto-init path",
+   "description": "Task 15 first says `init()` runs with `{ timeoutMs: GUIDE_INIT_TIMEOUT_MS }`. It then says `sync()` must call it without the timeout \"as an `init()` option\". The signature is given as `init(operationPath: string)`, which has no option parameter. Task 17 calls `SubmoduleStrategy.init(operationPath)` with no timeout. Taken literally, `ensureCheckout()` would run unbounded, which defeats D10 and finding F004. Task 18 has no test that the bound is applied (only that a rejection propagates).\n\nFix this in three places:\n- Define `init(operationPath, opts?: { timeoutMs?: number })` in Task 15.\n- Have Task 17 pass `GUIDE_INIT_TIMEOUT_MS`.\n- Have Task 16 or 18 assert that `ensureCheckout` passes the timeout. This can be a spy on `gitExec` or a mocked timeout rejection that surfaces `GUIDE_OFFLINE_REMEDIATION`.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227-238"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Fixture will likely fail on modern git because local-path submodules are blocked by default",
+   "description": "Task 9 builds a host repo whose submodule URL is a local bare repo. Since git 2.38.1, `git submodule update --init` with a local-path URL fails with `transport 'file' not allowed` unless `protocol.file.allow=always` is set. This affects the fixture's own setup. It also affects the code under test in Tasks 16, 18 and 21, because `init()` runs plain git through `gitExec`. A junior implementer will hit this with no hint.\n\nAdd a step to Task 9 to set the allowance. Options are `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0=protocol.file.allow`/`GIT_CONFIG_VALUE_0=always` in the test process env, or `-c protocol.file.allow=always` in the fixture setup commands. It must also reach the commands the code under test runs.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158-174"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Tasks 10\u201311 are coupled, and `detect()` throwing changes behavior for every existing caller",
+   "description": "- **Task 10:** its success criterion is \"typecheck passes once Task 11 populates the field\". It cannot be verified on its own, so it should be merged with Task 11.\n- **Task 11:** it makes `detect()` throw when `checkSyncStatus()` returns `'error'`. `detect()` is used by `cf guides info`, the install \"already installed\" check, `setup-ide` and MCP `guide_status`. A missing git binary or a non-repo directory would now break those paths. Task 11's success criteria don't require the existing suite to pass. Task 12 only adds new cases.\n\nAdd \"existing `GuideDetector`, CLI and MCP tests still pass\" to Task 11. Also note which callers are expected to surface the new error.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:176-205"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Test gaps at the input boundaries and call sites",
+   "description": "- **Config-path warning:** Task 7 adds the CLI deprecation warning for `guide.git_strategy: manual` in config. Task 6 only checks the core alias report, and Task 8 covers only the `--strategy` flag. The functional criterion \"same warning\" for config-sourced `manual` is untested at the CLI.\n- **MCP wiring:** Task 22 wires `prompt_list` and `prompt_get`, but Task 23 tests only `context_build`.\n- **Mocked `guidesInstallAction`:** Task 27 asserts \"no `.gitmodules` is created\" while `guidesInstallAction` is mocked. That assertion is vacuous. Either drop it or assert it in a non-mocked run.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:130-154"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task 32 includes a PM-review and merge gate",
+   "description": "\"PM reviews before merge to `main`\" waits on Project Manager approval with no named rule requiring it. Merging is also Phase 7 and must not appear in a task file. Remove it and end Task 32 at the final commit. The version bump note can stay as informational text outside the checkboxes.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:425-426"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task count is heavy for the slice; several effort-1 pairs should merge",
+   "description": "There are 32 tasks, about half of them effort 1\u20132 test tasks that follow trivial implementation tasks. Merge each of these into one task with an inline test step:\n- Tasks 1 and 2 (`normalizeGuideMethod` and its tests).\n- Tasks 10 and 11, or 10, 11 and 12.\n- Tasks 13 and 14 (`gitExec` timeout and its test).\n- Tasks 28 and 29 (managed notice and its tests).\n- Tasks 25\u201327, which currently have two implementation tasks before the tests.\n\nTasks 19\u201320 likewise have two implementation tasks before Task 21's tests. That is acceptable only because the helper is trivial. Tasks 21 and 23 add per-command `cloned()` cases that mostly re-test the shared `ensureGuideReady` path. Keep one full case per entry point, as D3 requires, and don't expand beyond that.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+  }
+ ]
+}

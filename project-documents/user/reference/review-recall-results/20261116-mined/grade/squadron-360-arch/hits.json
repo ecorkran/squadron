@@ -1,0 +1,21 @@
+{
+ "case": "squadron-360-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Output Conventions: \"Both capabilities write to the existing `project-documents/user/analysis/` directory\" (line 243) and the settled list (lines 332-",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     1
+    ],
+    "r05": [
+     2
+    ]
+   }
+  }
+ ],
+ "note": "r05[2] quotes the exact analysis/ vs project-guides contradiction; r02[1] cites the same quote and concept path but frames it as a docType issue; r01[0] frames it as concept path vs claimed layout without quoting the analysis/ sentence (borderline)."
+}

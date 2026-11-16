@@ -1,0 +1,11 @@
+{
+ "case": "context-forge-910-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Migration Plan step 1 says \"retyping alone would leave `taskFileParser.ts`'s still-bare-string assignments failing to compile\", and that steps 1 and 2",
+   "hits": {}
+  }
+ ],
+ "note": "No review mentions taskFileParser, the claim that steps 1 and 2 must land together, or the false compile-error premise. r01 #2, r05 #5 and r06 #6 discuss the inferredStatus widening, which is a different point."
+}

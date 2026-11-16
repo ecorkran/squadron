@@ -1,0 +1,75 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Exit criterion assigned by the slice plan is silently replaced",
+   "description": "The slice plan entry (`140-slices.simulation-scaling.md:56`) sets the exit criteria as \"k-nearest TPS at N=200k within 20% of **k-first** TPS at the same N \u2026 **no regression on k-first path**.\" The slice changes the gate to \"within 20% of `radius_only`\" and removes `k_first`, so the \"no regression on k-first path\" criterion can no longer be met. The reasoning may be correct, but the slice should not redefine a plan-assigned gate on its own. Either update the slice plan entry in the same change, so the plan and the slice agree, or keep the plan's gate. The new comparison also gets harder to pass the better `radius_only` performs, so the gate keeps moving as `radius_only` improves.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "FRNN collect-then-sort, assigned by the slice plan, is deferred",
+   "description": "The plan entry says: \"With coalesced reads, k-nearest via FRNN (collect all within radius R, then partial-sort the small candidate set per thread) becomes viable at scale.\" That makes FRNN part of how this slice delivers k-nearest. The slice explicitly keeps the slice 150 heap and pushes FRNN to a follow-up slice (lines 75, 187\u2013193, 458). Deferring it may be the right call, but it drops scope the plan assigned to this slice. The plan entry needs updating to match, or a follow-up slice entry needs to be added to the plan.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:75"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Mode set change and default flip are scope creep and break the \"GPU-only\" boundary claim",
+   "description": "Line 93 says: \"No file outside the GPU compute path is touched.\" But scope items 7\u20138 and \u00a7\"Default `neighbor_mode` flip\" (line 349) edit `migratory_server/config.py` and `bench/workload.py`, add a `ConfigurationError` path, and change a user-facing default. The plan entry asks for none of this: it doesn't mention `radius_only`, removing `k_first`, or flipping the default. Adding the `radius_only` kernel branch is small and defensible as the measurement baseline. Removing `k_first` and flipping the server default is a separate behavior change for users and could be its own small `feat:` change after the gate passes. Cut it, or correct line 93 and record the plan deviation.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:93"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Contradictory `k_first` retirement strategy",
+   "description": "Lines 67 and 199 say `k_first` \"is removed entirely\" and raises `ConfigurationError` with \"No silent migration.\" Mitigation line 433 says to \"ship the two new modes alongside the legacy `k_first` value (still parsed, with a deprecation warning)\" until the final commit. Line 441 also has step 1 leaving the force kernel unchanged, so `k_first` keeps running there. An implementer can't tell which applies in the intermediate commits. In particular, it's unclear whether the kernel temporarily specializes three modes, and whether criterion 3's `k_first` baseline (213.9 TPS) gets re-measured on the same box or is taken from history. Pick one sequence and state it.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Coherent field dtype is hardcoded f32 while claiming \"same dtype as originals\"",
+   "description": "Scope item 2 and line 449 require the coherent fields to match the originals' dtype. The allocation snippet hardcodes `qd.f32`, and the memory estimate assumes 4 bytes per field. The plan conflicts on precision: line 36 says slice 145 \"uses f64 throughout on CUDA\", while line 54 (slice 151) says the GPU path is f32. If the originals are f64 on CUDA, this snippet introduces a silent precision drop in neighbor reads that the parity test may not catch. State the actual dtype of `px`/`vx`/`leadership_per_agent` as of slice 150, and derive the coherent fields' dtype from the originals rather than writing a literal.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:207-226"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Tier NFR misstated and not restated with an absolute target",
+   "description": "The slice calls N=200k \"the architecture's Tier 3 target\". The architecture (`140-arch.simulation-scaling.md:74`) and plan (line 81) define Tier 3 as **250k on production-class** NVIDIA hardware. The slice's gate is relative only (k_nearest \u2265 0.8 \u00d7 radius_only) and gives no absolute TPS target at 200k on the dev box. That target is needed to say whether this slice moves the Tier 3 milestone forward. Correct the tier reference, and either restate the tier TPS target with the hardware caveat or say explicitly that this slice carries no absolute TPS NFR.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Headroom workloads referenced but not in scope",
+   "description": "Verification step 5 and criterion 4 run `mid-flock-500k` and `mid-flock-1M`. Only `mid-flock-200k` is scoped for addition (lines 367, 452). Criterion 4 makes the 500k/1M results decide whether FRNN is \"required.\" Either add both workloads to scope, or make step 5 explicitly optional and take it out of the criterion 4 decision.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:397-402"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Redundant host sync added per tick",
+   "description": "\u00a7State Management (line 146) says kernel boundaries already order the reindex before the force kernel. The `build_spatial_hash` snippet still appends an explicit `qd.sync()` after `coherent_reindex_kernel`. That adds a host round-trip every tick, which matters most for the small-N sanity gate (criterion 3). Drop it unless a consumer needs it.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:343-344"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Slice 150 status disagrees with the plan",
+   "description": "The slice says slice 150 is \"shipped on `main` as of 2026-05-05\". The plan still shows (150) unchecked (`140-slices.simulation-scaling.md:52`). One of the two documents is stale; fix whichever is wrong so the prerequisite status is clear.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:81"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Branch name does not follow convention",
+   "description": "`152-coherent-grid-for-k-nearest-neighbor-search` drops the `slice.` part. Per convention it should be `152-slice.coherent-grid-for-k-nearest-neighbor-search`.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:439"
+  }
+ ]
+}

@@ -1,0 +1,61 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox items, not plain `**Commit**:` lines",
+   "description": "Every commit point is written as `- [ ] Commit: ...`. This happens at lines 112, 157, 187, 217, 264, 286, 306, 320, 344, 368, 386, 414, 456, 472, 493, 508 and 527. Commit markers must be plain `**Commit**: ...` lines, never checkboxes. As checkboxes, task-checker will try to tick them, which goes against the \"never make a commit that only checks boxes\" rule. Where the commits fall is fine: each one is at a tested, working point.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Tasks 4\u20135 will create a circular import, and Task 4's success check cannot pass",
+   "description": "- **The cycle:** `state.py` imports `executor` at the top of the module (`state.py:25`). `executor.py` imports `state` only inside functions (`executor.py:661`, `:1456`), which is how the cycle is avoided today.\n- **How the tasks trigger it:** Task 4 puts `ActiveItem` in `state.py`, and `run_observer.py` imports it from there. Task 5 then has the executor build `ActiveItem(...)` and annotate `observer: RunObserver | None`. A top-level import of either `run_observer` or `state` from the executor closes the cycle.\n- **The success check:** Task 4 says \"the module has no import of `executor`\". But `RunObserver.step_completed` takes a `StepResult`, and `StepResult` is defined in `executor.py:178`. Without at least a `TYPE_CHECKING` import, that check can't be met.\n- **Fix:** have Task 4 put `ActiveItem` somewhere with no `state` or `executor` dependency, such as `run_observer.py` or `models.py`, and have `state` re-export it. Change the check to \"only a `TYPE_CHECKING` import of `StepResult`\".",
+   "location": "src/squadron/pipeline/state.py:25"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Nothing says or tests how the two config keys reach the code that uses them",
+   "description": "- **Foreground timeout:** Task 15 passes `idle_s=foreground_idle_timeout_s` but never says where `SDKExecutionSession` gets that value. Task 17 tests the stall with fake streams and a value set directly. No test shows that the configured `pipeline.foreground_idle_timeout_s` actually bounds the read.\n- **Heartbeat interval:** in the same way, Task 13 (lines 199\u2013202) never says that the `RunHeartbeat` interval and `RunOwner.current(...)` read `pipeline.run_heartbeat_interval_s` through the Task 8 reader.\n- **Why it matters:** the criterion names the key (\"silent longer than `pipeline.foreground_idle_timeout_s`\"). If the wiring is missing, the feature does nothing and no test fails.\n- **Fix:** have Task 15 say how the value gets in (the same way 932's `background_idle_timeout_s` does), and add one assertion that a configured value reaches `_collect_turns` and `RunHeartbeat`.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:227-230"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 22a contradicts the design's \"no assertion on time in tests\"",
+   "description": "The load test is justified: the slice restates the NFR, and `.claude/rules/python.md` has a load-test tier. But Special Considerations still says \"There is still no assertion on time in tests.\" Task 41 or 42 should update that sentence so the design and code agree.",
+   "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:648"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The heartbeat error handling is specified twice",
+   "description": "Task 11 makes `StateManager.heartbeat` catch `OSError` / `STATE_READ_ERRORS` and log a WARNING. Task 13 (line 195) also has the heartbeat task catch the same errors. One catch point is enough. Keep it in `StateManager.heartbeat`, and have the task rely on it plus its done-callback for anything unexpected.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:172-174"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 25's column order differs from the UI spec",
+   "description": "Task 25 lists the columns as \"Run ID, Status, Pipeline, Target, At, Started, Activity\". The UI spec orders them Run ID, Pipeline, Target, Status, At, Started, Activity. Write the spec order, and flag the columns that never shrink separately.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:348-351"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Task 2 stops for the Project Manager where the design already gives the fallback",
+   "description": "The design already decides both outcomes:\n- If no `ResultMessage` arrives after the interrupt, D7 narrows to \"always mark unusable\" and the design is updated.\n- If a state write runs off the event-loop thread, D5 adds a per-run `threading.Lock`.\n\nThe two \"stop and ask the Project Manager\" lines should state those actions instead.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-60"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Task 42 says to run walkthrough step 8 in a scratch HOME",
+   "description": "Step 8 of the walkthrough is deliberately a read-only timing run against the real runs directory. Task 42 says to run steps 1\u20135 and 8 in a scratch HOME. Exclude step 8 from that instruction.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:521-524"
+  }
+ ]
+}

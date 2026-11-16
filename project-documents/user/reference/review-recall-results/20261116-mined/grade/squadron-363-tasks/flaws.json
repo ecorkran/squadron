@@ -1,0 +1,22 @@
+{
+ "case": "squadron-363-tasks",
+ "kind": "tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "SC4: dropped topics (why-now, audience evolution, methodology preference) \"appear nowhere in the document, neither as content nor as gap markers\". Task 4.1 authors the rule and 5.1 stops extra questions, but no task inspects the generated `000-concept.squadron.md` for them. **VALID** (`coverage`). Needs: doc (design plus tasks). Raised (F001)."
+  },
+  {
+   "id": "F2",
+   "text": "SC7: with the guide \"absent, unreadable, or missing the expected section title\" the flow stops loudly (and names the setup step when the guide tree is absent). Task 6.1 authors all three; Task 8.3 exercises only the renamed section. **VALID** (`coverage`). Needs: doc. Raised (F002)."
+  },
+  {
+   "id": "F3",
+   "text": "SC8: \"mechanical refillability for augment\". Task 6.2 authors it; Task 8.4 checks default stop, the dated subheading and byte identity of populated sections, not that an empty or `[GAP: ...]` section is refilled and real content left alone. **VALID** (`coverage`). Needs: doc. Raised (F003, first half)."
+  },
+  {
+   "id": "F4",
+   "text": "SC10: \"every `[INFERRED]` sentence satisfies the checkable rule\". Task 8.1 checks only that the provenance inferred-claims line exists; no task audits the sentences. **VALID** (`coverage`). Needs: doc. Raised (F004)."
+  }
+ ]
+}

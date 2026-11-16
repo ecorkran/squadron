@@ -1,0 +1,10 @@
+{
+ "case": "squadron-306-tasks",
+ "kind": "tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design SC (line 372-373): \"A failed **or unverifiable** archive copy aborts the overwrite: the original review file is byte-identical afterward\". T12 specifies both modes (copy cannot be created; read-back verification fails), but T13's tests cover only the unwritable-directory mode; no test exercises a copy that succeeds and then fails verification. **VALID** (minor, `coverage`): the tests leave out one branch the success criterion names. Needs: doc (design plus tasks). Raised by the original review (F001, as its first CONCERN)."
+  }
+ ]
+}

@@ -1,0 +1,54 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkbox tasks, not plain `**Commit**:` lines",
+   "description": "Every commit point (2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C) is written as `- [ ] **Task 2C: Commit** \u2014 ...`. The project rule is that markers are plain `**Commit**:` lines and never checkboxes. A parser or implementer looking for `**Commit**:` markers will find none. It would then fall back to committing after every top-level task, which loses the intended grouping (for example, Tasks 4/4T/5/5T committed as one unit). The checkbox form also makes the commit a trackable task that `task-checker` would tick. Rewrite each as a plain line, such as `**Commit**: feat(core): add adoption.state config key and state helpers`. The placements themselves are good. Each sits after a tested, building state.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 15C is a notes-only commit",
+   "description": "Task 15 mostly runs checks and records outcomes \"under this task\". Task 15C (`docs: record slice 261 verification walkthrough`) would therefore usually contain only notes and check-offs. The rule is never to make a commit that only checks boxes or only adds notes. Drop the marker so the notes and check-offs ride with the last real commit (13C or 14C), or fold the Task 15 notes into the Task 14 commit. Defect fixes already get their own typed commits per Task 15's last bullet.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:269"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No task covers the \"`context_build` / `cf build` surface the `AdoptionError`\" criterion end to end",
+   "description": "The slice's Functional Requirements say that with a guide missing the profile or prompt, `cf build` exits non-zero with the `AdoptionError` message and `context_build` returns it as an error. The tasks only cover pieces of this:\n- Task 10T tests the integrator rethrow.\n- Task 12 fixture 12 tests that the pipeline rejects.\n- Task 15's manual walkthrough step 4 covers `cf build` once.\n- No automated assertion shows `context_build` returns an error result.\n\nTask 11 already edits `contextTools.test.ts`. Add one case there where the mocked pipeline rejects with `AdoptionError` and the tool result is an error carrying the message. Add the same to `build.test.ts` for the non-zero exit.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:220-222"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 15 baseline step hard-codes `main` and omits setup for the temporary worktree",
+   "description": "Task 0 resolves the target through `git.integration_branch`, but Task 15 builds `/tmp/before.md` from `main`. If an integration branch is set, `main` is not the pre-slice state, so the byte-identical comparison would be against the wrong baseline. Name the target (read the same way as Task 0) instead of `main`. The step also says only \"a temporary `git worktree add` \u2026 built there\". A fresh worktree has no `dist` and no installed dependencies, so the task should say to run install and `pnpm -r build` there. It should also say how `cfl build` resolves the project from that path. The slice design's version (\"in this repo, on main before the slice\") avoids this.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "No load test or CI wiring task for the sub-second detection target",
+   "description": "D2 states a performance target of under one second. The slice explicitly decides that \"tests assert the caps, not timings\". The task file's Context Summary records the same reasoning and notes that the `tests/load/` tier is a Python rule. I found no `tests/load/` directory in this repo. Task 3T asserts the early-exit cap and the `MAX_WALK_ENTRIES` cap, which bound the worst case. This is an accepted, documented omission, so a load test and CI gate would add scope the slice rejected.",
+   "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:167"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`measureSourceVolume` barrel export is deferred to Task 5",
+   "description": "Task 3 creates `sourceVolume.ts`, but its `detection/index.ts` export is added later in Task 5's \"Export \u2026 `measureSourceVolume` and `SourceVolume`\" bullet. Nothing breaks, because `node.ts` already re-exports `./detection/index.js` and the tests can import the file directly. Still, the export belongs with the file's creation, so moving it into Task 3 avoids a reader wondering why the file was left unexported for two tasks.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:119"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 6 deviates from D6's \"reuse `resolveInitiativePlanPath`\" for a stated reason",
+   "description": "D6 says to reuse `resolveInitiativePlanPath`. The task instead extracts `INITIATIVE_PLAN_FILE_PATTERN` and reads the directory itself. The Context Summary explains why: `resolveInitiativePlanPath` swallows `readdir` errors, which conflicts with D6's \"other read errors throw\". The regex is still defined once, and the existing behavior is preserved and covered by the \"tests pass unchanged\" criterion. This is reasonable and in scope.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:134"
+  }
+ ]
+}

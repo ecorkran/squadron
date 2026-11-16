@@ -1,0 +1,24 @@
+{
+ "case": "context-forge-214-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design Success Criteria say a missing, non-regular or **unreadable** file, and a missing or **unreadable** template, each exit 2. Task 3 implements th",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     1
+    ],
+    "r05": [
+     1
+    ],
+    "r06": [
+     3
+    ]
+   }
+  }
+ ],
+ "note": "r02 finding 1 names the missing unreadable file/template tests but concludes no new task is needed, so counted as borderline hit. r05 finding 1 adds an unreadable-file case but not explicitly a template case; counted."
+}

@@ -1,0 +1,47 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Git failures in range resolution are reported as \"unresolved\" at INFO, contradicting the exit-1 contract",
+   "description": "The failure table says a `None` from a reflog read or merge search means \"this path can't answer\", so the next path is tried, and the only signal is an INFO line with an unresolved reason. The API contract (line 275) says `slice-ranges` \"exits 1 on a git or store error\". Both cannot hold.\n\n- **Wrong reason shown.** A merge search that times out falls through to the fast-forward path (lines 111-114). The slice is then reported as `no_landing`, `landed_elsewhere` or `reflog_unavailable`, none of which is true. Nothing at WARNING or above records that git failed.\n- **Durability at stake.** The slice plan rates this slice's risk on \"the persistence has to be right the first time\". A user who reads `reflog_unavailable` after a transient timeout will believe a fast-forward range is permanently lost.\n- **Related gap in the same flow.** \"None found \u2192 fast-forward\" means the fast-forward path runs only when no merge landing exists. A slice that first landed by fast-forward and later got a follow-up merge never has its first landing resolved, although D1 says a slice can land more than once.\n\nFix: distinguish \"git answered, nothing found\" from \"git couldn't answer\". The latter should be a WARNING and exit 1, or a dedicated `RangeUnresolvedReason` that is never shown as a topology conclusion. State whether the fast-forward path also runs when merge landings exist.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "One per-project record mixes landings from different targets, and reports don't say how they treat them",
+   "description": "D2 tells users to resolve side-branch slices \"in a checkout whose target is that branch\". The store is user-level and keyed on `ProjectId`, so those landings go into the same `slice_ranges` record that a `main` checkout reads. `SliceLanding.target_ref` exists, but no report rule uses it.\n\n- **`report slice`.** It iterates \"each landing (oldest first)\" under a header reading \"N landings on main\". It would show a landing whose before and after are on another branch.\n- **`report history` (line 298).** Rows are the target's first-parent commits, and review findings go \"on the row of the landing's `after_sha`\". A landing recorded against another target has no row. Its reviews are also excluded from the closing project-level line, because the slice does have a resolved landing. Those findings disappear from the report, which breaks the plan's criterion that such slices \"appear at project level\".\n- **Multi-landing slices.** Reviews carry only `slice_index`. With two landings (172, 305, 940) the design doesn't say which landing's row gets the findings, or whether both do and the counts double.\n- **\"Oldest first\" has no defined key.** Stored and newly resolved landings are merged, and `resolved_at` is resolution time, not landing time.\n\nFix: state that reports use only landings whose `target_ref` equals the current target, and that D9's \"has a resolved landing\" means on this target. Define which landing's row review findings attach to, and the ordering key.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:194"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The mitigation for the editable self-install risk cannot detect it",
+   "description": "The risk at line 375 is that pyright resolves `import squadron` through the live editable install, so type counts at an export reflect live code. That would break the architecture's \"a snapshot measures a commit\" principle and its determinism goal.\n\n- **Criterion 5 can't catch it.** The in-place-equals-export test runs at HEAD, where the exported `src` and the live `src` are identical. Resolving through either gives the same count.\n- **Walkthrough step 4 has no reference value.** It runs at an older commit but has nothing to compare against, so \"checked against a known older commit\" is not a check.\n- **The fallback is undecided.** \"If they differ, type counts become absent\" is a design decision deferred to implementation, with no criterion deciding it.\n\nFix: add an export test where the exported tree's package differs from the live editable one. For example, a symbol exists only in the live `src`, and the test asserts that the exported file importing it produces a type error. Then decide the outcome now: either the test passes and the risk closes, or export type counts are absent `environment_unresolved` whenever the project is installed editable.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:380"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Walkthrough step 2 doesn't exercise the persisted record in a fresh clone",
+   "description": "`git clone . /tmp/sq-clone` produces a clone whose remote is the local path. Per the architecture, `ProjectId` comes from the git remote, so the clone likely derives a different id from the original checkout. I did not confirm how `derive_project_id` treats a local-path remote.\n\n- The step still passes, because a merge-commit landing resolves from topology.\n- It probably writes a second `sliceranges-*` file to the real user store under a stray project id.\n- It does not demonstrate the claim at line 176 that a fresh clone of the same remote reads the stored range. No listed test covers a fast-forward slice read from the store in a second checkout, which is the plan's \"still resolves \u2026 in a fresh clone\" case for fast-forwards.\n\nConsider cloning from the real remote URL in the walkthrough, and adding one resolver test that reads a stored fast-forward landing from a second checkout with the same `ProjectId`.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:364"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The lost-update case on `slice_ranges` has no signal",
+   "description": "Concurrent writers are \"not supported\", last write wins, and the signal is \"None\". Squadron runs several worktrees that share one `ProjectId`, so two `slice-ranges` or `report slice` runs can overlap. The only unrecoverable loss is a fast-forward landing whose reflog later expires, which is the case this slice exists to prevent. The window is small and matches 400's precedent, so this is acceptable. A cheap improvement is to re-read the record just before writing and merge, or to state the limitation in `docs/COMMANDS.md`.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Review figures have no noise floor, where the plan says LLM-sourced numbers are shown against theirs",
+   "description": "The slice plan criterion says \"LLM-sourced numbers are shown against their noise floor\". No review noise floor exists in 320, 323 or 402, and the design excludes measuring one. It marks every review figure `no floor measured` and gives audit figures the three-state floor display. That is the honest reading of \"absent is not zero\" and not dropped scope, but the plan criterion should be read as audit-only, or the gap recorded in the plan's Future Work.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:237"
+  }
+ ]
+}

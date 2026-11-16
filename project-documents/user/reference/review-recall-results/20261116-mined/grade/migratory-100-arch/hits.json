@@ -1,0 +1,54 @@
+{
+ "case": "migratory-100-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Related Work links `200-arch.world-server-foundation.md`. At `09dd31b` the repo holds `300-arch.worldserver-foundation.md` and no 200-arch file. **VAL",
+   "hits": {
+    "r01": [
+     12
+    ],
+    "r02": [
+     11
+    ],
+    "r03": [
+     11
+    ],
+    "r04": [
+     10
+    ],
+    "r05": [
+     18
+    ],
+    "r06": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Envisioned State says the narrow interface is \"tick the simulation forward, query agent state, register/remove agents\", while the same section says th",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     3
+    ],
+    "r06": [
+     3
+    ]
+   }
+  }
+ ],
+ "note": "r06 f0 hits F1 loosely (says one of 300/200 is wrong, names the nonexistent 200-arch link); r05 f3 hits F2 as one part of a broader tick-contract finding that explicitly says to remove register/remove from the engine."
+}

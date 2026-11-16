@@ -1,0 +1,75 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Two Task 3.4 integration tests leave dt and speed open and will likely fail",
+   "description": "`test_reflect_policy_flips_velocities_at_edges` puts an agent at `(99, 50)` with velocity `(10, 0)`, steps once and expects `vx < 0`. Almost every existing `SimulationManager` in `tests/test_simulation.py` uses `dt=0.05` (for example lines 142 and 432). At that step the agent only reaches 99.5, so it never crosses the edge and the assertion fails.\n\nThe 50-step tests have the same gap. The shared setup (line 226) gives no dt, starting distance from the edge, or profile `max_speed`, so nothing guarantees an agent leaves the box. Without that, the OPEN-drift test fails and the WRAP/REFLECT tests pass without ever exercising the policy.\n\nFix: give values in the setup, e.g. `dt=1.0` (already used at line 339), or start the agent at 99.9. Also require `max_speed` to be at least the starting speed, and require that 50 steps carries every agent past an edge.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:226-231"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes inside their own \"Commit\" tasks",
+   "description": "The same pattern appears at lines 176-179, 246-249, 283-286 and 322-325. Each one is a separate task (1.5, 2.4, 3.6, 4.3, 5.5) whose `**Commit**:` line sits behind `- [ ]`. Commit markers must be plain lines, never checkboxes.\n\nReplace each Commit task with a plain `**Commit**: <message>` line at the end of the section. The `git add` sub-step can go.\n\nFive commits is also a lot for a 2/5-effort slice. The Section 4 config change is two YAML lines and could go into the Section 3 commit or the final commit.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 1.3 allows hard-coding the valid policy names",
+   "description": "The step says to list valid options with \"`sorted(p.value for p in BoundsPolicy)` or a literal tuple\". A literal tuple copies the enum's values into a second place. That breaks the project rule that a comparison value is defined once: adding the planned `SOFT` variant would mean editing two places, and the error message could fall out of sync. Drop the \"or a literal tuple\" option and require the list to come from the enum.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:73"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The round-trip test only partly checks success criterion 5",
+   "description": "SC5 requires that \"reloading the emitted YAML produces an equal `ServerConfig`\". The task only asserts that the policy matches. Asserting `reloaded == original`, which works because the configs are frozen dataclasses, covers the whole criterion at no extra cost.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The manual walkthrough can leave `config/test.yaml` off `wrap`",
+   "description": "Steps 6 and 7 change `config/test.yaml` to `reflect` and then `open`. Step 8 says to restore it \"to whichever policy you want to keep (recommend `wrap`)\". SC12 requires `config/test.yaml` to use `policy: wrap`. Following step 8 literally could leave the file on another policy, and the Task 5.5 `git add` list does not cover `config/test.yaml`, so the change would sit uncommitted.\n\nChange step 8 to \"restore `policy: wrap` and confirm `git diff config/test.yaml` is empty.\"",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:304-306"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 3.2's \"zero import-time overhead\" step contradicts the plan itself",
+   "description": "The step asks to confirm zero import-time overhead on the OPEN path. But the same task imports `apply_bounds_policy` at module top level (line 195), and the Notes say \"No import of `apply_bounds_policy` is avoided\" (line 329). Someone following the plan cannot verify this step. Change it to \"no function call or array slicing on the OPEN path.\"",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:209"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "More unit tests than the criteria need",
+   "description": "Two trims:\n- The parametrized test that checks dispatch \"does not raise\" (line 171) repeats what the per-policy tests already prove. Drop it.\n- `test_open_is_noop_positions` and `test_open_is_noop_velocities` can be one test.\n\nThe rest of the list is reasonable for the slice's \"full unit test coverage\" requirement.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:150-171"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "A floating-point edge case can break the half-open rule for WRAP",
+   "description": "For a tiny negative overshoot, `np.mod(-1e-17, 100.0)` returns exactly `100.0`. That breaks SC7's `[0, width)` range, and the strict `x < width` check in Task 3.4 could fail on rare runs. A follow-up such as `positions[positions >= width] = 0.0`, or a unit test for a tiny negative value, would close it. This is low-probability, so it is informational only.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:134"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The task file's frontmatter already says `status: complete`",
+   "description": "The status is `complete` while every checkbox is unticked, and Task 5.3 later sets the same status. Tools that read frontmatter may treat the file as finished. It should be `not started` or `in-progress` until Task 5.3 runs.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "No load-test task is needed",
+   "description": "The slice states no NFR. The \"zero overhead\" wording describes the design, not a measurable requirement. This project's `.claude/rules/python.md` has no load-test tier, so no `tests/load/` task or CI gating task is required.",
+   "location": "project-documents/user/slices/313-slice.world-bounds-policy.md:355-392"
+  }
+ ]
+}

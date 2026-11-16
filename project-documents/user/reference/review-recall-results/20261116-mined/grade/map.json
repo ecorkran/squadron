@@ -1,0 +1,1292 @@
+{
+ "squadron-129-design/r01": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r02": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r03": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r04": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r05": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r06": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-174-tasks/r01": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r02": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r03": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r04": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r05": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r06": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-362-design/r01": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r02": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r04": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r05": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r06": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-401-tasks/r01": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r02": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r03": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r04": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r05": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r06": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-403-design/r01": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r02": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r05": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r06": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-920-tasks/r01": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r02": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r03": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r05": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r06": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-927-design/r01": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r02": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r05": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r06": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r01": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r02": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r04": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r05": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r06": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-320-arch/r01": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r02": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r04": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r05": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r06": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r01": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r02": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r05": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r06": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r01": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r02": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r03": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r05": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r06": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r01": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r02": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r03": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r04": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r05": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r06": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-197-tasks/r01": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r02": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r04": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r05": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r06": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r01": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r02": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r03": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r04": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r05": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r06": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r01": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r02": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r04": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r05": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r06": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r01": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r02": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r03": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r04": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r05": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r06": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r01": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r02": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r03": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r04": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r05": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r06": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r01": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r02": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r04": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r05": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r06": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r01": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r02": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r03": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r04": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r05": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r06": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-240-arch/r01": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r02": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r03": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r04": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r05": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r06": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r01": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r02": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r04": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r05": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r06": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-210-slice/r01": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r02": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r04": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r05": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r06": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-214-tasks/r01": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r02": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r03": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r04": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r05": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r06": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-241-slice/r01": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r02": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r03": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r04": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r05": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r06": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-261-tasks/r01": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r02": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r04": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r05": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r06": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r01": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r02": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r05": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r06": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-910-slice/r01": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r02": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r03": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r04": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r05": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r06": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r01": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r02": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r04": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r05": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r06": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-918-tasks/r01": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r02": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r03": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r05": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r06": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r01": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r02": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r03": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r04": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r05": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r06": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-100-arch/r01": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r02": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r04": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r05": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r06": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r01": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r02": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r03": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r04": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r05": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r06": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r01": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r02": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r04": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r05": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r06": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-slice/r01": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r02": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r03": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r04": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r05": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r06": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-102-tasks/r01": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r02": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r03": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r04": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r05": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r06": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-109-slice/r01": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r02": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r04": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r05": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r06": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r01": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r02": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r04": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r05": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r06": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r01": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r02": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r03": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r04": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r05": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r06": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r01": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r02": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r04": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r05": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r06": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r01": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r02": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r03": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r04": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r05": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r06": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r01": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r02": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r04": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r05": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r06": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r01": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r02": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r05": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r06": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-313-tasks/r01": {
+  "alias": "sonnet-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r02": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r03": {
+  "alias": "opus-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r05": {
+  "alias": "sonnet-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r06": {
+  "alias": "opus-medium",
+  "run": 1,
+  "kind": "tasks"
+ }
+}

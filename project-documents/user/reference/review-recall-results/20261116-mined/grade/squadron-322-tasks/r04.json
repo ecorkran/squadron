@@ -1,0 +1,75 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "T13 depends on a result-discovery surface 320 does not have, and its fallback cannot meet the non-empty-offers guarantee",
+   "description": "T13 says to \"reuse 320's existing result-discovery surface\", and if there is none, to \"scope this task to the store-recorded samples only\". The code has no such surface:\n- The only review-file globbing in `src/squadron/metrology/` is `capture.resolve_target` (`src/squadron/metrology/capture.py:95`). It resolves a single index (`{index}-review.*`). It cannot list every judge result for a given `JudgeConfigId`.\n- The store holds only samples. By definition, every result it knows about has already been sampled.\n\nSo the fallback can never find an unsampled result. That makes the success criterion \"a graduated config with unsampled results yields a non-empty offer set\" unreachable. It also blocks lapse detection (T13 line 203, T15 line 231). Lapse detection needs the `JudgeConfigId`s of *current* review files, which takes the same discovery capability.\n\nThe task breakdown has to commit to one approach. Either add a task that builds a review-file scanner (reviews dir \u2192 `derive_judge_config_id`, excluding any `result_ref` already sampled), or record a scope change against the slice design. \"Ask the PM if this reveals a gap\" leaves the slice's central guarantee undecided.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "T7's numbered precedence contradicts its own TIGHTEN rule",
+   "description": "Step 1 returns `INSUFFICIENT_EVIDENCE` for `n < floor`. That happens before step 4 (`TIGHTEN`) is ever checked, so a low-n, low-match-rate cell can never reach `TIGHTEN`. Step 4 and line 121 then say this must work. A junior implementer following the numbered list will write the bug that T8 line 134 tests for.\n\nFix: rewrite the order explicitly. One option:\n1. unversioned and not low-match \u2192 `INSUFFICIENT_EVIDENCE`\n2. `match_rate <= tighten_rate` \u2192 `TIGHTEN`\n3. `n < floor` \u2192 `INSUFFICIENT_EVIDENCE`\n4. `match_rate >= graduate_rate` \u2192 `GRADUATE`\n5. otherwise \u2192 `HOLD`\n\nThe task should also decide whether an unversioned cell can return `TIGHTEN`. The design table doesn't say.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A malformed `judge:` block will crash `recommend`; the coverage claim of T8 is false",
+   "description": "`resolve_thresholds` calls `float(pass_floor)` with no guard, so a non-numeric floor raises `ValueError`. It does not \"fall back to the documented merge\".\n\nThe design's failure-mode row requires that a malformed block is \"flagged, not silently defaulted\" and produces a WARNING. The tasks don't deliver that:\n- T7 (line 122) only handles an unregistered template.\n- `ThresholdTarget` (T3, line 61) has no field to flag the target.\n- T8 has no malformed-block test, even though the Coverage Check (line 287) says \"exercised in T8\".\n\nFix: add steps to T7/T8 that catch `ValueError` around `resolve_thresholds`, log a WARNING naming the template, mark the target unresolvable, and test it.",
+   "location": "src/squadron/pipeline/actions/judge.py:55-56"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The runtime-drawn-model limitation is never implemented or asserted",
+   "description": "The success criterion requires that \"the runtime-drawn-model limitation is stated where the recommendation is produced (asserted: the note is present in output, including `--json`)\". The design says the note must state that a step whose model comes from a 180 pool cannot track the drawn model.\n\nT9's `model_dimension_note` text only covers \"this template paired with this model\". T16 (line 243) checks that `--json` parses, but never asserts the note is in the JSON or that the pool-limitation wording is there.\n\nFix: add the pool-limitation sentence to T9 and add a JSON-output assertion to T16.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The store has no update path for idempotent re-graduation, and graduation can't be imported into `MetrologyRecord` without a cycle",
+   "description": "**No update path.** T15 (line 230) requires `graduate` to \"update its evidence snapshot in place\". But T11 only adds `write_graduation` returning a newly generated id. `MetrologyStore` writes to `{sample_id}.json` and has no overwrite-by-identity method. Unless T11 derives a deterministic record id from `(JudgeConfigId, artifact_level)` or adds an explicit replace method, re-graduating creates a second record and T16's \"record count stays at 1\" fails.\n\n**Import cycle.** T11 (line 175) adds `graduated_config: GraduatedConfig | None` to `MetrologyRecord` in `models.py`. T3 puts `GraduatedConfig` in `calibration_models.py`, which has to import `JudgeConfigId` from `models.py`. That's a circular import.\n\nFix: define `GraduatedConfig` (and `EvidenceSnapshot`) in `models.py`, or state how the cycle is broken. Also add the update/upsert method to T11.",
+   "location": "src/squadron/metrology/store.py:100-142"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`select_residual_offers`'s return type can't carry the lapse and pruned-file signals T14/T15 need, and T13 has no pruned-file step",
+   "description": "- The signature returns `list[OfferTarget]` only.\n- T13 line 203 leaves the lapse signal undecided (\"return enough information (or have the CLI re-derive it\u2026)\").\n- T14 line 217 says to \"assert on whatever signal T13 produces\".\n- T14 line 218 requires pruned files to be \"counted (not silently dropped)\" with a WARNING, but T13 has no implementation step for missing review files and nowhere to put a count.\n- T15 also doesn't render the exhausted-case \"no offers due\" line that the design requires.\n\nFix: define a result model in T3/T13, for example `OfferReport{offers, lapsed: list[JudgeConfigId], exhausted, pruned_count}`, and add the pruned-file handling to T13's steps.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-206"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Fractional `rate` rounding can break the non-empty guarantee",
+   "description": "\"Select a `rate` fraction\" doesn't say how to round or which items to pick. With flooring, `rate=0.1` over 3 unsampled results gives 0 offers, which violates the architecture's commitment that a graduated config with unsampled results yields a non-empty offer set.\n\nFix: specify at least one offer whenever there are unsampled matches (for example `max(1, ceil(rate * k))`) and a deterministic selection order, and add a small-k, low-rate test case to T14.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:202"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "`graduate --template --model --level` doesn't say which `JudgeConfigId` it targets",
+   "description": "After T1 re-keys the store, and after any prompt edit, the agreement report can contain several cells with the same `(template, model, level)` and different `template_content_hash` values.\n\nT15 says to re-derive and filter \"to this template/model/level\" but doesn't say which hash wins. The likely intended answer is the hash of the currently registered template, via `_template_content_hash`. If the implementer picks the wrong cell, the graduation gets recorded against a stale instrument, which is exactly the version-blending the design forbids.\n\nFix: say to use the current template's hash, and refuse if that cell is missing or isn't `GRADUATE`.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Commit markers come after every task, including implementation that isn't tested yet",
+   "description": "There are 17 `**Commit**:` markers, one per task. T1, T3, T5, T7, T9, T11, T13 and T15 each commit implementation before its tests exist in the next task, so those commits aren't at tested points.\n\nFix: merge each implementation/test pair into one commit, about 8 markers in total. The config-key tasks (T5/T6) are small enough to fold into the T7/T8 commit.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "`find_graduation` should not reuse `_judge_config_matches`",
+   "description": "The existing helper treats a filter with `template_content_hash=None` as a wildcard. T11 line 178 says to \"extract a shared helper\" for list tolerance. If the implementer also reuses this matcher for `find_graduation`, version-scoping could weaken. A one-line warning in T11 would prevent that.",
+   "location": "src/squadron/metrology/store.py:64-77"
+  }
+ ]
+}

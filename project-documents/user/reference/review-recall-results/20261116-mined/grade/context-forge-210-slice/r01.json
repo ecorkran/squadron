@@ -1,0 +1,61 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Source of truth for compilation is under-specified",
+   "description": "The file layout says outputs come \"from `.claude/rules/\u2026`\" and \"`.claude/skills/\u2026`\". The design also says the guide script \"understands the project-documents layout\". The slice never says which input the copilot backend reads. It also never says whether `cf setup-ide claude` must have run first.\n\nThe stated driver is a user who cancelled Claude. For that user, `cf init --ide copilot` may produce no `.claude/` at all. Success criterion 2 of the plan (end-to-end on a fresh directory) depends on this.\n\n\"alwaysApply\" is also used as a classifier, but the doc never defines it. It could be a frontmatter key or simply the absence of `paths`. Lines 83 and 44 imply the latter, while the plan table implies the former. Name the input directories and the alwaysApply/scoped classification rule. State explicitly that the Copilot target doesn't require `.claude/` to be generated first.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49, 71-83"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Unmanaged-file guard covers only two of the four output locations",
+   "description": "The managed-marker check (Sequence step 4 and `isManagedCopilotFiles`) covers only `.github/copilot-instructions.md` and `AGENTS.md`. The script also writes `.github/instructions/*.instructions.md` and `.github/prompts/*.prompt.md`. A user's own prompt or instruction file with a colliding name would be overwritten with no prompt and no `.bak`. This breaks the plan's \"same safety as Claude path\" criterion.\n\nEither extend the guard to every file the script will write, or state that the script skips or backs up unmanaged targets. The design should also say what happens to previously generated files whose source rule was later deleted (stale orphans).",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100, 109"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failure modes for the new script and propagation I/O paths are not enumerated",
+   "description": "The only failure handling stated is \"fail at the script step with a clear error\" (Risks). That is asserted, not designed. Gaps:\n- **Script failure or hang.** `execFileSync('bash', [scriptPath,'copilot'])` has no stated timeout. A non-zero exit or partial output (some files written, then failure) has no handling, and no one decides whether worktree propagation is skipped.\n- **Outdated guides submodule.** It is unverified that an older `setup-ide` rejects the unknown `copilot` argument rather than silently succeeding or falling through. Nothing detects the version mismatch.\n- **Propagation.** `.github/instructions/` and `.github/prompts/` may not exist, for example when a project has no scoped rules or no skills. The copy step doesn't say whether that is skipped or an error. A worktree path that is missing or unwritable is also unhandled.\n- **Observability.** Each failure should produce a WARNING or ERROR log or a non-zero exit. Test Coverage has no case that asserts a failure signal.\n\nAdd a short failure-mode table with a handling strategy and observable signal for each, plus tests for the script-nonzero and missing-directory cases.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:93-103, 121-129, 131-133"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Cross-repo dependency on the guides submodule is not reflected in dependencies or sequencing",
+   "description": "Frontmatter says `dependencies: []`, but the slice cannot deliver anything until the ai-project-guide script gains a `copilot` case. That change lives in a separate repo. Risks calls it \"the highest-risk coupling\" and says it must be \"released in sync\", but no mechanism is given. Specify the ordering (guide change lands first), how CF detects the guide is too old, and how the CLI tests run without the real script (a stub or fixture script). Without that, the Test Coverage \"creates files\" cases can't run in CF CI.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:6, 113-114, 133"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Plan-assigned deliverable dropped: tool guide reference",
+   "description": "The plan's success criteria require that the tool guide `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` is referenced in the slice design, and promoted to a published tool guide if needed. The slice doc never mentions it. The plan also says to \"document the mapping\" for `.claude/agents/*.md` \u2192 Copilot custom agents. The slice defers implementation, which is acceptable, but it states no mapping to document. Add the tool-guide reference and a one-line agents mapping, or record the deferral explicitly.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Inconsistent helper naming and signature",
+   "description": "Technical Scope defines `isManagedCopilot(filePath)`, analogous to `isManagedClaudeMd()`. Files Changed defines `isManagedCopilotFiles(projectPath)`. These differ in name and in signature (single file versus project-wide). Pick one. A per-file helper reused across all guarded outputs would also fit the guard concern above and avoid duplicated logic.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29, 109"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Duplicate always-on content in AGENTS.md and copilot-instructions.md",
+   "description": "The plan prescribes writing identical content to both files. VS Code may load both for a Copilot user, so the same rules appear twice in context. `AGENTS.md` is also commonly owned by other tools or users. The prompt-before-overwrite guard covers it, but the design could acknowledge the duplication cost. It could also note that `AGENTS.md` is the cross-tool file and `copilot-instructions.md` could be a pointer, if that proves problematic. No change is required for this slice.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:61"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Proportionality is appropriate",
+   "description": "The slice is small and additive. It adds one `VALID_TARGETS` entry, one guard, one propagation branch, and one guide-script backend. Agents translation and Cursor are correctly deferred. The `applyTo` translation section partly restates the plan table, but it is short and not worth cutting.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+  }
+ ]
+}

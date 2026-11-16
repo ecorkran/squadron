@@ -1,0 +1,78 @@
+{
+ "case": "squadron-322-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "T7 lists `classify_direction` precedence as 1 `n < floor` -> `INSUFFICIENT_EVIDENCE`, 2 unversioned -> same, 3 graduate, 4 `match_rate <= tighten_rate",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     1
+    ],
+    "r04": [
+     1
+    ],
+    "r05": [
+     0
+    ],
+    "r06": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "The Coverage Check says the malformed `judge:` block row is \"exercised in T8\", but T8's tests list only registered and unregistered templates. **VALID",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     3
+    ],
+    "r03": [
+     2
+    ],
+    "r04": [
+     2
+    ],
+    "r05": [
+     5
+    ],
+    "r06": [
+     5
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "T13 says to \"reuse 320's existing result-discovery surface\" to find unsampled judge results, falling back to \"store-recorded samples only\". At `9360d6",
+   "hits": {
+    "r01": [
+     3
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     1
+    ],
+    "r06": [
+     1
+    ]
+   }
+  }
+ ],
+ "note": "r01:3 (F3) is borderline: it flags the unidentified 320 surface but does not say it does not exist or that the fallback cannot meet the criterion. r05 finding 5 and r06 finding 5 for F2 bundle the malformed-block row with another item but name the false T8 coverage claim."
+}

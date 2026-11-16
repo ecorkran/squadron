@@ -1,0 +1,75 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 15 contradicts itself on the timeout, and D10 has no test",
+   "description": "- Task 15's first bullet has `init()` run with `{ timeoutMs: GUIDE_INIT_TIMEOUT_MS }`. The second bullet says `sync()` calls it \"without the timeout\" by passing the timeout \"as an `init()` option\".\n- Together these don't give a signature. Task 17 (line 255) calls `SubmoduleStrategy.init(operationPath)` with no option. Depending on how Task 15 is read, auto-init is either unbounded, which breaks D10, or `sync()` is bounded, which also breaks D10.\n- Pin it: `init(operationPath, opts?: { timeoutMs?: number })`. `ensureCheckout()` passes `GUIDE_INIT_TIMEOUT_MS`, and `sync()` passes nothing.\n- Add a Task 16 or Task 18 assertion on this, such as a mocked `gitExec` call-args check. Task 14 only tests `gitExec` in isolation. Nothing verifies that the auto-init path is bounded or that `sync()`/`update()` are not.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227-238"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The Task 9 fixture can't be reached from the CLI and MCP test packages",
+   "description": "- Task 9 puts the `cloned()` / `initialized()` / `outOfSync()` helper under `packages/core/tests/guides/helpers/`.\n- Tasks 21, 23 and 24 need it from `packages/cli/tests/` and `packages/mcp-server/tests/`. Those packages can't cleanly import another package's test directory.\n- No task says how the helper is shared. A junior agent will either duplicate the fixture, which is a DRY violation, or reach across packages with relative paths.\n- Decide in Task 9 where it lives, for example a shared test-utils location or a path the CLI and MCP vitest configs can import. Add that to the task's success criteria.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158-174"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`ensureCheckout()` has no defined signature, and its `operationPath` bullet can't be done in core",
+   "description": "- The design's signature is `ensureCheckout(): Promise<EnsureCheckoutResult>`. Its data flow passes `operationPath` through `ensureGuideReady(projectPath, operationPath)`. Task 17 says neither how `operationPath` reaches `GuideManager` (constructor or parameter) nor what `ensureCheckout` takes.\n- The bullet \"`operationPath` resolution matches `getGuideContext()` in `guides.ts`\" describes CLI logic. Core can't import it.\n- Task 22 has the MCP call `ensureCheckout()` with no mention of worktree path resolution at all.\n- State the signature, for example `ensureCheckout(operationPath: string)`. Say that callers resolve the path: the CLI via `guideReady.ts`, and MCP via an equivalent step. Move that bullet to Tasks 19 and 22.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:249-266"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`detect()` now throws on git errors, but existing mocked tests and the error path aren't covered",
+   "description": "- Task 11 makes `detect()` throw when `checkSyncStatus()` returns `'error'`, and calls `checkSyncStatus` for every submodule detection.\n- Task 4's note says `GuideDetector.test.ts` mocks the filesystem. If it has submodule-detection cases, they will now run real `git submodule status` against mocked paths. Neither Task 11 nor Task 12 says to update them. Task 11's success criteria don't require existing tests to pass.\n- The new throw is a failure mode, and the project's failure-mode rule wants a test asserting the observable signal. Task 12 tests the three states and tarball but never the throw.\n- It also changes `cf guides info` and `guide_status` behaviour when git is missing. No task covers that.\n- Add a Task 12 case for `'error'` \u2192 throw, and add \"existing `GuideDetector` tests pass\" to Task 11's success criteria.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:188-205"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Alias warning logic is spread across five sites, and its return shape is left to the implementer",
+   "description": "- The deprecation warning is emitted in the CLI install action (Task 7), in `guidesInstallAction` for the config path (Task 7), in `init.ts` (Task 26), and in MCP (Task 7). The text isn't defined once.\n- Task 5 says \"Choose one return shape (e.g. \u2026)\", but Task 7 depends on that choice.\n- Define one message builder in core, next to `GUIDE_METHOD_DEPRECATED_ALIASES`, and have all four sites call it. Fix the `resolveStrategy()` return shape in Task 5.\n- The config-path warning is also untested at the CLI. Task 6(b) checks only the manager level, and Task 8 only the `--strategy` flag. Add a CLI test where the config has `manual`, since that is a stated success criterion.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:102-144"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Commit instructions are inside checkbox items, not plain `**Commit**:` lines",
+   "description": "- Commit instructions appear as `Commit:` text inside \"Success criteria\" checkbox items at lines 100, 127, 153, 204, 224, 246, 276, 312, 333, 342, 373, 389 and 412.\n- The convention is plain `**Commit**:` lines that are never checkboxes. With none present, the project rule falls back to committing after every top-level task, which contradicts the intended cadence.\n- Convert them to plain `**Commit**:` lines placed after the tested group.\n- Task 4's marker (line 100) sits after a core-only test run. Changing `GuideMethod` likely breaks MCP typecheck at that point. `guideTools.ts`'s zod enum still lists `manual` while `manager.install()` takes `GuideMethod`, and the fix is not until Task 7. Either run `pnpm -r build` before that commit, or move the marker to after Task 8.\n- Task 32 records walkthrough output into the DEVLOG after Task 31's commit, which forces a notes-only \"final commit\". Do the walkthrough first and write the DEVLOG once, or fold DEVLOG into Task 32.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "MCP call-site task omits the grep that D3 requires",
+   "description": "- D3 says the implementation task must grep `createContextPipeline`, `resolvePromptFilePath` and `GUIDE_RELATIVE_PATH` in both `packages/cli/src` and `packages/mcp-server/src`. Task 20 does this for the CLI.\n- Task 22 lists two line numbers in `contextTools.ts` and stops. Any other MCP tool reading guide content would be missed, leaving the empty-tree bug in place there.\n- Add the same grep step and \"cover every hit\" to Task 22.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:315-325"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task file is heavier than the slice needs",
+   "description": "There are 32 tasks in a single file, and several are too granular to stand alone:\n- **Task 10 into Task 11:** Task 10 admits it can't typecheck until Task 11 (line 186), because the new required `GuideInfo.checkout` field breaks every constructor. Merge them.\n- **Task 13 and Task 14:** both are about one optional parameter on `gitExec`. Combine them.\n- **Tasks 28 and 29:** one constant, printed in two places and tested in two. Combine them.\n- **Task 2 into Task 1:** a one-point test for a one-point function.\n- **Task 25 into Task 26:** the descriptor and its single consumer.\n\nMerging these gives roughly 25 tasks with no loss of coverage. The test-with pattern still holds, because each merged task carries its own tests.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:56-427"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Remediation text may be appended twice",
+   "description": "- Task 13 has `gitExec` run timeout errors through `withNetworkErrorHint`, which appends `GUIDE_OFFLINE_REMEDIATION`. Task 14 asserts it is present. Task 17 line 262 then has `ensureCheckout` append it again on `init()` failure.\n- The design says `gitExec` wraps the error and the caller appends the remediation. If `withNetworkErrorHint` already adds it, network failures would print it twice.\n- Task 18 should assert the remediation appears exactly once. It should also say whether non-network failures, such as \"not a git repo\", get it appended.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:207-225"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Task 32 contains merge and PM-review language",
+   "description": "\"PM reviews before merge to `main`\" and the version-bump remark are Phase 7 and release matters, not slice-implementation work. Under the project's Git rules, merge steps don't belong in task files. Trim the success criterion to \"all pass; final commit\".",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:425-426"
+  }
+ ]
+}

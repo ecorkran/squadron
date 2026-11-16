@@ -1,0 +1,75 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Fork-point vs merge-commit snapshots credit other slices' changes to this slice",
+   "description": "The Envisioned State defines a slice's before/after as \"the snapshot at its fork point against the snapshot at its merge.\" The merge commit on the target also contains every slice, fix and refresh that landed on the target after the fork. Slices run in parallel in worktrees, and fix commits land directly on the target (as Technical Considerations admits), so this diff often credits or blames a slice for code it never touched. Technical Considerations (\"Attributing measurements to slices\") defers only the mapping *source*. It does not cover the comparison basis. The architecture should fix the basis here: either the merge commit's first parent vs the merge commit (the slice's net effect on the target), or fork point vs slice tip. `review/git_utils.py` already resolves fork points and merge commits for diffs, and the doc should say it reuses that code rather than building a third resolver.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Measure any commit\" and \"doesn't modify the repository\" conflict, and the mechanism is unspecified",
+   "description": "\"A project can be measured at any commit\" and \"Taking a snapshot doesn't modify the measured repository\" (Envisioned State) together require measuring a commit that isn't checked out, such as a fork point taken after the fact or a historical brownfield baseline. That means a temporary worktree or an export of the tree, which the doc never mentions. The dirty-tree principle (\"A snapshot measures a commit\") covers only HEAD. Coverage also writes into the tree (`.coverage`, `.pytest_cache`, build artifacts), and so does running pyright or tsc with incremental caches. These breach the no-modification promise unless the run is isolated. Pick the isolation mechanism now (a throwaway `git worktree add --detach <sha>`, cleaned up on failure). The keystone record and adapter contract depend on it: adapters need to know they run against a path that isn't the user's checkout.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Type-error and lint counts need the project's environment, the same as coverage, but only coverage is flagged",
+   "description": "\"Coverage requires running tests\" is treated as the one metric that needs the project's environment. Type-error counts need it too. Pyright or mypy without the project's dependencies installed reports every third-party import as unresolved (`reportMissingImports`), and the resulting count measures the environment, not the code. The same applies to tsc without `node_modules`. Some lint rules that resolve imports have the same problem. On a brownfield repo measured \"without editing the project's config files\", the snapshot will either record nonsense or must mark the metric absent. The absent-with-reason rule should explicitly cover \"environment not resolvable\". The environment-and-security decision that is deferred to a slice for coverage should be raised to the architecture level and cover type counts as well.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Where the measurement tools come from is unspecified, which undermines the determinism goal",
+   "description": "Design Goals promise \"the same value on the same commit with the same tool versions\", and Principles make tool identity part of the measurement. The doc never says how tools are provisioned. Options include pinned squadron dependencies (radon or lizard for Python complexity), optional extras, whatever happens to be on `PATH`, or `uvx`/`npx` invocations of a pinned version. Language-agnostic duplication tools such as jscpd are Node packages, which adds a runtime squadron doesn't currently require. If tools come from `PATH`, versions drift per machine and the \"flag a tool change\" rule fires constantly across operators. Put a provisioning policy in the architecture, for example: tools run through pinned `uvx`/`npx` specs held in central config, and the version recorded is the one actually executed. Otherwise the keystone slice will make this choice implicitly.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Review ingest has no identity or idempotency rule, and the store's scan model makes per-finding records expensive",
+   "description": "\"An ingest step reads review files into the store as normalized finding records\" leaves three load-bearing questions open:\n- **Granularity.** One record per finding or one per review file? The existing store is glob-and-filter: every `list_*` call in `metrology/store.py` loads and validates every JSON file. Per-finding records across all historical reviews, plus snapshots, multiply the file count. Each rollup reads all three sources, so each report becomes a full scan of everything. Follow `AuditRun`'s precedent (findings inline in one record per review) and say so.\n- **Re-ingest.** `JudgeResultRef`'s docstring notes that review files \"carry no id and are overwritten on re-run.\" Ingesting twice, or after a review re-run, will double-count unless the record keys on something like 320's `(project_id, relative_review_path, content_hash)`. The doc must say whether a re-run review replaces or adds to the earlier record.\n- **Commit attribution.** \"Tied to project, commit and slice where known\": review frontmatter records no commit SHA today. Either the write path adds one, which is another review-format change, or commit attribution is always derived and can be wrong.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Write-time categorization changes a shared review field, and the audit vocabulary is a poor fit for most review types",
+   "description": "`AuditCategory` contains tech-debt dimensions (`architectural-decay`, `consistency-rot`, `documentation-drift`, ...). The review `category` field (`StructuredFinding.category`, `ReviewFinding.category`) is shared by every review type under `project-documents/user/reviews/`. Architecture and slice reviews use their own vocabularies (consistency, completeness, feasibility, ...), and `review/addressed/models.py` consumes the field. The doc says \"code-review findings\", but it never states that ingest and template changes are limited to code reviews, or how ingest tells code reviews apart from other review files. If the closed vocabulary is pushed into the shared field, other consumers break. If it isn't, the doc needs a separate field (`audit_category` beside `category`), and should say so. The Non-Goal (\"if the vocabulary turns out not to fit... that's a finding to report\") has a cost here: a poor fit means write-time categorization dumps most code-review findings into `other`, and the headline \"error-handling: 4 from review, 2 from audit\" becomes uninformative. Validating the fit against existing code reviews should come before the template change, not after.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Scope is heavier than the stated consumers need; cut or defer several mechanisms",
+   "description": "Candidates to cut or defer:\n- **Fixed reference rule set** (\"A snapshot may record either or both\"). Cross-project comparability serves only a hypothetical 420 cross-project leaderboard. Recording the project's own rule set meets squadron's own trend need and 440's baseline. Defer the reference rule set until 420 has a concrete design.\n- **Read-side mapping of historical reviews.** This requires either a lookup table the doc itself says \"will miss\" or an LLM call that adds noise with no noise floor. The output is flagged as not poolable anyway. Ingest historical findings as `other` with `raw_category` kept (exactly 323's normalization) and drop the mapping mechanism.\n- **Adoption baseline as its own slice.** It is a composition of the snapshot command and the existing 323 audit-baseline/noise-floor command. Fold it into the rollup slice or the keystone as a thin wrapper.\n- **Second language adapter before 440 exists.** This is fine as the trigger for 440, but the doc lists it as the second slice. Order it after the reports so squadron's own measurement delivers value first.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#anticipated-slices"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Project-declared limits have no defined config location, including for the keystone's own test subject",
+   "description": "\"Limits come from the project... limits the project declares in its own config\" doesn't say which config: a squadron config key, `pyproject.toml`, or a `.squadron` file. Squadron's own limits exist only as approximate prose (\"~300 lines\", \"~50 lines\") in CLAUDE.md, and the keystone is \"proven on squadron itself.\" The keystone therefore either adds a config key to squadron, which the doc should state, or reports \"no limits set\" on its own proving ground. Brownfield projects are measured \"without editing the project's config files\", so they will always report no limits unless limits can be supplied out-of-tree. Decide whether limits live in the user-level squadron config (keyed by `ProjectId`) or in the repository.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Frontmatter dependencies omit initiatives the design relies on",
+   "description": "`dependencies: [100, 320]` omits 300. Review output format and templates are being changed, and 300 owns those artifacts. Related Work also names 323/324 and CF initiative 260 as integration points. The 440 capability probe is a downstream consumer, which is correct to leave out, but \"CF offers this at handoff through 440's capability probe\" in Envisioned State describes behavior this component neither owns nor can verify.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:8"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Absent-with-reason needs a shared metric-result shape, which the doc implies but doesn't name",
+   "description": "\"Absent is not zero\" plus per-metric tool/version/rule-set identity implies that every metric value is a structured result of the form `{value | absent_reason, tool, version, rule_set}`, not a bare number. This shape is the core of the adapter contract and of how rollups treat absence, so name it in the architecture so the keystone doesn't invent a per-metric variant. Also state how rollups aggregate across a mix of absent and present values (for example, a project-level duplication figure when one of two language adapters failed).",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+  }
+ ]
+}

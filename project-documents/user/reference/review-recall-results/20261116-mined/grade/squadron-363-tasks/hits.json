@@ -1,0 +1,6 @@
+{"case":"squadron-363-tasks","flaws":[
+{"id":"F1","text":"SC4: dropped topics (why-now, audience evolution, methodology preference) \"appear nowhere in the document, neither as content nor as gap markers\". Task 4.1 authors the rule and 5.1 stops ex","hits":{"r01":[4],"r02":[0],"r03":[3],"r04":[4],"r05":[1],"r06":[0]}},
+{"id":"F2","text":"SC7: with the guide \"absent, unreadable, or missing the expected section title\" the flow stops loudly (and names the setup step when the guide tree is absent). Task 6.1 authors all three; Ta","hits":{"r01":[6],"r04":[4],"r05":[3],"r06":[3]}},
+{"id":"F3","text":"SC8: \"mechanical refillability for augment\". Task 6.2 authors it; Task 8.4 checks default stop, the dated subheading and byte identity of populated sections, not that an empty or `[GAP: ...]` ","hits":{"r02":[13],"r05":[6],"r06":[3]}},
+{"id":"F4","text":"SC10: \"every `[INFERRED]` sentence satisfies the checkable rule\". Task 8.1 checks only that the provenance inferred-claims line exists; no task audits the sentences. **VALID** (`coverage`). Ne","hits":{"r01":[3],"r02":[1],"r04":[4],"r05":[1],"r06":[3]}}
+],"note":"r04 f4 and r06 f3 are multi-criterion findings counted for each flaw they name explicitly. r03 f3 names SC4 but not SC7/SC8/SC10 specifics, so only F1 counted."}

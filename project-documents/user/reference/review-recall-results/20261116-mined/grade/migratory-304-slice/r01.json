@@ -1,0 +1,61 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Two `step()` listings conflict, and the Implementation Details version skips `post_tick()` when there are no entities",
+   "description": "The Technical Decisions snippet wraps only `engine.tick()` in `if count > 0`, so `post_tick()` always runs. The Implementation Details snippet uses `if self._entity_manager.count == 0: return`, which exits before `post_tick()`. The note directly below that snippet (:291) and the Special Considerations section (:408) both say `post_tick()` must run with zero entities so trail decay still advances. The code as written contradicts those statements. An implementer following the second listing would ship a bug against the slice's own stated requirement. Keep one listing, the first, and reference it from the other section.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:175-191 and :272-291"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Environment is always present\" contradicts the `Environment | None` design",
+   "description": "The section says the environment is not optional and that this avoids `if environment is not None:` checks. The design then makes `SimulationManager.environment` return `Environment | None` and puts two `is not None` branches in `step()`. The stated reason is \"backward compatibility\" with existing tests. But `step()` already gains a required `tick_number`, so all those tests must be edited anyway. Making `environment` required, with tests passing `Environment(bounds, layers={})`, removes the optional state and both branches. It also gives the future force-construction code a non-optional property. This follows the \"resist complexity\" and \"no silent fallback\" principles.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:218-220"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Slice-plan scope for 304 is dropped or deferred without being named as a deviation",
+   "description": "The 304 entry in the slice plan assigns these items, and the design omits or reshapes each:\n- **Grid resolution and layer selection config.** The plan lists \"seed, grid resolution, layer selection\" in YAML. The design delivers only `seed` and excludes grid resolution.\n- **Environment context to `engine.tick()`.** The plan says \"Pass environment context to `SimulationManager` and `engine.tick()`\". The design passes it only to `SimulationManager`, and forces get it by constructor injection. That approach is reasonable and `BulkForce` stays unchanged. The design should record it as a deliberate deviation from the plan, because 303 and 100-arch consumers may expect the `engine.tick()` path.\n- **Terrain summary in snapshots.** The 305 entry says \"Terrain summary in snapshots deferred to (304)\". The design excludes environment data from snapshots as \"deferred to future work\" with no owner. Either take it on or have the slice plan reassign it to a named slice.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:42-48"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "\"Handle post-tick environment writes\" is only a no-argument `post_tick()` call, which cannot carry agent-originated writes",
+   "description": "The plan assigns this slice handling of post-tick writes such as stigmergic trail deposits. The design calls `post_tick()` with no arguments, after `engine.tick()`. Trail and threat layers (505, 506) need the committed agent positions or velocities to deposit anything. The doc does not say how those reach the layer. Either `post_tick()` takes state (this would be a 500 contract question), or layers hold a state reference, or 506 adds a call. Without that decision, 506 may need to change the signature this slice establishes. State the mechanism, or state that 500's `post_tick()` contract defines it and cite it.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:196, :189-191"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure modes for the new `pre_tick`/`post_tick` calls are not enumerated",
+   "description": "This slice adds two new calls into subsystem code inside the tick body. The doc does not say what happens in these cases:\n- **Layer raises.** `pre_tick` or `post_tick` raises, for example from a future layer's generation bug. It is unclear whether the exception propagates and kills the tick loop, or whether the tick is skipped.\n- **Half-applied tick.** `pre_tick` succeeds, `engine.tick()` raises, and `post_tick` never runs. It is unclear whether the environment is left half-advanced.\n- **Slow layer.** A layer runs slowly and blows the tick budget. The architecture's overrun warning and metrics cover this, but the doc should say so, since environment time now counts toward the budget.\n\nThe architecture requires \"no silent failures\". The fix is a few lines and one test asserting the chosen behavior, for example \"propagate, log at ERROR, tick loop terminates\". It does not need new machinery.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:175-191"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Speculative configuration and state that nothing in this slice uses",
+   "description": "Several items are built now for later slices:\n- **`_seasonal_parameter` field.** It is listed under SimulationManager state but is never read. `step()` takes `seasonal_parameter` as an argument, so the field is dead state. Drop it.\n- **`seed` config.** The design states it is \"Not used by the empty environment in this slice\". It adds a config dataclass, validation and tests for a value no code reads. The architecture does list the environment seed as configuration, which supports eventually having it. A lighter option is to defer the field to 501, the first slice that consumes it. If it stays, the doc should justify it against the \"resist complexity\" rule. It should also not describe the silent default of 42 as \"sensible\".\n- **`environment` property.** It exists only for force construction that is \"illustrative, not built here\". `server.py` already holds the `Environment` instance it creates, so it can pass that instance to forces directly. The property is unnecessary.\n- **Illustrative `TerrainResistance` example.** The code block is outside this slice's scope.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:119, :148-149, :216, :329"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Tick-cycle ordering and the dependency direction match the architecture",
+   "description": "`pre_tick` runs before behavior evaluation, which is step 2 before step 3 in the architecture's tick cycle. `post_tick` runs before state distribution, so `broadcast` sees a consistent environment. Entity add/remove stays outside behavior evaluation, so the architecture's \"stable arrays during a tick\" constraint is untouched. The server remains the orchestrator and the environment library has no dependency on server code. No NFR from the architecture is touched directly. The overrun warning from slice 301 will cover any added environment time.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:89-108"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The slice plan calls the lifecycle method `environment.update()`, and the design uses `pre_tick`/`post_tick`",
+   "description": "The design uses the API names as delivered by slice 500, which is marked complete, so there is no conflict. The slice plan entry for 304 is stale on this point and should be updated when the slice is reconciled.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:57"
+  }
+ ]
+}

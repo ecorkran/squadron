@@ -1,0 +1,15 @@
+{
+ "case": "squadron-306-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design SC (line 372-373): \"A failed **or unverifiable** archive copy aborts the overwrite: the original review file is byte-identical afterward\". T12 ",
+   "hits": {
+    "r03": [
+     4
+    ]
+   }
+  }
+ ],
+ "note": "Only r03 finding 4 names the missing test for the unverifiable (read-back mismatch) copy case. r02 finding 0 only quotes the criterion while arguing the guard sits on the wrong function, so not counted; r06 finding 5 covers archive-name collision and the success WARNING, not the verification branch."
+}

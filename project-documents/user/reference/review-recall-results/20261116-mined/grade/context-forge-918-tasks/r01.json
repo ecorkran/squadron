@@ -1,0 +1,89 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 1 edits the shared fixture, which breaks an existing test and contradicts the design's success criterion",
+   "description": "`sample-slice-plan.md` is loaded by `ArtifactIntrospector.test.ts:49`, which asserts `totalSlices` of 5 at line 52. After Tasks 1\u20132 the parser returns 7 entries, so that test fails. No task names it. Task 5's targeted run (`-- slicePlanParser`) won't catch it, and only Task 13's full run would. Task 5 also rewrites the 5/3 assertion at `slicePlanParser.test.ts:44-45` to 7/5. The design's success criterion says the existing fixture tests \"continue to pass unchanged\", so the task plan contradicts it. The design's Scope allows \"or add a sibling fixture\". Task 1 should create a sibling fixture and leave `sample-slice-plan.md` untouched. Task 5 then adds its cases against the sibling. I did not inspect the other consumers at `slicePlanParser.test.ts:127,165,179` or `overviewParser.test.ts:20`.",
+   "location": "packages/core/tests/introspection/ArtifactIntrospector.test.ts:52"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The commit point after Task 5 is not a working state, and `cf next` would offer a `[~]` entry",
+   "description": "`resolveEntryStatus` builds its signals only from `index`, `isChecked`, the task file and slice-design frontmatter. It never reads the parser's `entry.status`. `findFirstNotCompleteEntry` (`WorkflowNavigator.ts:762-775`) runs on those resolved statuses. After Tasks 2\u20135, a `[~]` entry with no design doc derives `NotStarted`, so `getNext` would offer a descoped slice that is invisible today. Task 8 fixes this, but Task 10's commit is where it lands. Move the Task 5 commit marker to after the wiring, or land the parser change together with Tasks 8\u20139.",
+   "location": "packages/core/src/introspection/WorkflowNavigator.ts:692-724"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No task covers the `arch-status-vs-plans` rule",
+   "description": "The design's success criteria name both `plan-status-vs-entries` and `arch-status-vs-plans`. Task 12 covers only the first. `ConsistencyChecker.test.ts` already has `arch-status-vs-plans` cases at lines 879 and 912, so a matching deprecated-entry case is cheap to add to Task 12.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:199-212"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The all-resolved `completedSlices === totalSlices` property has no parser-level test",
+   "description": "Task 4's success line states that a plan with every entry checked or `[~]` gives `completedSlices === totalSlices`. No task asserts that. Task 5's assertions leave two unchecked entries in the fixture, so they never reach equality. Task 12 is the only indirect check, but the existing `plan-status-vs-entries` tests hard-code parser counts (lines 832\u2013833 set `totalSlices: 2, completedSlices: 2`). A Task 12 case built that way never runs `parseSlicePlan`'s arithmetic. Add an all-`[x]`/`[~]` parser test, and have Task 12 read a real plan file through `parseSlicePlan`.",
+   "location": "packages/core/tests/introspection/ConsistencyChecker.test.ts:832-833"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not `**Commit**:` lines, and the cadence is unclear",
+   "description": "The commit lines (105, 135, 179, 197, 212, 225) are `- [ ] Commit: ...` checkbox items. The project convention requires plain `**Commit**:` lines. Because no such marker exists, the fallback rule applies (commit at each top-level task), which conflicts with the irregular placement. Tasks 1\u20134, 6, 8 and 9 have no commit line, and Tasks 8\u20139 land only inside Task 10's commit. Commit types also alternate `fix`/`feat`/`test` within one slice. Task 10's subject line is about 96 characters, over the ~72 guideline. Convert these to `**Commit**:` lines at the working, tested points, and shorten the subject.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Test tasks don't immediately follow their implementation",
+   "description": "Tasks 2\u20134 change the regexes, the status logic and the `completedSlices` arithmetic, and no test runs until Task 5. Tasks 1\u20132 already turn `slicePlanParser.test.ts:44` and `ArtifactIntrospector.test.ts:52` red. Task 8 (the `resolveEntryStatus` wiring, lines 137\u2013149) has no test until Task 11, three tasks later, and its success is only \"builds clean\". Merge Tasks 2\u20134 into one parser task that includes its test. Give Task 8 a test of its own.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:52-83"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The rendered `\u2298 deprecated` output is not asserted by any automated test",
+   "description": "The success criterion requires `cf list slices` to render `\u2298 deprecated` and never mark the row `\u2190 next`. Task 10 asserts only the JSON `status` and `isNext`. The rendered label is left to Task 13's manual walkthrough. Add an assertion on the rendered row.",
+   "location": "packages/cli/tests/commands/list-derived-status.test.ts"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Thirteen top-level tasks is heavy for four production edits",
+   "description": "Tasks 2\u20134 all edit `slicePlanParser.ts`. Tasks 6\u20137 are one `statusDerivation.ts` change and its test. Tasks 8\u201311 are the same wiring spread over three files. Merging 2\u20134, 6\u20137 and 8\u201310 keeps the same success-criteria coverage and cuts the task count to roughly eight.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Task 9 adds a change the design does not list",
+   "description": "The design describes the `cf list slices` change as \"the same one-line addition\". Task 9 also rewrites the `derivedStatus` initializer, which replaces a silent `not-started` fallback. The change is justified by the no-silent-fallback rule. Keep it, and record it in the design's Scope so it doesn't read as scope creep.",
+   "location": "packages/cli/src/commands/slice.ts:124"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Task 13's manual walkthrough can't be confirmed in a non-interactive run",
+   "description": "\"Walkthrough steps confirmed manually\" can't be recorded by an agent. Script walkthrough steps 2\u20136 as CLI runs in a scratch project (`cf list slices --json`, `cf next`, `cf check`) so there is recorded evidence. The conditional `fix:` commit at the end names no specific change.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:214-225"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The Task 12 \"rule still fires\" case is not traced to a success criterion",
+   "description": "The complementary `in-progress` case guards against Decision 3 disabling the other half of the rule. That is defensible, but the design's success criteria don't ask for it. Keep it only if it is cheap.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:205-209"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Task 1's example lines are not the issue #54 format the design cites",
+   "description": "The design asks the fixture to match \"the exact convention from issue #54's repro\". Task 1 gives \"e.g.\" lines written from scratch. Per the lenient-parsing rule, use the actual repro line verbatim.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:36-41"
+  }
+ ]
+}

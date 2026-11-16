@@ -1,0 +1,61 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Padded layout grows with n \u00d7 k_max, which contradicts \"regardless of agent count or clustering density\" and the architecture's tens-of-thousands NFR",
+   "description": "The architecture's NFR (100-arch line 36) is \"tens of thousands of agents at full behavioral fidelity on a single CPU process\". The slice only restates a 50 ms target at 100 agents (lines 23, 215). It never states a target at the architecture's scale.\n\nAt that scale the padded design breaks down:\n- `max_neighbors` is the maximum over all agents (line 82), so one dense cluster pads every row to that width.\n- When agents flock, k_max approaches n. That is the case this slice exists to fix (line 17).\n- At n = 10K, `indices` alone is 10K \u00d7 10K \u00d7 8 B \u2248 800 MB.\n- Each force's gather (`state.positions[indices]`, n \u00d7 k \u00d7 2 float64) is about 1.6 GB more. Four forces do this gather on every tick.\n\nLine 144 says CSR has \"no benefit at n <= 10K\", and line 148 defers trouble to 100K+. Both claims are wrong for clustered populations. Line 19's promise of constant cost \"regardless of agent count or clustering density\" is also false: Python overhead becomes constant, but memory and array work grow with n \u00d7 k_max. The architecture's concern about per-tick allocation and GC pressure (100-arch line 88) is not addressed.\n\n**Fix:** Restate the NFR with a concrete agent count. Correct the scaling claims. Then either cap the width (for example, a profile-driven maximum neighbor count) or record that the padded layout is only valid up to a stated n and density, with the CSR/segment-reduce fallback behind `NeighborData` named as the path beyond that.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:144-148"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Building profile weights with a per-agent comprehension contradicts the slice's own \"no per-agent Python loops\" rule",
+   "description": "Line 133 builds weights with `[profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]]`. That is a Python loop over every active agent, inside `BulkForce.__call__`, in every force, on every tick. Line 198 calls \"no Python-level per-agent loops in any `BulkForce.__call__`\" the defining constraint of this slice. The grep check at lines 221-224 would not catch the comprehension, because it has no `agent_idx`, `eval_indices` or `list_idx` loop variable.\n\nThere is a lighter option with no loop: build a per-profile array once (`np.array([p.cohesion_weight for p in profiles])`, which loops over a handful of profiles) and index it with `profile_indices[eval_indices]`. This is also the table-lookup pattern the architecture prescribes for GPU compatibility (100-arch line 102).\n\n**Fix:** Specify the per-profile lookup table. Remove the \"precompute if needed\" hedge at line 136.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The `-1` padding is gathered, so Separation can divide by zero before masking",
+   "description": "Line 80 says padded `-1` entries are \"never dereferenced thanks to `mask`\". That is not true. `state.positions[neighbor_data.indices]` (line 111) does read index `-1`, which in NumPy wraps to the last agent. Masking only happens afterwards.\n\nCohesion is safe, because it zeroes masked entries by assignment (line 114). Separation computes inverse-square distances (line 123). For the last agent in the array, every padded slot points at itself: distance 0, so 1/0 = inf. If the mask is then applied by multiplication, inf \u00d7 0 = NaN, which spreads into the force output.\n\n**Fix:** Correct the statement. Also require one of these for distance-based forces: masking by `np.where` or assignment before any division, a pad value that points at a safe sentinel, or a clamped minimum distance on padded slots. Add the last-agent-has-padding case to the edge cases at line 259.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:79-81"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Slice 103 is listed as an interface but still designs against `neighbor_lists`, and the order between 103 and 109 is unresolved",
+   "description": "The frontmatter (line 7) lists 103 as an interface. Lines 176-178 say predator-prey forces \"consume this instead of raw lists\". But the 103 design (`103-slice.predator-prey-dynamics.md:396-400`, `:444-452`, `:507-515`) says \"No changes to tick()\". It specifies `FlightForce` and `PursuitForce` with `(state, neighbor_lists, ...)`, per-agent loops, and inline self-filtering. All of those are invalidated by this slice.\n\nThe slice plan says all existing implementations change in the same slice. If 103 ships first (it comes before 109 in the plan), 109's fixed list of five forces (lines 35, 190) leaves two loop-based forces behind on a broken signature. If 109 ships first, the 103 design is stale.\n\n**Fix:** State the order explicitly:\n- either 109 goes before 103, and 103's design must be revised to take `NeighborData` and use vectorized interaction lookup,\n- or, if 103 lands first, 109's scope extends to `FlightForce` and `PursuitForce`.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#provides-to-other-slices"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "\"GPU-ready\" overstates what the padded layout gives",
+   "description": "The architecture's GPU requirement (100-arch line 102) includes \"no dynamic allocation\". `max_neighbors` changes every tick, so every `NeighborData` array and gather temporary changes shape every tick. The layout is a step towards GPU compatibility, not a GPU-ready buffer. Soften the claim at lines 27 and 180, or note that a fixed-width cap would be needed.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:180"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The N-tick comparison test at `atol=1e-12` may be flaky",
+   "description": "The single-call equivalence tests are sound. But the old loop (`np.mean` over a variable-length subset) and the new path (`np.sum` over a padded axis, then divide) add floating-point values in different orders. Boid dynamics are chaotic, so differences of about 1e-16 per step can grow past 1e-12 over N ticks. Either limit N to a few ticks or loosen the tolerance for the whole-tick comparison.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:258-260"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Tick budget is only checked by a manual 5-minute run",
+   "description": "The value this slice delivers is removing tick overruns (line 23). The only check for it is watching a live server. A small timed test, for example a clustered 100-agent state where all agents are within `query_radius` with a generous per-tick bound, would guard against regressions cheaply. This is optional.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:211-215"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "`NeighborData` ties neighbors to agent-state indices",
+   "description": "The architecture warns that aggregate neighbors (slice 108) have a different shape, and that failing to plan for them means a breaking change later (100-arch line 100). This slice already breaks the `BulkForce` signature. Handling aggregates here would be scope creep. A one-line note that `NeighborData` currently covers individual agents only, and is the extension point for 108, would make the trade-off explicit.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:68-77"
+  }
+ ]
+}

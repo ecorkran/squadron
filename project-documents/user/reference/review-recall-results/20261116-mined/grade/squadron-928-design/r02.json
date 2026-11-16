@@ -1,0 +1,47 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Doctor, `skills list`, and the bundled-pack move are scope the plan entry does not assign",
+   "description": "The plan entry assigns three things: `skills install/uninstall --ide`, the documented approval rule, and the doctor-rule question (answer it and record why). The slice adds several more:\n- `--ide`/`--local` on `skills list`\n- per-target doctor skill-pack rows (D8), including a new WARN state\n- moving the bundled `analysis` skills and changing `bundle_subdirs`\n- hint sections in three agent skills (D12)\n- the `sq model list` fix\n\nThe overview presents list and doctor as part of #125, which is partly fair. But `PackLayout.installed_path` and the D8 doctor rows are the heaviest additions, and nothing in the plan requires them. Install and uninstall can ship without them, because Claude-only status reporting is today's behavior and is not a regression. Cut or defer:\n- **Doctor rows (D8) and `skills list --ide`:** move to a follow-up. This drops `installed_path`, the surface-by-target table, and the doctor tests.\n- **Bundled-pack move (D4):** keep only if the verification walkthrough needs the `analysis` pack to install for Codex. If so, say that this is the reason. The move touches `install-commands` fixtures and `bundled_skill_names`, which is wider than the stated goal.\n\nIf the PM wants these in the slice, update the plan entry to say so. The `sq model list` fix is small enough to commit separately under the fixes path.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Technical Scope"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Agents receipt suffix creates a new pack-vs-pack receipt collision that the exclusions do not cover",
+   "description": "D5 builds the receipt name as `<pack>` + `-agents` + `-local`. So a Claude machine install of a pack named `foo-agents` writes `foo-agents.toml`. That is the same file as the agents machine receipt for pack `foo`. Installing or uninstalling one would overwrite or delete the other's record, and `remove_receipt_files` would delete files based on the wrong receipt. The same applies to `-local`. The Excluded section only waives collisions \"with squadron's own receipt names or skill names\", described as pre-existing on the Claude path. This collision is new, because the suffix scheme introduces it. Either reject pack names ending in `-agents` or `-local` at `skills add` and install time, or put the target in a receipt field or subdirectory. State the choice in D5.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D5"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure modes for the new write path and receipt are not enumerated",
+   "description": "D3 covers validation failures well, with all violations reported and nothing written. The new I/O is the writing of skill directories into the shared `~/.agents/skills` root, followed by the receipt write. Four failure modes are not addressed:\n- **Failure mid-write:** a permission error, disk-full, or interrupt after some skill directories are written and before the receipt exists. The files are then unowned and cannot be removed by receipt-driven uninstall, which matters because #65 makes receipts the only authority. Nothing is said about rollback or cleanup.\n- **Receipt write fails** after files are written.\n- **Uninstall with no receipt, or a receipt pointing at missing files.** Containment is covered, but this case is not.\n- **Github-source clone hang or timeout** under `--ide codex`. This path is reused, but the slice's own D10 notes it is the one that hits the sandbox.\n\nThe project rules require each failure to be observable (WARNING or above) and covered by at least one test. The Technical Requirements test list has none of these. Add a short failure-mode table with the handling for each and a test for the mid-write case.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Data Flow"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`installed_path` glob can report another pack's skills as installed",
+   "description": "For agents prefix packs, status is \"first `root/p-*/SKILL.md`\". The agents root is shared with every other skill source, and D3 itself says directory names are the only tie to a pack. A pack with prefix `a`, or any unrelated skill named `p-something`, makes `list` and doctor report \"installed\" with no receipt. The slice's own pattern says receipts are the authority for what squadron owns (Patterns and Conventions, #65). Derive status from the receipt, or check that the receipt's recorded files exist. Fixing this is also cheaper if the `list`/doctor scope above is deferred.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Data Flow"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Subcommand list for the rule is deferred to implementation-time probing",
+   "description": "Several rows in the D10 table are \"confirm by probe\" or \"probe\", so the rule's alternatives and the README correction about `$sq-spawn` are not fixed by the design. The method is sound, and success criterion 8 verifies it with `codex execpolicy check`. The probe has to be run before the docs are written, as the Development Approach step order already says.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D10"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Security statement for the rule is handled correctly",
+   "description": "The slice says the docs must state, in the same paragraph as the snippet, that a matching command runs outside the sandbox with no prompt. It names `decision = \"prompt\"` and project-scoped rules as alternatives. This is the right level of disclosure for a rule that authorizes more than network access.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Special Considerations"
+  }
+ ]
+}

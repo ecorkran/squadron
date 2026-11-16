@@ -1,0 +1,40 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Padded representation becomes O(n\u00b2) memory under clustering, which conflicts with the \"tens of thousands of agents\" goal",
+   "description": "`max_neighbors` is the largest neighbor count in the tick (line 82). The slice's own problem statement is that clustering drives k \u2192 n. In that case the gather `state.positions[neighbor_data.indices]` builds an `(n, n, 2)` float64 temporary:\n- **n = 10K:** about 1.6 GB per gather, and Separation needs several such temporaries (offsets, distances, masks).\n\nThe doc says CSR adds complexity \"for no benefit at n <= 10K\" and puts the switch at \"100K+\". Both claims rest on the n=100 figure (~80KB), not on clustered n=10K. The architecture asks for \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" (`100-arch.behavior-engine.md:36`), and the slice says it \"unlocks\" that goal (line 25).\n\nFix: correct the memory analysis for clustered 10K agents, and record the agent count above which padding stops being viable. Alternatively, cap `max_neighbors` with an explicit, logged truncation policy. Don't claim the representation is fine up to 10K.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:142-148"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Constant Python overhead\" claim is wrong: per-agent Python loops move into the builder and weight lookup",
+   "description": "Line 19 and the plan entry promise \"O(1) Python overhead regardless of agent count.\" The design keeps or adds three per-agent Python passes:\n1. The weight construction at line 133 is a list comprehension over agents, run once per force (five times per tick).\n2. Step 3 of `build_neighbor_data` (line 101), \"a single pass to pad, mask, and self-exclude,\" gives no vectorized method. Read literally, it is a Python loop over agents that copies variable-length arrays. That is O(n\u00b7k) element copies if done row by row, which is the same scaling the slice is meant to remove.\n3. The query loop in `tick.py` stays (excluded to slice 105).\n\nVerification step 4 (line 223) only greps `flocking.py`/`herding.py` for `for.*agent_idx` patterns. It would not catch the loop in `neighbors.py` or the comprehension.\n\nLighter fixes are available:\n- **Weights:** build a per-profile table once (`np.array([p.cohesion_weight for p in profiles])`, O(profiles)) and index it with `state.profile_indices[active_indices]`. This also matches the architecture's index-based dispatch direction (`100-arch.behavior-engine.md:102`).\n- **Builder:** specify a vectorized build, e.g. concatenate the lists, compute per-row offsets from `counts`, scatter into the padded array in one step, then mask out self.\n- **Overhead claim:** state the remaining O(n) Python cost honestly as slice 105's responsibility.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:129-136"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "No plan for slice 103, which is designed against the protocol this slice breaks",
+   "description": "Slice 103 is listed in this slice's `interfaces` frontmatter and is not started. Its design and task file use the old signature and the per-agent loop pattern:\n- `103-slice.predator-prey-dynamics.md:444-452`: `def __call__(self, state, neighbor_lists, ...)` with `neighbors = neighbor_lists[list_idx]`\n- `103-tasks.predator-prey-dynamics.md:98`: the same signature\n\nThe slice says only that future forces \"consume this instead of raw lists\" (line 178). If 109 lands first, 103's tasks will not compile against the protocol. If 103 lands first, 109's scope is missing `FlightForce`/`PursuitForce`.\n\nFix: state the ordering. Either 103's design and tasks are revised to `NeighborData` before 103 is implemented, or 109's scope includes the 103 forces if those exist when 109 starts. 103 also needs per-neighbor profile lookups (heterogeneous interactions), and the gather pattern has to support them. Sketch that briefly, e.g. `state.profile_indices[neighbor_data.indices]` feeding an interaction-matrix gather.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#provides-to-other-slices"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Multi-tick old-vs-new equivalence at `atol=1e-12` is likely to fail for reasons unrelated to correctness",
+   "description": "The vectorized reductions sum in a different order than the loops, so single-call results differ at the ULP level. Boid dynamics amplify such differences over N ticks. A trajectory comparison at `atol=1e-12` (line 260) will fail spuriously, and loosening it hides real regressions. Keep strict equivalence for single force calls (line 258). For the tick integration test, assert determinism of the new path (same input, bit-identical output, per the architecture's Tick determinism goal) instead of trajectory equality with the old code.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:258-260"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "`mask` duplicates `counts`, and the n_active = 0 / empty-population edge cases are missing",
+   "description": "`mask` can be derived from `counts` (`np.arange(max_neighbors) < counts[:, None]`). Storing both risks them getting out of sync unless the builder is the only constructor. Either compute it in a `__post_init__`/property or document that the builder alone creates the dataclass. Separately, padding with `-1` relies on `positions[-1]` existing. With an empty population, the gather raises `IndexError`. Add \"n_active = 0\" and \"0 agents\" to the edge cases at line 193.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:71-82"
+  }
+ ]
+}

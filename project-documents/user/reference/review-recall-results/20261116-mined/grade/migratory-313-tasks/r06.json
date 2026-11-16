@@ -1,0 +1,54 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "No task covers `config_to_yaml` serialising the enum (success criterion 5)",
+   "description": "Task 1.4 adds a round-trip test. No implementation task makes that test pass. The slice design (line 225) assumes `yaml.dump` writes a `StrEnum` as a plain string. It doesn't: PyYAML's default dumper writes `str` subclasses as `!!python/object/apply:...` tags, and loading those tags back fails. The code already in this worktree shows the step that was needed. `src/migratory_server/config.py:657-669` has a `_serialize_for_yaml` that converts `StrEnum` instances to `.value` before `yaml.dump` is called (`config.py:681`). Add a step to Task 1.3 (or a new Task 1.3a): \"Make `config_to_yaml` convert `StrEnum` values to their `.value` before dumping.\" Also widen the Task 1.4 round-trip assertion so it compares the whole reloaded `ServerConfig`, not just `policy`. Criterion 5 asks that reloading the emitted YAML \"produces an equal `ServerConfig`\".",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The reflect velocity-flip integration test depends on an unstated `dt`",
+   "description": "`test_reflect_policy_flips_velocities_at_edges` puts an agent at `(99, 50)` moving at `(10, 0)`, steps once, and asserts `vx < 0`. That only works if `10 * dt > 1`, i.e. `dt > 0.1`. At a typical tick rate (`dt` of 0.05 or less) the agent ends the step at about 99.5. It never crosses the edge, so reflect never runs and the test fails. Either have the test derive the starting position from the manager's real `dt` (e.g. `width - 0.5 * speed * dt`), or put the agent just past the edge before stepping. The unit tests in 2.3 already cover the flip itself, so this test only needs to confirm that `step()` runs the enforcement.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:231"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The Section 4 commit happens before the test suite is re-run",
+   "description": "Tasks 4.1 and 4.2 switch `config/default.yaml` and `config/test.yaml` to `wrap`. They only check this with a `python -c` print, and the commit in 4.3 comes next. Any existing test that loads `config/test.yaml` and depends on positions now runs under different behaviour. The full `pytest` run doesn't happen until Task 5.1, after that commit. Add a `pytest` run to Section 4 before 4.3 so the commit is at a tested point.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:251-286"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "Lines 96, 179, 249, 286 and 325 are all written as `- [ ] **Commit:** ...`. Commit markers must be plain `**Commit**:` lines, never checkbox items. The placement is fine: one commit per tested section. Separately, each marker sits in its own task (1.5, 2.4, 3.6, 4.3, 5.5) made of only `git add` plus the commit. Turn each one into a plain marker line at the end of the section before it and delete those five tasks.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The task file is marked `status: complete` but nothing is checked off",
+   "description": "The frontmatter says `status: complete`, but every item is unchecked. Task 5.3 is the step that should set this. Tooling or agents that filter by status could skip this file as already done. Set it to `not-started` (or whatever the project uses) until Task 5.3 runs.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The unit-test matrix is a bit heavy for a 2/5 slice",
+   "description": "Every test traces to a success criterion, but some could be merged:\n- `test_open_is_noop_positions` and `test_open_is_noop_velocities` can become one test.\n- The four single-edge reflect tests can become one parametrized test.\n- The parametrized \"dispatch does not raise\" test repeats what the per-policy tests already check.\n\nNot blocking.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:150-171"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The integration-test setup gives no guidance on placing agents",
+   "description": "The setup asks for 4 agents \"placed near the edges with outward-pointing velocities\". It doesn't say how to set positions and velocities through `EntityManager`, or whether an existing fixture does this. A pointer to the existing helper or fixture in `tests/test_simulation.py` would help a junior implementer. The same `dt` dependency as above affects whether the OPEN drift test pushes agents out within 50 steps.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:226"
+  }
+ ]
+}

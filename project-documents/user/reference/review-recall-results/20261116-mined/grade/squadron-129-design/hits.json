@@ -1,0 +1,11 @@
+{
+ "case": "squadron-129-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The design names the command `sq model list` (summary, D9, Interfaces, Success Criteria, Walkthrough). The CLI registers the group as `models` (`cli/a",
+   "hits": {}
+  }
+ ],
+ "note": "No finding names the CLI group mismatch (models vs model); r01 #4 and r04 #12 discuss sq model list but not the command name."
+}

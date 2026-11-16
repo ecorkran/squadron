@@ -1,0 +1,33 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The 3.2a commit can't pass: tests that still expect the removed sections are only deleted later",
+   "description": "Tasks 3.1 and 3.2 stop rendering the `Comprehension:` line and the `### Adoption Facts` section. The resolver still supplies both, and some tests still check that they render. Task 3.2a then requires `pnpm --filter @context-forge/core test` to pass before committing. It will fail:\n- `packages/core/tests/pipeline-integration.test.ts:184` expects `Comprehension: ${COMPREHENSION}`. That case is in the probe block, which isn't deleted until 3.3.\n- `packages/core/tests/adoption/adoptionBuild.integration.test.ts:102` expects `### Adoption Facts` (`FACTS_HEADING`). That file isn't deleted until 4.1.\n- `packages/mcp-server/tests/integration/adoptionParity.test.ts:116` expects `Comprehension:`. The 3.2a check doesn't run MCP tests, but this commit would still break the MCP suite. The file isn't deleted until 3.6.\n\nEither fix works:\n- Drop 3.2a and commit 3.1\u20133.6 together at 3.7.\n- Or move the deletion of those three test cases into 3.1/3.2. This is the less useful option, because that test coverage then disappears before the resolver code it covers.",
+   "location": "packages/core/tests/pipeline-integration.test.ts:184"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit points are checkbox items, not plain `**Commit**:` lines",
+   "description": "Commit points must be plain `**Commit**:` lines, never checkboxes. Here they are checkbox tasks or sub-items:\n- 2.3 (`- [ ] **2.3 Commit**`) and 3.2a are whole checkbox tasks.\n- 3.7, 4.1\u20134.4, 5.1 and 6.3 put `- [ ] Commit: \u2026` sub-items inside their tasks.\n\nConvert each one to a plain `**Commit**: <message>` line after its task. Task 3.2a's success check (typecheck plus tests) can move into 3.2. As checkboxes they also push towards a commit that only checks boxes, which the project's commit rules forbid.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "The four commits in section 4 could be fewer",
+   "description": "Tasks 4.1\u20134.4 are each small deletions that commit separately. Together with the other commits, that's nine for a slice rated effort 2/5. Each one does leave the workspace compiling, so this is acceptable. Merging 4.2 and 4.3 into a single commit, \"trim kept adoption modules\", would cut one without losing a working state.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:138-169"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "4.1 checks only core, though it deletes exports from the package index",
+   "description": "Task 4.1 removes re-exports from `core/src/adoption/index.ts` but only runs `pnpm --filter @context-forge/core typecheck`. Tasks 4.2\u20134.4 use the workspace-wide `pnpm typecheck`. Section 3 should already have removed CLI and MCP use of these exports, so the risk is low. Using `pnpm typecheck` in 4.1 would make it consistent.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:147"
+  }
+ ]
+}

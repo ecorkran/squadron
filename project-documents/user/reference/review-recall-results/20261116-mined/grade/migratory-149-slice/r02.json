@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Benchmark steps can't separate the two interventions, so the baseline can't be reproduced",
+   "description": "Step 3 lists four bench runs labelled \"counter-gating\" or \"break enabled\". Runs 1 and 2 use the same command (`--subdivision-factor 1`), and so do runs 3 and 4 (`--subdivision-factor 3`). The design never adds a way to switch early exit on or off. Intervention 1 replaces counter-gating outright (line 25). Once it ships, the run labelled \"Baseline \u2026 should reproduce slice 145 ~38 TPS\" will actually run with early exit on. As a result:\n- A2 (\"\u22655\u00d7 vs slice 145 baseline\") has to be compared against the historical 38 TPS figure, not a fresh run.\n- The per-intervention attribution that line 58 says \"needs CUDA measurement\" can't be measured.\n\nPick one fix. Either add a bench-only switch (a kernel template constant, not a runtime branch), or drop the attribution runs. If you drop them, state that the baseline is the recorded slice 145 figure and keep only the S=1 and S=3 runs.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`cell_size` and `S` are separate settings that can disagree",
+   "description": "The component diagram stores `cell_size` and `subdivision_factor S` as two separate `BenchConfig` fields. Both are passed to the kernel. Line 80 says the harness \"reads [cell_size] from config\", but `cell_size = query_radius / S` is only valid if `cell_size` is calculated from `S`. If they are set separately:\n- `cell_size < query_radius / S` makes the \u00b1S scan too small. Neighbors inside the radius are silently missed.\n- `cell_size > query_radius / S` scans more cells than needed.\n\nThe validation block (lines 69\u201376) checks only `S`. State that `cell_size` is calculated from `query_radius` and `S` and can't be set on its own. Otherwise, add a config-time check that `cell_size * S >= query_radius`, in line with the project's fail-explicitly rule.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:84-99"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Correct neighborhood is preserved\" is false once the cap applies",
+   "description": "Subdivision keeps the same search area. But with `max_neighbors=32` and hundreds of candidates per cell, the cap picks neighbors by scan order. With S=1, the first 32 come from the (-1,-1) cell. With S=3, they come from the first sub-cells of the 7\u00d77 block, starting at the (\u22123,\u22123) corner. These are often the far-corner cells, only partly inside the radius. So subdivision changes which neighbors are chosen, and that choice is biased toward one direction.\n\nSlice 145 (lines 222\u2013227) accepted the gap between first-k-found and true k-nearest, measured at population level. This slice changes the gap without discussing it. The parity check also runs at `mid-flock N=5000` (Step 5), where the cap may rarely bind. Two changes would close this:\n- Correct the claim on line 56.\n- Run the A4 parity check at a density where the cap binds (the gate workload), or document why the scan-order bias is acceptable.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Relies on Quadrants supporting inner-loop `break`, with no check or fallback",
+   "description": "Slice 145 R1 (lines 363\u2013368) listed \"Quadrants may not support the conditional break in the inner loop\" as a risk. Counter-gating was the fallback, and the shipped kernel uses it. This slice says the inner `for kk` loop accepts `break`, but gives no evidence. If the compiler rejects it, or turns it into predication that saves nothing, Intervention 1 fails. Add a small kernel test as the first implementation step. Also name the fallback: for example, a `while kk < end and k_found < k_max` loop, or relying on subdivision alone.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:29-46"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Not specified how the `S` setting reaches the production engine (slice 146)",
+   "description": "`S` is added only to the \"bench configuration\" (line 50). Production runs will default to S=1. The A3 gate exists to show headroom \"before slice 146 wires the GPU tick into the production engine\" (line 116). That headroom is measured with S=3, which production won't get unless slice 146 knows to pass `S` through. The interface note says only that the setup/tick API is unchanged. State where `S` and the derived `cell_size` live in production config, or record it as a requirement handed to slice 146.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:108-112"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Early exit sits in the caller, so A7 is no longer a one-place swap",
+   "description": "Option A puts the `break` in the kernel loop, outside `get_neighbors_first_k`. Distance-ranked k-nearest (the future A7 swap) has to scan every candidate. So that swap will need to remove the caller-side break as well as replace the seam. That conflicts with slice 145's A7 goal that the swap needs no kernel-structure change. This is acceptable, but say it in the A7 note on line 112.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-36"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The upper bound on `S` is justified incorrectly",
+   "description": "At any `S`, a (2S+1)\u00b2 grid of `query_radius/S` cells covers the same area. S=8 is not \"larger than the physical neighborhood\". Grid memory grows by S\u00b2, which stays small at the stated world sizes. The real cost of a large `S` is the number of near-empty cells scanned per agent. The cap is fine, but rewrite the reason.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:78"
+  }
+ ]
+}

@@ -1,0 +1,21 @@
+{
+ "case": "squadron-380-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "\"Rules outside a planned project\": \"In an unplanned repository the review runs with the template's rules and language auto-detection only, and says so",
+   "hits": {
+    "r04": [
+     3
+    ],
+    "r05": [
+     2
+    ],
+    "r06": [
+     1
+    ]
+   }
+  }
+ ],
+ "note": "r04#3 names the cwd-probe silently picking up repo rules dirs (does not mention the ~/.config user dir) but still identifies the defect; r05#2 and r06#1 give the full resolution order. r01#7 and r02#6 are unplanned-repo findings about persistence/pr create, not hits."
+}

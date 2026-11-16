@@ -1,0 +1,5 @@
+{"case":"migratory-300-arch","flaws":[
+{"id":"F1","text":"100-arch (the parent) Scope lists \"the simulation tick loop\" and says \"the engine owns what happens between ticks\"; 300-arch Overview says the world server owns \"th","hits":{"r01":[0],"r05":[0],"r06":[2]}},
+{"id":"F2","text":"Frontmatter `dependsOn: [001-concept.migratory, ...]` and Related Work link `../project-guides/001-concept.migratory.md`. At `ecd8f65^` the repo holds only `000","hits":{"r01":[1],"r02":[12],"r03":[16],"r04":[11],"r05":[0],"r06":[9]}},
+{"id":"F3","text":"Tick loop and asyncio coexistence: \"run the tick synchronously, then yield to the async event loop for I/O between ticks ... without the tick loop starving I/","hits":{"r01":[5],"r03":[3],"r04":[3],"r06":[0]}}
+],"note":"r02[9] and r04[12] flag the lifecycle/register-remove conflict with 100-arch but not tick-loop ownership, so excluded from F1. r05[0] counted for F2 because it names the 001-concept broken link specifically, though bundled in a tick-ownership finding. r05[9] and r02[10] discuss overrun policy/drift but not the missing yield on overrun, so excluded from F3."}

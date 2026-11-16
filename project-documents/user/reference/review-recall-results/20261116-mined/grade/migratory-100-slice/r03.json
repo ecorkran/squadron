@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Force vs. BulkForce: two protocols, but tick() accepts only one",
+   "description": "The design defines `Force` (per-agent) and `BulkForce`. The tick signature takes only `forces: list[BulkForce]`. The text says \"the tick loop prefers the bulk variant when available,\" which implies a mixed list and a dispatch or adapter that the design never specifies. Success criterion line 248 requires placeholder forces to \"exercise both the Force and BulkForce protocol paths.\" Nothing in the design shows how a `Force` reaches the tick. Data Flow step 4 describes the per-agent shape, which contradicts the bulk-only signature.\n\nThe slice plan asks only for \"basic force integration.\" The per-agent protocol has no consumer in this slice or in 101\u2013105, which makes it speculative. Either cut `Force` and have the placeholder forces and tests use `BulkForce` only, or specify the adapter and the `tick()` signature that accepts it. I recommend cutting it.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-154, 180-187, 248"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"No per-agent Python loops in the hot path\" conflicts with the specified data flow",
+   "description": "Step 3 issues one `query_radius` call per active agent, which is a Python loop. `BulkForce` receives `neighbor_lists: list[NDArray]` and `profiles: list[BehavioralProfile]`, both per-agent Python lists. Integration clamps to `max_speed` \"from profile,\" but profiles are a list of dataclass objects. The design never says how a vectorized clamp gets a `max_speed` array: gather per tick, or keep a profile table. The technical requirement at line 247 cannot be met by this data flow as written.\n\nEither scope the requirement honestly (force math and integration are vectorized; neighbor gathering is per-agent until slice 105) or add a batch query or profile-parameter array. This matters because the `BulkForce` signature is the contract slices 101\u2013104 inherit. Changing it later forces rework in each of them.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:86-91, 141-148, 247"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Brute-force query design is internally inconsistent and leaves the result contract open",
+   "description": "`build()` is said to \"compute all pairwise distances,\" but `query_radius` takes a position, not an agent index. A precomputed N\u00d7N index-keyed matrix cannot answer a position-based query. It would also cost O(n\u00b2) memory for no benefit. Under the position-based protocol, `build()` should just store positions.\n\nThe contract also doesn't say whether the querying agent is included in its own result, or whether result order is deterministic (for example, sorted ascending). Separation and cohesion in slice 101 depend on both answers. Slice 105 must produce identical behavior after the swap, and result order can change float summation order and break determinism. State both rules in the protocol docstring.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:156-175"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Subset-integration semantics are contradictory, and invalid-input handling is unstated",
+   "description": "Line 152 says the full-size N\u00d72 force array keeps integration simple (\"add force to velocity for all\"). Line 91 and the integration section say only active agents are integrated. If integration ran over all agents, inactive agents would still advance position by `velocity * dt`, which violates \"inactive agents' state is untouched.\" Pick the active-only fancy-indexing path and fix line 152.\n\nAlso, `state.velocities[idx] += x` with duplicate indices silently applies the update once. The project's fail-fast principle requires explicit validation, with errors, at the `tick()` boundary for:\n- duplicate or out-of-range `active_indices`\n- `profile_indices` that don't map into `profiles`\n- non-positive `dt`\n\nAdd a test for each. There are no I/O paths here, so this is the relevant failure-mode set.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:91, 152, 215"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Proportionality: speculative elements that can be cut or deferred",
+   "description": "- `accelerations` is an array in `AgentState`, but the integrator never reads or writes it. Forces go straight to velocity, and there is no mass. Drop it until a slice needs it.\n- The `DIMS` constant and 3D readiness serve no slice in this plan. A module-level constant is cheap, but \"single-point change\" is unverified without a 3D test. Keep it to the constant and remove the claim, or defer it.\n- Add/remove agent operations are not in the slice plan entry and have no consumer in 101\u2013105. Either justify them or defer. They also invalidate `active_indices` and profile indices, with no stated handling.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96, 102, 120"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Integration section renders as a code block",
+   "description": "The \"Integration: Semi-Implicit Euler\" subsection is indented four spaces, so Markdown renders it as a code block instead of a heading and prose. Dedent it.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "No NFR to restate",
+   "description": "The slice plan states no numeric performance NFR for this slice. The \"hundreds of agents\" scale target is declared locally and is consistent with deferring optimization to 105. No finding is raised.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  }
+ ]
+}

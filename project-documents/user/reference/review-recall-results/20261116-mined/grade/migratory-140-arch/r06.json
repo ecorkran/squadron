@@ -1,0 +1,89 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The \"tick return type contract\" describes an interface that does not exist, and is left undecided",
+   "description": "The doc says \"Currently `tick()` returns NumPy arrays (positions, velocities)\" and that `tick() \u2192 state arrays` is preserved at every tier. In `src/migratory/engine/tick.py:14-21`, `tick()` returns `None` and mutates a server-owned `AgentState` in place. The real boundary is shared mutable state, touched by:\n\n- `EntityManager`, which owns and resizes the arrays (spawn/remove).\n- `SimulationManager.step` (`src/migratory_server/simulation.py:115-122`), which runs `apply_bounds_policy` on `state.positions`/`velocities` in NumPy after the tick.\n- `Environment.post_tick`.\n- `serialize_state_update` and the sim logger, which read `state` directly.\n\nOnce state lives in GPU fields, each of these is either a host\u2194device round trip or must move into the engine. The doc addresses none of them: who owns canonical state, how spawn/remove reaches the GPU, or where bounds enforcement runs.\n\nThe contract is also not chosen. It says \"support all three behind an abstraction, with the choice made per-platform\", which defers the one decision this document exists to make. Option (b)/(c) and Tier 4's \"whether position data exits the GPU at all\" contradict the design goal that the server must not know the compute backend. Delta encoding, culling and WebSocket send all need CPU bytes, or the server must run GPU code.\n\nFix: restate the contract as state ownership plus a readback point, and pick option (a). At 2M agents \u00d7 2 dims \u00d7 f32 that is about 16 MB per tick, which does not justify a three-way abstraction.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Quadrants \"behind the existing `SpatialQuery` and `BulkForce` interfaces\" contradicts \"full tick on GPU\"",
+   "description": "Both protocols are NumPy-typed host interfaces:\n\n- `SpatialQuery.build(positions: NDArray[np.float64])` and `query_knn_batch` return variable-length CSR arrays (`flat_neighbors, counts, raw_counts`) as `NDArray[np.intp]`.\n- `BulkForce.__call__` takes `AgentState` and `CSRNeighborData` and returns an N\u00d72 `NDArray[np.float64]`.\n- `tick()` itself does host-side work between them: `np.arange`, `exclude_self`, `cumsum` offsets, `total_forces +=`, and `record_density`.\n\nA Quadrants backend behind these protocols must upload positions and download CSR and forces on every call. That defeats Tier 2's \"all forces, spatial queries, and integration run as compiled GPU kernels\". Variable-length CSR output also needs a fixed-capacity or two-pass count/fill layout on GPU, which the protocol's return shape does not express.\n\nThe real substitution seam is the whole tick: an engine-level protocol with NumPy and Quadrants implementations. The slice list implies this (\"Quadrants integration and tick pipeline\"), but the goals, the risk mitigation and Related Work (\"optimizes but does not change\") all assert the opposite. Decide it here; the incremental-migration claim depends on it.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#design-goals"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "The engine is float64 end to end; Metal has no f64, and fidelity verification is undefined",
+   "description": "`AgentState`, both protocols and the wire are `float64`. Metal Shading Language has no double type, so the Metal backend (a \"first-class\" goal) forces f32 state. The doc never mentions precision.\n\nThis collides with goal 1, \"outputs verifiable against the current NumPy implementation\", in three ways:\n\n- Flocking is chaotic, so f32 and f64 trajectories diverge within a few hundred ticks.\n- Parallel GPU accumulation order is non-deterministic.\n- Cell-ordered neighbor traversal differs from cKDTree order.\n\n\"Regression testing \u2026 mandatory at each tier transition\" has no stated criterion: per-force single-step tolerance, statistical order parameters, or something else. The doc accepts statistical equivalence for staggering but applies no such standard to the substrate change.\n\nDefine the equivalence test (for example, single-tick per-force error bounds on fixed inputs plus named order-parameter statistics over long runs). Also decide whether CUDA runs f32 for cross-platform parity.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#design-goals"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Current-state wire description is wrong, and the errors propagate into Tier 2 scope and compression claims",
+   "description": "- **Not JSON.** \"Uncompressed JSON over WebSocket \u2026 24 bytes \u00d7 3,500\" is false. `src/migratory_server/protocol.py:174-187` sends a binary `STATE_UPDATE`: a 9-byte header plus float64 positions and velocities, i.e. 32 bytes per agent. That is about 112 KB per tick at 3,500 and about 320 KB per tick (roughly 150 Mbit/s at 60 Hz) at 10k.\n- **Tier 2 non-work.** \"Binary WebSocket replaces JSON\" and the delta-compression slice's \"binary WebSocket\" are already done.\n- **Compression ratio.** \"int16 \u2026 gives ~32\u00d7 compression over float32 positions\" is wrong: int16 against float32 is 2\u00d7, and against the actual float64 it is 4\u00d7.\n- **Velocities.** They are half the payload, and the delta design does not say whether they are sent, derived on the client, or quantized.\n- **Existing constraint.** `protocol_compression.py:14-16` forbids `permessage-deflate`, and zstd already exists. The doc does not reconcile its delta scheme with the existing compression flags or opcode-versioning convention.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#current-state"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Performance baseline is internally inconsistent and no tier has a budget",
+   "description": "- The section is headed \"At N=3,500 \u2026 57 TPS\" but the per-phase numbers are from the N=2492 synthetic bench.\n- Those phases sum to 9.4 ms (about 106 TPS), which is not 57 TPS.\n- The next paragraph cites 79 TPS at 2,500 and 43 at 4,500.\n- The 570\u00d7 motivation rests on a figure the doc does not source.\n\nNo tier has a per-phase budget. Linear extrapolation puts 10k at roughly 38 ms per tick against a 16.7 ms target. Staggering cuts `spatial_query` but not `spatial_build` or CSR assembly. Whether Numba's gain on the 3.14 ms force phase closes the rest is not shown. The doc's own \"bottleneck moves\" principle needs a target table per tier to be actionable.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#current-state"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "GPU spatial hash feasibility is asserted, not argued; KNN semantics and density are unaddressed",
+   "description": "- **KNN semantics.** The current hot path is top-k within radius (k=13 via `query_knn_batch`). A cell-gather hash returns all candidates in adjacent cells, so top-k needs a per-agent selection inside the kernel. The doc does not mention this.\n- **Density.** The NumPy hash failure is attributed solely to \"bookkeeping overhead\". The performance journal's settled-herd rows (line 1013) suggest collapse in dense formations, though I did not read that entry in full. The target demo, two 1M populations colliding around the camera, is the worst-case density scenario. Candidate counts per cell are unbounded unless cell size or per-cell capacity is designed.\n- **Sort primitives.** \"Parallel radix sort\" and \"prefix sum\" as \"single-kernel operations\" assume Quadrants ships them on Metal. In upstream Taichi the prefix-sum executor was, as far as I recall, limited to CUDA/Vulkan. I could not verify this for Quadrants 0.7.2.\n- **Kernel decorator.** The doc writes `@ti.kernel` for Quadrants; confirm the fork's actual namespace.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Quadrants evaluation slice has no exit criteria, and the \"fallback\" is not one",
+   "description": "The architecture commits to Quadrants for Tiers 2\u20135 and then lists \"Quadrants substrate evaluation\" as the first slice. There is no pass/fail threshold and no named alternative if it fails.\n\nThe mitigation \"Numba tier provides a working fallback at 10k\" does not cover 50k and above. If Quadrants fails, every tier above 1 has no plan.\n\nUnaddressed integration facts:\n\n- **Threading.** The sim runs in a `ThreadPoolExecutor` (`server.py:416,535`). Taichi-family runtimes are sensitive to which thread initialises and calls kernels.\n- **JIT stalls.** Numba and Quadrants compilation will stall the first ticks unless cached or warmed.\n- **Dependencies.** Both must be optional extras (as `terrain-lz4` is) with explicit backend selection in config. The project rule forbids silent fallback.\n- **Typing.** Pyright strict is a merge blocker, and untyped `@njit`/kernel decorators erase signatures.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#anticipated-slices"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Delta compression, stream decimation and per-client culling compound; failure modes are not enumerated",
+   "description": "- **Broadcast becomes per-client.** `STATE_UPDATE` is one buffer broadcast to all clients, indexed by array position with no entity IDs. Frustum culling makes the payload per-client and the visible set changes every frame, so the wire needs IDs or enter/leave events.\n- **Per-client baselines.** Delta baselines become per-client, per-entity server state. An agent re-entering the frustum needs a full position.\n- **Dropped frames.** Any dropped or coalesced frame desynchronises accumulated deltas. Slice 318 (slow-client backpressure policy) already exists and is not referenced. The doc needs a keyframe/resync rule and a statement of how 318's policy interacts.\n- **Quantisation drift.** Deltas must be computed against the client's reconstructed position, not the true previous position. This is unstated.\n- **Wrap bounds.** The wrap policy produces \"large delta\" events as normal operation.\n- **Inbound camera channel.** \"Reliable and low-latency\" has no message definition, validation, staleness or timeout behaviour, or multi-client semantics.\n- **2D frustum.** The sim is 2D (`positions` are N\u00d72). What a frustum means over 2D agents on terrain, and the basis for \"~50k visible at ground level\", are not given.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Staggered neighbor caching does not address index stability or interaction with existing mechanisms",
+   "description": "Cached neighbor lists hold array indices across ticks. The doc discusses only determinism. It does not cover:\n\n- Invalidation when `EntityManager` adds or removes entities, which is an issue if removal compacts or reorders the arrays.\n- Interaction with the existing `active_indices` partial-evaluation path.\n- Interaction with `AdaptiveSpatial.record_density`, which would then see only the refreshed subset.\n\n\"O(n/k) spatial work\" is also overstated: `spatial.build` remains a full O(n log n) rebuild every tick.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Scope outruns what is designed: Tiers 3\u20135, the three-option abstraction and biome shading should be cut or deferred",
+   "description": "- **Tiers 4\u20135.** They consist of \"Quadrants CUDA tuned\", a hardware purchase the scope section excludes, and \"server-side render path (Vulkan framebuffer \u2192 H.264 stream)\". The last is a different product architecture introduced in one clause, with no slice. \"All tiers converging\" is not a design.\n- **Tier 3.** It has no CUDA slice.\n- **What to do.** Scope this document to Tiers 1\u20132, plus Tier 3 culling if wanted. Move Tiers 4\u20135 to a vision note.\n- **Cut.** The per-platform three-option return abstraction (pick option a).\n- **Defer.** The NVIDIA half of the \"cross-platform benchmark harness\" until CUDA work is scheduled.\n- **Remove.** The biome terrain shading paragraph. The scope excludes viewer rendering, yet the paragraph gives ship-timing guidance for it.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#envisioned-state"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Ownership and sequencing claims conflict",
+   "description": "- **Ownership.** The Overview says each track is owned by its own initiative and this document defines only the shared boundary. Yet it lists five Quadrants slices as initiative 140's own, while `relatedSlices` names only 118 and 119.\n- **Slice indices.** The 140 and 300-series slices have no indices. The doc does not say whether `300-slices.worldserver-foundation.md` is being extended the way `100-slices` was.\n- **Sequencing.** The principle \"wire \u2026 should not be gated on the compute substrate migration\" conflicts with Tier 1 (\"current wire protocol\") and Tier 2, which bundles delta compression and stream decoupling with the Quadrants migration. With the real 32 B/agent format, 10k at 60 Hz is already about 150 Mbit/s. Either the wire slices are scheduled independently, or the tiers are the gate.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#anticipated-slices"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "\"Same code, different backend\" depends on Numba kernels being written in a form the GPU port can reuse",
+   "description": "Slice 118 as planned compiles forces behind the `BulkForce` signature: `AgentState`, `list[BehavioralProfile]`, f64, returning a freshly allocated N\u00d72 array. For those kernels to serve as the \"verified reference for the Quadrants port\", 118 should already use flat profile-attribute arrays and caller-provided output buffers. Otherwise the port is a rewrite. State that constraint on 118 here, since this document is where the two initiatives are coordinated.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#architectural-principles"
+  }
+ ]
+}

@@ -1,0 +1,68 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Re-run byte-identity check (8.4) relies on `git diff` against a document that is not committed yet",
+   "description": "Task 8.4 checks that \"populated sections stay byte-identical (`git diff`)\" against the document written in 8.1. But the first commit that includes `000-concept.squadron.md` is the one at the end of 8.6. When 8.4 runs, the file is untracked, and `git diff` ignores untracked files, so the check passes no matter what changed. This leaves Success Criterion 8 (and the preservation half of 6) unverified. The same cause affects 8.6: `git diff --name-only main` does not list untracked files, so the generated concept will not appear in the changed-file set. There is a second side effect: the augment run in 8.4 changes the real document, so the commit in 8.6 will include the re-run's dated subheading.\n**Fix:** after 8.1, commit the generated document, or at least `git add` it, before 8.4 runs. Then state whether the augmented version or the original is the one that gets committed.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-351"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Success Criterion 4 (dropped topics) and the `[INFERRED]`-rule half of Criterion 10 are never checked on the output",
+   "description": "Task 4.1 writes the dropped-topics rule into the skill, and 7.1 writes the `[INFERRED]` rule. But none of the 8.x checks look at the generated document for either one. 8.1 confirms that the inferred-claims line *exists* in provenance. It does not confirm that (a) why-now, audience-evolution and methodology-preference are absent both as content and as gap markers, or (b) each `[INFERRED]` sentence meets the checkable rule (it comes from a named graph field and asserts something that field does not literally state). Both are listed success criteria. The design's own walkthrough has the same gap, so the task file should close it rather than copy it.\n**Fix:** add two checks to 8.1: a review or grep for the dropped topics, and a sentence-by-sentence check of each `[INFERRED]` marker against its cited field.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-318"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Success Criterion 12 has no task",
+   "description": "\"Running against squadron produces a concept a PM would edit rather than discard\" is not traced to any task. The PM is already present for 8.1, so the fix is cheap: record their edit-or-discard verdict on the written document as a check in 8.1, and include it in the DEVLOG entry in 9.2.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-318"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The contract-failure test (8.3) gives no way to redirect the check and covers only one of three failure modes",
+   "description": "The skill reads the guide from a fixed path (6.1, Check 1). \"Point the check at it\" does not say how to aim it at a scratch copy without editing the skill or the real guide. A junior agent has to improvise, and the obvious improvisations (editing the path in the skill, or touching the real guide) are the ones the task forbids. Success Criterion 7 also lists *absent* and *unreadable* as failure modes. 8.3 tests only the renamed heading.\n**Fix:**\n- State the redirection mechanism explicitly, for example a per-run path override given in the session instruction.\n- Add a case where the path does not exist, using the same mechanism.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes",
+   "description": "Every commit line (lines 99, 125, 164, 185, 221, 254, 296, 351) is written as `- [ ] Commit: ...`. Commit markers must be plain `**Commit**:` lines, never checkboxes. As checkboxes, they will be counted as work items and checked off. Where they sit is fine: each one follows a verification step, which matches the project's commit-per-task convention.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Where the existing-document check runs is not specified",
+   "description": "Task 6.2 writes the re-run semantics but does not say *when* the flow checks for an existing `000-concept.{project}.md`. If a junior agent puts it at write time, next to the contract check, the operator answers both engagement questions and confirms the description, only to be told \"document exists, stopping\". Consider stating that the existence check and the default stop happen before extraction and the interview.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:239-247"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Refilling under augment is not exercised",
+   "description": "Task 8.4 checks that populated sections are left alone. It does not check the other half of the mechanical refillability test: a section holding exactly `[GAP: ...]` gets filled on augment. The 8.2 decline-path document already has gap markers, so it would make a ready fixture if that check is wanted.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The decline-path scratch copy may fail Precondition 3",
+   "description": "I could not verify whether the cf project registration resolves inside a copied tree. If it is tied to a path, the scratch run in 8.2 will stop at Precondition 3 before reaching the interview. 8.2 should say how the copy gets a resolvable project name.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-324"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Some verification steps are thin and could be merged",
+   "description": "Tasks 1.2 and 4.2 repeat the success checks of 1.1 and 4.1 (case coverage, and matching the design row for row) and add nothing new. They could be folded into their authoring tasks. 3.4, 5.3 and 6.3 run real checks against the repo and are worth keeping.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-99"
+  }
+ ]
+}

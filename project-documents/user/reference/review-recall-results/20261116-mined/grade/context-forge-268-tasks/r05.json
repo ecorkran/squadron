@@ -1,0 +1,40 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commits are written as checkboxes, not `**Commit**:` markers",
+   "description": "Commits appear as checklist items: `- [ ] **2.3 Commit** \u2014 ...`, `- [ ] **3.2a Commit the render removal**`, `- [ ] Commit: ...` in 3.7, 4.1\u20134.4 and 5.1, and the last line of 6.3. The project convention is that `**Commit**:` markers are plain lines, never checkboxes. Implementation commits happen only at those markers, and the commit must follow the task-checker check-off so the check-offs land in the same commit. A commit that is itself a checkbox can't be checked off before it is made.\n- **Fix:** convert each to a plain `**Commit**: <message>` line.\n- **Fix:** drop 2.3 and 3.2a as tasks. Task 3.2a currently carries only a verification line and a commit.\n- **Fix:** fold the commit line into the end of 2.2, 3.2 and 3.7. The placements are right, only the format is wrong.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Section 4 claims each task compiles but checks only against a stale core `dist`",
+   "description": "Section 4 says \"Each task leaves the workspace compiling.\" The checks don't prove it. 4.1 runs only core typecheck and tests. 4.2\u20134.4 run root `pnpm typecheck`, which is `pnpm -r typecheck` (`package.json:11`) and does not build. cli and mcp resolve core through `dist`, so they type-check against the build from 3.4 and cannot see exports removed in section 4. The risk is low, since 3.5 and 3.6 already removed their usages. Even so, the stated guarantee is not backed by the commands.\n- **Fix:** add `pnpm -r build` before the typecheck in 4.1\u20134.4, or state that cross-package compilation is verified only at 6.1.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:140"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 5.1 bundles a harness and six distinct checks into one task",
+   "description": "Effort is rated 3, and the task combines these pieces:\n- checkout fixture construction, adapted from a deleted test\n- fake `sq` with PATH management\n- snapshot helper\n- two CLI runs\n- two MCP runs\n- parity check\n- explicit-key check\n- a mutation check\n\nIt is a hard handoff for a junior AI to complete in one pass. Splitting it would give two tasks:\n- 5.1 builds the harness: fixture, fake `sq`, snapshot helper, and one passing CLI run.\n- 5.2 adds the cases: the `in_progress` state, MCP, parity, the explicit key, and the mutation check.\n\nThe slice's success criteria are unchanged either way. The split only makes the work a junior AI can complete reliably, and the commit can stay at the end of 5.2.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:175"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Proportionality is acceptable",
+   "description": "There is one task file, which fits a slice of effort 2/5 with a broad, mechanical deletion surface. The tests added are only the golden test (D6) and the purity test (D5). Both trace to success criteria, and the design review already weighed test cost. Task 1.1 (branch setup) is a standalone task with one verification line. It could be merged into the head of section 2, but it does no harm.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "6.1 and 3.7 overlap by design",
+   "description": "6.1 repeats the full build, typecheck, lint and test run from 3.7. Sections 4 and 5 sit between them and touch many files, so a final end-to-end pass is justified. The golden-diff check against `{target}` in 6.1 also confirms the golden files never changed over the whole slice. 6.3 correctly says there is nothing to commit when no changes were needed.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:192"
+  }
+ ]
+}
