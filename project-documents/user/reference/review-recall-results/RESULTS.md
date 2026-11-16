@@ -311,3 +311,28 @@ Notes:
 - Selection bias from section 14 still applies: sonnet-5-5 originally reviewed the six 42x designs, so it is measured on flaws it did not get fixed.
 - Slice designs and one task breakdown only. No architecture documents.
 - haiku-xhigh and opus-high differ within noise; both are clearly above sonnet.
+
+## 16. Design review on mined cases, 6 configs (2026-11-17)
+
+**Method:** 43 cases with 82 VALID flaws mined from squadron, context-forge and migratory review history (19 arch, 32 slice, 31 tasks). Case sources: `design-review-recall-cases-2.md`, `-3.md`, `-context-forge.md`, `-migratory.md` in `reference/`; each case is the document at the commit that held it, exported to `wt/<case>` (scratch, not committed). `sq review` with read tools. Run 1: 6 configs × 43 = 258 reviews. Runs 2 and 3: haiku-xhigh, opus-high, opus-medium, fable-medium × 43 × 2 = 344 reviews (sonnet dropped after run 1). Scripts, outputs, logs: `20261116-mined/` (`run.sh`, `jobs.txt`, `jobs2.txt`, `out/`, `logs/`). Grading: 86 Sonnet agents, one per case per set, blind (names stripped, order shuffled, seeds 20261116 and 20261117). Inputs, `hits.json`, `map.json`: `20261116-mined/grade/` (run 1) and `grade2/` (runs 2 and 3). Combined table: `score_all.py`. Agent grades, not hand-checked.
+
+| Config | Per run (of 82) | Recall/run | Any of 3 runs | Arch (19) | Slice (32) | Tasks (31) |
+|---|---|---|---|---|---|---|
+| fable-medium | 46.3 (43, 49, 47) | 57% | 55 | 12.7 | 14.0 | 19.7 |
+| haiku-xhigh | 43.7 (42-45) | 53% | **58** | 9.7 | **16.0** | 18.0 |
+| opus-high | 42.7 (39-45) | 52% | 53 | 11.7 | 13.7 | 17.3 |
+| opus-medium | 38.7 (37-42) | 47% | 49 | 10.7 | 10.3 | 17.7 |
+| sonnet-high (1 run) | 33 | 40% | 33 | 11 | 13 | 9 |
+| sonnet-medium (1 run) | 32 | 39% | 32 | 9 | 13 | 10 |
+
+Per-kind columns are mean flaws found per run. Costs per review are in section 15 (haiku-xhigh $0.34, opus-medium $0.79, opus-high $0.96, fable-medium $2.10, sub).
+
+Notes:
+- 68 of 82 flaws found by at least one run; 14 by none. By kind: arch 18 of 19, slice 25 of 32, tasks 25 of 31.
+- Union across all runs: fable-medium + haiku-xhigh 66; haiku-xhigh + opus-high 66; fable-medium + opus-high 62; the four repeated configs 68; all six 68. Adding opus-medium or sonnet to fable + haiku adds nothing.
+- Sonnet is far behind on tasks (9-10 per run against 17-20), level on slice, slightly behind on arch.
+- Spread between runs of one config is 3-6 flaws, so fable-medium against haiku-xhigh per run (46.3 against 43.7) is within noise. Both sit above opus-medium.
+- Disagrees with section 15 on fable-medium (mid-pack there) and opus-high (tied first there). Section 15 had 25 flaws on 9 cases and sonnet-5-5 had reviewed six of the designs; this set has 43 cases from three repos.
+- 4 of the 43 cases come from response-edit pairs where the original review raised the flaws; the other 39 are flaws the original reviewer did not raise.
+- Slice designs are the weakest case for every config (best union 66%).
+- Recommendation from this data: haiku-xhigh as the cheap default review, fable-medium as a heavier second pass. Opus did not earn a place here.
